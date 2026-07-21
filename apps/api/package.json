@@ -1,12 +1,40 @@
 {
   "name": "@nv/api",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "private": true,
-  "description": "NV Core backend (NestJS) — PLACEHOLDER. Not implemented in phase 1.",
+  "description": "NV Core backend (NestJS)",
   "scripts": {
-    "build": "echo \"(api) placeholder — NestJS not implemented yet\"",
-    "dev": "echo \"(api) placeholder — run phase 2 to enable\"",
-    "lint": "echo \"(api) placeholder\"",
-    "typecheck": "echo \"(api) placeholder\""
+    "build": "nest build",
+    "dev": "nest start --watch",
+    "start": "node dist/main.js",
+    "start:prod": "node dist/main.js",
+    "lint": "eslint \"src/**/*.ts\"",
+    "typecheck": "tsc --noEmit",
+    "clean": "rm -rf dist",
+    "prisma:generate": "prisma generate",
+    "prisma:migrate": "prisma migrate dev",
+    "prisma:studio": "prisma studio"
+  },
+  "dependencies": {
+    "@nestjs/common": "^11.0.1",
+    "@nestjs/config": "^4.0.0",
+    "@nestjs/core": "^11.0.1",
+    "@nestjs/platform-express": "^11.0.1",
+    "@nestjs/swagger": "^11.0.3",
+    "@nv/domain": "workspace:*",
+    "class-transformer": "^0.5.1",
+    "class-validator": "^0.14.1",
+    "reflect-metadata": "^0.2.2",
+    "rxjs": "^7.8.1",
+    "zod": "^3.24.1"
+  },
+  "devDependencies": {
+    "@nestjs/cli": "^11.0.0",
+    "@nestjs/schematics": "^11.0.0",
+    "@nv/tsconfig": "workspace:*",
+    "@types/express": "^5.0.0",
+    "@types/node": "^22.10.5",
+    "prisma": "^6.2.1",
+    "typescript": "^5.7.3"
   }
 }

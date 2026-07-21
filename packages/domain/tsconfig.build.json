@@ -1,0 +1,16 @@
+{
+  "extends": "@nv/tsconfig/base.json",
+  "compilerOptions": {
+    "module": "CommonJS",
+    "moduleResolution": "Node",
+    "lib": ["ES2022", "DOM"],
+    "outDir": "dist",
+    "rootDir": "src",
+    "declaration": true,
+    "declarationMap": true,
+    "sourceMap": true,
+    "noEmit": false
+  },
+  "include": ["src"],
+  "exclude": ["dist", "node_modules"]
+}
