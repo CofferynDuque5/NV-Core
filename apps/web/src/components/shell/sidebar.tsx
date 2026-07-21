@@ -7,6 +7,7 @@ import { ChevronLeft, ChevronsUpDown } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { useUiStore } from "@/stores/ui-store";
+import { useAuthStore } from "@/stores/auth-store";
 import { useWorkspace } from "@/hooks/use-workspace";
 import {
   Tooltip,
@@ -18,8 +19,19 @@ import { getNavIcon } from "./sidebar-icon";
 export function Sidebar({ onOpenSwitcher }: { onOpenSwitcher: () => void }) {
   const collapsed = useUiStore((s) => s.navCollapsed);
   const toggleNav = useUiStore((s) => s.toggleNav);
+  const user = useAuthStore((s) => s.user);
   const ws = useWorkspace();
   const pathname = usePathname();
+
+  const userInitials = user
+    ? user.name
+        .split(" ")
+        .map((w) => w[0])
+        .filter(Boolean)
+        .slice(0, 2)
+        .join("")
+        .toUpperCase()
+    : "NV";
 
   return (
     <aside
@@ -159,12 +171,16 @@ export function Sidebar({ onOpenSwitcher }: { onOpenSwitcher: () => void }) {
           )}
         >
           <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-gradient-to-br from-brand to-brand-violet text-[11px] font-bold text-white">
-            NV
+            {userInitials}
           </span>
           {!collapsed ? (
             <div className="min-w-0 flex-1 leading-tight">
-              <div className="truncate text-xs font-semibold text-ink">Tu cuenta</div>
-              <div className="truncate text-[10px] text-ink-faint">Sin sesión iniciada</div>
+              <div className="truncate text-xs font-semibold text-ink">
+                {user ? user.name : "Tu cuenta"}
+              </div>
+              <div className="truncate text-[10px] text-ink-faint">
+                {user ? user.email : "Sin sesión iniciada"}
+              </div>
             </div>
           ) : null}
         </div>

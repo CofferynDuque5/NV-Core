@@ -6,6 +6,7 @@ import { ArrowRight, Check, Plus } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { useWorkspace } from "@/hooks/use-workspace";
+import { useAuthStore } from "@/stores/auth-store";
 import {
   Dialog,
   DialogContent,
@@ -23,6 +24,13 @@ export function WorkspaceSwitcher({
 }) {
   const router = useRouter();
   const active = useWorkspace();
+  const memberships = useAuthStore((s) => s.memberships);
+
+  // When authenticated with memberships, show only accessible workspaces.
+  const visible =
+    memberships.length > 0
+      ? WORKSPACES.filter((w) => memberships.some((m) => m.workspaceSlug === w.slug))
+      : WORKSPACES;
 
   function go(slug: string) {
     router.push(`/w/${slug}/dashboard`);
@@ -43,7 +51,7 @@ export function WorkspaceSwitcher({
         </DialogHeader>
 
         <div className="grid max-h-[52vh] grid-cols-1 gap-2 overflow-y-auto pr-1 sm:grid-cols-2">
-          {WORKSPACES.map((w) => {
+          {visible.map((w) => {
             const isActive = w.id === active.id;
             return (
               <button

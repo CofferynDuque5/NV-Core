@@ -27,35 +27,53 @@ import type {
  * API (@nv/api). Enabled only when NEXT_PUBLIC_API_URL is set (see
  * ./configure-services). Response shapes match the backend 1:1.
  */
-function createClient(baseUrl: string) {
-  const base = baseUrl.replace(/\/$/, "");
+export interface HttpAdapterOptions {
+  baseUrl: string;
+  /** Supplies the current JWT (or null) for each request. */
+  getToken?: () => string | null;
+  /** Invoked once on a 401 so the app can clear session + redirect. */
+  onUnauthorized?: () => void;
+}
+
+function createClient(opts: HttpAdapterOptions) {
+  const base = opts.baseUrl.replace(/\/$/, "");
+
+  function authHeaders(): Record<string, string> {
+    const token = opts.getToken?.();
+    return token ? { Authorization: `Bearer ${token}` } : {};
+  }
+
+  async function handle<T>(res: Response, path: string): Promise<T> {
+    if (res.status === 401) {
+      opts.onUnauthorized?.();
+      throw new Error(`API 401 on ${path}`);
+    }
+    if (!res.ok) throw new Error(`API ${res.status} on ${path}`);
+    const text = await res.text();
+    return (text ? JSON.parse(text) : null) as T;
+  }
 
   async function get<T>(path: string): Promise<T> {
     const res = await fetch(`${base}/api${path}`, {
-      headers: { Accept: "application/json" },
+      headers: { Accept: "application/json", ...authHeaders() },
     });
-    if (!res.ok) throw new Error(`API ${res.status} on GET ${path}`);
-    // 204 / empty body → null
-    const text = await res.text();
-    return (text ? JSON.parse(text) : null) as T;
+    return handle<T>(res, `GET ${path}`);
   }
 
   async function post<T>(path: string, body: unknown): Promise<T> {
     const res = await fetch(`${base}/api${path}`, {
       method: "POST",
-      headers: { "Content-Type": "application/json", Accept: "application/json" },
+      headers: { "Content-Type": "application/json", Accept: "application/json", ...authHeaders() },
       body: JSON.stringify(body),
     });
-    if (!res.ok) throw new Error(`API ${res.status} on POST ${path}`);
-    const text = await res.text();
-    return (text ? JSON.parse(text) : null) as T;
+    return handle<T>(res, `POST ${path}`);
   }
 
   return { get, post };
 }
 
-export function createHttpAdapters(baseUrl: string): Services {
-  const { get, post } = createClient(baseUrl);
+export function createHttpAdapters(opts: HttpAdapterOptions): Services {
+  const { get, post } = createClient(opts);
   const ws = (id: string) => `/workspaces/${encodeURIComponent(id)}`;
 
   return {
