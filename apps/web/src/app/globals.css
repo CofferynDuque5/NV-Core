@@ -1,0 +1,104 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/*
+ * NV Core theme — mapped from the design's raw palette to shadcn's HSL tokens.
+ * Dark is the primary (and currently only) theme, matching the design.
+ */
+@layer base {
+  :root,
+  .dark {
+    --background: 210 16% 5%; /* #0B0D10 */
+    --foreground: 214 16% 91%; /* #E6E9EE */
+
+    --card: 216 16% 8%; /* #101318 */
+    --card-foreground: 214 16% 91%;
+
+    --popover: 216 18% 7%; /* #0F1216 */
+    --popover-foreground: 214 16% 91%;
+
+    --primary: 220 82% 65%; /* #5B8DEF */
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 214 14% 12%; /* #191D23 */
+    --secondary-foreground: 214 16% 91%;
+
+    --muted: 214 14% 12%;
+    --muted-foreground: 214 9% 58%; /* #8A93A0 */
+
+    --accent: 214 14% 14%;
+    --accent-foreground: 216 24% 96%; /* #F3F5F8 */
+
+    --destructive: 3 91% 63%; /* #F85149 */
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 213 16% 14%; /* #1C2229 */
+    --input: 213 16% 16%; /* #1F252C */
+    --ring: 220 82% 65%;
+
+    --radius: 0.625rem;
+  }
+
+  * {
+    @apply border-border;
+  }
+
+  html {
+    color-scheme: dark;
+  }
+
+  body {
+    @apply bg-canvas text-ink antialiased;
+    font-feature-settings:
+      "rlig" 1,
+      "calt" 1;
+    text-rendering: optimizeLegibility;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  ::selection {
+    background: rgba(91, 141, 239, 0.3);
+    color: #fff;
+  }
+
+  /* Scrollbars — match the design. */
+  *::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  *::-webkit-scrollbar-thumb {
+    background: #262c34;
+    border-radius: 20px;
+    border: 3px solid transparent;
+    background-clip: content-box;
+  }
+  *::-webkit-scrollbar-thumb:hover {
+    background: #333b45;
+    border: 3px solid transparent;
+    background-clip: content-box;
+  }
+}
+
+@layer components {
+  /* Shared surface used by cards/panels across the app. */
+  .nv-panel {
+    @apply rounded-xl border border-line bg-panel;
+  }
+
+  /* Skeleton shimmer bar. */
+  .nv-shimmer {
+    @apply relative overflow-hidden bg-line/60;
+  }
+  .nv-shimmer::after {
+    @apply absolute inset-0 -translate-x-full animate-shimmer;
+    content: "";
+    background-image: linear-gradient(
+      90deg,
+      rgba(255, 255, 255, 0) 0,
+      rgba(255, 255, 255, 0.06) 20%,
+      rgba(255, 255, 255, 0.1) 60%,
+      rgba(255, 255, 255, 0)
+    );
+  }
+}

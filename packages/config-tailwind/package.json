@@ -1,0 +1,13 @@
+{
+  "name": "@nv/tailwind-preset",
+  "version": "0.0.0",
+  "private": true,
+  "main": "preset.ts",
+  "types": "preset.ts",
+  "peerDependencies": {
+    "tailwindcss": "^3.4.0"
+  },
+  "dependencies": {
+    "tailwindcss-animate": "^1.0.7"
+  }
+}
