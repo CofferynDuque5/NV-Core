@@ -5,11 +5,21 @@ import type { Template } from "@nv/domain";
 import { ListResultDto } from "../../common/dto/list-result.dto";
 import { WorkspaceId } from "../../common/tenant/workspace.decorator";
 import { WorkspaceGuard } from "../../common/tenant/workspace.guard";
+import { PrismaService } from "../../prisma/prisma.service";
+import { mapTemplate } from "../../prisma/mappers";
 
 @Injectable()
 export class TemplatesService {
-  async list(_workspaceId: string): Promise<ListResultDto<Template>> {
-    return ListResultDto.empty<Template>();
+  constructor(private readonly prisma: PrismaService) {}
+
+  async list(workspaceId: string): Promise<ListResultDto<Template>> {
+    if (!this.prisma.enabled) return ListResultDto.empty<Template>();
+    const where = { workspaceSlug: workspaceId };
+    const [rows, total] = await Promise.all([
+      this.prisma.template.findMany({ where, orderBy: { createdAt: "desc" } }),
+      this.prisma.template.count({ where }),
+    ]);
+    return new ListResultDto(rows.map(mapTemplate), total);
   }
 }
 

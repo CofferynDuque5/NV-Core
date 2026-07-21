@@ -5,15 +5,39 @@ import type { Post } from "@nv/domain";
 import { ListResultDto } from "../../common/dto/list-result.dto";
 import { WorkspaceId } from "../../common/tenant/workspace.decorator";
 import { WorkspaceGuard } from "../../common/tenant/workspace.guard";
+import { PrismaService } from "../../prisma/prisma.service";
+import { mapPost } from "../../prisma/mappers";
 
 @Injectable()
 export class PostsService {
-  async list(_workspaceId: string): Promise<ListResultDto<Post>> {
-    return ListResultDto.empty<Post>();
+  constructor(private readonly prisma: PrismaService) {}
+
+  async list(workspaceId: string): Promise<ListResultDto<Post>> {
+    if (!this.prisma.enabled) return ListResultDto.empty<Post>();
+    const where = { workspaceSlug: workspaceId };
+    const [rows, total] = await Promise.all([
+      this.prisma.post.findMany({
+        where,
+        orderBy: { scheduledAt: "asc" },
+        include: { campaign: { select: { name: true } } },
+      }),
+      this.prisma.post.count({ where }),
+    ]);
+    return new ListResultDto(rows.map(mapPost), total);
   }
 
-  async today(_workspaceId: string): Promise<Post[]> {
-    return [];
+  async today(workspaceId: string): Promise<Post[]> {
+    if (!this.prisma.enabled) return [];
+    const start = new Date();
+    start.setHours(0, 0, 0, 0);
+    const end = new Date(start);
+    end.setDate(end.getDate() + 1);
+    const rows = await this.prisma.post.findMany({
+      where: { workspaceSlug: workspaceId, scheduledAt: { gte: start, lt: end } },
+      orderBy: { scheduledAt: "asc" },
+      include: { campaign: { select: { name: true } } },
+    });
+    return rows.map(mapPost);
   }
 }
 

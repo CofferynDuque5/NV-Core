@@ -1,9 +1,10 @@
 # @nv/api — Backend (NestJS)
 
-Backend multi-workspace de NV Core. **Fase 2 en curso.** La estructura y el
-cableado están listos y la API **corre**; los endpoints devuelven **resultados
-vacíos** (sin datos ficticios) hasta conectar PostgreSQL. Ninguna integración
-externa se invoca todavía.
+Backend multi-workspace de NV Core. **Fase 2.** La API corre sobre
+**PostgreSQL + Prisma**: identidad (usuarios/membresías) y todos los datos por
+workspace se leen/escriben en la base real. Sin `DATABASE_URL`, la API sigue
+arrancando y los endpoints devuelven vacío (sin datos ficticios). Las
+integraciones externas (IA, mensajería, pagos…) aún no se invocan.
 
 ## Correr
 
@@ -70,18 +71,26 @@ Los tipos de request/response provienen de `@nv/domain`, el mismo paquete que
 consume el frontend. Cuando implementes el adaptador HTTP en la web, las formas
 coinciden 1:1.
 
-## Conectar la base de datos (siguiente paso)
+## Base de datos (PostgreSQL + Prisma)
 
 ```bash
-# 1. define DATABASE_URL en .env (PostgreSQL)
-# 2. genera el cliente y migra
+# 1. define DATABASE_URL en .env (copia de .env.example), p.ej.
+#    postgresql://nvcore:nvcore@localhost:5432/nvcore?schema=public
+# 2. genera el cliente y aplica migraciones
 pnpm --filter @nv/api prisma:generate
-pnpm --filter @nv/api prisma:migrate
-# 3. implementa las consultas Prisma dentro de cada *Service (hoy retornan vacío)
+pnpm --filter @nv/api prisma:migrate    # crea/aplica prisma/migrations
+# 3. (opcional) inspecciona los datos
+pnpm --filter @nv/api prisma:studio
 ```
 
-El modelo de datos completo (multi-tenant, con `workspaceId` en cada tabla) está
-en [`prisma/schema.prisma`](./prisma/schema.prisma).
+- Modelo multi-tenant por **slug**: cada tabla lleva `workspaceSlug` indexado
+  (los workspaces son configuración en `@nv/domain`, no filas de BD).
+- `PrismaService` conecta al arrancar si hay `DATABASE_URL`; si no, `enabled` es
+  `false` y los repositorios devuelven vacío en lugar de consultar.
+- `AuthStore` y todos los *Service de lectura usan Prisma real (ver
+  `src/prisma/mappers.ts` para el mapeo fila → entidad de dominio).
+- Esquema completo en [`prisma/schema.prisma`](./prisma/schema.prisma);
+  migraciones en [`prisma/migrations/`](./prisma/migrations/).
 
 ## Integraciones (diferidas)
 

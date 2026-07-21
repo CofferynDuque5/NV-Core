@@ -5,15 +5,34 @@ import type { Campaign } from "@nv/domain";
 import { ListResultDto } from "../../common/dto/list-result.dto";
 import { WorkspaceId } from "../../common/tenant/workspace.decorator";
 import { WorkspaceGuard } from "../../common/tenant/workspace.guard";
+import { PrismaService } from "../../prisma/prisma.service";
+import { mapCampaign } from "../../prisma/mappers";
 
 @Injectable()
 export class CampaignsService {
-  async list(_workspaceId: string): Promise<ListResultDto<Campaign>> {
-    return ListResultDto.empty<Campaign>();
+  constructor(private readonly prisma: PrismaService) {}
+
+  async list(workspaceId: string): Promise<ListResultDto<Campaign>> {
+    if (!this.prisma.enabled) return ListResultDto.empty<Campaign>();
+    const where = { workspaceSlug: workspaceId };
+    const [rows, total] = await Promise.all([
+      this.prisma.campaign.findMany({
+        where,
+        orderBy: { createdAt: "desc" },
+        include: { _count: { select: { posts: true } } },
+      }),
+      this.prisma.campaign.count({ where }),
+    ]);
+    return new ListResultDto(rows.map(mapCampaign), total);
   }
 
-  async get(_workspaceId: string, _id: string): Promise<Campaign | null> {
-    return null;
+  async get(workspaceId: string, id: string): Promise<Campaign | null> {
+    if (!this.prisma.enabled) return null;
+    const row = await this.prisma.campaign.findFirst({
+      where: { id, workspaceSlug: workspaceId },
+      include: { _count: { select: { posts: true } } },
+    });
+    return row ? mapCampaign(row) : null;
   }
 }
 

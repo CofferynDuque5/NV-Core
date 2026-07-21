@@ -1,9 +1,8 @@
 // NV Core — data model (PostgreSQL).
 //
-// Multi-tenant by design: every operational table carries `workspaceId`.
-// This schema is the phase-2 target; run `pnpm --filter @nv/api prisma:generate`
-// then `prisma migrate dev` once a DATABASE_URL is configured. The API runs
-// without it (endpoints return empty) until then.
+// Multi-tenant by slug: workspaces are configuration (see @nv/domain), so every
+// operational row carries `workspaceSlug` (indexed) rather than a Workspace FK.
+// Identity (User/Membership) is persisted here.
 
 generator client {
   provider = "prisma-client-js"
@@ -54,67 +53,30 @@ enum Role {
   Visor
 }
 
-enum AutomationNodeType {
-  trigger
-  action
-  wait
-  cond
-}
-
-model Workspace {
-  id        String   @id @default(cuid())
-  slug      String   @unique
-  name      String
-  kind      String
-  accent    String
-  initials  String
-  tagline   String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  memberships Membership[]
-  contacts    Contact[]
-  groups      Group[]
-  segments    Segment[]
-  campaigns   Campaign[]
-  posts       Post[]
-  connections Connection[]
-  media       MediaAsset[]
-  folders     MediaFolder[]
-  templates   Template[]
-  automations Automation[]
-  events      CalendarEvent[]
-  conversations Conversation[]
-  notifications Notification[]
-  auditLogs   AuditLog[]
-}
-
 model User {
-  id          String       @id @default(cuid())
-  name        String
-  email       String       @unique
-  avatarColor String       @default("#5B8DEF")
-  createdAt   DateTime     @default(now())
-  memberships Membership[]
+  id           String       @id @default(cuid())
+  email        String       @unique
+  name         String
+  passwordHash String
+  createdAt    DateTime     @default(now())
+  memberships  Membership[]
 }
 
 model Membership {
-  id          String    @id @default(cuid())
-  role        Role      @default(Visor)
-  online      Boolean   @default(false)
-  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  userId      String
-  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  workspaceId String
+  id            String   @id @default(cuid())
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId        String
+  workspaceSlug String
+  role          Role     @default(Visor)
+  createdAt     DateTime @default(now())
 
-  @@unique([userId, workspaceId])
-  @@index([workspaceId])
+  @@unique([userId, workspaceSlug])
+  @@index([workspaceSlug])
 }
 
 model Contact {
   id            String    @id @default(cuid())
-  workspace     Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  workspaceId   String
+  workspaceSlug String
   name          String
   phone         String?
   email         String?
@@ -124,73 +86,68 @@ model Contact {
   lastContactAt DateTime?
   createdAt     DateTime  @default(now())
 
-  @@index([workspaceId])
+  @@index([workspaceSlug])
 }
 
 model Group {
-  id          String    @id @default(cuid())
-  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  workspaceId String
-  name        String
-  channel     ChannelId @default(wa)
-  members     Int       @default(0)
-  admins      Int       @default(0)
-  description String?
-  tags        String[]
-  createdAt   DateTime  @default(now())
+  id            String    @id @default(cuid())
+  workspaceSlug String
+  name          String
+  channel       ChannelId @default(wa)
+  members       Int       @default(0)
+  admins        Int       @default(0)
+  description   String?
+  tags          String[]
+  createdAt     DateTime  @default(now())
 
-  @@index([workspaceId])
+  @@index([workspaceSlug])
 }
 
 model Segment {
-  id          String    @id @default(cuid())
-  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  workspaceId String
-  name        String
-  color       String    @default("#5B8DEF")
-  rules       Json      @default("[]")
-  createdAt   DateTime  @default(now())
+  id            String   @id @default(cuid())
+  workspaceSlug String
+  name          String
+  color         String   @default("#5B8DEF")
+  rules         Json     @default("[]")
+  createdAt     DateTime @default(now())
 
-  @@index([workspaceId])
+  @@index([workspaceSlug])
 }
 
 model Campaign {
-  id          String         @id @default(cuid())
-  workspace   Workspace      @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  workspaceId String
-  name        String
-  status      CampaignStatus @default(borrador)
-  channels    ChannelId[]
-  progress    Int            @default(0)
-  nextRunAt   DateTime?
-  accent      String?
-  createdAt   DateTime       @default(now())
-  posts       Post[]
+  id            String         @id @default(cuid())
+  workspaceSlug String
+  name          String
+  status        CampaignStatus @default(borrador)
+  channels      ChannelId[]
+  progress      Int            @default(0)
+  nextRunAt     DateTime?
+  accent        String?
+  createdAt     DateTime       @default(now())
+  posts         Post[]
 
-  @@index([workspaceId])
+  @@index([workspaceSlug])
 }
 
 model Post {
-  id          String     @id @default(cuid())
-  workspace   Workspace  @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  workspaceId String
-  campaign    Campaign?  @relation(fields: [campaignId], references: [id], onDelete: SetNull)
-  campaignId  String?
-  channel     ChannelId
-  title       String
-  copy        String?
-  hashtags    String[]
-  status      PostStatus @default(draft)
-  scheduledAt DateTime?
-  createdAt   DateTime   @default(now())
+  id            String     @id @default(cuid())
+  workspaceSlug String
+  campaign      Campaign?  @relation(fields: [campaignId], references: [id], onDelete: SetNull)
+  campaignId    String?
+  channel       ChannelId
+  title         String
+  copy          String?
+  hashtags      String[]
+  status        PostStatus @default(draft)
+  scheduledAt   DateTime?
+  createdAt     DateTime   @default(now())
 
-  @@index([workspaceId])
+  @@index([workspaceSlug])
 }
 
 model Connection {
   id            String           @id @default(cuid())
-  workspace     Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  workspaceId   String
+  workspaceSlug String
   channel       ChannelId
   handle        String
   status        ConnectionStatus @default(down)
@@ -200,86 +157,80 @@ model Connection {
   permissions   String[]
   createdAt     DateTime         @default(now())
 
-  @@unique([workspaceId, channel])
-  @@index([workspaceId])
+  @@unique([workspaceSlug, channel])
+  @@index([workspaceSlug])
 }
 
 model MediaFolder {
-  id          String       @id @default(cuid())
-  workspace   Workspace    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  workspaceId String
-  label       String
-  assets      MediaAsset[]
+  id            String       @id @default(cuid())
+  workspaceSlug String
+  label         String
+  assets        MediaAsset[]
 
-  @@index([workspaceId])
+  @@index([workspaceSlug])
 }
 
 model MediaAsset {
-  id          String       @id @default(cuid())
-  workspace   Workspace    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  workspaceId String
-  folder      MediaFolder? @relation(fields: [folderId], references: [id], onDelete: SetNull)
-  folderId    String?
-  type        String
-  title       String
-  tag         String?
-  url         String?
-  createdAt   DateTime     @default(now())
+  id            String       @id @default(cuid())
+  workspaceSlug String
+  folder        MediaFolder? @relation(fields: [folderId], references: [id], onDelete: SetNull)
+  folderId      String?
+  type          String
+  title         String
+  tag           String?
+  url           String?
+  createdAt     DateTime     @default(now())
 
-  @@index([workspaceId])
+  @@index([workspaceSlug])
 }
 
 model Template {
-  id          String    @id @default(cuid())
-  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  workspaceId String
-  name        String
-  category    String
-  body        String
-  uses        Int       @default(0)
-  createdAt   DateTime  @default(now())
+  id            String   @id @default(cuid())
+  workspaceSlug String
+  name          String
+  category      String
+  body          String
+  uses          Int      @default(0)
+  createdAt     DateTime @default(now())
 
-  @@index([workspaceId])
+  @@index([workspaceSlug])
 }
 
 model Automation {
-  id          String    @id @default(cuid())
-  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  workspaceId String
-  name        String
-  status      String    @default("pausado")
-  runs        Int       @default(0)
-  description String?
-  nodes       Json      @default("[]")
-  createdAt   DateTime  @default(now())
+  id            String   @id @default(cuid())
+  workspaceSlug String
+  name          String
+  status        String   @default("pausado")
+  runs          Int      @default(0)
+  description   String?
+  nodes         Json     @default("[]")
+  createdAt     DateTime @default(now())
 
-  @@index([workspaceId])
+  @@index([workspaceSlug])
 }
 
 model CalendarEvent {
-  id          String    @id @default(cuid())
-  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  workspaceId String
-  channel     ChannelId
-  title       String
-  date        DateTime
-  campaignId  String?
+  id            String    @id @default(cuid())
+  workspaceSlug String
+  channel       ChannelId
+  title         String
+  date          DateTime
+  campaignId    String?
 
-  @@index([workspaceId])
+  @@index([workspaceSlug])
 }
 
 model Conversation {
-  id          String    @id @default(cuid())
-  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  workspaceId String
-  channel     ChannelId
-  contactName String
-  resolved    Boolean   @default(false)
-  assignee    String?
-  createdAt   DateTime  @default(now())
-  messages    Message[]
+  id            String    @id @default(cuid())
+  workspaceSlug String
+  channel       ChannelId
+  contactName   String
+  resolved      Boolean   @default(false)
+  assignee      String?
+  createdAt     DateTime  @default(now())
+  messages      Message[]
 
-  @@index([workspaceId])
+  @@index([workspaceSlug])
 }
 
 model Message {
@@ -294,26 +245,24 @@ model Message {
 }
 
 model Notification {
-  id          String    @id @default(cuid())
-  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  workspaceId String
-  type        String    @default("info")
-  title       String
-  meta        String?
-  read        Boolean   @default(false)
-  createdAt   DateTime  @default(now())
+  id            String   @id @default(cuid())
+  workspaceSlug String
+  type          String   @default("info")
+  title         String
+  meta          String?
+  read          Boolean  @default(false)
+  createdAt     DateTime @default(now())
 
-  @@index([workspaceId])
+  @@index([workspaceSlug])
 }
 
 model AuditLog {
-  id          String    @id @default(cuid())
-  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  workspaceId String
-  actor       String
-  action      String
-  target      String?
-  createdAt   DateTime  @default(now())
+  id            String   @id @default(cuid())
+  workspaceSlug String
+  actor         String
+  action        String
+  target        String?
+  createdAt     DateTime @default(now())
 
-  @@index([workspaceId])
+  @@index([workspaceSlug])
 }

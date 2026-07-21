@@ -4,11 +4,21 @@ import type { AuditLogEntry } from "@nv/domain";
 
 import { WorkspaceId } from "../../common/tenant/workspace.decorator";
 import { WorkspaceGuard } from "../../common/tenant/workspace.guard";
+import { PrismaService } from "../../prisma/prisma.service";
+import { mapAuditLog } from "../../prisma/mappers";
 
 @Injectable()
 export class AuditService {
-  async logs(_workspaceId: string): Promise<AuditLogEntry[]> {
-    return [];
+  constructor(private readonly prisma: PrismaService) {}
+
+  async logs(workspaceId: string): Promise<AuditLogEntry[]> {
+    if (!this.prisma.enabled) return [];
+    const rows = await this.prisma.auditLog.findMany({
+      where: { workspaceSlug: workspaceId },
+      orderBy: { createdAt: "desc" },
+      take: 100,
+    });
+    return rows.map(mapAuditLog);
   }
 }
 

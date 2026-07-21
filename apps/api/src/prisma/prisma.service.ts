@@ -1,27 +1,23 @@
 import { Injectable, Logger, type OnModuleDestroy, type OnModuleInit } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
+import { PrismaClient } from "@prisma/client";
 
 import type { AppConfig } from "../config/configuration";
 
 /**
- * Prisma access.
+ * Prisma access — the real generated client.
  *
- * The Prisma client is loaded LAZILY and only when `DATABASE_URL` is set, so
- * the API boots with zero database configured (every repository returns empty
- * until then). Once a DB is provisioned:
- *   1. set DATABASE_URL
- *   2. `pnpm --filter @nv/api prisma:generate`
- *   3. `pnpm --filter @nv/api prisma:migrate`
- * and this service exposes a connected `client`.
+ * Connects on boot when `DATABASE_URL` is set. Without it the app still boots;
+ * `enabled` is false and repositories return empty instead of querying (so the
+ * API keeps working with zero database configured).
  */
 @Injectable()
-export class PrismaService implements OnModuleInit, OnModuleDestroy {
+export class PrismaService extends PrismaClient implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(PrismaService.name);
 
-  /** Typed as `unknown` until @prisma/client is generated; cast at call sites. */
-  public client: unknown = null;
-
-  constructor(private readonly config: ConfigService<AppConfig, true>) {}
+  constructor(private readonly config: ConfigService<AppConfig, true>) {
+    super();
+  }
 
   get enabled(): boolean {
     return Boolean(this.config.get("database", { infer: true }).url);
@@ -33,23 +29,14 @@ export class PrismaService implements OnModuleInit, OnModuleDestroy {
       return;
     }
     try {
-      // Lazy require avoids a hard dependency on a generated client at build time.
-      // eslint-disable-next-line @typescript-eslint/no-var-requires
-      const { PrismaClient } = require("@prisma/client") as { PrismaClient: new () => { $connect: () => Promise<void>; $disconnect: () => Promise<void> } };
-      const client = new PrismaClient();
-      await client.$connect();
-      this.client = client;
+      await this.$connect();
       this.logger.log("Prisma conectado a PostgreSQL.");
     } catch (err) {
-      this.logger.error(
-        "No se pudo inicializar Prisma. ¿Ejecutaste `prisma generate`? La API seguirá con datos vacíos.",
-        (err as Error).message,
-      );
+      this.logger.error("No se pudo conectar a PostgreSQL.", (err as Error).message);
     }
   }
 
   async onModuleDestroy(): Promise<void> {
-    const client = this.client as { $disconnect?: () => Promise<void> } | null;
-    if (client?.$disconnect) await client.$disconnect();
+    await this.$disconnect();
   }
 }

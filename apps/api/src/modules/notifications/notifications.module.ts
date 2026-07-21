@@ -4,15 +4,25 @@ import type { Notification } from "@nv/domain";
 
 import { WorkspaceId } from "../../common/tenant/workspace.decorator";
 import { WorkspaceGuard } from "../../common/tenant/workspace.guard";
+import { PrismaService } from "../../prisma/prisma.service";
+import { mapNotification } from "../../prisma/mappers";
 
 @Injectable()
 export class NotificationsService {
-  async list(_workspaceId: string): Promise<Notification[]> {
-    return [];
+  constructor(private readonly prisma: PrismaService) {}
+
+  async list(workspaceId: string): Promise<Notification[]> {
+    if (!this.prisma.enabled) return [];
+    const rows = await this.prisma.notification.findMany({
+      where: { workspaceSlug: workspaceId },
+      orderBy: { createdAt: "desc" },
+    });
+    return rows.map(mapNotification);
   }
 
-  async unreadCount(_workspaceId: string): Promise<number> {
-    return 0;
+  async unreadCount(workspaceId: string): Promise<number> {
+    if (!this.prisma.enabled) return 0;
+    return this.prisma.notification.count({ where: { workspaceSlug: workspaceId, read: false } });
   }
 }
 

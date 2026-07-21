@@ -5,15 +5,31 @@ import type { MediaAsset, MediaFolder } from "@nv/domain";
 import { ListResultDto } from "../../common/dto/list-result.dto";
 import { WorkspaceId } from "../../common/tenant/workspace.decorator";
 import { WorkspaceGuard } from "../../common/tenant/workspace.guard";
+import { PrismaService } from "../../prisma/prisma.service";
+import { mapMediaAsset, mapMediaFolder } from "../../prisma/mappers";
 
 @Injectable()
 export class MediaService {
-  async folders(_workspaceId: string): Promise<MediaFolder[]> {
-    return [];
+  constructor(private readonly prisma: PrismaService) {}
+
+  async folders(workspaceId: string): Promise<MediaFolder[]> {
+    if (!this.prisma.enabled) return [];
+    const rows = await this.prisma.mediaFolder.findMany({
+      where: { workspaceSlug: workspaceId },
+      include: { _count: { select: { assets: true } } },
+      orderBy: { label: "asc" },
+    });
+    return rows.map(mapMediaFolder);
   }
 
-  async assets(_workspaceId: string, _folderId?: string): Promise<ListResultDto<MediaAsset>> {
-    return ListResultDto.empty<MediaAsset>();
+  async assets(workspaceId: string, folderId?: string): Promise<ListResultDto<MediaAsset>> {
+    if (!this.prisma.enabled) return ListResultDto.empty<MediaAsset>();
+    const where = { workspaceSlug: workspaceId, ...(folderId ? { folderId } : {}) };
+    const [rows, total] = await Promise.all([
+      this.prisma.mediaAsset.findMany({ where, orderBy: { createdAt: "desc" } }),
+      this.prisma.mediaAsset.count({ where }),
+    ]);
+    return new ListResultDto(rows.map(mapMediaAsset), total);
   }
 }
 

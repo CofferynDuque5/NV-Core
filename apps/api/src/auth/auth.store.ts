@@ -1,88 +1,97 @@
-import { randomUUID } from "node:crypto";
 import { Injectable } from "@nestjs/common";
 import type { Role } from "@nv/domain";
 
+import { PrismaService } from "../prisma/prisma.service";
 import type { MembershipRecord, UserRecord } from "./auth.types";
 
 /**
- * In-memory identity store (users + workspace memberships).
+ * Identity store backed by Prisma/PostgreSQL (User + Membership tables).
  *
- * Starts EMPTY — no seeded/fake accounts. Every record comes from a real
- * register/invite action and lives for the process lifetime. This is the
- * no-database backing so auth is demonstrable today.
- *
- * Phase 2b: swap this for a Prisma-backed repository (the `User` and
- * `Membership` models already exist in schema.prisma). The AuthService depends
- * only on these method signatures, so nothing else changes.
+ * Starts empty — no seeded accounts. All records come from real
+ * register/invite actions and persist across restarts. The AuthService depends
+ * only on these method signatures.
  */
 @Injectable()
 export class AuthStore {
-  private readonly users = new Map<string, UserRecord>();
-  private readonly memberships: MembershipRecord[] = [];
+  constructor(private readonly prisma: PrismaService) {}
+
+  private toUser(u: {
+    id: string;
+    email: string;
+    name: string;
+    passwordHash: string;
+    createdAt: Date;
+  }): UserRecord {
+    return {
+      id: u.id,
+      email: u.email,
+      name: u.name,
+      passwordHash: u.passwordHash,
+      createdAt: u.createdAt.toISOString(),
+    };
+  }
 
   async findUserByEmail(email: string): Promise<UserRecord | undefined> {
-    const normalized = email.toLowerCase();
-    for (const user of this.users.values()) {
-      if (user.email === normalized) return user;
-    }
-    return undefined;
+    const u = await this.prisma.user.findUnique({ where: { email: email.toLowerCase() } });
+    return u ? this.toUser(u) : undefined;
   }
 
   async findUserById(id: string): Promise<UserRecord | undefined> {
-    return this.users.get(id);
+    const u = await this.prisma.user.findUnique({ where: { id } });
+    return u ? this.toUser(u) : undefined;
   }
 
-  async createUser(input: { email: string; name: string; passwordHash: string }): Promise<UserRecord> {
-    const user: UserRecord = {
-      id: randomUUID(),
-      email: input.email.toLowerCase(),
-      name: input.name,
-      passwordHash: input.passwordHash,
-      createdAt: new Date().toISOString(),
-    };
-    this.users.set(user.id, user);
-    return user;
+  async createUser(input: {
+    email: string;
+    name: string;
+    passwordHash: string;
+  }): Promise<UserRecord> {
+    const u = await this.prisma.user.create({
+      data: { email: input.email.toLowerCase(), name: input.name, passwordHash: input.passwordHash },
+    });
+    return this.toUser(u);
   }
 
   async membershipsOf(userId: string): Promise<MembershipRecord[]> {
-    return this.memberships.filter((m) => m.userId === userId);
+    const rows = await this.prisma.membership.findMany({ where: { userId } });
+    return rows.map((m) => ({ userId: m.userId, workspaceSlug: m.workspaceSlug, role: m.role as Role }));
   }
 
   async membershipsOfWorkspace(workspaceSlug: string): Promise<MembershipRecord[]> {
-    return this.memberships.filter((m) => m.workspaceSlug === workspaceSlug);
+    const rows = await this.prisma.membership.findMany({ where: { workspaceSlug } });
+    return rows.map((m) => ({ userId: m.userId, workspaceSlug: m.workspaceSlug, role: m.role as Role }));
   }
 
   /** Members of a workspace, joined with their user record. */
   async listWorkspaceMembers(
     workspaceSlug: string,
-  ): Promise<Array<{ user: UserRecord; role: MembershipRecord["role"] }>> {
-    const result: Array<{ user: UserRecord; role: MembershipRecord["role"] }> = [];
-    for (const m of this.memberships) {
-      if (m.workspaceSlug !== workspaceSlug) continue;
-      const user = this.users.get(m.userId);
-      if (user) result.push({ user, role: m.role });
-    }
-    return result;
+  ): Promise<Array<{ user: UserRecord; role: Role }>> {
+    const rows = await this.prisma.membership.findMany({
+      where: { workspaceSlug },
+      include: { user: true },
+      orderBy: { createdAt: "asc" },
+    });
+    return rows.map((m) => ({ user: this.toUser(m.user), role: m.role as Role }));
   }
 
   async getMembership(userId: string, workspaceSlug: string): Promise<MembershipRecord | undefined> {
-    return this.memberships.find((m) => m.userId === userId && m.workspaceSlug === workspaceSlug);
+    const m = await this.prisma.membership.findUnique({
+      where: { userId_workspaceSlug: { userId, workspaceSlug } },
+    });
+    return m ? { userId: m.userId, workspaceSlug: m.workspaceSlug, role: m.role as Role } : undefined;
   }
 
   async workspaceHasMembers(workspaceSlug: string): Promise<boolean> {
-    return this.memberships.some((m) => m.workspaceSlug === workspaceSlug);
+    const count = await this.prisma.membership.count({ where: { workspaceSlug } });
+    return count > 0;
   }
 
   async upsertMembership(userId: string, workspaceSlug: string, role: Role): Promise<MembershipRecord> {
-    const existing = this.memberships.find(
-      (m) => m.userId === userId && m.workspaceSlug === workspaceSlug,
-    );
-    if (existing) {
-      existing.role = role;
-      return existing;
-    }
-    const record: MembershipRecord = { userId, workspaceSlug, role };
-    this.memberships.push(record);
-    return record;
+    const m = await this.prisma.membership.upsert({
+      where: { userId_workspaceSlug: { userId, workspaceSlug } },
+      create: { userId, workspaceSlug, role },
+      update: { role },
+    });
+    return { userId: m.userId, workspaceSlug: m.workspaceSlug, role: m.role as Role };
   }
 }

@@ -5,15 +5,30 @@ import type { Conversation, Message } from "@nv/domain";
 import { ListResultDto } from "../../common/dto/list-result.dto";
 import { WorkspaceId } from "../../common/tenant/workspace.decorator";
 import { WorkspaceGuard } from "../../common/tenant/workspace.guard";
+import { PrismaService } from "../../prisma/prisma.service";
+import { mapConversation, mapMessage } from "../../prisma/mappers";
 
 @Injectable()
 export class InboxService {
-  async conversations(_workspaceId: string): Promise<ListResultDto<Conversation>> {
-    return ListResultDto.empty<Conversation>();
+  constructor(private readonly prisma: PrismaService) {}
+
+  async conversations(workspaceId: string): Promise<ListResultDto<Conversation>> {
+    if (!this.prisma.enabled) return ListResultDto.empty<Conversation>();
+    const where = { workspaceSlug: workspaceId };
+    const [rows, total] = await Promise.all([
+      this.prisma.conversation.findMany({ where, orderBy: { createdAt: "desc" } }),
+      this.prisma.conversation.count({ where }),
+    ]);
+    return new ListResultDto(rows.map(mapConversation), total);
   }
 
-  async messages(_workspaceId: string, _conversationId: string): Promise<Message[]> {
-    return [];
+  async messages(workspaceId: string, conversationId: string): Promise<Message[]> {
+    if (!this.prisma.enabled) return [];
+    const rows = await this.prisma.message.findMany({
+      where: { conversationId, conversation: { workspaceSlug: workspaceId } },
+      orderBy: { createdAt: "asc" },
+    });
+    return rows.map(mapMessage);
   }
 }
 

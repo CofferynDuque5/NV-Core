@@ -5,11 +5,21 @@ import type { Segment } from "@nv/domain";
 import { ListResultDto } from "../../common/dto/list-result.dto";
 import { WorkspaceId } from "../../common/tenant/workspace.decorator";
 import { WorkspaceGuard } from "../../common/tenant/workspace.guard";
+import { PrismaService } from "../../prisma/prisma.service";
+import { mapSegment } from "../../prisma/mappers";
 
 @Injectable()
 export class SegmentsService {
-  async list(_workspaceId: string): Promise<ListResultDto<Segment>> {
-    return ListResultDto.empty<Segment>();
+  constructor(private readonly prisma: PrismaService) {}
+
+  async list(workspaceId: string): Promise<ListResultDto<Segment>> {
+    if (!this.prisma.enabled) return ListResultDto.empty<Segment>();
+    const where = { workspaceSlug: workspaceId };
+    const [rows, total] = await Promise.all([
+      this.prisma.segment.findMany({ where, orderBy: { createdAt: "desc" } }),
+      this.prisma.segment.count({ where }),
+    ]);
+    return new ListResultDto(rows.map(mapSegment), total);
   }
 }
 

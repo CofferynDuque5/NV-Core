@@ -23,6 +23,7 @@
     "@nestjs/platform-express": "^11.0.1",
     "@nestjs/swagger": "^11.0.3",
     "@nv/domain": "workspace:*",
+    "@prisma/client": "6.19.3",
     "class-transformer": "^0.5.1",
     "class-validator": "^0.14.1",
     "reflect-metadata": "^0.2.2",
