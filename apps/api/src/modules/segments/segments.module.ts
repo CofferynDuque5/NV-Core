@@ -1,16 +1,66 @@
-import { Controller, Get, Injectable, Module, UseGuards } from "@nestjs/common";
-import { ApiTags } from "@nestjs/swagger";
-import type { Segment } from "@nv/domain";
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  HttpCode,
+  Injectable,
+  Module,
+  NotFoundException,
+  Param,
+  Patch,
+  Post,
+  ServiceUnavailableException,
+  UseGuards,
+} from "@nestjs/common";
+import { ApiBearerAuth, ApiPropertyOptional, ApiTags } from "@nestjs/swagger";
+import type { Segment, SegmentRule } from "@nv/domain";
+import { IsArray, IsOptional, IsString, MinLength } from "class-validator";
 
 import { ListResultDto } from "../../common/dto/list-result.dto";
 import { WorkspaceId } from "../../common/tenant/workspace.decorator";
 import { WorkspaceGuard } from "../../common/tenant/workspace.guard";
+import { AuditLogger } from "../../common/audit-logger.service";
 import { PrismaService } from "../../prisma/prisma.service";
 import { mapSegment } from "../../prisma/mappers";
+import { RolesGuard } from "../../auth/guards/roles.guard";
+import { Roles } from "../../auth/decorators/roles.decorator";
+import { CurrentUser } from "../../auth/decorators/current-user.decorator";
+import type { AuthenticatedUser } from "../../auth/auth.types";
+
+export class CreateSegmentDto {
+  @IsString()
+  @MinLength(1)
+  name!: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  color?: string;
+
+  @ApiPropertyOptional({ type: "array", items: { type: "object" } })
+  @IsOptional()
+  @IsArray()
+  rules?: SegmentRule[];
+}
+
+export class UpdateSegmentDto {
+  @IsOptional() @IsString() @MinLength(1) name?: string;
+  @IsOptional() @IsString() color?: string;
+  @IsOptional() @IsArray() rules?: SegmentRule[];
+}
 
 @Injectable()
 export class SegmentsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly audit: AuditLogger,
+  ) {}
+
+  private db() {
+    if (!this.prisma.enabled) throw new ServiceUnavailableException("Base de datos no configurada.");
+    return this.prisma;
+  }
 
   async list(workspaceId: string): Promise<ListResultDto<Segment>> {
     if (!this.prisma.enabled) return ListResultDto.empty<Segment>();
@@ -21,9 +71,51 @@ export class SegmentsService {
     ]);
     return new ListResultDto(rows.map(mapSegment), total);
   }
+
+  async create(workspaceId: string, actor: string, dto: CreateSegmentDto): Promise<Segment> {
+    const row = await this.db().segment.create({
+      data: {
+        workspaceSlug: workspaceId,
+        name: dto.name,
+        color: dto.color ?? "#5B8DEF",
+        rules: (dto.rules ?? []) as object[],
+      },
+    });
+    await this.audit.record(workspaceId, actor, "segment.create", row.id);
+    return mapSegment(row);
+  }
+
+  async update(
+    workspaceId: string,
+    actor: string,
+    id: string,
+    dto: UpdateSegmentDto,
+  ): Promise<Segment> {
+    const existing = await this.db().segment.findFirst({ where: { id, workspaceSlug: workspaceId } });
+    if (!existing) throw new NotFoundException("Segmento no encontrado.");
+    const row = await this.prisma.segment.update({
+      where: { id },
+      data: {
+        name: dto.name,
+        color: dto.color,
+        rules: dto.rules ? (dto.rules as object[]) : undefined,
+      },
+    });
+    await this.audit.record(workspaceId, actor, "segment.update", id);
+    return mapSegment(row);
+  }
+
+  async remove(workspaceId: string, actor: string, id: string): Promise<void> {
+    const { count } = await this.db().segment.deleteMany({
+      where: { id, workspaceSlug: workspaceId },
+    });
+    if (count === 0) throw new NotFoundException("Segmento no encontrado.");
+    await this.audit.record(workspaceId, actor, "segment.delete", id);
+  }
 }
 
 @ApiTags("segments")
+@ApiBearerAuth()
 @UseGuards(WorkspaceGuard)
 @Controller("workspaces/:workspace/segments")
 export class SegmentsController {
@@ -32,6 +124,41 @@ export class SegmentsController {
   @Get()
   list(@WorkspaceId() workspaceId: string) {
     return this.service.list(workspaceId);
+  }
+
+  @Post()
+  @Roles("Owner", "Admin", "Editor")
+  @UseGuards(RolesGuard)
+  create(
+    @WorkspaceId() workspaceId: string,
+    @CurrentUser() user: AuthenticatedUser,
+    @Body() dto: CreateSegmentDto,
+  ) {
+    return this.service.create(workspaceId, user.email, dto);
+  }
+
+  @Patch(":id")
+  @Roles("Owner", "Admin", "Editor")
+  @UseGuards(RolesGuard)
+  update(
+    @WorkspaceId() workspaceId: string,
+    @CurrentUser() user: AuthenticatedUser,
+    @Param("id") id: string,
+    @Body() dto: UpdateSegmentDto,
+  ) {
+    return this.service.update(workspaceId, user.email, id, dto);
+  }
+
+  @Delete(":id")
+  @Roles("Owner", "Admin")
+  @UseGuards(RolesGuard)
+  @HttpCode(204)
+  remove(
+    @WorkspaceId() workspaceId: string,
+    @CurrentUser() user: AuthenticatedUser,
+    @Param("id") id: string,
+  ) {
+    return this.service.remove(workspaceId, user.email, id);
   }
 }
 
