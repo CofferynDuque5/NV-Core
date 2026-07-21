@@ -1,7 +1,12 @@
 import { notFound } from "next/navigation";
-import { getWorkspaceBySlug } from "@nv/domain";
+import { getWorkspaceBySlug, WORKSPACES } from "@nv/domain";
 
 import { AppShell } from "@/components/shell/app-shell";
+
+/** Pre-render every workspace (required for static export). */
+export function generateStaticParams() {
+  return WORKSPACES.map((w) => ({ workspace: w.slug }));
+}
 
 export default async function WorkspaceLayout({
   children,
