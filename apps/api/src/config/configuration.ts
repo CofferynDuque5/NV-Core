@@ -8,6 +8,7 @@ export interface AppConfig {
   env: Env["NODE_ENV"];
   port: number;
   corsOrigins: string[];
+  auth: { secret: string; expiresIn: string };
   database: { url?: string };
   redis: { url?: string };
   integrations: {
@@ -24,10 +25,21 @@ export interface AppConfig {
 }
 
 export function buildConfig(env: Env): AppConfig {
+  // JWT secret is required in production; a stable dev fallback keeps the API
+  // bootable locally without configuration.
+  let secret = env.JWT_SECRET;
+  if (!secret) {
+    if (env.NODE_ENV === "production") {
+      throw new Error("JWT_SECRET es obligatorio en producción.");
+    }
+    secret = "nv-core-dev-secret-change-me";
+  }
+
   return {
     env: env.NODE_ENV,
     port: env.PORT,
     corsOrigins: env.CORS_ORIGINS.split(",").map((o) => o.trim()).filter(Boolean),
+    auth: { secret, expiresIn: env.JWT_EXPIRES_IN },
     database: { url: env.DATABASE_URL },
     redis: { url: env.REDIS_URL },
     integrations: {

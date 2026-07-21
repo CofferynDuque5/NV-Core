@@ -3,6 +3,8 @@ import { Injectable, Module } from "@nestjs/common";
 import { ApiTags } from "@nestjs/swagger";
 import { getWorkspaceBySlug, WORKSPACES, type Workspace } from "@nv/domain";
 
+import { Public } from "../../auth/decorators/public.decorator";
+
 /**
  * Workspaces are structural configuration (branding + enabled modules), so
  * these are served from @nv/domain config — not the database. This is the one
@@ -22,6 +24,7 @@ export class WorkspacesService {
 }
 
 @ApiTags("workspaces")
+@Public()
 @Controller("workspaces")
 export class WorkspacesController {
   constructor(private readonly service: WorkspacesService) {}

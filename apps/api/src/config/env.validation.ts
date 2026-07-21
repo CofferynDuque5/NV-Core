@@ -10,6 +10,10 @@ export const envSchema = z.object({
   PORT: z.coerce.number().int().positive().default(4000),
   CORS_ORIGINS: z.string().default("http://localhost:3000"),
 
+  // Auth
+  JWT_SECRET: z.string().min(16).optional(),
+  JWT_EXPIRES_IN: z.string().default("1d"),
+
   // Data / infra
   DATABASE_URL: z.string().url().optional(),
   REDIS_URL: z.string().url().optional(),

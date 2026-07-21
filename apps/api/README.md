@@ -43,6 +43,27 @@ El `WorkspaceGuard` valida el tenant contra `@nv/domain` (WORKSPACES) antes de
 cualquier handler. Cada método de servicio recibe `workspaceId` para aislar los
 datos en cuanto exista la BD.
 
+### Autenticación (JWT) + membresías de workspace
+
+- `POST /api/auth/register` — crea usuario (hash scrypt). Con `workspaceSlug`
+  opcional: si ese workspace aún no tiene miembros, el usuario se vuelve
+  **Owner** (bootstrap). Devuelve `{ accessToken, user, memberships }`.
+- `POST /api/auth/login` — devuelve token + membresías.
+- `GET /api/auth/me` — usuario actual (requiere `Authorization: Bearer <jwt>`).
+- `GET /api/workspaces/:workspace/members` — miembros del workspace.
+- `POST /api/workspaces/:workspace/members` — invita a un usuario existente con
+  un rol. Restringido a **Owner/Admin** (`RolesGuard`).
+
+Guards: `JwtAuthGuard` es global (todo requiere token salvo rutas `@Public()`:
+health, register, login, listado de workspaces). El `WorkspaceGuard` valida que
+el usuario autenticado **pertenezca** al workspace (403 si no). `RolesGuard`
+aplica RBAC por rol.
+
+> El identity store (`AuthStore`) es **en memoria** y arranca **vacío** — sin
+> usuarios sembrados. Es la base sin-BD para poder probar auth hoy; los modelos
+> `User`/`Membership` ya existen en `schema.prisma` para migrarlo a Prisma sin
+> cambiar el `AuthService`.
+
 ### Contrato compartido
 
 Los tipos de request/response provienen de `@nv/domain`, el mismo paquete que

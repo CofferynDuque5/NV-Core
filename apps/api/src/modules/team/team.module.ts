@@ -1,29 +1,35 @@
 import { Controller, Get, Injectable, Module, UseGuards } from "@nestjs/common";
-import { ApiTags } from "@nestjs/swagger";
+import { ApiBearerAuth, ApiTags } from "@nestjs/swagger";
 import { ROLE_DESCRIPTIONS, ROLE_ORDER, type RoleDefinition, type TeamMember } from "@nv/domain";
 
 import { WorkspaceId } from "../../common/tenant/workspace.decorator";
 import { WorkspaceGuard } from "../../common/tenant/workspace.guard";
+import { AuthStore } from "../../auth/auth.store";
+import { toTeamMember } from "../../auth/member.mapper";
 
 @Injectable()
 export class TeamService {
-  async members(_workspaceId: string): Promise<TeamMember[]> {
-    // No members until users are invited.
-    return [];
+  constructor(private readonly store: AuthStore) {}
+
+  async members(workspaceId: string): Promise<TeamMember[]> {
+    const rows = await this.store.listWorkspaceMembers(workspaceId);
+    return rows.map(({ user, role }) => toTeamMember(user, role));
   }
 
-  async roles(_workspaceId: string): Promise<RoleDefinition[]> {
-    // Role definitions are structural policy; membership counts start at 0.
+  async roles(workspaceId: string): Promise<RoleDefinition[]> {
+    // Role definitions are structural policy; counts reflect real memberships.
+    const rows = await this.store.listWorkspaceMembers(workspaceId);
     return ROLE_ORDER.map((role) => ({
       id: role,
       name: role,
       description: ROLE_DESCRIPTIONS[role],
-      userCount: 0,
+      userCount: rows.filter((r) => r.role === role).length,
     }));
   }
 }
 
 @ApiTags("team")
+@ApiBearerAuth()
 @UseGuards(WorkspaceGuard)
 @Controller("workspaces/:workspace/team")
 export class TeamController {

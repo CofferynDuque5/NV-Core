@@ -6,6 +6,7 @@ import { validateEnv } from "./config/env.validation";
 import { CommonModule } from "./common/common.module";
 import { PrismaModule } from "./prisma/prisma.module";
 import { HealthModule } from "./health/health.module";
+import { AuthModule } from "./auth/auth.module";
 
 import { WorkspacesModule } from "./modules/workspaces/workspaces.module";
 import { ContactsModule } from "./modules/contacts/contacts.module";
@@ -37,6 +38,7 @@ import { BillingModule } from "./modules/billing/billing.module";
     }),
     CommonModule,
     PrismaModule,
+    AuthModule,
     HealthModule,
 
     // Feature modules (one per @nv/domain service)
