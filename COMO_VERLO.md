@@ -1,71 +1,88 @@
 # Cómo ver / correr NV Core
 
-Este paquete incluye el **monorepo completo** (frontend Next.js + backend
-NestJS) y una **vista estática** para previsualizar sin instalar nada.
+Monorepo completo: **frontend Next.js + backend NestJS + PostgreSQL/Prisma**,
+con autenticación JWT, membresías por workspace y CRUD real. Incluye además una
+**vista estática** para previsualizar sin instalar nada.
 
 ---
 
 ## Opción A — Vista rápida con Live Server (sin instalar nada) ✅
 
-Carpeta: **`static-preview/`** — la app ya compilada a HTML/CSS/JS estático.
+Carpeta: **`static-preview/`** — la app ya compilada a HTML/CSS/JS estático
+(modo demo, sin backend: verás estados vacíos y skeletons por diseño).
 
-1. Abre en VS Code **la carpeta `static-preview/`** (File → Open Folder →
-   `static-preview`). Ábrela *como raíz*, porque los assets usan rutas
-   absolutas (`/_next/...`).
+1. Abre en VS Code **la carpeta `static-preview/`** como raíz (los assets usan
+   rutas absolutas `/_next/...`).
 2. Clic derecho en `index.html` → **Open with Live Server**.
-3. Navega las 16 pantallas de los 14 workspaces, prueba `⌘K`, el switcher de
-   workspace, los drawers y el dark theme.
-
-> Verás **estados vacíos y skeletons** en todos lados: es intencional. No hay
-> datos falsos. La lógica con datos vive en la app real (Opción B).
+3. Navega las 16 pantallas de los 14 workspaces, `⌘K`, switcher, drawers, dark
+   theme.
 
 ---
 
-## Opción B — Correr el proyecto real (frontend + backend)
+## Opción B — Correr el proyecto real (frontend + backend + BD)
 
-Requisitos: **Node 20+** y **pnpm** (`npm i -g pnpm`).
+Requisitos: **Node 20+**, **pnpm** (`npm i -g pnpm`) y **PostgreSQL**.
 
 ```bash
 pnpm install
 ```
 
-### Frontend (Next.js)
+### 1. Base de datos
+
+Crea una BD y define la conexión en `apps/api/.env` (copia de `.env.example`):
 
 ```bash
-pnpm --filter @nv/web dev      # http://localhost:3000
+# apps/api/.env
+DATABASE_URL=postgresql://USER:PASS@localhost:5432/nvcore?schema=public
+JWT_SECRET=pon-aqui-un-secreto-largo
+CORS_ORIGINS=http://localhost:3000
 ```
 
-### Backend (NestJS)
+Aplica el esquema:
+
+```bash
+pnpm --filter @nv/api prisma:generate
+pnpm --filter @nv/api prisma:migrate     # aplica prisma/migrations
+```
+
+> Sin `DATABASE_URL` la API arranca igual y devuelve vacío (sin datos ficticios).
+
+### 2. Backend (NestJS)
 
 ```bash
 pnpm --filter @nv/api dev      # http://localhost:4000/api
 ```
 
-- Salud: `GET http://localhost:4000/api/health`
-- **Swagger / OpenAPI**: `http://localhost:4000/api/docs`
+- Salud: `GET /api/health` · **Swagger**: `http://localhost:4000/api/docs`
 
-La API arranca **sin base de datos** y devuelve resultados vacíos (sin datos
-ficticios). Los proveedores externos responden `501` hasta configurarse.
-
-### Conectar el frontend al backend (opcional)
+### 3. Frontend (Next.js), apuntando al backend
 
 ```bash
 echo "NEXT_PUBLIC_API_URL=http://localhost:4000" > apps/web/.env.local
-# reinicia `pnpm --filter @nv/web dev`
+pnpm --filter @nv/web dev      # http://localhost:3000
 ```
 
-Sin esa variable, la web usa adaptadores vacíos (mismos estados vacíos). Con
-ella, cada hook de datos consume el backend real. **Cero cambios de código.**
+Sin `NEXT_PUBLIC_API_URL` la web corre en **modo demo** (estados vacíos, sin
+login). Con la variable, te pedirá **iniciar sesión / registrarte**.
+
+### Probar el flujo completo
+
+1. Ve a `http://localhost:3000` → **Crear cuenta**; en "Workspace a reclamar"
+   elige uno (te vuelves **Owner**).
+2. Entra a **Contactos → Nuevo**, crea un contacto: aparece en la tabla y
+   persiste en PostgreSQL. Igual en Campañas, Segmentos, Grupos, Plantillas.
+3. Los permisos se aplican por rol (Owner/Admin/Editor/Visor) y cada escritura
+   queda en **Auditoría** (Configuración → Logs).
 
 ### Otros comandos
 
 ```bash
 pnpm build       # build de todo el monorepo (domain + web + api)
 pnpm typecheck   # TypeScript estricto en todos los paquetes
-pnpm lint
+pnpm --filter @nv/api prisma:studio        # inspeccionar la BD
 
-# regenerar la vista estática de la Opción A
-cd apps/web && STATIC_EXPORT=true pnpm build   # genera apps/web/out
+# regenerar la vista estática (Opción A)
+cd apps/web && STATIC_EXPORT=true pnpm build
 ```
 
 ---
@@ -75,25 +92,21 @@ cd apps/web && STATIC_EXPORT=true pnpm build   # genera apps/web/out
 ```
 apps/
   web/     Next.js 15 · React 19 · Tailwind · shadcn/ui   (frontend)
-  api/     NestJS 11 · Swagger · Prisma (schema listo)    (backend)
+  api/     NestJS 11 · Swagger · Prisma · PostgreSQL       (backend)
 packages/
   domain/           @nv/domain — entidades, config, contratos de servicio
   config-tailwind/  design tokens
   tsconfig/         configs TS compartidas
 ```
 
-## Conectar PostgreSQL (siguiente paso del backend)
+## Qué está implementado
 
-```bash
-# 1. define DATABASE_URL en apps/api/.env (copia de apps/api/.env.example)
-# 2. genera el cliente y migra
-pnpm --filter @nv/api prisma:generate
-pnpm --filter @nv/api prisma:migrate
-# 3. implementa las consultas Prisma dentro de cada *Service (hoy retornan vacío)
-```
+- **Auth JWT** + membresías por workspace + RBAC (Owner/Admin/Editor/Visor).
+- **PostgreSQL + Prisma**: identidad y datos por workspace (multi-tenant por slug).
+- **CRUD**: crear/editar/eliminar Contactos, Campañas, Segmentos, Grupos,
+  Plantillas (+ Posts, Automatizaciones, Conexiones, Media) con validación y
+  **auditoría** de cada escritura.
+- **Frontend**: login/registro, shell fiel al diseño, y formularios "Nuevo"
+  cableados a la API.
 
-El modelo de datos completo (multi-tenant, `workspaceId` en cada tabla) está en
-`apps/api/prisma/schema.prisma`.
-
-Ver `IMPLEMENTATION_PLAN.md` para el detalle de arquitectura y
-`apps/api/README.md` para el backend.
+Detalle de arquitectura en `IMPLEMENTATION_PLAN.md` y `apps/api/README.md`.
