@@ -19,10 +19,17 @@ function emptyList<T>(): Promise<ListResult<T>> {
   return delay({ items: [], total: 0 });
 }
 
+/** Mutations are unavailable without a backend (demo mode). */
+function notAvailable(): never {
+  throw new Error("Acción no disponible en modo demo. Configura el backend (NEXT_PUBLIC_API_URL).");
+}
+
 export const emptyAdapters: Services = {
   campaigns: {
     list: () => emptyList(),
     get: () => delay(null),
+    create: () => notAvailable(),
+    remove: () => notAvailable(),
   },
   posts: {
     list: () => emptyList(),
@@ -33,12 +40,19 @@ export const emptyAdapters: Services = {
   },
   contacts: {
     list: () => emptyList(),
+    create: () => notAvailable(),
+    update: () => notAvailable(),
+    remove: () => notAvailable(),
   },
   groups: {
     list: () => emptyList(),
+    create: () => notAvailable(),
+    remove: () => notAvailable(),
   },
   segments: {
     list: () => emptyList(),
+    create: () => notAvailable(),
+    remove: () => notAvailable(),
   },
   inbox: {
     conversations: () => emptyList(),
@@ -50,6 +64,8 @@ export const emptyAdapters: Services = {
   },
   templates: {
     list: () => emptyList(),
+    create: () => notAvailable(),
+    remove: () => notAvailable(),
   },
   automations: {
     list: () => emptyList(),

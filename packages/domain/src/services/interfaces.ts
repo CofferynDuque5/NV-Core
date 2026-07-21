@@ -35,9 +35,52 @@ export interface ListResult<T> {
   total: number;
 }
 
+// ── Mutation inputs ─────────────────────────────────────────────────────────
+
+export interface CreateContactInput {
+  name: string;
+  phone?: string;
+  email?: string;
+  company?: string;
+  tags?: string[];
+  stage?: Contact["stage"];
+}
+export type UpdateContactInput = Partial<CreateContactInput>;
+
+export interface CreateCampaignInput {
+  name: string;
+  status?: Campaign["status"];
+  channels?: Campaign["channels"];
+  progress?: number;
+  nextRunAt?: string;
+  accent?: string;
+}
+
+export interface CreateSegmentInput {
+  name: string;
+  color?: string;
+  rules?: Segment["rules"];
+}
+
+export interface CreateGroupInput {
+  name: string;
+  channel?: Group["channel"];
+  description?: string;
+  tags?: string[];
+  members?: number;
+}
+
+export interface CreateTemplateInput {
+  name: string;
+  body: string;
+  category?: string;
+}
+
 export interface CampaignService {
   list(workspaceId: string): Promise<ListResult<Campaign>>;
   get(workspaceId: string, id: string): Promise<Campaign | null>;
+  create(workspaceId: string, input: CreateCampaignInput): Promise<Campaign>;
+  remove(workspaceId: string, id: string): Promise<void>;
 }
 
 export interface PostService {
@@ -51,14 +94,21 @@ export interface CalendarService {
 
 export interface ContactService {
   list(workspaceId: string): Promise<ListResult<Contact>>;
+  create(workspaceId: string, input: CreateContactInput): Promise<Contact>;
+  update(workspaceId: string, id: string, input: UpdateContactInput): Promise<Contact>;
+  remove(workspaceId: string, id: string): Promise<void>;
 }
 
 export interface GroupService {
   list(workspaceId: string): Promise<ListResult<Group>>;
+  create(workspaceId: string, input: CreateGroupInput): Promise<Group>;
+  remove(workspaceId: string, id: string): Promise<void>;
 }
 
 export interface SegmentService {
   list(workspaceId: string): Promise<ListResult<Segment>>;
+  create(workspaceId: string, input: CreateSegmentInput): Promise<Segment>;
+  remove(workspaceId: string, id: string): Promise<void>;
 }
 
 export interface InboxService {
@@ -73,6 +123,8 @@ export interface MediaService {
 
 export interface TemplateService {
   list(workspaceId: string): Promise<ListResult<Template>>;
+  create(workspaceId: string, input: CreateTemplateInput): Promise<Template>;
+  remove(workspaceId: string, id: string): Promise<void>;
 }
 
 export interface AutomationService {

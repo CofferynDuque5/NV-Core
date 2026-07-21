@@ -1,5 +1,6 @@
 "use client";
 
+import * as React from "react";
 import { FileText, Plus } from "lucide-react";
 
 import { useTemplates } from "@/hooks/use-domain-data";
@@ -7,9 +8,11 @@ import { PageHeader } from "@/components/common/page-header";
 import { QueryBoundary } from "@/components/common/query-boundary";
 import { CardGridSkeleton } from "@/components/common/skeletons";
 import { Button } from "@/components/ui/button";
+import { TemplateCreateDialog } from "@/components/entities/template-create-dialog";
 
 export default function PlantillasPage() {
   const templates = useTemplates();
+  const [open, setOpen] = React.useState(false);
 
   return (
     <div className="space-y-6">
@@ -18,7 +21,7 @@ export default function PlantillasPage() {
         title="Plantillas"
         description="Guarda mensajes que uses con frecuencia."
         actions={
-          <Button size="sm">
+          <Button size="sm" onClick={() => setOpen(true)}>
             <Plus className="size-4" /> Nueva plantilla
           </Button>
         }
@@ -34,7 +37,7 @@ export default function PlantillasPage() {
           description:
             "Crea plantillas de mensajes con variables para responder e iniciar conversaciones más rápido.",
           action: (
-            <Button size="sm">
+            <Button size="sm" onClick={() => setOpen(true)}>
               <Plus className="size-4" /> Nueva plantilla
             </Button>
           ),
@@ -42,6 +45,8 @@ export default function PlantillasPage() {
       >
         {() => null}
       </QueryBoundary>
+
+      <TemplateCreateDialog open={open} onOpenChange={setOpen} />
     </div>
   );
 }
