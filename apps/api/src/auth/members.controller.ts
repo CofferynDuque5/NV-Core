@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Post, UseGuards } from "@nestjs/common";
+import { Body, Controller, Delete, Get, HttpCode, Param, Post, UseGuards } from "@nestjs/common";
 import { ApiBearerAuth, ApiTags } from "@nestjs/swagger";
 import type { TeamMember } from "@nv/domain";
 
@@ -37,5 +37,13 @@ export class MembersController {
   @Post()
   add(@WorkspaceId() workspaceId: string, @Body() dto: AddMemberDto) {
     return this.auth.addMember(workspaceId, dto.email, dto.role);
+  }
+
+  @Roles("Owner", "Admin")
+  @UseGuards(RolesGuard)
+  @Delete(":userId")
+  @HttpCode(204)
+  remove(@WorkspaceId() workspaceId: string, @Param("userId") userId: string) {
+    return this.auth.removeMember(workspaceId, userId);
   }
 }

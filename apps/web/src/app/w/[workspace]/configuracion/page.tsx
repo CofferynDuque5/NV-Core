@@ -1,19 +1,21 @@
 "use client";
 
 import { PERMISSION_MATRIX, ROLE_DESCRIPTIONS, ROLE_ORDER } from "@nv/domain";
-import { Check, Minus, ScrollText, UserPlus, Users } from "lucide-react";
+import { Check, Minus, ScrollText } from "lucide-react";
 
-import { useAuditLogs, useTeam } from "@/hooks/use-domain-data";
+import { useAuditLogs, useRoles } from "@/hooks/use-domain-data";
 import { PageHeader } from "@/components/common/page-header";
 import { Panel, PanelHeader } from "@/components/common/panel";
 import { EmptyState } from "@/components/common/empty-state";
 import { ListSkeleton } from "@/components/common/skeletons";
-import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { TeamTab } from "@/components/settings/team-tab";
 
 export default function ConfiguracionPage() {
-  const team = useTeam();
   const logs = useAuditLogs();
+  const roles = useRoles();
+  const roleCount = (name: string) =>
+    (roles.data ?? []).find((r) => r.name === name)?.userCount ?? 0;
 
   return (
     <div className="space-y-6">
@@ -33,45 +35,26 @@ export default function ConfiguracionPage() {
 
         {/* Team */}
         <TabsContent value="equipo">
-          <Panel>
-            <PanelHeader
-              title="Equipo"
-              action={
-                <Button size="sm">
-                  <UserPlus className="size-4" /> Invitar
-                </Button>
-              }
-            />
-            <div className="p-4">
-              {team.isLoading ? (
-                <ListSkeleton rows={3} />
-              ) : (
-                <EmptyState
-                  icon={Users}
-                  title="Aún no hay miembros"
-                  description="Invita a tu equipo para colaborar en campañas, contenido y automatizaciones."
-                  action={
-                    <Button size="sm">
-                      <UserPlus className="size-4" /> Invitar miembro
-                    </Button>
-                  }
-                  compact
-                />
-              )}
-            </div>
-          </Panel>
+          <TeamTab />
         </TabsContent>
 
-        {/* Roles (structural) */}
+        {/* Roles */}
         <TabsContent value="roles">
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            {ROLE_ORDER.map((role) => (
-              <div key={role} className="nv-panel p-4">
-                <div className="text-sm font-semibold text-ink-bright">{role}</div>
-                <p className="mt-1 text-xs text-ink-muted">{ROLE_DESCRIPTIONS[role]}</p>
-                <div className="mt-3 text-[11px] text-ink-faint">Sin usuarios asignados</div>
-              </div>
-            ))}
+            {ROLE_ORDER.map((role) => {
+              const count = roleCount(role);
+              return (
+                <div key={role} className="nv-panel p-4">
+                  <div className="text-sm font-semibold text-ink-bright">{role}</div>
+                  <p className="mt-1 text-xs text-ink-muted">{ROLE_DESCRIPTIONS[role]}</p>
+                  <div className="mt-3 text-[11px] text-ink-faint">
+                    {count === 0
+                      ? "Sin usuarios asignados"
+                      : `${count} ${count === 1 ? "usuario" : "usuarios"}`}
+                  </div>
+                </div>
+              );
+            })}
           </div>
         </TabsContent>
 
@@ -119,13 +102,35 @@ export default function ConfiguracionPage() {
             <div className="p-4">
               {logs.isLoading ? (
                 <ListSkeleton rows={4} />
-              ) : (
+              ) : (logs.data ?? []).length === 0 ? (
                 <EmptyState
                   icon={ScrollText}
                   title="Sin registros"
                   description="Cada acción en el workspace quedará registrada aquí para auditoría."
                   compact
                 />
+              ) : (
+                <ul className="divide-y divide-line">
+                  {(logs.data ?? []).map((log) => (
+                    <li key={log.id} className="flex items-center gap-3 py-2.5 first:pt-0 last:pb-0">
+                      <span className="grid size-7 shrink-0 place-items-center rounded-md bg-panel-raised text-ink-muted">
+                        <ScrollText className="size-3.5" />
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <span className="text-sm text-ink">
+                          <span className="font-medium">{log.actor}</span>{" "}
+                          <span className="text-ink-muted">{log.action}</span>
+                          {log.target ? (
+                            <span className="text-ink-faint"> · {log.target}</span>
+                          ) : null}
+                        </span>
+                      </div>
+                      <span className="shrink-0 text-[11px] text-ink-faint">
+                        {new Date(log.createdAt).toLocaleString()}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
               )}
             </div>
           </Panel>

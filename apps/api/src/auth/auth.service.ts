@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   ConflictException,
   Injectable,
   NotFoundException,
@@ -78,6 +79,21 @@ export class AuthService {
     }
     await this.store.upsertMembership(user.id, workspaceSlug, role);
     return { workspaceSlug, role };
+  }
+
+  /** Removes a member from a workspace. Protects the last Owner. */
+  async removeMember(workspaceSlug: string, userId: string): Promise<void> {
+    const membership = await this.store.getMembership(userId, workspaceSlug);
+    if (!membership) throw new NotFoundException("El usuario no es miembro de este workspace.");
+    if (membership.role === "Owner") {
+      const owners = (await this.store.membershipsOfWorkspace(workspaceSlug)).filter(
+        (m) => m.role === "Owner",
+      );
+      if (owners.length <= 1) {
+        throw new BadRequestException("No puedes quitar al último Owner del workspace.");
+      }
+    }
+    await this.store.removeMembership(userId, workspaceSlug);
   }
 
   private async buildResult(user: UserRecord): Promise<AuthResult> {

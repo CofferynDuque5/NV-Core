@@ -2,6 +2,7 @@
 
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import type {
+  AddMemberInput,
   CreateAutomationInput,
   CreateCampaignInput,
   CreateContactInput,
@@ -151,5 +152,30 @@ export function useDeleteAutomation() {
   return useMutation({
     mutationFn: (id: string) => svc.automations.remove(ws.id, id),
     onSuccess: () => qc.invalidateQueries({ queryKey: [ws.id, "automations"] }),
+  });
+}
+
+function invalidateTeam(qc: ReturnType<typeof useQueryClient>, wsId: string) {
+  void qc.invalidateQueries({ queryKey: [wsId, "team"] });
+  void qc.invalidateQueries({ queryKey: [wsId, "roles"] });
+}
+
+export function useAddMember() {
+  const svc = useServices();
+  const ws = useWorkspace();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: AddMemberInput) => svc.team.addMember(ws.id, input),
+    onSuccess: () => invalidateTeam(qc, ws.id),
+  });
+}
+
+export function useRemoveMember() {
+  const svc = useServices();
+  const ws = useWorkspace();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (userId: string) => svc.team.removeMember(ws.id, userId),
+    onSuccess: () => invalidateTeam(qc, ws.id),
   });
 }

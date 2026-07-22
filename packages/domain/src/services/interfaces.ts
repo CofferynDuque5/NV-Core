@@ -19,6 +19,7 @@ import type {
   TeamMember,
   AuditLogEntry,
 } from "../entities";
+import type { Role } from "../enums";
 
 /**
  * Service contracts.
@@ -172,9 +173,17 @@ export interface NotificationService {
   unreadCount(workspaceId: string): Promise<number>;
 }
 
+export interface AddMemberInput {
+  email: string;
+  role: Role;
+}
+
 export interface TeamService {
   members(workspaceId: string): Promise<TeamMember[]>;
   roles(workspaceId: string): Promise<RoleDefinition[]>;
+  /** Invite a registered user or change an existing member's role (upsert). */
+  addMember(workspaceId: string, input: AddMemberInput): Promise<void>;
+  removeMember(workspaceId: string, userId: string): Promise<void>;
 }
 
 export interface AuditService {

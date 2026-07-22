@@ -94,4 +94,9 @@ export class AuthStore {
     });
     return { userId: m.userId, workspaceSlug: m.workspaceSlug, role: m.role as Role };
   }
+
+  async removeMembership(userId: string, workspaceSlug: string): Promise<number> {
+    const { count } = await this.prisma.membership.deleteMany({ where: { userId, workspaceSlug } });
+    return count;
+  }
 }
