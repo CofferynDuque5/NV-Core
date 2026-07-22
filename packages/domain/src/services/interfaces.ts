@@ -76,6 +76,23 @@ export interface CreateTemplateInput {
   category?: string;
 }
 
+export interface UpsertConnectionInput {
+  channel: Connection["channel"];
+  handle: string;
+  status?: Connection["status"];
+  token?: string;
+  expiresAt?: string;
+  webhookStatus?: string;
+  permissions?: string[];
+}
+
+export interface CreateAutomationInput {
+  name: string;
+  description?: string;
+  status?: Automation["status"];
+  nodes?: Automation["nodes"];
+}
+
 export interface CampaignService {
   list(workspaceId: string): Promise<ListResult<Campaign>>;
   get(workspaceId: string, id: string): Promise<Campaign | null>;
@@ -129,6 +146,8 @@ export interface TemplateService {
 
 export interface AutomationService {
   list(workspaceId: string): Promise<ListResult<Automation>>;
+  create(workspaceId: string, input: CreateAutomationInput): Promise<Automation>;
+  remove(workspaceId: string, id: string): Promise<void>;
 }
 
 export interface AnalyticsService {
@@ -138,6 +157,8 @@ export interface AnalyticsService {
 export interface ConnectionService {
   list(workspaceId: string): Promise<Connection[]>;
   get(workspaceId: string, id: string): Promise<Connection | null>;
+  upsert(workspaceId: string, input: UpsertConnectionInput): Promise<Connection>;
+  remove(workspaceId: string, id: string): Promise<void>;
 }
 
 export interface IntegrationService {

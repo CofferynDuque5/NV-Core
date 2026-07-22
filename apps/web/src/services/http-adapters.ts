@@ -130,11 +130,17 @@ export function createHttpAdapters(opts: HttpAdapterOptions): Services {
       create: (id, input) => post<Template>(`${ws(id)}/templates`, input),
       remove: (id, tid) => del<void>(`${ws(id)}/templates/${tid}`),
     },
-    automations: { list: (id) => get<ListResult<Automation>>(`${ws(id)}/automations`) },
+    automations: {
+      list: (id) => get<ListResult<Automation>>(`${ws(id)}/automations`),
+      create: (id, input) => post<Automation>(`${ws(id)}/automations`, input),
+      remove: (id, aid) => del<void>(`${ws(id)}/automations/${aid}`),
+    },
     analytics: { snapshot: (id) => get<AnalyticsSnapshot | null>(`${ws(id)}/analytics`) },
     connections: {
       list: (id) => get<Connection[]>(`${ws(id)}/connections`),
       get: (id, cid) => get<Connection | null>(`${ws(id)}/connections/${cid}`),
+      upsert: (id, input) => post<Connection>(`${ws(id)}/connections`, input),
+      remove: (id, cid) => del<void>(`${ws(id)}/connections/${cid}`),
     },
     integrations: { catalog: (id) => get<Integration[]>(`${ws(id)}/integrations`) },
     notifications: {

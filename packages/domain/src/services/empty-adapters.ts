@@ -69,6 +69,8 @@ export const emptyAdapters: Services = {
   },
   automations: {
     list: () => emptyList(),
+    create: () => notAvailable(),
+    remove: () => notAvailable(),
   },
   analytics: {
     snapshot: () => delay(null),
@@ -76,6 +78,8 @@ export const emptyAdapters: Services = {
   connections: {
     list: () => delay([]),
     get: () => delay(null),
+    upsert: () => notAvailable(),
+    remove: () => notAvailable(),
   },
   integrations: {
     catalog: () => delay([]),
