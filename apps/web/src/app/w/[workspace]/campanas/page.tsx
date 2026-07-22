@@ -1,18 +1,48 @@
 "use client";
 
 import * as React from "react";
-import { Megaphone, Plus } from "lucide-react";
+import type { Campaign } from "@nv/domain";
+import { Loader2, Megaphone, Pencil, Plus, Trash2 } from "lucide-react";
 
+import { EMPTY_METRIC } from "@/lib/utils";
 import { useCampaigns } from "@/hooks/use-domain-data";
+import { useDeleteCampaign } from "@/hooks/use-domain-mutations";
 import { PageHeader } from "@/components/common/page-header";
 import { QueryBoundary } from "@/components/common/query-boundary";
 import { CardGridSkeleton } from "@/components/common/skeletons";
+import { Panel } from "@/components/common/panel";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { CampaignCreateDialog } from "@/components/entities/campaign-create-dialog";
+import { ChannelStack } from "@/components/common/channel-badge";
+import { CampaignFormDialog } from "@/components/entities/campaign-form-dialog";
+
+const STATUS_VARIANT: Record<Campaign["status"], "default" | "success" | "warning" | "neutral"> = {
+  activa: "success",
+  programada: "warning",
+  pausada: "neutral",
+  borrador: "neutral",
+  completada: "default",
+};
 
 export default function CampanasPage() {
   const campaigns = useCampaigns();
-  const [open, setOpen] = React.useState(false);
+  const del = useDeleteCampaign();
+  const [dialogOpen, setDialogOpen] = React.useState(false);
+  const [editing, setEditing] = React.useState<Campaign | null>(null);
+  const [deletingId, setDeletingId] = React.useState<string | null>(null);
+
+  function openCreate() {
+    setEditing(null);
+    setDialogOpen(true);
+  }
+  function openEdit(c: Campaign) {
+    setEditing(c);
+    setDialogOpen(true);
+  }
+  function remove(id: string) {
+    setDeletingId(id);
+    del.mutate(id, { onSettled: () => setDeletingId(null) });
+  }
 
   return (
     <div className="space-y-6">
@@ -21,7 +51,7 @@ export default function CampanasPage() {
         title="Campañas"
         description="Planifica, lanza y monitorea tus campañas omnicanal."
         actions={
-          <Button size="sm" onClick={() => setOpen(true)}>
+          <Button size="sm" onClick={openCreate}>
             <Plus className="size-4" /> Nueva campaña
           </Button>
         }
@@ -37,16 +67,73 @@ export default function CampanasPage() {
           description:
             "Crea tu primera campaña para empezar a publicar en WhatsApp, Instagram, Facebook, TikTok y más desde un solo lugar.",
           action: (
-            <Button size="sm" onClick={() => setOpen(true)}>
+            <Button size="sm" onClick={openCreate}>
               <Plus className="size-4" /> Nueva campaña
             </Button>
           ),
         }}
       >
-        {() => null}
+        {(data) => (
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
+            {data.items.map((c) => (
+              <Panel key={c.id} className="flex flex-col gap-3 p-4">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <h3 className="truncate text-sm font-semibold text-ink-bright">{c.name}</h3>
+                    <div className="mt-1">
+                      <Badge variant={STATUS_VARIANT[c.status]}>{c.status}</Badge>
+                    </div>
+                  </div>
+                  <div className="flex shrink-0 items-center gap-0.5">
+                    <button
+                      onClick={() => openEdit(c)}
+                      className="rounded-md p-1.5 text-ink-faint transition-colors hover:bg-panel-high hover:text-ink"
+                      title="Editar"
+                    >
+                      <Pencil className="size-4" />
+                    </button>
+                    <button
+                      onClick={() => remove(c.id)}
+                      disabled={deletingId === c.id}
+                      className="rounded-md p-1.5 text-ink-faint transition-colors hover:bg-state-danger/10 hover:text-state-danger"
+                      title="Eliminar"
+                    >
+                      {deletingId === c.id ? (
+                        <Loader2 className="size-4 animate-spin" />
+                      ) : (
+                        <Trash2 className="size-4" />
+                      )}
+                    </button>
+                  </div>
+                </div>
+
+                {c.channels.length > 0 ? <ChannelStack ids={c.channels} /> : null}
+
+                <div>
+                  <div className="mb-1 flex justify-between text-[11px] text-ink-faint">
+                    <span>Progreso</span>
+                    <span>{c.progress}%</span>
+                  </div>
+                  <div className="h-1.5 w-full overflow-hidden rounded-full bg-line">
+                    <div
+                      className="h-full rounded-full bg-gradient-to-r from-brand to-brand-violet"
+                      style={{ width: `${c.progress}%` }}
+                    />
+                  </div>
+                </div>
+
+                <div className="flex justify-between border-t border-line pt-2 text-xs text-ink-muted">
+                  <span>Alcance {c.reach ?? EMPTY_METRIC}</span>
+                  <span>CTR {c.ctr ?? EMPTY_METRIC}</span>
+                  <span>{c.posts} posts</span>
+                </div>
+              </Panel>
+            ))}
+          </div>
+        )}
       </QueryBoundary>
 
-      <CampaignCreateDialog open={open} onOpenChange={setOpen} />
+      <CampaignFormDialog open={dialogOpen} onOpenChange={setDialogOpen} campaign={editing} />
     </div>
   );
 }

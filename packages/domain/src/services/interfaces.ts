@@ -55,6 +55,7 @@ export interface CreateCampaignInput {
   nextRunAt?: string;
   accent?: string;
 }
+export type UpdateCampaignInput = Partial<CreateCampaignInput>;
 
 export interface CreateSegmentInput {
   name: string;
@@ -97,6 +98,7 @@ export interface CampaignService {
   list(workspaceId: string): Promise<ListResult<Campaign>>;
   get(workspaceId: string, id: string): Promise<Campaign | null>;
   create(workspaceId: string, input: CreateCampaignInput): Promise<Campaign>;
+  update(workspaceId: string, id: string, input: UpdateCampaignInput): Promise<Campaign>;
   remove(workspaceId: string, id: string): Promise<void>;
 }
 

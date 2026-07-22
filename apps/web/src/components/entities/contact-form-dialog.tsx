@@ -1,21 +1,28 @@
 "use client";
 
 import * as React from "react";
-import { CONTACT_STAGES, type ContactStage } from "@nv/domain";
+import { CONTACT_STAGES, type Contact, type ContactStage } from "@nv/domain";
 
-import { useCreateContact } from "@/hooks/use-domain-mutations";
+import { useCreateContact, useUpdateContact } from "@/hooks/use-domain-mutations";
 import { FormDialog, errorMessage } from "./form-dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
-export function ContactCreateDialog({
+export function ContactFormDialog({
   open,
   onOpenChange,
+  contact,
 }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
+  /** When provided, the dialog edits this contact instead of creating one. */
+  contact?: Contact | null;
 }) {
-  const mutation = useCreateContact();
+  const isEdit = Boolean(contact);
+  const create = useCreateContact();
+  const update = useUpdateContact();
+  const pending = create.isPending || update.isPending;
+
   const [name, setName] = React.useState("");
   const [phone, setPhone] = React.useState("");
   const [email, setEmail] = React.useState("");
@@ -24,53 +31,49 @@ export function ContactCreateDialog({
   const [stage, setStage] = React.useState<ContactStage>("Lead");
   const [error, setError] = React.useState<string | null>(null);
 
-  function reset() {
-    setName("");
-    setPhone("");
-    setEmail("");
-    setCompany("");
-    setTags("");
-    setStage("Lead");
+  // Sync fields whenever the dialog opens (prefill for edit, blank for create).
+  React.useEffect(() => {
+    if (!open) return;
+    setName(contact?.name ?? "");
+    setPhone(contact?.phone ?? "");
+    setEmail(contact?.email ?? "");
+    setCompany(contact?.company ?? "");
+    setTags(contact?.tags.join(", ") ?? "");
+    setStage(contact?.stage ?? "Lead");
     setError(null);
-  }
+  }, [open, contact]);
 
   function submit() {
     setError(null);
-    mutation.mutate(
-      {
-        name: name.trim(),
-        phone: phone.trim() || undefined,
-        email: email.trim() || undefined,
-        company: company.trim() || undefined,
-        tags: tags
-          .split(",")
-          .map((t) => t.trim())
-          .filter(Boolean),
-        stage,
-      },
-      {
-        onSuccess: () => {
-          reset();
-          onOpenChange(false);
-        },
-        onError: (err) => setError(errorMessage(err)),
-      },
-    );
+    const input = {
+      name: name.trim(),
+      phone: phone.trim() || undefined,
+      email: email.trim() || undefined,
+      company: company.trim() || undefined,
+      tags: tags
+        .split(",")
+        .map((t) => t.trim())
+        .filter(Boolean),
+      stage,
+    };
+    const opts = {
+      onSuccess: () => onOpenChange(false),
+      onError: (err: unknown) => setError(errorMessage(err)),
+    };
+    if (contact) update.mutate({ id: contact.id, input }, opts);
+    else create.mutate(input, opts);
   }
 
   return (
     <FormDialog
       open={open}
-      onOpenChange={(v) => {
-        if (!v) reset();
-        onOpenChange(v);
-      }}
-      title="Nuevo contacto"
-      description="Añade un contacto a tu CRM."
+      onOpenChange={onOpenChange}
+      title={isEdit ? "Editar contacto" : "Nuevo contacto"}
+      description={isEdit ? "Actualiza los datos del contacto." : "Añade un contacto a tu CRM."}
       onSubmit={submit}
-      pending={mutation.isPending}
+      pending={pending}
       error={error}
-      submitLabel="Crear contacto"
+      submitLabel={isEdit ? "Guardar cambios" : "Crear contacto"}
     >
       <div className="space-y-1.5">
         <Label htmlFor="c-name">Nombre</Label>

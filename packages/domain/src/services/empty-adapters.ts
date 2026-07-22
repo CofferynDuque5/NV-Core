@@ -29,6 +29,7 @@ export const emptyAdapters: Services = {
     list: () => emptyList(),
     get: () => delay(null),
     create: () => notAvailable(),
+    update: () => notAvailable(),
     remove: () => notAvailable(),
   },
   posts: {

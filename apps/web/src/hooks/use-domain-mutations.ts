@@ -8,6 +8,8 @@ import type {
   CreateGroupInput,
   CreateSegmentInput,
   CreateTemplateInput,
+  UpdateCampaignInput,
+  UpdateContactInput,
   UpsertConnectionInput,
 } from "@nv/domain";
 
@@ -30,6 +32,17 @@ export function useCreateContact() {
   });
 }
 
+export function useUpdateContact() {
+  const svc = useServices();
+  const ws = useWorkspace();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, input }: { id: string; input: UpdateContactInput }) =>
+      svc.contacts.update(ws.id, id, input),
+    onSuccess: () => qc.invalidateQueries({ queryKey: [ws.id, "contacts"] }),
+  });
+}
+
 export function useDeleteContact() {
   const svc = useServices();
   const ws = useWorkspace();
@@ -46,6 +59,27 @@ export function useCreateCampaign() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (input: CreateCampaignInput) => svc.campaigns.create(ws.id, input),
+    onSuccess: () => qc.invalidateQueries({ queryKey: [ws.id, "campaigns"] }),
+  });
+}
+
+export function useDeleteCampaign() {
+  const svc = useServices();
+  const ws = useWorkspace();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => svc.campaigns.remove(ws.id, id),
+    onSuccess: () => qc.invalidateQueries({ queryKey: [ws.id, "campaigns"] }),
+  });
+}
+
+export function useUpdateCampaign() {
+  const svc = useServices();
+  const ws = useWorkspace();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, input }: { id: string; input: UpdateCampaignInput }) =>
+      svc.campaigns.update(ws.id, id, input),
     onSuccess: () => qc.invalidateQueries({ queryKey: [ws.id, "campaigns"] }),
   });
 }

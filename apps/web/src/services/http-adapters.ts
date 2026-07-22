@@ -89,6 +89,7 @@ export function createHttpAdapters(opts: HttpAdapterOptions): Services {
       list: (id) => get<ListResult<Campaign>>(`${ws(id)}/campaigns`),
       get: (id, cid) => get<Campaign | null>(`${ws(id)}/campaigns/${cid}`),
       create: (id, input) => post<Campaign>(`${ws(id)}/campaigns`, input),
+      update: (id, cid, input) => patch<Campaign>(`${ws(id)}/campaigns/${cid}`, input),
       remove: (id, cid) => del<void>(`${ws(id)}/campaigns/${cid}`),
     },
     posts: {

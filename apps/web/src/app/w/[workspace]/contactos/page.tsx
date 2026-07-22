@@ -1,7 +1,8 @@
 "use client";
 
 import * as React from "react";
-import { Contact, Download, Filter, Loader2, Plus, Send, Trash2, Upload } from "lucide-react";
+import type { Contact as ContactEntity } from "@nv/domain";
+import { Contact, Download, Filter, Loader2, Pencil, Plus, Send, Trash2, Upload } from "lucide-react";
 
 import { useContacts } from "@/hooks/use-domain-data";
 import { useDeleteContact } from "@/hooks/use-domain-mutations";
@@ -13,16 +14,26 @@ import { Panel } from "@/components/common/panel";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { ContactCreateDialog } from "@/components/entities/contact-create-dialog";
+import { ContactFormDialog } from "@/components/entities/contact-form-dialog";
 
 const COLUMNS = ["Contacto", "Teléfono", "Empresa", "Etiquetas", "Estado", "Último", ""];
 
 export default function ContactosPage() {
   const contacts = useContacts();
   const openCompose = useUiStore((s) => s.openCompose);
-  const [createOpen, setCreateOpen] = React.useState(false);
+  const [dialogOpen, setDialogOpen] = React.useState(false);
+  const [editing, setEditing] = React.useState<ContactEntity | null>(null);
   const del = useDeleteContact();
   const [deletingId, setDeletingId] = React.useState<string | null>(null);
+
+  function openCreate() {
+    setEditing(null);
+    setDialogOpen(true);
+  }
+  function openEdit(row: ContactEntity) {
+    setEditing(row);
+    setDialogOpen(true);
+  }
 
   function remove(id: string) {
     setDeletingId(id);
@@ -40,7 +51,7 @@ export default function ContactosPage() {
             <Button variant="secondary" size="sm" onClick={openCompose}>
               <Send className="size-4" /> Mensaje masivo
             </Button>
-            <Button size="sm" onClick={() => setCreateOpen(true)}>
+            <Button size="sm" onClick={openCreate}>
               <Plus className="size-4" /> Nuevo
             </Button>
           </>
@@ -72,7 +83,7 @@ export default function ContactosPage() {
           description:
             "Importa contactos o crea el primero manualmente para empezar a segmentar y hacer difusión.",
           action: (
-            <Button size="sm" onClick={() => setCreateOpen(true)}>
+            <Button size="sm" onClick={openCreate}>
               <Plus className="size-4" /> Nuevo contacto
             </Button>
           ),
@@ -107,19 +118,28 @@ export default function ContactosPage() {
                     </td>
                     <td className="px-4 py-3 text-ink-muted">{row.stage}</td>
                     <td className="px-4 py-3 text-ink-muted">{row.lastContactAt}</td>
-                    <td className="px-4 py-3 text-right">
-                      <button
-                        onClick={() => remove(row.id)}
-                        disabled={deletingId === row.id}
-                        className="rounded-md p-1.5 text-ink-faint transition-colors hover:bg-state-danger/10 hover:text-state-danger"
-                        title="Eliminar"
-                      >
-                        {deletingId === row.id ? (
-                          <Loader2 className="size-4 animate-spin" />
-                        ) : (
-                          <Trash2 className="size-4" />
-                        )}
-                      </button>
+                    <td className="px-4 py-3">
+                      <div className="flex items-center justify-end gap-1">
+                        <button
+                          onClick={() => openEdit(row)}
+                          className="rounded-md p-1.5 text-ink-faint transition-colors hover:bg-panel-high hover:text-ink"
+                          title="Editar"
+                        >
+                          <Pencil className="size-4" />
+                        </button>
+                        <button
+                          onClick={() => remove(row.id)}
+                          disabled={deletingId === row.id}
+                          className="rounded-md p-1.5 text-ink-faint transition-colors hover:bg-state-danger/10 hover:text-state-danger"
+                          title="Eliminar"
+                        >
+                          {deletingId === row.id ? (
+                            <Loader2 className="size-4 animate-spin" />
+                          ) : (
+                            <Trash2 className="size-4" />
+                          )}
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -129,7 +149,7 @@ export default function ContactosPage() {
         )}
       </QueryBoundary>
 
-      <ContactCreateDialog open={createOpen} onOpenChange={setCreateOpen} />
+      <ContactFormDialog open={dialogOpen} onOpenChange={setDialogOpen} contact={editing} />
     </div>
   );
 }
