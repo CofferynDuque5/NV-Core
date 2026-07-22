@@ -31,7 +31,8 @@
     "build": "tsc -p tsconfig.build.json",
     "clean": "rm -rf dist",
     "lint": "echo \"(domain) no lint configured\"",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "prepare": "tsc -p tsconfig.build.json"
   },
   "devDependencies": {
     "@nv/tsconfig": "workspace:*",

@@ -4,6 +4,8 @@
   "private": true,
   "description": "NV Core backend (NestJS)",
   "scripts": {
+    "predev": "pnpm --filter @nv/domain build",
+    "prebuild": "pnpm --filter @nv/domain build",
     "build": "nest build",
     "dev": "nest start --watch",
     "start": "node dist/main.js",

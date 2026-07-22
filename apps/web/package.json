@@ -3,7 +3,9 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
+    "predev": "pnpm --filter @nv/domain build",
     "dev": "next dev -p 3000",
+    "prebuild": "pnpm --filter @nv/domain build",
     "build": "next build",
     "start": "next start",
     "lint": "next lint",

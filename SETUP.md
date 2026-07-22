@@ -36,6 +36,13 @@ Desde la raíz del proyecto (donde está `package.json`):
 pnpm install
 ```
 
+> El paquete compartido `@nv/domain` se compila **automáticamente** al instalar
+> y al arrancar (`dev`/`build`). Si alguna vez ves errores
+> `Cannot find module '@nv/domain'`, compílalo a mano una vez:
+> ```bash
+> pnpm --filter @nv/domain build
+> ```
+
 ---
 
 ## 2. Base de datos PostgreSQL
