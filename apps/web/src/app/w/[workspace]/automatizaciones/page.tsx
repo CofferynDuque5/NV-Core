@@ -1,10 +1,10 @@
 "use client";
 
 import * as React from "react";
-import { Loader2, Plus, Trash2, Workflow } from "lucide-react";
+import { Loader2, Play, Plus, Trash2, Workflow } from "lucide-react";
 
 import { useAutomations } from "@/hooks/use-domain-data";
-import { useDeleteAutomation } from "@/hooks/use-domain-mutations";
+import { useDeleteAutomation, useRunAutomation } from "@/hooks/use-domain-mutations";
 import { useConfirm } from "@/providers/confirm-provider";
 import { PageHeader } from "@/components/common/page-header";
 import { QueryBoundary } from "@/components/common/query-boundary";
@@ -17,9 +17,16 @@ import { AutomationCreateDialog } from "@/components/entities/automation-create-
 export default function AutomatizacionesPage() {
   const automations = useAutomations();
   const del = useDeleteAutomation();
+  const run = useRunAutomation();
   const confirm = useConfirm();
   const [open, setOpen] = React.useState(false);
   const [deletingId, setDeletingId] = React.useState<string | null>(null);
+  const [runningId, setRunningId] = React.useState<string | null>(null);
+
+  function trigger(id: string) {
+    setRunningId(id);
+    run.mutate(id, { onSettled: () => setRunningId(null) });
+  }
 
   async function remove(id: string, name: string) {
     const ok = await confirm({
@@ -79,6 +86,21 @@ export default function AutomatizacionesPage() {
                   ) : null}
                 </div>
                 <span className="shrink-0 text-xs text-ink-faint">{a.runs} ejecuciones</span>
+                {a.webhookUrl ? (
+                  <button
+                    onClick={() => trigger(a.id)}
+                    disabled={runningId === a.id}
+                    className="flex items-center gap-1.5 rounded-md px-2 py-1.5 text-xs font-medium text-brand transition-colors hover:bg-brand/10"
+                    title="Ejecutar ahora (n8n)"
+                  >
+                    {runningId === a.id ? (
+                      <Loader2 className="size-4 animate-spin" />
+                    ) : (
+                      <Play className="size-4" />
+                    )}
+                    Ejecutar
+                  </button>
+                ) : null}
                 <button
                   onClick={() => remove(a.id, a.name)}
                   disabled={deletingId === a.id}

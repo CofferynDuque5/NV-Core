@@ -158,6 +158,8 @@ export function createHttpAdapters(opts: HttpAdapterOptions): Services {
       list: (id) => get<ListResult<Automation>>(`${ws(id)}/automations`),
       create: (id, input) => post<Automation>(`${ws(id)}/automations`, input),
       remove: (id, aid) => del<void>(`${ws(id)}/automations/${aid}`),
+      run: (id, aid) =>
+        post<{ triggered: boolean; runs: number }>(`${ws(id)}/automations/${aid}/run`, {}),
     },
     analytics: { snapshot: (id) => get<AnalyticsSnapshot | null>(`${ws(id)}/analytics`) },
     connections: {

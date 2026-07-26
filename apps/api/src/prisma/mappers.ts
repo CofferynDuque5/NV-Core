@@ -146,6 +146,7 @@ export const mapAutomation = (a: PAutomation): Automation => ({
   runs: a.runs,
   description: a.description ?? "",
   nodes: (a.nodes as unknown as Automation["nodes"]) ?? [],
+  webhookUrl: a.webhookUrl ?? undefined,
 });
 
 export const mapCalendarEvent = (e: PCalendarEvent): CalendarEvent => ({

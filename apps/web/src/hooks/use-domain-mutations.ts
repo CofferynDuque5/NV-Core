@@ -228,6 +228,20 @@ export function useDeleteAutomation() {
   });
 }
 
+export function useRunAutomation() {
+  const svc = useServices();
+  const ws = useWorkspace();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => svc.automations.run(ws.id, id),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: [ws.id, "automations"] });
+      toast.success("Automatización ejecutada");
+    },
+    onError: (err) => toast.error(errText(err)),
+  });
+}
+
 // ── Inbox ─────────────────────────────────────────────────────────────────────
 export function useCreateConversation() {
   const svc = useServices();

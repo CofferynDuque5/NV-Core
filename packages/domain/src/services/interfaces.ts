@@ -93,6 +93,12 @@ export interface CreateAutomationInput {
   description?: string;
   status?: Automation["status"];
   nodes?: Automation["nodes"];
+  webhookUrl?: string;
+}
+
+export interface RunAutomationResult {
+  triggered: boolean;
+  runs: number;
 }
 
 export interface CampaignService {
@@ -197,6 +203,8 @@ export interface AutomationService {
   list(workspaceId: string): Promise<ListResult<Automation>>;
   create(workspaceId: string, input: CreateAutomationInput): Promise<Automation>;
   remove(workspaceId: string, id: string): Promise<void>;
+  /** Trigger the automation's n8n webhook and increment its run count. */
+  run(workspaceId: string, id: string): Promise<RunAutomationResult>;
 }
 
 export interface AnalyticsService {

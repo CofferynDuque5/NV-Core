@@ -190,6 +190,8 @@ export interface Automation {
   runs: number;
   description: string;
   nodes: AutomationNode[];
+  /** Optional n8n webhook (absolute URL or path) triggered when the flow runs. */
+  webhookUrl?: string;
 }
 
 export interface CalendarEvent {

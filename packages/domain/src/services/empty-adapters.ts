@@ -80,6 +80,7 @@ export const emptyAdapters: Services = {
     list: () => emptyList(),
     create: () => notAvailable(),
     remove: () => notAvailable(),
+    run: () => notAvailable(),
   },
   analytics: {
     snapshot: () => delay(null),

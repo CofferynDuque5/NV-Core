@@ -19,19 +19,26 @@ export function AutomationCreateDialog({
   const [name, setName] = React.useState("");
   const [description, setDescription] = React.useState("");
   const [status, setStatus] = React.useState<"activo" | "pausado">("pausado");
+  const [webhookUrl, setWebhookUrl] = React.useState("");
   const [error, setError] = React.useState<string | null>(null);
 
   function reset() {
     setName("");
     setDescription("");
     setStatus("pausado");
+    setWebhookUrl("");
     setError(null);
   }
 
   function submit() {
     setError(null);
     mutation.mutate(
-      { name: name.trim(), description: description.trim() || undefined, status },
+      {
+        name: name.trim(),
+        description: description.trim() || undefined,
+        status,
+        webhookUrl: webhookUrl.trim() || undefined,
+      },
       {
         onSuccess: () => {
           reset();
@@ -87,6 +94,20 @@ export function AutomationCreateDialog({
           <option value="pausado">Pausado</option>
           <option value="activo">Activo</option>
         </select>
+      </div>
+      <div className="space-y-1.5">
+        <Label htmlFor="au-webhook">
+          Webhook de n8n <span className="text-ink-faint">· opcional</span>
+        </Label>
+        <Input
+          id="au-webhook"
+          value={webhookUrl}
+          onChange={(e) => setWebhookUrl(e.target.value)}
+          placeholder="https://n8n.tu-dominio.com/webhook/abc123"
+        />
+        <p className="text-xs text-ink-faint">
+          URL absoluta, o un path si defines N8N_BASE_URL. Se llama al ejecutar el flujo.
+        </p>
       </div>
     </FormDialog>
   );
