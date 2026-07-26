@@ -250,6 +250,13 @@ cuáles están conectadas (badge «Conectado») según las claves configuradas.
   pantalla muestra su estado vacío y el endpoint responde 503.
 - **Email (Resend)** → con `RESEND_API_KEY` (y opcional `MAIL_FROM`), invitar a
   un miembro envía un email de notificación (best-effort; nunca bloquea la acción).
+- **Mensajería (WhatsApp / Telegram)** → con `WHATSAPP_TOKEN` +
+  `WHATSAPP_PHONE_NUMBER_ID` o `TELEGRAM_BOT_TOKEN`, las respuestas del Inbox se
+  entregan al destinatario (si la conversación tiene teléfono/chat id). Best-effort:
+  el mensaje siempre se guarda aunque falle el envío externo.
+- **Pagos (Stripe)** → con `STRIPE_SECRET_KEY` (+ `STRIPE_PRICE_ID` para el precio
+  por defecto), Configuración → Facturación habilita checkout de suscripción y el
+  portal de cliente de Stripe. Sin clave, la pestaña muestra su estado vacío.
 
 De dónde sacar cada clave:
 
