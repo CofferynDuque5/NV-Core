@@ -38,6 +38,8 @@ export const envSchema = z.object({
   GEMINI_API_KEY: z.string().optional(),
   // Optional overrides — pick a provider explicitly and/or override models.
   AI_PROVIDER: z.enum(["openai", "anthropic", "gemini"]).optional(),
+  // Optional monthly cap on AI calls per workspace (0/unset = unlimited).
+  AI_MONTHLY_QUOTA: z.coerce.number().int().nonnegative().optional(),
   OPENAI_MODEL: z.string().default("gpt-4o-mini"),
   ANTHROPIC_MODEL: z.string().default("claude-haiku-4-5-20251001"),
   GEMINI_MODEL: z.string().default("gemini-1.5-flash"),

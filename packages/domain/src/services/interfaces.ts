@@ -272,9 +272,17 @@ export interface GenerateVariantsInput {
   tone: string;
 }
 
+export interface AiUsage {
+  period: string;
+  calls: number;
+  tokens: number;
+  quota: number | null;
+}
+
 export interface AiService {
   generateVariants(workspaceId: string, input: GenerateVariantsInput): Promise<AiVariant[]>;
   suggestHashtags(workspaceId: string, input: { prompt: string }): Promise<string[]>;
+  usage(workspaceId: string): Promise<AiUsage>;
 }
 
 export interface SendMessageExternalInput {

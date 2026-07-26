@@ -26,6 +26,7 @@ export interface AppConfig {
       anthropic?: string;
       gemini?: string;
       models: { openai: string; anthropic: string; gemini: string };
+      monthlyQuota?: number;
     };
     whatsapp: { token?: string; phoneNumberId?: string; verifyToken?: string };
     meta: { appId?: string; appSecret?: string };
@@ -82,6 +83,7 @@ export function buildConfig(env: Env): AppConfig {
           anthropic: env.ANTHROPIC_MODEL,
           gemini: env.GEMINI_MODEL,
         },
+        monthlyQuota: env.AI_MONTHLY_QUOTA,
       },
       whatsapp: {
         token: env.WHATSAPP_TOKEN,

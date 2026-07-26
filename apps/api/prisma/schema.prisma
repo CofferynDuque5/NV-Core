@@ -311,6 +311,18 @@ model GoogleConnection {
   createdAt     DateTime @default(now())
 }
 
+/** AI usage aggregated per workspace and month (YYYY-MM) for metering/quotas. */
+model AiUsage {
+  id            String   @id @default(cuid())
+  workspaceSlug String
+  period        String
+  calls         Int      @default(0)
+  tokens        Int      @default(0)
+  updatedAt     DateTime @updatedAt
+
+  @@unique([workspaceSlug, period])
+}
+
 /** Stripe billing state, one per workspace. */
 model BillingAccount {
   id                 String   @id @default(cuid())

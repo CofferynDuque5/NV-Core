@@ -127,6 +127,12 @@ export function useIntegrations() {
   });
 }
 
+export function useAiUsage() {
+  const svc = useServices();
+  const ws = useWorkspace();
+  return useQuery({ queryKey: [ws.id, "ai", "usage"], queryFn: () => svc.ai.usage(ws.id) });
+}
+
 export function useGoogleStatus() {
   const svc = useServices();
   const ws = useWorkspace();

@@ -13,6 +13,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { useGenerateVariants } from "@/hooks/use-domain-mutations";
+import { useAiUsage } from "@/hooks/use-domain-data";
 
 const TONES = ["Entusiasta", "Profesional", "Cercano", "Urgente", "Divertido"];
 
@@ -21,6 +22,7 @@ export default function AiStudioPage() {
   const [channel, setChannel] = React.useState(CHANNEL_LIST[0]!.id);
   const [tone, setTone] = React.useState(TONES[0]!);
   const generate = useGenerateVariants();
+  const usage = useAiUsage();
   const variants = generate.data ?? [];
 
   const canGenerate = prompt.trim().length >= 3 && !generate.isPending;
@@ -45,6 +47,14 @@ export default function AiStudioPage() {
         eyebrow="Inteligencia de contenido"
         title="AI Content Studio"
         description="Genera captions y variantes A/B con IA (OpenAI, Anthropic o Gemini)."
+        actions={
+          usage.data ? (
+            <span className="rounded-full border border-line-soft bg-panel px-3 py-1 text-xs text-ink-muted">
+              {usage.data.calls}
+              {usage.data.quota ? ` / ${usage.data.quota}` : ""} usos · {usage.data.period || "este mes"}
+            </span>
+          ) : undefined
+        }
       />
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">

@@ -118,6 +118,7 @@ export const emptyAdapters: Services = {
   ai: {
     generateVariants: () => delay([]),
     suggestHashtags: () => delay([]),
+    usage: () => delay({ period: "", calls: 0, tokens: 0, quota: null }),
   },
   messaging: {
     send: () => notAvailable(),
