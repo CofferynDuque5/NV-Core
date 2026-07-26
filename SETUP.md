@@ -264,6 +264,10 @@ cuáles están conectadas (badge «Conectado») según las claves configuradas.
   `APP_URL`/`API_URL` correctos, Conexiones muestra «Conectar con Google»
   (Calendar/Drive). Autoriza en Google Console el redirect
   `{API_URL}/api/integrations/google/callback`.
+- **Automatización (n8n)** → una automatización puede guardar un webhook de n8n
+  (URL absoluta, o un path si defines `N8N_BASE_URL`). El botón «Ejecutar» en
+  Automatizaciones llama a ese webhook y suma una ejecución. `N8N_API_KEY` se
+  envía como cabecera si está definido.
 
 De dónde sacar cada clave:
 
