@@ -10,7 +10,9 @@ import type { AppConfig } from "./config/configuration";
 import { AllExceptionsFilter } from "./common/filters/all-exceptions.filter";
 
 async function bootstrap(): Promise<void> {
-  const app = await NestFactory.create(AppModule, { bufferLogs: false });
+  // rawBody: true keeps a raw copy of the body (needed for Stripe webhook
+  // signature verification) alongside normal JSON parsing for every other route.
+  const app = await NestFactory.create(AppModule, { bufferLogs: false, rawBody: true });
   const config = app.get(ConfigService<AppConfig, true>);
 
   app.use(cookieParser());
