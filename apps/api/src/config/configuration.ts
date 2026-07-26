@@ -10,6 +10,8 @@ export interface AppConfig {
   corsOrigins: string[];
   appUrl: string;
   apiUrl: string;
+  /** Workspace slug that receives inbound WhatsApp/Telegram messages. */
+  inboundWorkspace?: string;
   auth: { secret: string; expiresIn: string; refreshTtlDays: number };
   database: { url?: string };
   redis: { url?: string };
@@ -23,9 +25,9 @@ export interface AppConfig {
       gemini?: string;
       models: { openai: string; anthropic: string; gemini: string };
     };
-    whatsapp: { token?: string; phoneNumberId?: string };
+    whatsapp: { token?: string; phoneNumberId?: string; verifyToken?: string };
     meta: { appId?: string; appSecret?: string };
-    telegram: { botToken?: string };
+    telegram: { botToken?: string; webhookSecret?: string };
     google: { clientId?: string; clientSecret?: string };
     stripe: { secretKey?: string; webhookSecret?: string; priceId?: string };
     cloudinary: { url?: string };
@@ -50,6 +52,7 @@ export function buildConfig(env: Env): AppConfig {
     corsOrigins: env.CORS_ORIGINS.split(",").map((o) => o.trim()).filter(Boolean),
     appUrl: env.APP_URL.replace(/\/$/, ""),
     apiUrl: env.API_URL.replace(/\/$/, ""),
+    inboundWorkspace: env.INBOUND_WORKSPACE,
     auth: { secret, expiresIn: env.JWT_EXPIRES_IN, refreshTtlDays: env.REFRESH_TOKEN_TTL_DAYS },
     database: { url: env.DATABASE_URL },
     redis: { url: env.REDIS_URL },
@@ -67,9 +70,13 @@ export function buildConfig(env: Env): AppConfig {
           gemini: env.GEMINI_MODEL,
         },
       },
-      whatsapp: { token: env.WHATSAPP_TOKEN, phoneNumberId: env.WHATSAPP_PHONE_NUMBER_ID },
+      whatsapp: {
+        token: env.WHATSAPP_TOKEN,
+        phoneNumberId: env.WHATSAPP_PHONE_NUMBER_ID,
+        verifyToken: env.WHATSAPP_VERIFY_TOKEN,
+      },
       meta: { appId: env.META_APP_ID, appSecret: env.META_APP_SECRET },
-      telegram: { botToken: env.TELEGRAM_BOT_TOKEN },
+      telegram: { botToken: env.TELEGRAM_BOT_TOKEN, webhookSecret: env.TELEGRAM_WEBHOOK_SECRET },
       google: { clientId: env.GOOGLE_CLIENT_ID, clientSecret: env.GOOGLE_CLIENT_SECRET },
       stripe: {
         secretKey: env.STRIPE_SECRET_KEY,

@@ -1,7 +1,10 @@
 import {
   Body,
   Controller,
+  ForbiddenException,
   Get,
+  Headers,
+  HttpCode,
   Injectable,
   Logger,
   Module,
@@ -9,21 +12,30 @@ import {
   Param,
   Patch,
   Post,
+  Query,
+  Res,
   ServiceUnavailableException,
   UseGuards,
 } from "@nestjs/common";
-import { ApiBearerAuth, ApiPropertyOptional, ApiTags } from "@nestjs/swagger";
+import { ConfigService } from "@nestjs/config";
+import { ApiBearerAuth, ApiExcludeEndpoint, ApiPropertyOptional, ApiTags } from "@nestjs/swagger";
+import { SkipThrottle } from "@nestjs/throttler";
 import { CHANNEL_IDS, type ChannelId, type Conversation, type Message } from "@nv/domain";
 import { IsBoolean, IsIn, IsOptional, IsString, MinLength } from "class-validator";
+import type { Response } from "express";
 
+import type { AppConfig } from "../../config/configuration";
 import { ListResultDto } from "../../common/dto/list-result.dto";
 import { WorkspaceId } from "../../common/tenant/workspace.decorator";
 import { WorkspaceGuard } from "../../common/tenant/workspace.guard";
+import { WorkspaceRegistry } from "../../common/workspace-registry.service";
 import { PrismaService } from "../../prisma/prisma.service";
 import { mapConversation, mapMessage } from "../../prisma/mappers";
 import { RolesGuard } from "../../auth/guards/roles.guard";
 import { Roles } from "../../auth/decorators/roles.decorator";
+import { Public } from "../../auth/decorators/public.decorator";
 import { MessagingModule, MessagingService } from "../messaging/messaging.module";
+import { parseTelegramInbound, parseWhatsAppInbound, type InboundMessage } from "./inbound";
 
 export class CreateConversationDto {
   @IsIn(CHANNEL_IDS) channel!: ChannelId;
@@ -50,6 +62,8 @@ export class InboxService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly messaging: MessagingService,
+    private readonly config: ConfigService<AppConfig, true>,
+    private readonly registry: WorkspaceRegistry,
   ) {}
 
   private db() {
@@ -61,6 +75,42 @@ export class InboxService {
     const conv = await this.db().conversation.findFirst({ where: { id, workspaceSlug: workspaceId } });
     if (!conv) throw new NotFoundException("Conversación no encontrada.");
     return conv;
+  }
+
+  /**
+   * Persist an inbound message: find (by channel + handle) or create its
+   * conversation in the configured inbound workspace, then append it.
+   * Best-effort — drops silently (with a log) when misconfigured.
+   */
+  async recordInbound(msg: InboundMessage): Promise<void> {
+    const slug = this.config.get("inboundWorkspace", { infer: true });
+    if (!slug) {
+      this.logger.warn("Mensaje entrante ignorado: define INBOUND_WORKSPACE.");
+      return;
+    }
+    if (!this.prisma.enabled) return;
+    if (!(await this.registry.exists(slug))) {
+      this.logger.warn(`Mensaje entrante ignorado: workspace "${slug}" no existe.`);
+      return;
+    }
+
+    let conversation = await this.prisma.conversation.findFirst({
+      where: { workspaceSlug: slug, channel: msg.channel, contactHandle: msg.contactHandle },
+    });
+    if (!conversation) {
+      conversation = await this.prisma.conversation.create({
+        data: {
+          workspaceSlug: slug,
+          channel: msg.channel,
+          contactName: msg.contactName,
+          contactHandle: msg.contactHandle,
+        },
+      });
+    }
+    await this.prisma.message.create({
+      data: { conversationId: conversation.id, direction: "in", text: msg.text },
+    });
+    this.logger.log(`Mensaje entrante (${msg.channel}) de ${msg.contactHandle} → ${slug}.`);
   }
 
   async conversations(workspaceId: string): Promise<ListResultDto<Conversation>> {
@@ -180,9 +230,89 @@ export class InboxController {
   }
 }
 
+/** Inbound WhatsApp (Meta Cloud API) webhook. Register at {API_URL}/api/integrations/whatsapp/webhook. */
+@ApiTags("inbox")
+@Controller("integrations/whatsapp")
+export class WhatsAppWebhookController {
+  private readonly logger = new Logger(WhatsAppWebhookController.name);
+
+  constructor(
+    private readonly service: InboxService,
+    private readonly config: ConfigService<AppConfig, true>,
+  ) {}
+
+  /** Meta verification handshake: echo hub.challenge when the token matches. */
+  @Public()
+  @SkipThrottle()
+  @Get("webhook")
+  @ApiExcludeEndpoint()
+  verify(
+    @Query("hub.mode") mode: string,
+    @Query("hub.verify_token") token: string,
+    @Query("hub.challenge") challenge: string,
+    @Res() res: Response,
+  ): void {
+    const expected = this.config.get("integrations", { infer: true }).whatsapp.verifyToken;
+    if (mode === "subscribe" && expected && token === expected) {
+      res.status(200).send(challenge ?? "");
+    } else {
+      res.status(403).send("forbidden");
+    }
+  }
+
+  @Public()
+  @SkipThrottle()
+  @Post("webhook")
+  @HttpCode(200)
+  @ApiExcludeEndpoint()
+  async event(@Body() body: unknown): Promise<{ received: true }> {
+    const messages = parseWhatsAppInbound(body);
+    for (const msg of messages) {
+      await this.service.recordInbound(msg).catch((err: unknown) =>
+        this.logger.warn(`WhatsApp inbound falló: ${(err as Error).message}`),
+      );
+    }
+    return { received: true };
+  }
+}
+
+/** Inbound Telegram webhook. Register with setWebhook at {API_URL}/api/integrations/telegram/webhook. */
+@ApiTags("inbox")
+@Controller("integrations/telegram")
+export class TelegramWebhookController {
+  private readonly logger = new Logger(TelegramWebhookController.name);
+
+  constructor(
+    private readonly service: InboxService,
+    private readonly config: ConfigService<AppConfig, true>,
+  ) {}
+
+  @Public()
+  @SkipThrottle()
+  @Post("webhook")
+  @HttpCode(200)
+  @ApiExcludeEndpoint()
+  async event(
+    @Body() body: unknown,
+    @Headers("x-telegram-bot-api-secret-token") secret?: string,
+  ): Promise<{ received: true }> {
+    const expected = this.config.get("integrations", { infer: true }).telegram.webhookSecret;
+    if (expected && secret !== expected) {
+      throw new ForbiddenException("Secret de webhook inválido.");
+    }
+    const msg = parseTelegramInbound(body);
+    if (msg) {
+      await this.service.recordInbound(msg).catch((err: unknown) =>
+        this.logger.warn(`Telegram inbound falló: ${(err as Error).message}`),
+      );
+    }
+    return { received: true };
+  }
+}
+
 @Module({
   imports: [MessagingModule],
-  controllers: [InboxController],
+  controllers: [InboxController, WhatsAppWebhookController, TelegramWebhookController],
   providers: [InboxService],
 })
 export class InboxModule {}

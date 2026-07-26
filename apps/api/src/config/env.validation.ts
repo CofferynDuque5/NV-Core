@@ -40,9 +40,13 @@ export const envSchema = z.object({
   // Messaging
   WHATSAPP_TOKEN: z.string().optional(),
   WHATSAPP_PHONE_NUMBER_ID: z.string().optional(),
+  WHATSAPP_VERIFY_TOKEN: z.string().optional(),
   META_APP_ID: z.string().optional(),
   META_APP_SECRET: z.string().optional(),
   TELEGRAM_BOT_TOKEN: z.string().optional(),
+  TELEGRAM_WEBHOOK_SECRET: z.string().optional(),
+  // Workspace that receives inbound messages (WhatsApp/Telegram webhooks).
+  INBOUND_WORKSPACE: z.string().optional(),
 
   // Google
   GOOGLE_CLIENT_ID: z.string().optional(),
