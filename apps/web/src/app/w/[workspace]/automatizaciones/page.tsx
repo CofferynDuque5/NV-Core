@@ -5,6 +5,7 @@ import { Loader2, Plus, Trash2, Workflow } from "lucide-react";
 
 import { useAutomations } from "@/hooks/use-domain-data";
 import { useDeleteAutomation } from "@/hooks/use-domain-mutations";
+import { useConfirm } from "@/providers/confirm-provider";
 import { PageHeader } from "@/components/common/page-header";
 import { QueryBoundary } from "@/components/common/query-boundary";
 import { ListSkeleton } from "@/components/common/skeletons";
@@ -16,10 +17,18 @@ import { AutomationCreateDialog } from "@/components/entities/automation-create-
 export default function AutomatizacionesPage() {
   const automations = useAutomations();
   const del = useDeleteAutomation();
+  const confirm = useConfirm();
   const [open, setOpen] = React.useState(false);
   const [deletingId, setDeletingId] = React.useState<string | null>(null);
 
-  function remove(id: string) {
+  async function remove(id: string, name: string) {
+    const ok = await confirm({
+      title: "Eliminar automatización",
+      description: `¿Eliminar el flujo "${name}"?`,
+      confirmLabel: "Eliminar",
+      destructive: true,
+    });
+    if (!ok) return;
     setDeletingId(id);
     del.mutate(id, { onSettled: () => setDeletingId(null) });
   }
@@ -71,7 +80,7 @@ export default function AutomatizacionesPage() {
                 </div>
                 <span className="shrink-0 text-xs text-ink-faint">{a.runs} ejecuciones</span>
                 <button
-                  onClick={() => remove(a.id)}
+                  onClick={() => remove(a.id, a.name)}
                   disabled={deletingId === a.id}
                   className="rounded-md p-1.5 text-ink-faint transition-colors hover:bg-state-danger/10 hover:text-state-danger"
                   title="Eliminar"

@@ -1,6 +1,7 @@
 "use client";
 
 import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
 import type {
   AddMemberInput,
   CreateAutomationInput,
@@ -19,17 +20,28 @@ import { useWorkspace } from "./use-workspace";
 
 /**
  * Mutation hooks — write through the service registry (HTTP adapter → NestJS)
- * and invalidate the matching list query so the UI refreshes. In demo mode the
- * empty adapter throws a clear "backend required" error surfaced by the form.
+ * and invalidate the matching list query so the UI refreshes.
+ *
+ * Toast policy: every mutation shows a success toast. Operations without an
+ * inline form (deletes, member role change/remove) also show an error toast;
+ * create/update surface their error inside the dialog instead.
  */
 
+function errText(err: unknown): string {
+  return err instanceof Error ? err.message : "Ocurrió un error.";
+}
+
+// ── Contacts ────────────────────────────────────────────────────────────────
 export function useCreateContact() {
   const svc = useServices();
   const ws = useWorkspace();
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (input: CreateContactInput) => svc.contacts.create(ws.id, input),
-    onSuccess: () => qc.invalidateQueries({ queryKey: [ws.id, "contacts"] }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: [ws.id, "contacts"] });
+      toast.success("Contacto creado");
+    },
   });
 }
 
@@ -40,7 +52,10 @@ export function useUpdateContact() {
   return useMutation({
     mutationFn: ({ id, input }: { id: string; input: UpdateContactInput }) =>
       svc.contacts.update(ws.id, id, input),
-    onSuccess: () => qc.invalidateQueries({ queryKey: [ws.id, "contacts"] }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: [ws.id, "contacts"] });
+      toast.success("Contacto actualizado");
+    },
   });
 }
 
@@ -50,27 +65,25 @@ export function useDeleteContact() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (id: string) => svc.contacts.remove(ws.id, id),
-    onSuccess: () => qc.invalidateQueries({ queryKey: [ws.id, "contacts"] }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: [ws.id, "contacts"] });
+      toast.success("Contacto eliminado");
+    },
+    onError: (err) => toast.error(errText(err)),
   });
 }
 
+// ── Campaigns ───────────────────────────────────────────────────────────────
 export function useCreateCampaign() {
   const svc = useServices();
   const ws = useWorkspace();
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (input: CreateCampaignInput) => svc.campaigns.create(ws.id, input),
-    onSuccess: () => qc.invalidateQueries({ queryKey: [ws.id, "campaigns"] }),
-  });
-}
-
-export function useDeleteCampaign() {
-  const svc = useServices();
-  const ws = useWorkspace();
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: (id: string) => svc.campaigns.remove(ws.id, id),
-    onSuccess: () => qc.invalidateQueries({ queryKey: [ws.id, "campaigns"] }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: [ws.id, "campaigns"] });
+      toast.success("Campaña creada");
+    },
   });
 }
 
@@ -81,17 +94,38 @@ export function useUpdateCampaign() {
   return useMutation({
     mutationFn: ({ id, input }: { id: string; input: UpdateCampaignInput }) =>
       svc.campaigns.update(ws.id, id, input),
-    onSuccess: () => qc.invalidateQueries({ queryKey: [ws.id, "campaigns"] }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: [ws.id, "campaigns"] });
+      toast.success("Campaña actualizada");
+    },
   });
 }
 
+export function useDeleteCampaign() {
+  const svc = useServices();
+  const ws = useWorkspace();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => svc.campaigns.remove(ws.id, id),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: [ws.id, "campaigns"] });
+      toast.success("Campaña eliminada");
+    },
+    onError: (err) => toast.error(errText(err)),
+  });
+}
+
+// ── Segments / Groups / Templates ─────────────────────────────────────────────
 export function useCreateSegment() {
   const svc = useServices();
   const ws = useWorkspace();
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (input: CreateSegmentInput) => svc.segments.create(ws.id, input),
-    onSuccess: () => qc.invalidateQueries({ queryKey: [ws.id, "segments"] }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: [ws.id, "segments"] });
+      toast.success("Segmento creado");
+    },
   });
 }
 
@@ -101,7 +135,10 @@ export function useCreateGroup() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (input: CreateGroupInput) => svc.groups.create(ws.id, input),
-    onSuccess: () => qc.invalidateQueries({ queryKey: [ws.id, "groups"] }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: [ws.id, "groups"] });
+      toast.success("Grupo creado");
+    },
   });
 }
 
@@ -111,17 +148,24 @@ export function useCreateTemplate() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (input: CreateTemplateInput) => svc.templates.create(ws.id, input),
-    onSuccess: () => qc.invalidateQueries({ queryKey: [ws.id, "templates"] }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: [ws.id, "templates"] });
+      toast.success("Plantilla creada");
+    },
   });
 }
 
+// ── Connections ───────────────────────────────────────────────────────────────
 export function useUpsertConnection() {
   const svc = useServices();
   const ws = useWorkspace();
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (input: UpsertConnectionInput) => svc.connections.upsert(ws.id, input),
-    onSuccess: () => qc.invalidateQueries({ queryKey: [ws.id, "connections"] }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: [ws.id, "connections"] });
+      toast.success("Conexión guardada");
+    },
   });
 }
 
@@ -131,17 +175,25 @@ export function useDeleteConnection() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (id: string) => svc.connections.remove(ws.id, id),
-    onSuccess: () => qc.invalidateQueries({ queryKey: [ws.id, "connections"] }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: [ws.id, "connections"] });
+      toast.success("Conexión eliminada");
+    },
+    onError: (err) => toast.error(errText(err)),
   });
 }
 
+// ── Automations ───────────────────────────────────────────────────────────────
 export function useCreateAutomation() {
   const svc = useServices();
   const ws = useWorkspace();
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (input: CreateAutomationInput) => svc.automations.create(ws.id, input),
-    onSuccess: () => qc.invalidateQueries({ queryKey: [ws.id, "automations"] }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: [ws.id, "automations"] });
+      toast.success("Automatización creada");
+    },
   });
 }
 
@@ -151,10 +203,15 @@ export function useDeleteAutomation() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (id: string) => svc.automations.remove(ws.id, id),
-    onSuccess: () => qc.invalidateQueries({ queryKey: [ws.id, "automations"] }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: [ws.id, "automations"] });
+      toast.success("Automatización eliminada");
+    },
+    onError: (err) => toast.error(errText(err)),
   });
 }
 
+// ── Team / members ────────────────────────────────────────────────────────────
 function invalidateTeam(qc: ReturnType<typeof useQueryClient>, wsId: string) {
   void qc.invalidateQueries({ queryKey: [wsId, "team"] });
   void qc.invalidateQueries({ queryKey: [wsId, "roles"] });
@@ -166,7 +223,11 @@ export function useAddMember() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (input: AddMemberInput) => svc.team.addMember(ws.id, input),
-    onSuccess: () => invalidateTeam(qc, ws.id),
+    onSuccess: () => {
+      invalidateTeam(qc, ws.id);
+      toast.success("Miembro actualizado");
+    },
+    onError: (err) => toast.error(errText(err)),
   });
 }
 
@@ -176,6 +237,10 @@ export function useRemoveMember() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (userId: string) => svc.team.removeMember(ws.id, userId),
-    onSuccess: () => invalidateTeam(qc, ws.id),
+    onSuccess: () => {
+      invalidateTeam(qc, ws.id);
+      toast.success("Miembro eliminado");
+    },
+    onError: (err) => toast.error(errText(err)),
   });
 }

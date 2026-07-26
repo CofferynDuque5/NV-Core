@@ -6,6 +6,7 @@ import { Contact, Download, Filter, Loader2, Pencil, Plus, Send, Trash2, Upload 
 
 import { useContacts } from "@/hooks/use-domain-data";
 import { useDeleteContact } from "@/hooks/use-domain-mutations";
+import { useConfirm } from "@/providers/confirm-provider";
 import { useUiStore } from "@/stores/ui-store";
 import { PageHeader } from "@/components/common/page-header";
 import { QueryBoundary } from "@/components/common/query-boundary";
@@ -24,6 +25,7 @@ export default function ContactosPage() {
   const [dialogOpen, setDialogOpen] = React.useState(false);
   const [editing, setEditing] = React.useState<ContactEntity | null>(null);
   const del = useDeleteContact();
+  const confirm = useConfirm();
   const [deletingId, setDeletingId] = React.useState<string | null>(null);
 
   function openCreate() {
@@ -34,8 +36,14 @@ export default function ContactosPage() {
     setEditing(row);
     setDialogOpen(true);
   }
-
-  function remove(id: string) {
+  async function remove(id: string, name: string) {
+    const ok = await confirm({
+      title: "Eliminar contacto",
+      description: `¿Eliminar a ${name}? Esta acción no se puede deshacer.`,
+      confirmLabel: "Eliminar",
+      destructive: true,
+    });
+    if (!ok) return;
     setDeletingId(id);
     del.mutate(id, { onSettled: () => setDeletingId(null) });
   }
@@ -128,7 +136,7 @@ export default function ContactosPage() {
                           <Pencil className="size-4" />
                         </button>
                         <button
-                          onClick={() => remove(row.id)}
+                          onClick={() => remove(row.id, row.name)}
                           disabled={deletingId === row.id}
                           className="rounded-md p-1.5 text-ink-faint transition-colors hover:bg-state-danger/10 hover:text-state-danger"
                           title="Eliminar"

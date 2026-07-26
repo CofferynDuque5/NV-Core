@@ -6,6 +6,7 @@ import { Loader2, Plug, Radio, Trash2 } from "lucide-react";
 
 import { useConnections } from "@/hooks/use-domain-data";
 import { useDeleteConnection } from "@/hooks/use-domain-mutations";
+import { useConfirm } from "@/providers/confirm-provider";
 import { PageHeader } from "@/components/common/page-header";
 import { Panel, PanelHeader } from "@/components/common/panel";
 import { EmptyState } from "@/components/common/empty-state";
@@ -18,13 +19,21 @@ const STATUS_TEXT = { ok: "Conectado", warn: "Con advertencias", down: "Caído" 
 export default function ConexionesPage() {
   const connections = useConnections();
   const del = useDeleteConnection();
+  const confirm = useConfirm();
   const [dialogChannel, setDialogChannel] = React.useState<ChannelId | null>(null);
   const [deletingId, setDeletingId] = React.useState<string | null>(null);
 
   const byChannel = new Map<ChannelId, Connection>();
   for (const c of connections.data ?? []) byChannel.set(c.channel, c);
 
-  function remove(id: string) {
+  async function remove(id: string, label: string) {
+    const ok = await confirm({
+      title: "Eliminar conexión",
+      description: `¿Desconectar ${label}?`,
+      confirmLabel: "Eliminar",
+      destructive: true,
+    });
+    if (!ok) return;
     setDeletingId(id);
     del.mutate(id, { onSettled: () => setDeletingId(null) });
   }
@@ -66,7 +75,7 @@ export default function ConexionesPage() {
                     Reconectar
                   </Button>
                   <button
-                    onClick={() => remove(conn.id)}
+                    onClick={() => remove(conn.id, ch.name)}
                     disabled={deletingId === conn.id}
                     className="rounded-md p-1.5 text-ink-faint transition-colors hover:bg-state-danger/10 hover:text-state-danger"
                     title="Eliminar"

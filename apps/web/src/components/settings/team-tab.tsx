@@ -6,6 +6,7 @@ import { Loader2, Trash2, UserPlus, Users } from "lucide-react";
 
 import { useTeam } from "@/hooks/use-domain-data";
 import { useAddMember, useRemoveMember } from "@/hooks/use-domain-mutations";
+import { useConfirm } from "@/providers/confirm-provider";
 import { useWorkspace } from "@/hooks/use-workspace";
 import { useAuthStore } from "@/stores/auth-store";
 import { Panel, PanelHeader } from "@/components/common/panel";
@@ -21,6 +22,7 @@ export function TeamTab() {
   const currentUser = useAuthStore((s) => s.user);
   const addMember = useAddMember();
   const removeMember = useRemoveMember();
+  const confirm = useConfirm();
   const [inviteOpen, setInviteOpen] = React.useState(false);
   const [busyId, setBusyId] = React.useState<string | null>(null);
 
@@ -33,7 +35,14 @@ export function TeamTab() {
     addMember.mutate({ email, role }, { onSettled: () => setBusyId(null) });
   }
 
-  function remove(memberId: string) {
+  async function remove(memberId: string, name: string) {
+    const ok = await confirm({
+      title: "Quitar miembro",
+      description: `¿Quitar a ${name} de este workspace?`,
+      confirmLabel: "Quitar",
+      destructive: true,
+    });
+    if (!ok) return;
     setBusyId(memberId);
     removeMember.mutate(memberId, { onSettled: () => setBusyId(null) });
   }
@@ -115,7 +124,7 @@ export function TeamTab() {
 
                   {canManage ? (
                     <button
-                      onClick={() => remove(m.id)}
+                      onClick={() => remove(m.id, m.name)}
                       disabled={busyId === m.id}
                       className="rounded-md p-1.5 text-ink-faint transition-colors hover:bg-state-danger/10 hover:text-state-danger disabled:opacity-50"
                       title="Quitar del workspace"

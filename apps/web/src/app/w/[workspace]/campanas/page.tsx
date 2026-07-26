@@ -7,6 +7,7 @@ import { Loader2, Megaphone, Pencil, Plus, Trash2 } from "lucide-react";
 import { EMPTY_METRIC } from "@/lib/utils";
 import { useCampaigns } from "@/hooks/use-domain-data";
 import { useDeleteCampaign } from "@/hooks/use-domain-mutations";
+import { useConfirm } from "@/providers/confirm-provider";
 import { PageHeader } from "@/components/common/page-header";
 import { QueryBoundary } from "@/components/common/query-boundary";
 import { CardGridSkeleton } from "@/components/common/skeletons";
@@ -27,6 +28,7 @@ const STATUS_VARIANT: Record<Campaign["status"], "default" | "success" | "warnin
 export default function CampanasPage() {
   const campaigns = useCampaigns();
   const del = useDeleteCampaign();
+  const confirm = useConfirm();
   const [dialogOpen, setDialogOpen] = React.useState(false);
   const [editing, setEditing] = React.useState<Campaign | null>(null);
   const [deletingId, setDeletingId] = React.useState<string | null>(null);
@@ -39,9 +41,16 @@ export default function CampanasPage() {
     setEditing(c);
     setDialogOpen(true);
   }
-  function remove(id: string) {
-    setDeletingId(id);
-    del.mutate(id, { onSettled: () => setDeletingId(null) });
+  async function remove(c: Campaign) {
+    const ok = await confirm({
+      title: "Eliminar campaña",
+      description: `¿Eliminar "${c.name}"? Esta acción no se puede deshacer.`,
+      confirmLabel: "Eliminar",
+      destructive: true,
+    });
+    if (!ok) return;
+    setDeletingId(c.id);
+    del.mutate(c.id, { onSettled: () => setDeletingId(null) });
   }
 
   return (
@@ -93,7 +102,7 @@ export default function CampanasPage() {
                       <Pencil className="size-4" />
                     </button>
                     <button
-                      onClick={() => remove(c.id)}
+                      onClick={() => remove(c)}
                       disabled={deletingId === c.id}
                       className="rounded-md p-1.5 text-ink-faint transition-colors hover:bg-state-danger/10 hover:text-state-danger"
                       title="Eliminar"
