@@ -108,9 +108,7 @@ export const emptyAdapters: Services = {
     suggestHashtags: () => delay([]),
   },
   messaging: {
-    send: () => {
-      throw new Error("MessagingService is not implemented yet (phase 2).");
-    },
+    send: () => notAvailable(),
   },
   billing: {
     portalUrl: () => delay(null),

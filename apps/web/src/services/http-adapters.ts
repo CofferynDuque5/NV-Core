@@ -178,11 +178,7 @@ export function createHttpAdapters(opts: HttpAdapterOptions): Services {
         post<{ hashtags: string[] }>(`${ws(id)}/ai/hashtags`, input).then((r) => r.hashtags),
     },
     messaging: {
-      send: (input) =>
-        post<{ id: string }>(
-          `/workspaces/${encodeURIComponent("__current__")}/messaging/send`,
-          input,
-        ),
+      send: (id, input) => post<{ id: string }>(`${ws(id)}/messaging/send`, input),
     },
     billing: {
       portalUrl: (id) => get<{ url: string | null }>(`${ws(id)}/billing/portal`).then((r) => r.url),

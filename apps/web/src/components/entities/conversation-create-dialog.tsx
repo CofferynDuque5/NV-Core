@@ -20,18 +20,27 @@ export function ConversationCreateDialog({
   const mutation = useCreateConversation();
   const [channel, setChannel] = React.useState<ChannelId>("wa");
   const [contactName, setContactName] = React.useState("");
+  const [contactHandle, setContactHandle] = React.useState("");
   const [error, setError] = React.useState<string | null>(null);
+
+  const supportsHandle = channel === "wa" || channel === "tg";
 
   function reset() {
     setChannel("wa");
     setContactName("");
+    setContactHandle("");
     setError(null);
   }
 
   function submit() {
     setError(null);
+    const handle = contactHandle.trim();
     mutation.mutate(
-      { channel, contactName: contactName.trim() },
+      {
+        channel,
+        contactName: contactName.trim(),
+        ...(supportsHandle && handle ? { contactHandle: handle } : {}),
+      },
       {
         onSuccess: (conv) => {
           reset();
@@ -82,6 +91,23 @@ export function ConversationCreateDialog({
           ))}
         </select>
       </div>
+      {supportsHandle ? (
+        <div className="space-y-1.5">
+          <Label htmlFor="cv-handle">
+            {channel === "wa" ? "Teléfono (E.164)" : "Chat ID de Telegram"}{" "}
+            <span className="text-ink-faint">· opcional</span>
+          </Label>
+          <Input
+            id="cv-handle"
+            value={contactHandle}
+            onChange={(e) => setContactHandle(e.target.value)}
+            placeholder={channel === "wa" ? "+34600111222" : "123456789"}
+          />
+          <p className="text-xs text-ink-faint">
+            Necesario para entregar respuestas al destinatario por {channel === "wa" ? "WhatsApp" : "Telegram"}.
+          </p>
+        </div>
+      ) : null}
     </FormDialog>
   );
 }

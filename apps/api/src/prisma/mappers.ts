@@ -161,6 +161,7 @@ export const mapConversation = (c: PConversation): Conversation => ({
   channel: c.channel as ChannelId,
   contactName: c.contactName,
   contactInitials: initials(c.contactName),
+  contactHandle: c.contactHandle ?? undefined,
   preview: "",
   unread: 0,
   lastMessageAt: c.createdAt.toISOString(),

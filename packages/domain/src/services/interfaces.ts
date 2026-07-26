@@ -146,6 +146,8 @@ export interface SegmentService {
 export interface CreateConversationInput {
   channel: Conversation["channel"];
   contactName: string;
+  /** Optional recipient address for outbound delivery (WhatsApp phone / Telegram chat id). */
+  contactHandle?: string;
 }
 
 export interface SendMessageInput {
@@ -234,8 +236,14 @@ export interface AiService {
   suggestHashtags(workspaceId: string, input: { prompt: string }): Promise<string[]>;
 }
 
+export interface SendMessageExternalInput {
+  channel: string;
+  to: string;
+  body: string;
+}
+
 export interface MessagingService {
-  send(input: { channel: string; to: string; body: string }): Promise<{ id: string }>;
+  send(workspaceId: string, input: SendMessageExternalInput): Promise<{ id: string }>;
 }
 
 export interface BillingService {

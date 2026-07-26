@@ -3,6 +3,7 @@ import {
   Controller,
   Get,
   Injectable,
+  Logger,
   Module,
   NotFoundException,
   Param,
@@ -11,9 +12,9 @@ import {
   ServiceUnavailableException,
   UseGuards,
 } from "@nestjs/common";
-import { ApiBearerAuth, ApiTags } from "@nestjs/swagger";
+import { ApiBearerAuth, ApiPropertyOptional, ApiTags } from "@nestjs/swagger";
 import { CHANNEL_IDS, type ChannelId, type Conversation, type Message } from "@nv/domain";
-import { IsBoolean, IsIn, IsString, MinLength } from "class-validator";
+import { IsBoolean, IsIn, IsOptional, IsString, MinLength } from "class-validator";
 
 import { ListResultDto } from "../../common/dto/list-result.dto";
 import { WorkspaceId } from "../../common/tenant/workspace.decorator";
@@ -22,10 +23,16 @@ import { PrismaService } from "../../prisma/prisma.service";
 import { mapConversation, mapMessage } from "../../prisma/mappers";
 import { RolesGuard } from "../../auth/guards/roles.guard";
 import { Roles } from "../../auth/decorators/roles.decorator";
+import { MessagingModule, MessagingService } from "../messaging/messaging.module";
 
 export class CreateConversationDto {
   @IsIn(CHANNEL_IDS) channel!: ChannelId;
   @IsString() @MinLength(1) contactName!: string;
+
+  @ApiPropertyOptional({ description: "WhatsApp (E.164) o chat id de Telegram para envío saliente." })
+  @IsOptional()
+  @IsString()
+  contactHandle?: string;
 }
 
 export class SendMessageDto {
@@ -38,7 +45,12 @@ export class SetResolvedDto {
 
 @Injectable()
 export class InboxService {
-  constructor(private readonly prisma: PrismaService) {}
+  private readonly logger = new Logger(InboxService.name);
+
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly messaging: MessagingService,
+  ) {}
 
   private db() {
     if (!this.prisma.enabled) throw new ServiceUnavailableException("Base de datos no configurada.");
@@ -75,7 +87,12 @@ export class InboxService {
     dto: CreateConversationDto,
   ): Promise<Conversation> {
     const row = await this.db().conversation.create({
-      data: { workspaceSlug: workspaceId, channel: dto.channel, contactName: dto.contactName },
+      data: {
+        workspaceSlug: workspaceId,
+        channel: dto.channel,
+        contactName: dto.contactName,
+        contactHandle: dto.contactHandle,
+      },
     });
     return mapConversation(row);
   }
@@ -85,10 +102,20 @@ export class InboxService {
     conversationId: string,
     dto: SendMessageDto,
   ): Promise<Message> {
-    await this.owned(workspaceId, conversationId);
+    const conv = await this.owned(workspaceId, conversationId);
     const row = await this.prisma.message.create({
       data: { conversationId, direction: "out", text: dto.text },
     });
+
+    // Best-effort external delivery: never blocks or fails the persisted reply.
+    if (conv.contactHandle && this.messaging.isConfigured(conv.channel)) {
+      void this.messaging
+        .send(workspaceId, { channel: conv.channel, to: conv.contactHandle, body: dto.text })
+        .catch((err: unknown) =>
+          this.logger.warn(`Outbound delivery failed for ${conversationId}: ${(err as Error).message}`),
+        );
+    }
+
     return mapMessage(row);
   }
 
@@ -153,5 +180,9 @@ export class InboxController {
   }
 }
 
-@Module({ controllers: [InboxController], providers: [InboxService] })
+@Module({
+  imports: [MessagingModule],
+  controllers: [InboxController],
+  providers: [InboxService],
+})
 export class InboxModule {}

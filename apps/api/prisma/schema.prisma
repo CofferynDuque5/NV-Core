@@ -239,6 +239,8 @@ model Conversation {
   workspaceSlug String
   channel       ChannelId
   contactName   String
+  // Recipient address for outbound delivery: WhatsApp phone (E.164) or Telegram chat id.
+  contactHandle String?
   resolved      Boolean   @default(false)
   assignee      String?
   createdAt     DateTime  @default(now())

@@ -214,6 +214,8 @@ export interface Conversation {
   channel: ChannelId;
   contactName: string;
   contactInitials: string;
+  /** Recipient address for outbound delivery (WhatsApp phone / Telegram chat id). */
+  contactHandle?: string;
   preview: string;
   unread: number;
   lastMessageAt: string;
