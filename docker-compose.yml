@@ -1,0 +1,66 @@
+# NV Core — full stack with one command:
+#   docker compose up --build
+# Then open http://localhost:3000 (API at http://localhost:4000/api).
+#
+# Override secrets via a root .env file (see .env.docker.example).
+
+services:
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-nvcore}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-nvcore}
+      POSTGRES_DB: ${POSTGRES_DB:-nvcore}
+    ports:
+      - "5432:5432"
+    volumes:
+      - nvcore-db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-nvcore}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    environment:
+      NODE_ENV: production
+      PORT: 4000
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000}
+      JWT_SECRET: ${JWT_SECRET:-change-me-in-production-please-32chars}
+      DATABASE_URL: postgresql://${POSTGRES_USER:-nvcore}:${POSTGRES_PASSWORD:-nvcore}@db:5432/${POSTGRES_DB:-nvcore}?schema=public
+      REDIS_URL: redis://redis:6379
+    ports:
+      - "4000:4000"
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+      args:
+        # Inlined at build time — must be reachable from the browser.
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:4000}
+    ports:
+      - "3000:3000"
+    depends_on:
+      - api
+
+volumes:
+  nvcore-db:

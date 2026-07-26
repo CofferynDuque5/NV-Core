@@ -28,6 +28,23 @@ psql --version
 
 ---
 
+## ⚡ Atajo con Docker (todo en un comando)
+
+Si tienes **Docker**, puedes saltarte los pasos manuales:
+
+```bash
+cp .env.docker.example .env      # opcional; cambia JWT_SECRET
+docker compose up --build
+```
+
+Levanta **PostgreSQL + Redis + API + Web**, aplica migraciones y queda listo en
+**http://localhost:3000** (API en **http://localhost:4000/api**). Parar con
+`docker compose down` (`-v` también borra la base de datos).
+
+Si prefieres el modo manual (o no usas Docker), sigue los pasos siguientes.
+
+---
+
 ## 1. Instalar dependencias del proyecto
 
 Desde la raíz del proyecto (donde está `package.json`):
