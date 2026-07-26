@@ -257,6 +257,13 @@ cuáles están conectadas (badge «Conectado») según las claves configuradas.
 - **Pagos (Stripe)** → con `STRIPE_SECRET_KEY` (+ `STRIPE_PRICE_ID` para el precio
   por defecto), Configuración → Facturación habilita checkout de suscripción y el
   portal de cliente de Stripe. Sin clave, la pestaña muestra su estado vacío.
+- **Media (Cloudinary)** → con `CLOUDINARY_URL`, Biblioteca sube archivos
+  directo del navegador a Cloudinary (subida firmada por el backend) y registra
+  el asset. Sin clave, el botón avisa que falta configurar Cloudinary.
+- **Google (OAuth)** → con `GOOGLE_CLIENT_ID` + `GOOGLE_CLIENT_SECRET` y
+  `APP_URL`/`API_URL` correctos, Conexiones muestra «Conectar con Google»
+  (Calendar/Drive). Autoriza en Google Console el redirect
+  `{API_URL}/api/integrations/google/callback`.
 
 De dónde sacar cada clave:
 
