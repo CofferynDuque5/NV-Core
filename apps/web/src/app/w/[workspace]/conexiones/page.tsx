@@ -13,6 +13,7 @@ import { EmptyState } from "@/components/common/empty-state";
 import { StatusDot } from "@/components/common/status-dot";
 import { Button } from "@/components/ui/button";
 import { ConnectionDialog } from "@/components/entities/connection-dialog";
+import { GoogleConnectCard } from "@/components/entities/google-connect-card";
 
 const STATUS_TEXT = { ok: "Conectado", warn: "Con advertencias", down: "Caído" } as const;
 
@@ -45,6 +46,8 @@ export default function ConexionesPage() {
         title="Conexiones"
         description="Conecta tus canales para publicar y recibir mensajes."
       />
+
+      <GoogleConnectCard />
 
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
         {CHANNEL_LIST.map((ch) => {

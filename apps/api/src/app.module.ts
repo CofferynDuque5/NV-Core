@@ -22,6 +22,7 @@ import { AutomationsModule } from "./modules/automations/automations.module";
 import { AnalyticsModule } from "./modules/analytics/analytics.module";
 import { ConnectionsModule } from "./modules/connections/connections.module";
 import { IntegrationsModule } from "./modules/integrations/integrations.module";
+import { GoogleModule } from "./modules/integrations/google/google.module";
 import { NotificationsModule } from "./modules/notifications/notifications.module";
 import { TeamModule } from "./modules/team/team.module";
 import { AuditModule } from "./modules/audit/audit.module";
@@ -56,6 +57,7 @@ import { BillingModule } from "./modules/billing/billing.module";
     AnalyticsModule,
     ConnectionsModule,
     IntegrationsModule,
+    GoogleModule,
     NotificationsModule,
     TeamModule,
     AuditModule,

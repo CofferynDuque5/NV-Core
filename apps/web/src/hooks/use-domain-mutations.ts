@@ -272,6 +272,33 @@ export function useResolveConversation() {
   });
 }
 
+// ── Google OAuth ──────────────────────────────────────────────────────────────
+export function useGoogleConnect() {
+  const svc = useServices();
+  const ws = useWorkspace();
+  return useMutation({
+    mutationFn: () => svc.integrations.googleAuthUrl(ws.id),
+    onSuccess: (url) => {
+      if (url) window.location.assign(url);
+    },
+    onError: (err) => toast.error(errText(err)),
+  });
+}
+
+export function useGoogleDisconnect() {
+  const svc = useServices();
+  const ws = useWorkspace();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () => svc.integrations.googleDisconnect(ws.id),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: [ws.id, "integrations", "google"] });
+      toast.success("Google desconectado");
+    },
+    onError: (err) => toast.error(errText(err)),
+  });
+}
+
 // ── Media (Cloudinary uploads) ───────────────────────────────────────────────
 export function useUploadMedia() {
   const svc = useServices();

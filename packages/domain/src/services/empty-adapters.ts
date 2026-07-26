@@ -92,6 +92,9 @@ export const emptyAdapters: Services = {
   },
   integrations: {
     catalog: () => delay([]),
+    googleStatus: () => delay({ configured: false, connected: false, email: null }),
+    googleAuthUrl: () => notAvailable(),
+    googleDisconnect: () => notAvailable(),
   },
   notifications: {
     list: () => delay([]),

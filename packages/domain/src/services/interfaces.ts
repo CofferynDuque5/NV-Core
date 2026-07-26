@@ -210,8 +210,20 @@ export interface ConnectionService {
   remove(workspaceId: string, id: string): Promise<void>;
 }
 
+export interface GoogleStatus {
+  /** Google OAuth client is configured on the server. */
+  configured: boolean;
+  /** This workspace has a connected Google account. */
+  connected: boolean;
+  email: string | null;
+}
+
 export interface IntegrationService {
   catalog(workspaceId: string): Promise<Integration[]>;
+  googleStatus(workspaceId: string): Promise<GoogleStatus>;
+  /** Returns the Google consent URL to redirect the browser to. */
+  googleAuthUrl(workspaceId: string): Promise<string>;
+  googleDisconnect(workspaceId: string): Promise<void>;
 }
 
 export interface NotificationService {

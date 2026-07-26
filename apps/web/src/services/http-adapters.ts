@@ -7,6 +7,7 @@ import type {
   Connection,
   Contact,
   Conversation,
+  GoogleStatus,
   Group,
   Integration,
   ListResult,
@@ -165,7 +166,13 @@ export function createHttpAdapters(opts: HttpAdapterOptions): Services {
       upsert: (id, input) => post<Connection>(`${ws(id)}/connections`, input),
       remove: (id, cid) => del<void>(`${ws(id)}/connections/${cid}`),
     },
-    integrations: { catalog: (id) => get<Integration[]>(`${ws(id)}/integrations`) },
+    integrations: {
+      catalog: (id) => get<Integration[]>(`${ws(id)}/integrations`),
+      googleStatus: (id) => get<GoogleStatus>(`${ws(id)}/integrations/google/status`),
+      googleAuthUrl: (id) =>
+        get<{ url: string }>(`${ws(id)}/integrations/google/auth-url`).then((r) => r.url),
+      googleDisconnect: (id) => del<void>(`${ws(id)}/integrations/google`),
+    },
     notifications: {
       list: (id) => get<Notification[]>(`${ws(id)}/notifications`),
       unreadCount: (id) =>
