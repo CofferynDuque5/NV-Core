@@ -32,7 +32,7 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="es" className={`dark ${inter.variable} ${newsreader.variable}`} suppressHydrationWarning>
+    <html lang="es" className={`${inter.variable} ${newsreader.variable}`} suppressHydrationWarning>
       <body className="font-sans">
         <AppProviders>{children}</AppProviders>
       </body>

@@ -20,27 +20,27 @@ const preset = {
     },
     extend: {
       colors: {
-        // --- Raw NV Core palette (design source of truth) ---
-        canvas: "#0B0D10",
-        nav: "#0E1114",
+        // --- NV Core themeable tokens (CSS vars; light + dark in globals.css) ---
+        canvas: "hsl(var(--canvas) / <alpha-value>)",
+        nav: "hsl(var(--nav) / <alpha-value>)",
         ink: {
-          DEFAULT: "#E6E9EE",
-          bright: "#F3F5F8",
-          muted: "#8A93A0",
-          soft: "#9BA3AE",
-          faint: "#6B7280",
+          DEFAULT: "hsl(var(--ink) / <alpha-value>)",
+          bright: "hsl(var(--ink-bright) / <alpha-value>)",
+          muted: "hsl(var(--ink-muted) / <alpha-value>)",
+          soft: "hsl(var(--ink-soft) / <alpha-value>)",
+          faint: "hsl(var(--ink-faint) / <alpha-value>)",
         },
         line: {
-          DEFAULT: "#1C2229",
-          soft: "#1F252C",
-          strong: "#262C34",
-          bright: "#333B45",
+          DEFAULT: "hsl(var(--line) / <alpha-value>)",
+          soft: "hsl(var(--line-soft) / <alpha-value>)",
+          strong: "hsl(var(--line-strong) / <alpha-value>)",
+          bright: "hsl(var(--line-bright) / <alpha-value>)",
         },
         panel: {
-          DEFAULT: "#101318",
-          raised: "#12151A",
-          high: "#14181E",
-          sunken: "#0F1216",
+          DEFAULT: "hsl(var(--panel) / <alpha-value>)",
+          raised: "hsl(var(--panel-raised) / <alpha-value>)",
+          high: "hsl(var(--panel-high) / <alpha-value>)",
+          sunken: "hsl(var(--panel-sunken) / <alpha-value>)",
         },
         brand: {
           DEFAULT: "#5B8DEF",

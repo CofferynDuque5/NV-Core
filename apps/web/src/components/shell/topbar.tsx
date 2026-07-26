@@ -8,6 +8,7 @@ import { useUiStore } from "@/stores/ui-store";
 import { useNotifications } from "@/hooks/use-domain-data";
 import { Button } from "@/components/ui/button";
 import { UserMenu } from "./user-menu";
+import { ThemeToggle } from "./theme-toggle";
 
 export function Topbar() {
   const openCommand = useCommandStore((s) => s.setOpen);
@@ -35,6 +36,8 @@ export function Topbar() {
           <Plus className="size-4" />
           <span className="hidden sm:inline">Crear</span>
         </Button>
+
+        <ThemeToggle />
 
         <button
           onClick={toggleNotifications}
