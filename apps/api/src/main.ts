@@ -3,6 +3,7 @@ import { Logger, ValidationPipe } from "@nestjs/common";
 import { NestFactory } from "@nestjs/core";
 import { ConfigService } from "@nestjs/config";
 import { DocumentBuilder, SwaggerModule } from "@nestjs/swagger";
+import cookieParser from "cookie-parser";
 
 import { AppModule } from "./app.module";
 import type { AppConfig } from "./config/configuration";
@@ -12,6 +13,7 @@ async function bootstrap(): Promise<void> {
   const app = await NestFactory.create(AppModule, { bufferLogs: false });
   const config = app.get(ConfigService<AppConfig, true>);
 
+  app.use(cookieParser());
   app.setGlobalPrefix("api");
 
   app.useGlobalPipes(

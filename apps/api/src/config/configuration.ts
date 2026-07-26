@@ -8,7 +8,7 @@ export interface AppConfig {
   env: Env["NODE_ENV"];
   port: number;
   corsOrigins: string[];
-  auth: { secret: string; expiresIn: string };
+  auth: { secret: string; expiresIn: string; refreshTtlDays: number };
   database: { url?: string };
   redis: { url?: string };
   integrations: {
@@ -39,7 +39,7 @@ export function buildConfig(env: Env): AppConfig {
     env: env.NODE_ENV,
     port: env.PORT,
     corsOrigins: env.CORS_ORIGINS.split(",").map((o) => o.trim()).filter(Boolean),
-    auth: { secret, expiresIn: env.JWT_EXPIRES_IN },
+    auth: { secret, expiresIn: env.JWT_EXPIRES_IN, refreshTtlDays: env.REFRESH_TOKEN_TTL_DAYS },
     database: { url: env.DATABASE_URL },
     redis: { url: env.REDIS_URL },
     integrations: {

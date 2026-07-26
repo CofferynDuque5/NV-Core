@@ -99,4 +99,24 @@ export class AuthStore {
     const { count } = await this.prisma.membership.deleteMany({ where: { userId, workspaceSlug } });
     return count;
   }
+
+  // ── Refresh tokens ──────────────────────────────────────────────────────────
+  async createRefreshToken(userId: string, tokenHash: string, expiresAt: Date): Promise<void> {
+    await this.prisma.refreshToken.create({ data: { userId, tokenHash, expiresAt } });
+  }
+
+  async findValidRefreshToken(
+    tokenHash: string,
+  ): Promise<{ id: string; userId: string } | undefined> {
+    const row = await this.prisma.refreshToken.findUnique({ where: { tokenHash } });
+    if (!row || row.revokedAt || row.expiresAt.getTime() < Date.now()) return undefined;
+    return { id: row.id, userId: row.userId };
+  }
+
+  async revokeRefreshToken(tokenHash: string): Promise<void> {
+    await this.prisma.refreshToken.updateMany({
+      where: { tokenHash, revokedAt: null },
+      data: { revokedAt: new Date() },
+    });
+  }
 }

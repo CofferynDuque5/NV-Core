@@ -1,29 +1,72 @@
-import { Body, Controller, Get, HttpCode, Post } from "@nestjs/common";
+import { Body, Controller, Get, HttpCode, Post, Req, Res } from "@nestjs/common";
+import { ConfigService } from "@nestjs/config";
 import { ApiBearerAuth, ApiTags } from "@nestjs/swagger";
+import type { CookieOptions, Request, Response } from "express";
 
-import { AuthService } from "./auth.service";
+import type { AppConfig } from "../config/configuration";
+import { AuthService, type AuthResult } from "./auth.service";
 import { CurrentUser } from "./decorators/current-user.decorator";
 import { Public } from "./decorators/public.decorator";
 import { RegisterDto } from "./dto/register.dto";
 import { LoginDto } from "./dto/login.dto";
 import type { AuthenticatedUser } from "./auth.types";
 
+const REFRESH_COOKIE = "nv_refresh";
+
 @ApiTags("auth")
 @Controller("auth")
 export class AuthController {
-  constructor(private readonly auth: AuthService) {}
+  constructor(
+    private readonly auth: AuthService,
+    private readonly config: ConfigService<AppConfig, true>,
+  ) {}
+
+  private cookieOptions(): CookieOptions {
+    const isProd = this.config.get("env", { infer: true }) === "production";
+    const ttlDays = this.config.get("auth", { infer: true }).refreshTtlDays;
+    return {
+      httpOnly: true,
+      secure: isProd,
+      sameSite: isProd ? "none" : "lax",
+      path: "/api/auth",
+      maxAge: ttlDays * 24 * 60 * 60 * 1000,
+    };
+  }
+
+  /** Sets the refresh cookie and returns the sanitized session (no refresh token in body). */
+  private send(res: Response, result: AuthResult) {
+    res.cookie(REFRESH_COOKIE, result.refreshToken, this.cookieOptions());
+    return { accessToken: result.accessToken, user: result.user, memberships: result.memberships };
+  }
 
   @Public()
   @Post("register")
-  register(@Body() dto: RegisterDto) {
-    return this.auth.register(dto);
+  async register(@Body() dto: RegisterDto, @Res({ passthrough: true }) res: Response) {
+    return this.send(res, await this.auth.register(dto));
   }
 
   @Public()
   @HttpCode(200)
   @Post("login")
-  login(@Body() dto: LoginDto) {
-    return this.auth.login(dto);
+  async login(@Body() dto: LoginDto, @Res({ passthrough: true }) res: Response) {
+    return this.send(res, await this.auth.login(dto));
+  }
+
+  @Public()
+  @HttpCode(200)
+  @Post("refresh")
+  async refresh(@Req() req: Request, @Res({ passthrough: true }) res: Response) {
+    const raw = (req.cookies as Record<string, string> | undefined)?.[REFRESH_COOKIE];
+    return this.send(res, await this.auth.refresh(raw));
+  }
+
+  @Public()
+  @HttpCode(204)
+  @Post("logout")
+  async logout(@Req() req: Request, @Res({ passthrough: true }) res: Response) {
+    const raw = (req.cookies as Record<string, string> | undefined)?.[REFRESH_COOKIE];
+    await this.auth.logout(raw);
+    res.clearCookie(REFRESH_COOKIE, { ...this.cookieOptions(), maxAge: undefined });
   }
 
   @ApiBearerAuth()

@@ -46,6 +46,8 @@ async function request<T>(path: string, init: RequestInit & { token?: string } =
   const { token, ...rest } = init;
   const res = await fetch(`${API_URL}/api${path}`, {
     ...rest,
+    // Send/receive the httpOnly refresh cookie.
+    credentials: "include",
     headers: {
       Accept: "application/json",
       ...(rest.body ? { "Content-Type": "application/json" } : {}),
@@ -67,6 +69,12 @@ async function request<T>(path: string, init: RequestInit & { token?: string } =
   return data as T;
 }
 
+/** Session view (used by /me): no token in body. */
+export interface SessionView {
+  user: AuthUser;
+  memberships: Membership[];
+}
+
 export const authClient = {
   register: (input: RegisterInput) =>
     request<AuthResult>("/auth/register", { method: "POST", body: JSON.stringify(input) }),
@@ -74,5 +82,10 @@ export const authClient = {
   login: (input: LoginInput) =>
     request<AuthResult>("/auth/login", { method: "POST", body: JSON.stringify(input) }),
 
-  me: (token: string) => request<AuthResult>("/auth/me", { token }),
+  /** Exchange the refresh cookie for a fresh access token (rotates the cookie). */
+  refresh: () => request<AuthResult>("/auth/refresh", { method: "POST" }),
+
+  logout: () => request<null>("/auth/logout", { method: "POST" }),
+
+  me: (token: string) => request<SessionView>("/auth/me", { token }),
 };

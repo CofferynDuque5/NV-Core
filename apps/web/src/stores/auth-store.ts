@@ -9,22 +9,24 @@ import {
   type Membership,
   type RegisterInput,
 } from "@/services/auth-client";
-import { clearStoredToken, getStoredToken, setStoredToken } from "@/lib/auth-storage";
 import { isBackendConfigured } from "@/lib/env";
 
 type Status = "idle" | "loading" | "authenticated" | "unauthenticated";
 
 interface AuthState {
   status: Status;
+  /** Access token kept in memory only (never localStorage) — short-lived. */
   token: string | null;
   user: AuthUser | null;
   memberships: Membership[];
 
-  /** Restore session from a stored token (call once on mount). */
+  /** Restore the session from the httpOnly refresh cookie (call once on mount). */
   hydrate: () => Promise<void>;
   login: (input: LoginInput) => Promise<void>;
   register: (input: RegisterInput) => Promise<void>;
   logout: () => void;
+  /** Rotate the refresh cookie and return a fresh access token (throws on failure). */
+  refreshSession: () => Promise<string>;
 
   hasMembership: (workspaceSlug: string) => boolean;
 }
@@ -36,34 +38,26 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   memberships: [],
 
   hydrate: async () => {
-    // Demo mode (no backend): nothing to authenticate.
     if (!isBackendConfigured()) {
       set({ status: "unauthenticated" });
       return;
     }
-    const token = getStoredToken();
-    if (!token) {
-      set({ status: "unauthenticated" });
-      return;
-    }
-    set({ status: "loading", token });
+    set({ status: "loading" });
     try {
-      const res = await authClient.me(token);
+      const res = await authClient.refresh();
       set({
         status: "authenticated",
-        token,
+        token: res.accessToken,
         user: res.user,
         memberships: res.memberships,
       });
     } catch {
-      clearStoredToken();
       set({ status: "unauthenticated", token: null, user: null, memberships: [] });
     }
   },
 
   login: async (input) => {
     const res = await authClient.login(input);
-    setStoredToken(res.accessToken);
     set({
       status: "authenticated",
       token: res.accessToken,
@@ -74,7 +68,6 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
   register: async (input) => {
     const res = await authClient.register(input);
-    setStoredToken(res.accessToken);
     set({
       status: "authenticated",
       token: res.accessToken,
@@ -84,8 +77,19 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   },
 
   logout: () => {
-    clearStoredToken();
+    void authClient.logout().catch(() => undefined);
     set({ status: "unauthenticated", token: null, user: null, memberships: [] });
+  },
+
+  refreshSession: async () => {
+    const res = await authClient.refresh();
+    set({
+      status: "authenticated",
+      token: res.accessToken,
+      user: res.user,
+      memberships: res.memberships,
+    });
+    return res.accessToken;
   },
 
   hasMembership: (workspaceSlug) => get().memberships.some((m) => m.workspaceSlug === workspaceSlug),

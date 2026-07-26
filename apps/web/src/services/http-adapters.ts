@@ -29,9 +29,11 @@ import type {
  */
 export interface HttpAdapterOptions {
   baseUrl: string;
-  /** Supplies the current JWT (or null) for each request. */
+  /** Supplies the current access token (or null) for each request. */
   getToken?: () => string | null;
-  /** Invoked once on a 401 so the app can clear session + redirect. */
+  /** Tries to renew the session; returns a fresh token or null. */
+  refresh?: () => Promise<string | null>;
+  /** Invoked when the session can't be renewed (clear session + redirect). */
   onUnauthorized?: () => void;
 }
 
@@ -43,26 +45,10 @@ function createClient(opts: HttpAdapterOptions) {
     return token ? { Authorization: `Bearer ${token}` } : {};
   }
 
-  async function handle<T>(res: Response, path: string): Promise<T> {
-    if (res.status === 401) {
-      opts.onUnauthorized?.();
-      throw new Error(`API 401 on ${path}`);
-    }
-    if (!res.ok) throw new Error(`API ${res.status} on ${path}`);
-    const text = await res.text();
-    return (text ? JSON.parse(text) : null) as T;
-  }
-
-  async function get<T>(path: string): Promise<T> {
-    const res = await fetch(`${base}/api${path}`, {
-      headers: { Accept: "application/json", ...authHeaders() },
-    });
-    return handle<T>(res, `GET ${path}`);
-  }
-
-  async function send<T>(method: string, path: string, body?: unknown): Promise<T> {
-    const res = await fetch(`${base}/api${path}`, {
+  async function raw(method: string, path: string, body?: unknown): Promise<Response> {
+    return fetch(`${base}/api${path}`, {
       method,
+      credentials: "include",
       headers: {
         Accept: "application/json",
         ...(body !== undefined ? { "Content-Type": "application/json" } : {}),
@@ -70,9 +56,29 @@ function createClient(opts: HttpAdapterOptions) {
       },
       body: body !== undefined ? JSON.stringify(body) : undefined,
     });
-    return handle<T>(res, `${method} ${path}`);
   }
 
+  async function parse<T>(res: Response, path: string): Promise<T> {
+    if (!res.ok) throw new Error(`API ${res.status} on ${path}`);
+    const text = await res.text();
+    return (text ? JSON.parse(text) : null) as T;
+  }
+
+  /** Runs a request; on 401 tries a single refresh + retry, else signs out. */
+  async function send<T>(method: string, path: string, body?: unknown): Promise<T> {
+    let res = await raw(method, path, body);
+    if (res.status === 401 && opts.refresh) {
+      const token = await opts.refresh();
+      if (token) res = await raw(method, path, body);
+    }
+    if (res.status === 401) {
+      opts.onUnauthorized?.();
+      throw new Error(`API 401 on ${method} ${path}`);
+    }
+    return parse<T>(res, `${method} ${path}`);
+  }
+
+  const get = <T>(path: string) => send<T>("GET", path);
   const post = <T>(path: string, body: unknown) => send<T>("POST", path, body);
   const patch = <T>(path: string, body: unknown) => send<T>("PATCH", path, body);
   const del = <T>(path: string) => send<T>("DELETE", path);

@@ -6,10 +6,13 @@ import {
   UnauthorizedException,
 } from "@nestjs/common";
 import { JwtService } from "@nestjs/jwt";
+import { ConfigService } from "@nestjs/config";
 import { getWorkspaceBySlug, type Role } from "@nv/domain";
 
+import type { AppConfig } from "../config/configuration";
 import { AuthStore } from "./auth.store";
 import { hashPassword, verifyPassword } from "./password.util";
+import { generateRefreshToken, hashToken } from "./token.util";
 import type {
   JwtPayload,
   MembershipView,
@@ -19,8 +22,16 @@ import type {
 import type { RegisterDto } from "./dto/register.dto";
 import type { LoginDto } from "./dto/login.dto";
 
+/** Full result (internal): includes the raw refresh token for the cookie. */
 export interface AuthResult {
   accessToken: string;
+  refreshToken: string;
+  user: PublicUser;
+  memberships: MembershipView[];
+}
+
+/** Sanitized session view returned in the response body. */
+export interface SessionView {
   user: PublicUser;
   memberships: MembershipView[];
 }
@@ -30,6 +41,7 @@ export class AuthService {
   constructor(
     private readonly store: AuthStore,
     private readonly jwt: JwtService,
+    private readonly config: ConfigService<AppConfig, true>,
   ) {}
 
   async register(dto: RegisterDto): Promise<AuthResult> {
@@ -54,7 +66,7 @@ export class AuthService {
       }
     }
 
-    return this.buildResult(user);
+    return this.issueTokens(user);
   }
 
   async login(dto: LoginDto): Promise<AuthResult> {
@@ -62,13 +74,33 @@ export class AuthService {
     if (!user || !(await verifyPassword(dto.password, user.passwordHash))) {
       throw new UnauthorizedException("Credenciales inválidas.");
     }
-    return this.buildResult(user);
+    return this.issueTokens(user);
   }
 
-  async me(userId: string): Promise<AuthResult> {
+  /** Rotate a refresh token: revoke the old, issue a fresh pair. */
+  async refresh(rawRefreshToken: string | undefined): Promise<AuthResult> {
+    if (!rawRefreshToken) throw new UnauthorizedException("Falta el refresh token.");
+    const hash = hashToken(rawRefreshToken);
+    const record = await this.store.findValidRefreshToken(hash);
+    if (!record) throw new UnauthorizedException("Refresh token inválido o expirado.");
+    await this.store.revokeRefreshToken(hash);
+    const user = await this.store.findUserById(record.userId);
+    if (!user) throw new UnauthorizedException("Usuario no encontrado.");
+    return this.issueTokens(user);
+  }
+
+  async logout(rawRefreshToken: string | undefined): Promise<void> {
+    if (rawRefreshToken) await this.store.revokeRefreshToken(hashToken(rawRefreshToken));
+  }
+
+  async me(userId: string): Promise<SessionView> {
     const user = await this.store.findUserById(userId);
     if (!user) throw new NotFoundException("Usuario no encontrado.");
-    return this.buildResult(user);
+    const memberships = await this.store.membershipsOf(user.id);
+    return {
+      user: { id: user.id, email: user.email, name: user.name },
+      memberships: memberships.map((m) => ({ workspaceSlug: m.workspaceSlug, role: m.role })),
+    };
   }
 
   /** Adds an existing user to a workspace with a role (Owner/Admin action). */
@@ -96,14 +128,21 @@ export class AuthService {
     await this.store.removeMembership(userId, workspaceSlug);
   }
 
-  private async buildResult(user: UserRecord): Promise<AuthResult> {
+  private async issueTokens(user: UserRecord): Promise<AuthResult> {
     const memberships = await this.store.membershipsOf(user.id);
     const payload: JwtPayload = { sub: user.id, email: user.email, name: user.name };
-    // Secret + expiry come from JwtModule config (see AuthModule).
+    // Access token: secret + short expiry come from JwtModule config (AuthModule).
     const accessToken = await this.jwt.signAsync(payload);
+
+    // Refresh token: opaque, persisted as a hash, rotated on each refresh.
+    const refreshToken = generateRefreshToken();
+    const ttlDays = this.config.get("auth", { infer: true }).refreshTtlDays;
+    const expiresAt = new Date(Date.now() + ttlDays * 24 * 60 * 60 * 1000);
+    await this.store.createRefreshToken(user.id, hashToken(refreshToken), expiresAt);
 
     return {
       accessToken,
+      refreshToken,
       user: { id: user.id, email: user.email, name: user.name },
       memberships: memberships.map((m) => ({ workspaceSlug: m.workspaceSlug, role: m.role })),
     };

@@ -12,7 +12,9 @@ export const envSchema = z.object({
 
   // Auth
   JWT_SECRET: z.string().min(16).optional(),
-  JWT_EXPIRES_IN: z.string().default("1d"),
+  // Access token lifetime (short). Refresh tokens extend the session.
+  JWT_EXPIRES_IN: z.string().default("15m"),
+  REFRESH_TOKEN_TTL_DAYS: z.coerce.number().int().positive().default(7),
 
   // Data / infra
   DATABASE_URL: z.string().url().optional(),
