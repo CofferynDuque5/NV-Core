@@ -8,6 +8,8 @@ import cookieParser from "cookie-parser";
 import { AppModule } from "./app.module";
 import type { AppConfig } from "./config/configuration";
 import { AllExceptionsFilter } from "./common/filters/all-exceptions.filter";
+import { requestIdMiddleware } from "./common/middleware/request-id";
+import { initSentry } from "./common/observability/sentry";
 
 async function bootstrap(): Promise<void> {
   // rawBody: true keeps a raw copy of the body (needed for Stripe webhook
@@ -15,6 +17,10 @@ async function bootstrap(): Promise<void> {
   const app = await NestFactory.create(AppModule, { bufferLogs: false, rawBody: true });
   const config = app.get(ConfigService<AppConfig, true>);
 
+  // Error monitoring (no-op unless SENTRY_DSN is set).
+  initSentry(config.get("sentry", { infer: true }).dsn, config.get("env", { infer: true }));
+
+  app.use(requestIdMiddleware);
   app.use(cookieParser());
   app.setGlobalPrefix("api");
 

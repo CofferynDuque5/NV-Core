@@ -25,6 +25,9 @@ export const envSchema = z.object({
   DATABASE_URL: z.string().url().optional(),
   REDIS_URL: z.string().url().optional(),
 
+  // Observability
+  SENTRY_DSN: z.string().url().optional(),
+
   // Automation
   N8N_BASE_URL: z.string().url().optional(),
   N8N_API_KEY: z.string().optional(),

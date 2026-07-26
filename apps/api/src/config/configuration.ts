@@ -14,6 +14,7 @@ export interface AppConfig {
   inboundWorkspace?: string;
   auth: { secret: string; expiresIn: string; refreshTtlDays: number };
   security: { encryptionKey: string };
+  sentry: { dsn?: string };
   database: { url?: string };
   redis: { url?: string };
   mail: { from: string };
@@ -65,6 +66,7 @@ export function buildConfig(env: Env): AppConfig {
     inboundWorkspace: env.INBOUND_WORKSPACE,
     auth: { secret, expiresIn: env.JWT_EXPIRES_IN, refreshTtlDays: env.REFRESH_TOKEN_TTL_DAYS },
     security: { encryptionKey },
+    sentry: { dsn: env.SENTRY_DSN },
     database: { url: env.DATABASE_URL },
     redis: { url: env.REDIS_URL },
     mail: { from: env.MAIL_FROM },
