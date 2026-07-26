@@ -69,6 +69,16 @@ export function useConversations() {
   return useQuery({ queryKey: [ws.id, "inbox"], queryFn: () => svc.inbox.conversations(ws.id) });
 }
 
+export function useMessages(conversationId: string | null) {
+  const svc = useServices();
+  const ws = useWorkspace();
+  return useQuery({
+    queryKey: [ws.id, "inbox", conversationId, "messages"],
+    queryFn: () => svc.inbox.messages(ws.id, conversationId as string),
+    enabled: Boolean(conversationId),
+  });
+}
+
 export function useMediaFolders() {
   const svc = useServices();
   const ws = useWorkspace();

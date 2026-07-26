@@ -3,6 +3,8 @@ import { fileURLToPath } from "node:url";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const isStaticExport = process.env.STATIC_EXPORT === "true";
+// Standalone output is only for Docker images (opt-in); it breaks `next start`.
+const isStandalone = process.env.NEXT_OUTPUT === "standalone";
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
@@ -19,10 +21,12 @@ const nextConfig = {
         trailingSlash: true,
         images: { unoptimized: true },
       }
-    : {
-        // Slim, self-contained server bundle for Docker.
-        output: "standalone",
-      }),
+    : isStandalone
+      ? {
+          // Slim, self-contained server bundle for Docker (NEXT_OUTPUT=standalone).
+          output: "standalone",
+        }
+      : {}),
 };
 
 export default nextConfig;

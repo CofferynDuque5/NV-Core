@@ -101,6 +101,8 @@ export function createHttpAdapters(opts: HttpAdapterOptions): Services {
     posts: {
       list: (id) => get<ListResult<Post>>(`${ws(id)}/posts`),
       today: (id) => get<Post[]>(`${ws(id)}/posts/today`),
+      create: (id, input) => post<Post>(`${ws(id)}/posts`, input),
+      remove: (id, pid) => del<void>(`${ws(id)}/posts/${pid}`),
     },
     calendar: {
       events: (id, month) => get<CalendarEvent[]>(`${ws(id)}/calendar/events?month=${month}`),
@@ -124,6 +126,12 @@ export function createHttpAdapters(opts: HttpAdapterOptions): Services {
     inbox: {
       conversations: (id) => get<ListResult<Conversation>>(`${ws(id)}/inbox/conversations`),
       messages: (id, cid) => get<Message[]>(`${ws(id)}/inbox/conversations/${cid}/messages`),
+      createConversation: (id, input) =>
+        post<Conversation>(`${ws(id)}/inbox/conversations`, input),
+      sendMessage: (id, cid, input) =>
+        post<Message>(`${ws(id)}/inbox/conversations/${cid}/messages`, input),
+      setResolved: (id, cid, resolved) =>
+        patch<Conversation>(`${ws(id)}/inbox/conversations/${cid}`, { resolved }),
     },
     media: {
       folders: (id) => get<MediaFolder[]>(`${ws(id)}/media/folders`),

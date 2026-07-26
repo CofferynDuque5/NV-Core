@@ -42,6 +42,9 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       set({ status: "unauthenticated" });
       return;
     }
+    // Already signed in this session (e.g. just after register/login) — don't
+    // reset to loading or re-fetch.
+    if (get().status === "authenticated" && get().token) return;
     set({ status: "loading" });
     try {
       const res = await authClient.refresh();

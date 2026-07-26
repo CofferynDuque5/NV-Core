@@ -7,7 +7,9 @@ import type {
   CreateAutomationInput,
   CreateCampaignInput,
   CreateContactInput,
+  CreateConversationInput,
   CreateGroupInput,
+  CreatePostInput,
   CreateSegmentInput,
   CreateTemplateInput,
   UpdateCampaignInput,
@@ -115,6 +117,20 @@ export function useDeleteCampaign() {
   });
 }
 
+// ── Posts ─────────────────────────────────────────────────────────────────────
+export function useCreatePost() {
+  const svc = useServices();
+  const ws = useWorkspace();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: CreatePostInput) => svc.posts.create(ws.id, input),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: [ws.id, "posts"] });
+      toast.success("Publicación programada");
+    },
+  });
+}
+
 // ── Segments / Groups / Templates ─────────────────────────────────────────────
 export function useCreateSegment() {
   const svc = useServices();
@@ -206,6 +222,50 @@ export function useDeleteAutomation() {
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: [ws.id, "automations"] });
       toast.success("Automatización eliminada");
+    },
+    onError: (err) => toast.error(errText(err)),
+  });
+}
+
+// ── Inbox ─────────────────────────────────────────────────────────────────────
+export function useCreateConversation() {
+  const svc = useServices();
+  const ws = useWorkspace();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: CreateConversationInput) => svc.inbox.createConversation(ws.id, input),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: [ws.id, "inbox"] });
+      toast.success("Conversación creada");
+    },
+    onError: (err) => toast.error(errText(err)),
+  });
+}
+
+export function useSendMessage(conversationId: string | null) {
+  const svc = useServices();
+  const ws = useWorkspace();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (text: string) => svc.inbox.sendMessage(ws.id, conversationId as string, { text }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: [ws.id, "inbox", conversationId, "messages"] });
+      void qc.invalidateQueries({ queryKey: [ws.id, "inbox"] });
+    },
+    onError: (err) => toast.error(errText(err)),
+  });
+}
+
+export function useResolveConversation() {
+  const svc = useServices();
+  const ws = useWorkspace();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, resolved }: { id: string; resolved: boolean }) =>
+      svc.inbox.setResolved(ws.id, id, resolved),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: [ws.id, "inbox"] });
+      toast.success("Conversación actualizada");
     },
     onError: (err) => toast.error(errText(err)),
   });

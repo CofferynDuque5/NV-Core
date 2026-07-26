@@ -35,6 +35,8 @@ export const emptyAdapters: Services = {
   posts: {
     list: () => emptyList(),
     today: () => delay([]),
+    create: () => notAvailable(),
+    remove: () => notAvailable(),
   },
   calendar: {
     events: () => delay([]),
@@ -58,6 +60,9 @@ export const emptyAdapters: Services = {
   inbox: {
     conversations: () => emptyList(),
     messages: () => delay([]),
+    createConversation: () => notAvailable(),
+    sendMessage: () => notAvailable(),
+    setResolved: () => notAvailable(),
   },
   media: {
     folders: () => delay([]),

@@ -103,9 +103,21 @@ export interface CampaignService {
   remove(workspaceId: string, id: string): Promise<void>;
 }
 
+export interface CreatePostInput {
+  channel: Post["channel"];
+  title: string;
+  copy?: string;
+  hashtags?: string[];
+  status?: Post["status"];
+  scheduledAt?: string;
+  campaignId?: string;
+}
+
 export interface PostService {
   list(workspaceId: string): Promise<ListResult<Post>>;
   today(workspaceId: string): Promise<Post[]>;
+  create(workspaceId: string, input: CreatePostInput): Promise<Post>;
+  remove(workspaceId: string, id: string): Promise<void>;
 }
 
 export interface CalendarService {
@@ -131,9 +143,21 @@ export interface SegmentService {
   remove(workspaceId: string, id: string): Promise<void>;
 }
 
+export interface CreateConversationInput {
+  channel: Conversation["channel"];
+  contactName: string;
+}
+
+export interface SendMessageInput {
+  text: string;
+}
+
 export interface InboxService {
   conversations(workspaceId: string): Promise<ListResult<Conversation>>;
   messages(workspaceId: string, conversationId: string): Promise<Message[]>;
+  createConversation(workspaceId: string, input: CreateConversationInput): Promise<Conversation>;
+  sendMessage(workspaceId: string, conversationId: string, input: SendMessageInput): Promise<Message>;
+  setResolved(workspaceId: string, conversationId: string, resolved: boolean): Promise<Conversation>;
 }
 
 export interface MediaService {
