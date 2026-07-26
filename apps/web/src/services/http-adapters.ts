@@ -12,6 +12,7 @@ import type {
   ListResult,
   MediaAsset,
   MediaFolder,
+  MediaUploadSignature,
   Message,
   Notification,
   Post,
@@ -140,6 +141,12 @@ export function createHttpAdapters(opts: HttpAdapterOptions): Services {
         get<ListResult<MediaAsset>>(
           `${ws(id)}/media/assets${folderId ? `?folderId=${folderId}` : ""}`,
         ),
+      uploadSignature: (id, folder) =>
+        get<MediaUploadSignature | null>(
+          `${ws(id)}/media/upload-signature${folder ? `?folder=${encodeURIComponent(folder)}` : ""}`,
+        ),
+      createAsset: (id, input) => post<MediaAsset>(`${ws(id)}/media/assets`, input),
+      removeAsset: (id, assetId) => del<void>(`${ws(id)}/media/assets/${assetId}`),
     },
     templates: {
       list: (id) => get<ListResult<Template>>(`${ws(id)}/templates`),

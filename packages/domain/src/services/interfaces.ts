@@ -162,9 +162,29 @@ export interface InboxService {
   setResolved(workspaceId: string, conversationId: string, resolved: boolean): Promise<Conversation>;
 }
 
+export interface MediaUploadSignature {
+  cloudName: string;
+  apiKey: string;
+  timestamp: number;
+  signature: string;
+  folder: string;
+}
+
+export interface CreateAssetInput {
+  type: MediaAsset["type"];
+  title: string;
+  url?: string;
+  folderId?: string;
+  tag?: string;
+}
+
 export interface MediaService {
   folders(workspaceId: string): Promise<MediaFolder[]>;
   assets(workspaceId: string, folderId?: string): Promise<ListResult<MediaAsset>>;
+  /** Signed params for a direct browser→Cloudinary upload; null when unconfigured. */
+  uploadSignature(workspaceId: string, folder?: string): Promise<MediaUploadSignature | null>;
+  createAsset(workspaceId: string, input: CreateAssetInput): Promise<MediaAsset>;
+  removeAsset(workspaceId: string, id: string): Promise<void>;
 }
 
 export interface TemplateService {

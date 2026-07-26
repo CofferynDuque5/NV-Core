@@ -14,9 +14,17 @@ import {
   UseGuards,
 } from "@nestjs/common";
 import { ApiBearerAuth, ApiPropertyOptional, ApiTags } from "@nestjs/swagger";
-import { MEDIA_TYPES, type MediaAsset, type MediaFolder, type MediaType } from "@nv/domain";
+import { ConfigService } from "@nestjs/config";
+import {
+  MEDIA_TYPES,
+  type MediaAsset,
+  type MediaFolder,
+  type MediaType,
+  type MediaUploadSignature,
+} from "@nv/domain";
 import { IsIn, IsOptional, IsString, MinLength } from "class-validator";
 
+import type { AppConfig } from "../../config/configuration";
 import { ListResultDto } from "../../common/dto/list-result.dto";
 import { WorkspaceId } from "../../common/tenant/workspace.decorator";
 import { WorkspaceGuard } from "../../common/tenant/workspace.guard";
@@ -27,6 +35,7 @@ import { RolesGuard } from "../../auth/guards/roles.guard";
 import { Roles } from "../../auth/decorators/roles.decorator";
 import { CurrentUser } from "../../auth/decorators/current-user.decorator";
 import type { AuthenticatedUser } from "../../auth/auth.types";
+import { buildUploadSignature, parseCloudinaryUrl } from "./cloudinary";
 
 export class CreateFolderDto {
   @IsString() @MinLength(1) label!: string;
@@ -49,11 +58,32 @@ export class MediaService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly audit: AuditLogger,
+    private readonly config: ConfigService<AppConfig, true>,
   ) {}
 
   private db() {
     if (!this.prisma.enabled) throw new ServiceUnavailableException("Base de datos no configurada.");
     return this.prisma;
+  }
+
+  /** Signed params for a direct browser→Cloudinary upload; null when unconfigured. */
+  uploadSignature(workspaceId: string, folder?: string): MediaUploadSignature | null {
+    const creds = parseCloudinaryUrl(this.config.get("integrations", { infer: true }).cloudinary.url);
+    if (!creds) return null;
+    // Scope uploads to the workspace to keep tenants' media separate.
+    const targetFolder = folder ? `nv-core/${workspaceId}/${folder}` : `nv-core/${workspaceId}`;
+    const timestamp = Math.floor(Date.now() / 1000);
+    const signature = buildUploadSignature(
+      { folder: targetFolder, timestamp },
+      creds.apiSecret,
+    );
+    return {
+      cloudName: creds.cloudName,
+      apiKey: creds.apiKey,
+      timestamp,
+      signature,
+      folder: targetFolder,
+    };
   }
 
   async folders(workspaceId: string): Promise<MediaFolder[]> {
@@ -124,6 +154,13 @@ export class MediaController {
   @Get("assets")
   assets(@WorkspaceId() workspaceId: string, @Query("folderId") folderId?: string) {
     return this.service.assets(workspaceId, folderId);
+  }
+
+  @Get("upload-signature")
+  @Roles("Owner", "Admin", "Editor")
+  @UseGuards(RolesGuard)
+  uploadSignature(@WorkspaceId() workspaceId: string, @Query("folder") folder?: string) {
+    return this.service.uploadSignature(workspaceId, folder);
   }
 
   @Post("folders")

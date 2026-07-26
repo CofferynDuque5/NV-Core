@@ -272,6 +272,60 @@ export function useResolveConversation() {
   });
 }
 
+// ── Media (Cloudinary uploads) ───────────────────────────────────────────────
+export function useUploadMedia() {
+  const svc = useServices();
+  const ws = useWorkspace();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (file: File) => {
+      const sig = await svc.media.uploadSignature(ws.id);
+      if (!sig) {
+        throw new Error("Cloudinary no está configurado. Define CLOUDINARY_URL en el backend.");
+      }
+      const form = new FormData();
+      form.append("file", file);
+      form.append("api_key", sig.apiKey);
+      form.append("timestamp", String(sig.timestamp));
+      form.append("signature", sig.signature);
+      form.append("folder", sig.folder);
+      const res = await fetch(`https://api.cloudinary.com/v1_1/${sig.cloudName}/auto/upload`, {
+        method: "POST",
+        body: form,
+      });
+      if (!res.ok) {
+        const body = (await res.json().catch(() => ({}))) as { error?: { message?: string } };
+        throw new Error(body.error?.message ?? "Fallo al subir a Cloudinary.");
+      }
+      const uploaded = (await res.json()) as { secure_url: string; resource_type: string };
+      return svc.media.createAsset(ws.id, {
+        type: uploaded.resource_type === "video" ? "video" : "image",
+        title: file.name,
+        url: uploaded.secure_url,
+      });
+    },
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: [ws.id, "media"] });
+      toast.success("Archivo subido");
+    },
+    onError: (err) => toast.error(errText(err)),
+  });
+}
+
+export function useDeleteAsset() {
+  const svc = useServices();
+  const ws = useWorkspace();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => svc.media.removeAsset(ws.id, id),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: [ws.id, "media"] });
+      toast.success("Archivo eliminado");
+    },
+    onError: (err) => toast.error(errText(err)),
+  });
+}
+
 // ── Billing (Stripe) ────────────────────────────────────────────────────────
 export function useCheckout() {
   const svc = useServices();
