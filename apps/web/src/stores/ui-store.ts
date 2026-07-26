@@ -15,6 +15,10 @@ interface UiState {
   toggleNav: () => void;
   setNavCollapsed: (v: boolean) => void;
 
+  /** Mobile nav drawer. */
+  mobileNavOpen: boolean;
+  setMobileNavOpen: (v: boolean) => void;
+
   /** Notifications panel. */
   notificationsOpen: boolean;
   toggleNotifications: () => void;
@@ -35,6 +39,9 @@ export const useUiStore = create<UiState>((set) => ({
   navCollapsed: false,
   toggleNav: () => set((s) => ({ navCollapsed: !s.navCollapsed })),
   setNavCollapsed: (v) => set({ navCollapsed: v }),
+
+  mobileNavOpen: false,
+  setMobileNavOpen: (v) => set({ mobileNavOpen: v }),
 
   notificationsOpen: false,
   toggleNotifications: () => set((s) => ({ notificationsOpen: !s.notificationsOpen })),

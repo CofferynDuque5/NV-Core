@@ -3,6 +3,7 @@
 import * as React from "react";
 
 import { Sidebar } from "./sidebar";
+import { MobileNav } from "./mobile-nav";
 import { Topbar } from "./topbar";
 import { WorkspaceSwitcher } from "./workspace-switcher";
 import { CommandPalette } from "./command-palette";
@@ -18,6 +19,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     <AuthGate>
       <div className="flex min-h-screen w-full bg-canvas text-ink">
         <Sidebar onOpenSwitcher={() => setSwitcherOpen(true)} />
+        <MobileNav onOpenSwitcher={() => setSwitcherOpen(true)} />
 
         <div className="flex min-w-0 flex-1 flex-col">
           <Topbar />

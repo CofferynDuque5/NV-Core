@@ -36,7 +36,7 @@ export function Sidebar({ onOpenSwitcher }: { onOpenSwitcher: () => void }) {
   return (
     <aside
       className={cn(
-        "sticky top-0 z-30 flex h-screen flex-col border-r border-line bg-nav transition-[width] duration-200",
+        "sticky top-0 z-30 hidden h-screen flex-col border-r border-line bg-nav transition-[width] duration-200 lg:flex",
         collapsed ? "w-16" : "w-[248px]",
       )}
     >

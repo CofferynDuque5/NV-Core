@@ -1,6 +1,6 @@
 "use client";
 
-import { Bell, Plus, Search } from "lucide-react";
+import { Bell, Menu, Plus, Search } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { useCommandStore } from "@/stores/command-store";
@@ -14,11 +14,22 @@ export function Topbar() {
   const openCommand = useCommandStore((s) => s.setOpen);
   const toggleNotifications = useUiStore((s) => s.toggleNotifications);
   const openCompose = useUiStore((s) => s.openCompose);
+  const openMobileNav = useUiStore((s) => s.setMobileNavOpen);
   const notifications = useNotifications();
   const unread = (notifications.data ?? []).filter((n) => !n.read).length;
 
   return (
     <header className="sticky top-0 z-20 flex h-[57px] items-center gap-3 border-b border-line bg-canvas/80 px-4 backdrop-blur">
+      {/* Mobile hamburger */}
+      <button
+        onClick={() => openMobileNav(true)}
+        className="grid size-9 shrink-0 place-items-center rounded-lg border border-line-soft bg-panel text-ink-muted transition-colors hover:text-ink lg:hidden"
+        title="Menú"
+        aria-label="Abrir menú"
+      >
+        <Menu className="size-[18px]" />
+      </button>
+
       {/* Command trigger */}
       <button
         onClick={() => openCommand(true)}
