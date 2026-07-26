@@ -282,3 +282,15 @@ model AuditLog {
 
   @@index([workspaceSlug])
 }
+
+/** Stripe billing state, one per workspace. */
+model BillingAccount {
+  id                 String   @id @default(cuid())
+  workspaceSlug      String   @unique
+  stripeCustomerId   String?
+  subscriptionId     String?
+  subscriptionStatus String?
+  priceId            String?
+  updatedAt          DateTime @updatedAt
+  createdAt          DateTime @default(now())
+}

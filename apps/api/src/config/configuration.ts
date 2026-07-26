@@ -25,7 +25,7 @@ export interface AppConfig {
     meta: { appId?: string; appSecret?: string };
     telegram: { botToken?: string };
     google: { clientId?: string; clientSecret?: string };
-    stripe: { secretKey?: string; webhookSecret?: string };
+    stripe: { secretKey?: string; webhookSecret?: string; priceId?: string };
     cloudinary: { url?: string };
     resend: { apiKey?: string };
   };
@@ -67,7 +67,11 @@ export function buildConfig(env: Env): AppConfig {
       meta: { appId: env.META_APP_ID, appSecret: env.META_APP_SECRET },
       telegram: { botToken: env.TELEGRAM_BOT_TOKEN },
       google: { clientId: env.GOOGLE_CLIENT_ID, clientSecret: env.GOOGLE_CLIENT_SECRET },
-      stripe: { secretKey: env.STRIPE_SECRET_KEY, webhookSecret: env.STRIPE_WEBHOOK_SECRET },
+      stripe: {
+        secretKey: env.STRIPE_SECRET_KEY,
+        webhookSecret: env.STRIPE_WEBHOOK_SECRET,
+        priceId: env.STRIPE_PRICE_ID,
+      },
       cloudinary: { url: env.CLOUDINARY_URL },
       resend: { apiKey: env.RESEND_API_KEY },
     },

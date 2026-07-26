@@ -246,8 +246,25 @@ export interface MessagingService {
   send(workspaceId: string, input: SendMessageExternalInput): Promise<{ id: string }>;
 }
 
+export interface BillingStatus {
+  /** Stripe secret key is present on the server. */
+  configured: boolean;
+  /** The workspace already has a Stripe customer. */
+  customer: boolean;
+  subscriptionStatus: string | null;
+  priceId: string | null;
+}
+
+export interface CheckoutInput {
+  priceId?: string;
+  successUrl: string;
+  cancelUrl: string;
+}
+
 export interface BillingService {
-  portalUrl(workspaceId: string): Promise<string | null>;
+  status(workspaceId: string): Promise<BillingStatus>;
+  checkout(workspaceId: string, input: CheckoutInput): Promise<{ url: string }>;
+  portalUrl(workspaceId: string, returnUrl: string): Promise<string | null>;
 }
 
 /** All services the UI can resolve. */

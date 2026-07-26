@@ -111,6 +111,9 @@ export const emptyAdapters: Services = {
     send: () => notAvailable(),
   },
   billing: {
+    status: () =>
+      delay({ configured: false, customer: false, subscriptionStatus: null, priceId: null }),
+    checkout: () => notAvailable(),
     portalUrl: () => delay(null),
   },
 };

@@ -272,6 +272,40 @@ export function useResolveConversation() {
   });
 }
 
+// ── Billing (Stripe) ────────────────────────────────────────────────────────
+export function useCheckout() {
+  const svc = useServices();
+  const ws = useWorkspace();
+  return useMutation({
+    mutationFn: (priceId?: string) => {
+      const origin = window.location.origin;
+      const back = window.location.href;
+      return svc.billing.checkout(ws.id, {
+        priceId,
+        successUrl: `${back}${back.includes("?") ? "&" : "?"}billing=success`,
+        cancelUrl: `${origin}${window.location.pathname}?billing=cancel`,
+      });
+    },
+    onSuccess: ({ url }) => {
+      if (url) window.location.assign(url);
+    },
+    onError: (err) => toast.error(errText(err)),
+  });
+}
+
+export function useBillingPortal() {
+  const svc = useServices();
+  const ws = useWorkspace();
+  return useMutation({
+    mutationFn: () => svc.billing.portalUrl(ws.id, window.location.href),
+    onSuccess: (url) => {
+      if (url) window.location.assign(url);
+      else toast.error("Aún no tienes una suscripción. Suscríbete primero.");
+    },
+    onError: (err) => toast.error(errText(err)),
+  });
+}
+
 // ── AI Studio ─────────────────────────────────────────────────────────────────
 export function useGenerateVariants() {
   const svc = useServices();

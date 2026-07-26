@@ -10,6 +10,7 @@ import { EmptyState } from "@/components/common/empty-state";
 import { ListSkeleton } from "@/components/common/skeletons";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { TeamTab } from "@/components/settings/team-tab";
+import { BillingTab } from "@/components/settings/billing-tab";
 
 export default function ConfiguracionPage() {
   const logs = useAuditLogs();
@@ -30,6 +31,7 @@ export default function ConfiguracionPage() {
           <TabsTrigger value="equipo">Equipo</TabsTrigger>
           <TabsTrigger value="roles">Roles</TabsTrigger>
           <TabsTrigger value="permisos">Permisos</TabsTrigger>
+          <TabsTrigger value="facturacion">Facturación</TabsTrigger>
           <TabsTrigger value="logs">Logs</TabsTrigger>
         </TabsList>
 
@@ -93,6 +95,11 @@ export default function ConfiguracionPage() {
               </table>
             </div>
           </Panel>
+        </TabsContent>
+
+        {/* Billing */}
+        <TabsContent value="facturacion">
+          <BillingTab />
         </TabsContent>
 
         {/* Audit logs */}

@@ -127,6 +127,12 @@ export function useIntegrations() {
   });
 }
 
+export function useBilling() {
+  const svc = useServices();
+  const ws = useWorkspace();
+  return useQuery({ queryKey: [ws.id, "billing"], queryFn: () => svc.billing.status(ws.id) });
+}
+
 export function useNotifications() {
   const svc = useServices();
   const ws = useWorkspace();

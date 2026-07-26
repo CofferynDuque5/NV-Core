@@ -48,6 +48,8 @@ export const envSchema = z.object({
   // Payments / media / email
   STRIPE_SECRET_KEY: z.string().optional(),
   STRIPE_WEBHOOK_SECRET: z.string().optional(),
+  // Default subscription price used at checkout when the client sends none.
+  STRIPE_PRICE_ID: z.string().optional(),
   CLOUDINARY_URL: z.string().optional(),
   RESEND_API_KEY: z.string().optional(),
   MAIL_FROM: z.string().default("NV Core <onboarding@resend.dev>"),

@@ -1,6 +1,7 @@
 import type {
   AnalyticsSnapshot,
   Automation,
+  BillingStatus,
   Campaign,
   CalendarEvent,
   Connection,
@@ -181,7 +182,10 @@ export function createHttpAdapters(opts: HttpAdapterOptions): Services {
       send: (id, input) => post<{ id: string }>(`${ws(id)}/messaging/send`, input),
     },
     billing: {
-      portalUrl: (id) => get<{ url: string | null }>(`${ws(id)}/billing/portal`).then((r) => r.url),
+      status: (id) => get<BillingStatus>(`${ws(id)}/billing/status`),
+      checkout: (id, input) => post<{ url: string }>(`${ws(id)}/billing/checkout`, input),
+      portalUrl: (id, returnUrl) =>
+        post<{ url: string | null }>(`${ws(id)}/billing/portal`, { returnUrl }).then((r) => r.url),
     },
   };
 }
