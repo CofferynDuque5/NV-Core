@@ -254,6 +254,16 @@ cuáles están conectadas (badge «Conectado») según las claves configuradas.
   `WHATSAPP_PHONE_NUMBER_ID` o `TELEGRAM_BOT_TOKEN`, las respuestas del Inbox se
   entregan al destinatario (si la conversación tiene teléfono/chat id). Best-effort:
   el mensaje siempre se guarda aunque falle el envío externo.
+  **Entrantes:** registra los webhooks `{API_URL}/api/integrations/whatsapp/webhook`
+  (con `WHATSAPP_VERIFY_TOKEN`) y `.../telegram/webhook` (con `TELEGRAM_WEBHOOK_SECRET`);
+  los mensajes entrantes caen en el Inbox del workspace `INBOUND_WORKSPACE`.
+- **Facturación (Stripe webhook)** → registra `{API_URL}/api/integrations/stripe/webhook`
+  y pon su firmante en `STRIPE_WEBHOOK_SECRET` para que la suscripción se sincronice
+  tras pagar/cancelar. Sin suscripción activa, las funciones premium (IA) responden 402.
+- **Programación de posts** → con `REDIS_URL`, un worker (BullMQ) publica los posts
+  programados en su fecha y notifica.
+- **Rate limiting** → activo en producción (`NODE_ENV=production`): 120 req/min por IP,
+  10/min en login/registro.
 - **Pagos (Stripe)** → con `STRIPE_SECRET_KEY` (+ `STRIPE_PRICE_ID` para el precio
   por defecto), Configuración → Facturación habilita checkout de suscripción y el
   portal de cliente de Stripe. Sin clave, la pestaña muestra su estado vacío.
