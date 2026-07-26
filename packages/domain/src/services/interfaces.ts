@@ -18,8 +18,9 @@ import type {
   Template,
   TeamMember,
   AuditLogEntry,
+  Workspace,
 } from "../entities";
-import type { Role } from "../enums";
+import type { Role, WorkspaceKind } from "../enums";
 
 /**
  * Service contracts.
@@ -301,6 +302,19 @@ export interface CheckoutInput {
   cancelUrl: string;
 }
 
+export interface CreateWorkspaceInput {
+  name: string;
+  kind?: WorkspaceKind;
+  accent?: string;
+  tagline?: string;
+}
+
+export interface WorkspaceService {
+  /** All workspaces (built-in config + user-created). */
+  list(): Promise<Workspace[]>;
+  create(input: CreateWorkspaceInput): Promise<Workspace>;
+}
+
 export interface BillingService {
   status(workspaceId: string): Promise<BillingStatus>;
   checkout(workspaceId: string, input: CheckoutInput): Promise<{ url: string }>;
@@ -309,6 +323,7 @@ export interface BillingService {
 
 /** All services the UI can resolve. */
 export interface Services {
+  workspaces: WorkspaceService;
   campaigns: CampaignService;
   posts: PostService;
   calendar: CalendarService;

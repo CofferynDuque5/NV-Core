@@ -5,10 +5,10 @@ import {
   Injectable,
   NotFoundException,
 } from "@nestjs/common";
-import { getWorkspaceBySlug } from "@nv/domain";
 
 import { AuthStore } from "../../auth/auth.store";
 import type { AuthenticatedUser } from "../../auth/auth.types";
+import { WorkspaceRegistry } from "../workspace-registry.service";
 
 /**
  * Multi-tenancy guard. For a `:workspace` route it:
@@ -20,7 +20,10 @@ import type { AuthenticatedUser } from "../../auth/auth.types";
  */
 @Injectable()
 export class WorkspaceGuard implements CanActivate {
-  constructor(private readonly store: AuthStore) {}
+  constructor(
+    private readonly store: AuthStore,
+    private readonly registry: WorkspaceRegistry,
+  ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const request = context
@@ -28,7 +31,7 @@ export class WorkspaceGuard implements CanActivate {
       .getRequest<{ params: { workspace?: string }; user?: AuthenticatedUser }>();
     const slug = request.params.workspace;
 
-    if (!slug || !getWorkspaceBySlug(slug)) {
+    if (!slug || !(await this.registry.exists(slug))) {
       throw new NotFoundException(`Workspace "${slug ?? ""}" no encontrado`);
     }
 

@@ -1,12 +1,13 @@
 "use client";
 
+import * as React from "react";
 import { useRouter } from "next/navigation";
-import { WORKSPACES } from "@nv/domain";
 import { ArrowRight, Check, Plus } from "lucide-react";
 
 import { cn } from "@/lib/utils";
-import { useWorkspace } from "@/hooks/use-workspace";
+import { useWorkspace, useWorkspaces } from "@/hooks/use-workspace";
 import { useAuthStore } from "@/stores/auth-store";
+import { WorkspaceCreateDialog } from "@/components/entities/workspace-create-dialog";
 import {
   Dialog,
   DialogContent,
@@ -24,13 +25,15 @@ export function WorkspaceSwitcher({
 }) {
   const router = useRouter();
   const active = useWorkspace();
+  const workspaces = useWorkspaces();
   const memberships = useAuthStore((s) => s.memberships);
+  const [createOpen, setCreateOpen] = React.useState(false);
 
   // When authenticated with memberships, show only accessible workspaces.
   const visible =
     memberships.length > 0
-      ? WORKSPACES.filter((w) => memberships.some((m) => m.workspaceSlug === w.slug))
-      : WORKSPACES;
+      ? workspaces.filter((w) => memberships.some((m) => m.workspaceSlug === w.slug))
+      : workspaces;
 
   function go(slug: string) {
     router.push(`/w/${slug}/dashboard`);
@@ -93,10 +96,18 @@ export function WorkspaceSwitcher({
           })}
         </div>
 
-        <button className="flex items-center justify-center gap-2 rounded-xl border border-dashed border-line-strong py-2.5 text-sm font-medium text-ink-muted transition-colors hover:border-brand/50 hover:text-brand">
+        <button
+          onClick={() => {
+            onOpenChange(false);
+            setCreateOpen(true);
+          }}
+          className="flex items-center justify-center gap-2 rounded-xl border border-dashed border-line-strong py-2.5 text-sm font-medium text-ink-muted transition-colors hover:border-brand/50 hover:text-brand"
+        >
           <Plus className="size-4" /> Crear workspace
         </button>
       </DialogContent>
+
+      <WorkspaceCreateDialog open={createOpen} onOpenChange={setCreateOpen} />
     </Dialog>
   );
 }

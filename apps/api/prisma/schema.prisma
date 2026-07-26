@@ -285,6 +285,18 @@ model AuditLog {
   @@index([workspaceSlug])
 }
 
+/** User-created workspaces, stored alongside the 14 built-in (config) ones. */
+model Workspace {
+  id        String   @id @default(cuid())
+  slug      String   @unique
+  name      String
+  kind      String   @default("creative")
+  accent    String   @default("#5B8DEF")
+  tagline   String?
+  createdBy String
+  createdAt DateTime @default(now())
+}
+
 /** Connected Google account for a workspace (Calendar/Drive OAuth). */
 model GoogleConnection {
   id            String   @id @default(cuid())

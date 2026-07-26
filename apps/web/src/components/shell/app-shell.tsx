@@ -11,9 +11,27 @@ import { NotificationsPanel } from "./notifications-panel";
 import { ComposeWizard } from "@/components/overlays/compose-wizard";
 import { EntityDrawer } from "@/components/overlays/entity-drawer";
 import { AuthGate } from "@/components/auth/auth-gate";
+import { useServices } from "@/hooks/use-services";
+import { useWorkspaceStore } from "@/stores/workspace-store";
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const [switcherOpen, setSwitcherOpen] = React.useState(false);
+  const services = useServices();
+  const setWorkspaces = useWorkspaceStore((s) => s.setWorkspaces);
+
+  // Hydrate the workspace list (config + user-created) once on mount.
+  React.useEffect(() => {
+    let active = true;
+    services.workspaces
+      .list()
+      .then((ws) => {
+        if (active) setWorkspaces(ws);
+      })
+      .catch(() => undefined);
+    return () => {
+      active = false;
+    };
+  }, [services, setWorkspaces]);
 
   return (
     <AuthGate>

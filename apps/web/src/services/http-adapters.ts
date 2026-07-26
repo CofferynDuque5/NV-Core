@@ -23,6 +23,7 @@ import type {
   Template,
   TeamMember,
   AuditLogEntry,
+  Workspace,
 } from "@nv/domain";
 
 /**
@@ -94,6 +95,10 @@ export function createHttpAdapters(opts: HttpAdapterOptions): Services {
   const ws = (id: string) => `/workspaces/${encodeURIComponent(id)}`;
 
   return {
+    workspaces: {
+      list: () => get<Workspace[]>(`/workspaces`),
+      create: (input) => post<Workspace>(`/workspaces`, input),
+    },
     campaigns: {
       list: (id) => get<ListResult<Campaign>>(`${ws(id)}/campaigns`),
       get: (id, cid) => get<Campaign | null>(`${ws(id)}/campaigns/${cid}`),

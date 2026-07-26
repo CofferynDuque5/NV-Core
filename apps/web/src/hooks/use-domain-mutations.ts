@@ -4,6 +4,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import type {
   AddMemberInput,
+  CreateWorkspaceInput,
   CreateAutomationInput,
   CreateCampaignInput,
   CreateContactInput,
@@ -20,6 +21,8 @@ import type {
 
 import { useServices } from "./use-services";
 import { useWorkspace } from "./use-workspace";
+import { useWorkspaceStore } from "@/stores/workspace-store";
+import { useAuthStore } from "@/stores/auth-store";
 
 /**
  * Mutation hooks — write through the service registry (HTTP adapter → NestJS)
@@ -32,6 +35,25 @@ import { useWorkspace } from "./use-workspace";
 
 function errText(err: unknown): string {
   return err instanceof Error ? err.message : "Ocurrió un error.";
+}
+
+// ── Workspaces ──────────────────────────────────────────────────────────────
+export function useCreateWorkspace() {
+  const svc = useServices();
+  const setWorkspaces = useWorkspaceStore((s) => s.setWorkspaces);
+  const refreshSession = useAuthStore((s) => s.refreshSession);
+  return useMutation({
+    mutationFn: (input: CreateWorkspaceInput) => svc.workspaces.create(input),
+    onSuccess: async () => {
+      // Refresh the merged list and the session's memberships so the new
+      // workspace is visible and accessible immediately.
+      const list = await svc.workspaces.list().catch(() => null);
+      if (list) setWorkspaces(list);
+      await refreshSession().catch(() => undefined);
+      toast.success("Workspace creado");
+    },
+    onError: (err) => toast.error(errText(err)),
+  });
 }
 
 // ── Contacts ────────────────────────────────────────────────────────────────

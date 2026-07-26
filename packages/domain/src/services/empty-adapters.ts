@@ -1,3 +1,4 @@
+import { WORKSPACES } from "../config/workspaces";
 import type { ListResult, Services } from "./interfaces";
 
 /**
@@ -25,6 +26,10 @@ function notAvailable(): never {
 }
 
 export const emptyAdapters: Services = {
+  workspaces: {
+    list: () => delay([...WORKSPACES]),
+    create: () => notAvailable(),
+  },
   campaigns: {
     list: () => emptyList(),
     get: () => delay(null),
