@@ -15,6 +15,8 @@ import { IsString, MinLength } from "class-validator";
 import type { AppConfig } from "../../config/configuration";
 import { WorkspaceId } from "../../common/tenant/workspace.decorator";
 import { WorkspaceGuard } from "../../common/tenant/workspace.guard";
+import { PlanGuard } from "../../common/guards/plan.guard";
+import { RequiresActivePlan } from "../../common/decorators/requires-plan.decorator";
 import { createProvider, type AiProvider, type ChatMessage } from "./ai.providers";
 
 export class GenerateVariantsDto {
@@ -113,7 +115,8 @@ export class AiService {
 
 @ApiTags("ai")
 @ApiBearerAuth()
-@UseGuards(WorkspaceGuard)
+@RequiresActivePlan()
+@UseGuards(WorkspaceGuard, PlanGuard)
 @Controller("workspaces/:workspace/ai")
 export class AiController {
   constructor(private readonly service: AiService) {}
