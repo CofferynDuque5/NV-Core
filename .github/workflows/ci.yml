@@ -1,0 +1,86 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality:
+    name: Typecheck · Lint · Build · Unit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @nv/domain build
+      - run: pnpm typecheck
+      - run: pnpm lint
+      - run: pnpm build
+      - name: Unit tests (api)
+        run: pnpm --filter @nv/api test
+
+  e2e:
+    name: E2E (Playwright)
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: nvcore
+          POSTGRES_PASSWORD: nvcore
+          POSTGRES_DB: nvcore
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U nvcore"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgresql://nvcore:nvcore@localhost:5432/nvcore?schema=public
+      JWT_SECRET: ci-secret-at-least-16-characters-long
+      CORS_ORIGINS: http://localhost:3000
+      NEXT_PUBLIC_API_URL: http://localhost:4000
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @nv/domain build
+      - run: pnpm --filter @nv/api prisma:generate
+      - run: pnpm --filter @nv/api exec prisma migrate deploy
+      - run: pnpm --filter @nv/api build
+      - run: pnpm --filter @nv/web build
+      - name: Install Playwright browser
+        run: pnpm --filter @nv/web exec playwright install --with-deps chromium
+      - name: Start servers + run E2E
+        run: |
+          node apps/api/dist/main.js &
+          API_PID=$!
+          pnpm --filter @nv/web exec next start -p 3000 &
+          WEB_PID=$!
+          npx -y wait-on http://localhost:4000/api/health http://localhost:3000/login --timeout 90000
+          pnpm --filter @nv/web test:e2e
+          kill $API_PID $WEB_PID || true
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-report
+          path: apps/web/playwright-report
+          retention-days: 7
