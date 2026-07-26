@@ -20,3 +20,6 @@ build/
 .DS_Store
 coverage/
 *.tsbuildinfo
+
+apps/web/test-results/
+apps/web/playwright-report/
