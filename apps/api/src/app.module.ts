@@ -1,8 +1,11 @@
 import { Module } from "@nestjs/common";
+import { APP_GUARD } from "@nestjs/core";
 import { ConfigModule } from "@nestjs/config";
+import { ThrottlerModule } from "@nestjs/throttler";
 
 import { buildConfig } from "./config/configuration";
 import { validateEnv } from "./config/env.validation";
+import { ConditionalThrottlerGuard } from "./common/guards/conditional-throttler.guard";
 import { CommonModule } from "./common/common.module";
 import { PrismaModule } from "./prisma/prisma.module";
 import { HealthModule } from "./health/health.module";
@@ -37,6 +40,9 @@ import { BillingModule } from "./modules/billing/billing.module";
       cache: true,
       validate: (raw) => buildConfig(validateEnv(raw)),
     }),
+    // Global rate limit: 120 req/min per IP. Sensitive routes tighten this with
+    // @Throttle(); the Stripe webhook opts out with @SkipThrottle().
+    ThrottlerModule.forRoot([{ name: "default", ttl: 60_000, limit: 120 }]),
     CommonModule,
     PrismaModule,
     AuthModule,
@@ -65,5 +71,6 @@ import { BillingModule } from "./modules/billing/billing.module";
     MessagingModule,
     BillingModule,
   ],
+  providers: [{ provide: APP_GUARD, useClass: ConditionalThrottlerGuard }],
 })
 export class AppModule {}

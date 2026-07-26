@@ -15,6 +15,7 @@ import {
 } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { ApiBearerAuth, ApiExcludeEndpoint, ApiTags } from "@nestjs/swagger";
+import { SkipThrottle } from "@nestjs/throttler";
 import { getWorkspaceBySlug, type BillingStatus } from "@nv/domain";
 import { IsOptional, IsString, IsUrl } from "class-validator";
 
@@ -215,6 +216,7 @@ export class StripeWebhookController {
   constructor(private readonly service: BillingService) {}
 
   @Public()
+  @SkipThrottle()
   @Post("webhook")
   @HttpCode(200)
   @ApiExcludeEndpoint()
