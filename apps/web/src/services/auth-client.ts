@@ -88,4 +88,16 @@ export const authClient = {
   logout: () => request<null>("/auth/logout", { method: "POST" }),
 
   me: (token: string) => request<SessionView>("/auth/me", { token }),
+
+  forgotPassword: (email: string) =>
+    request<null>("/auth/forgot-password", { method: "POST", body: JSON.stringify({ email }) }),
+
+  resetPassword: (token: string, password: string) =>
+    request<null>("/auth/reset-password", {
+      method: "POST",
+      body: JSON.stringify({ token, password }),
+    }),
+
+  verifyEmail: (token: string) =>
+    request<null>("/auth/verify-email", { method: "POST", body: JSON.stringify({ token }) }),
 };

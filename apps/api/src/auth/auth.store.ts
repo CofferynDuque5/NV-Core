@@ -119,4 +119,44 @@ export class AuthStore {
       data: { revokedAt: new Date() },
     });
   }
+
+  /** Revoke every active refresh token for a user (e.g. after a password reset). */
+  async revokeAllRefreshTokens(userId: string): Promise<void> {
+    await this.prisma.refreshToken.updateMany({
+      where: { userId, revokedAt: null },
+      data: { revokedAt: new Date() },
+    });
+  }
+
+  async updatePassword(userId: string, passwordHash: string): Promise<void> {
+    await this.prisma.user.update({ where: { id: userId }, data: { passwordHash } });
+  }
+
+  async setEmailVerified(userId: string): Promise<void> {
+    await this.prisma.user.update({ where: { id: userId }, data: { emailVerifiedAt: new Date() } });
+  }
+
+  // ── Single-use auth tokens (password reset / email verification) ──────────
+  async createAuthToken(
+    userId: string,
+    purpose: "reset" | "verify",
+    tokenHash: string,
+    expiresAt: Date,
+  ): Promise<void> {
+    // One live token per purpose: drop older ones for this user first.
+    await this.prisma.authToken.deleteMany({ where: { userId, purpose } });
+    await this.prisma.authToken.create({ data: { userId, purpose, tokenHash, expiresAt } });
+  }
+
+  async consumeAuthToken(
+    tokenHash: string,
+    purpose: "reset" | "verify",
+  ): Promise<{ userId: string } | undefined> {
+    const row = await this.prisma.authToken.findUnique({ where: { tokenHash } });
+    if (!row || row.purpose !== purpose || row.usedAt || row.expiresAt.getTime() < Date.now()) {
+      return undefined;
+    }
+    await this.prisma.authToken.update({ where: { id: row.id }, data: { usedAt: new Date() } });
+    return { userId: row.userId };
+  }
 }

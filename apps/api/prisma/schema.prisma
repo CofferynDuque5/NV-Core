@@ -54,13 +54,30 @@ enum Role {
 }
 
 model User {
-  id            String         @id @default(cuid())
-  email         String         @unique
-  name          String
-  passwordHash  String
-  createdAt     DateTime       @default(now())
-  memberships   Membership[]
-  refreshTokens RefreshToken[]
+  id              String         @id @default(cuid())
+  email           String         @unique
+  name            String
+  passwordHash    String
+  emailVerifiedAt DateTime?
+  createdAt       DateTime       @default(now())
+  memberships     Membership[]
+  refreshTokens   RefreshToken[]
+  authTokens      AuthToken[]
+}
+
+/** Single-use tokens for password reset ("reset") and email verification ("verify"). */
+model AuthToken {
+  id        String    @id @default(cuid())
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId    String
+  purpose   String
+  /// sha256 hash of the opaque token (never stored in clear).
+  tokenHash String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([userId])
 }
 
 model RefreshToken {

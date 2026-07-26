@@ -68,7 +68,62 @@ export class AuthService {
       }
     }
 
+    // Best-effort verification email (no-op if Resend isn't configured).
+    await this.sendVerificationEmail(user.id, user.email, user.name);
     return this.issueTokens(user);
+  }
+
+  // ── Email verification ──────────────────────────────────────────────────
+  private async sendVerificationEmail(userId: string, email: string, name: string): Promise<void> {
+    const raw = generateRefreshToken();
+    const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
+    await this.store.createAuthToken(userId, "verify", hashToken(raw), expiresAt);
+    const url = `${this.config.get("appUrl", { infer: true })}/verify-email?token=${raw}`;
+    await this.mail.send({
+      to: email,
+      subject: "Verifica tu email · NV Core",
+      html:
+        `<p>Hola ${name},</p><p>Confirma tu email para activar tu cuenta:</p>` +
+        `<p><a href="${url}">Verificar email</a></p>` +
+        `<p>El enlace caduca en 24 horas.</p>`,
+    });
+  }
+
+  async resendVerification(userId: string, email: string, name: string): Promise<void> {
+    await this.sendVerificationEmail(userId, email, name);
+  }
+
+  async verifyEmail(token: string): Promise<void> {
+    const consumed = await this.store.consumeAuthToken(hashToken(token), "verify");
+    if (!consumed) throw new BadRequestException("Token de verificación inválido o expirado.");
+    await this.store.setEmailVerified(consumed.userId);
+  }
+
+  // ── Password reset ──────────────────────────────────────────────────────
+  /** Always resolves (does not reveal whether the email exists). */
+  async requestPasswordReset(email: string): Promise<void> {
+    const user = await this.store.findUserByEmail(email);
+    if (!user) return;
+    const raw = generateRefreshToken();
+    const expiresAt = new Date(Date.now() + 60 * 60 * 1000);
+    await this.store.createAuthToken(user.id, "reset", hashToken(raw), expiresAt);
+    const url = `${this.config.get("appUrl", { infer: true })}/reset-password?token=${raw}`;
+    await this.mail.send({
+      to: user.email,
+      subject: "Restablece tu contraseña · NV Core",
+      html:
+        `<p>Hola ${user.name},</p><p>Solicitaste restablecer tu contraseña:</p>` +
+        `<p><a href="${url}">Crear nueva contraseña</a></p>` +
+        `<p>Si no fuiste tú, ignora este correo. El enlace caduca en 1 hora.</p>`,
+    });
+  }
+
+  async resetPassword(token: string, newPassword: string): Promise<void> {
+    const consumed = await this.store.consumeAuthToken(hashToken(token), "reset");
+    if (!consumed) throw new BadRequestException("Token de restablecimiento inválido o expirado.");
+    await this.store.updatePassword(consumed.userId, await hashPassword(newPassword));
+    // Invalidate existing sessions after a password change.
+    await this.store.revokeAllRefreshTokens(consumed.userId);
   }
 
   async login(dto: LoginDto): Promise<AuthResult> {
