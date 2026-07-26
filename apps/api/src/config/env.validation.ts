@@ -50,6 +50,7 @@ export const envSchema = z.object({
   STRIPE_WEBHOOK_SECRET: z.string().optional(),
   CLOUDINARY_URL: z.string().optional(),
   RESEND_API_KEY: z.string().optional(),
+  MAIL_FROM: z.string().default("NV Core <onboarding@resend.dev>"),
 });
 
 export type Env = z.infer<typeof envSchema>;

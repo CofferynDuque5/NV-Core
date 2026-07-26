@@ -10,6 +10,7 @@ import { ConfigService } from "@nestjs/config";
 import { getWorkspaceBySlug, type Role } from "@nv/domain";
 
 import type { AppConfig } from "../config/configuration";
+import { MailService } from "../common/mail.service";
 import { AuthStore } from "./auth.store";
 import { hashPassword, verifyPassword } from "./password.util";
 import { generateRefreshToken, hashToken } from "./token.util";
@@ -42,6 +43,7 @@ export class AuthService {
     private readonly store: AuthStore,
     private readonly jwt: JwtService,
     private readonly config: ConfigService<AppConfig, true>,
+    private readonly mail: MailService,
   ) {}
 
   async register(dto: RegisterDto): Promise<AuthResult> {
@@ -110,6 +112,19 @@ export class AuthService {
       throw new NotFoundException("No existe un usuario con ese email. Debe registrarse primero.");
     }
     await this.store.upsertMembership(user.id, workspaceSlug, role);
+
+    // Best-effort notification — never blocks the membership change.
+    const workspace = getWorkspaceBySlug(workspaceSlug);
+    void this.mail.send({
+      to: user.email,
+      subject: `Te añadieron a ${workspace?.name ?? workspaceSlug} en NV Core`,
+      html:
+        `<p>Hola ${user.name ?? ""},</p>` +
+        `<p>Ahora eres <strong>${role}</strong> en el workspace ` +
+        `<strong>${workspace?.name ?? workspaceSlug}</strong> de NV Core.</p>` +
+        `<p>Inicia sesión para empezar a colaborar.</p>`,
+    });
+
     return { workspaceSlug, role };
   }
 

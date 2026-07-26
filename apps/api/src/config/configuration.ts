@@ -11,6 +11,7 @@ export interface AppConfig {
   auth: { secret: string; expiresIn: string; refreshTtlDays: number };
   database: { url?: string };
   redis: { url?: string };
+  mail: { from: string };
   integrations: {
     n8n: { baseUrl?: string; apiKey?: string };
     ai: {
@@ -48,6 +49,7 @@ export function buildConfig(env: Env): AppConfig {
     auth: { secret, expiresIn: env.JWT_EXPIRES_IN, refreshTtlDays: env.REFRESH_TOKEN_TTL_DAYS },
     database: { url: env.DATABASE_URL },
     redis: { url: env.REDIS_URL },
+    mail: { from: env.MAIL_FROM },
     integrations: {
       n8n: { baseUrl: env.N8N_BASE_URL, apiKey: env.N8N_API_KEY },
       ai: {
