@@ -235,10 +235,23 @@ cd apps/web && STATIC_EXPORT=true pnpm build
 
 ---
 
-## Integraciones futuras (TODAS opcionales)
+## Integraciones (TODAS opcionales)
 
 No hacen falta para usar la app. Cuando quieras conectarlas, añade su clave en
-`apps/api/.env` y se cablearán en su fase. De dónde sacar cada una:
+`apps/api/.env` y reinicia el backend. El **Marketplace** muestra en tiempo real
+cuáles están conectadas (badge «Conectado») según las claves configuradas.
+
+**Ya cableadas y funcionales:**
+
+- **IA (AI Content Studio)** → configura **una** de `OPENAI_API_KEY`,
+  `ANTHROPIC_API_KEY` o `GEMINI_API_KEY`. Con varias, el API usa `AI_PROVIDER`
+  (o el orden de prioridad `anthropic → openai → gemini`). Modelos ajustables
+  con `OPENAI_MODEL` / `ANTHROPIC_MODEL` / `GEMINI_MODEL`. Sin ninguna, la
+  pantalla muestra su estado vacío y el endpoint responde 503.
+- **Email (Resend)** → con `RESEND_API_KEY` (y opcional `MAIL_FROM`), invitar a
+  un miembro envía un email de notificación (best-effort; nunca bloquea la acción).
+
+De dónde sacar cada clave:
 
 | Variable(s) | Servicio | De dónde |
 |---|---|---|
