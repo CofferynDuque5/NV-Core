@@ -8,6 +8,7 @@ import { validateEnv } from "./config/env.validation";
 import { ConditionalThrottlerGuard } from "./common/guards/conditional-throttler.guard";
 import { CommonModule } from "./common/common.module";
 import { PrismaModule } from "./prisma/prisma.module";
+import { SchedulerModule } from "./modules/scheduler/scheduler.module";
 import { HealthModule } from "./health/health.module";
 import { AuthModule } from "./auth/auth.module";
 
@@ -45,6 +46,7 @@ import { BillingModule } from "./modules/billing/billing.module";
     ThrottlerModule.forRoot([{ name: "default", ttl: 60_000, limit: 120 }]),
     CommonModule,
     PrismaModule,
+    SchedulerModule,
     AuthModule,
     HealthModule,
 

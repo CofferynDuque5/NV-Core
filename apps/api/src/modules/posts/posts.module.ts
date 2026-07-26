@@ -39,6 +39,7 @@ import { RolesGuard } from "../../auth/guards/roles.guard";
 import { Roles } from "../../auth/decorators/roles.decorator";
 import { CurrentUser } from "../../auth/decorators/current-user.decorator";
 import type { AuthenticatedUser } from "../../auth/auth.types";
+import { PostScheduler } from "../scheduler/post-scheduler.service";
 
 export class CreatePostDto {
   @IsIn(CHANNEL_IDS) channel!: ChannelId;
@@ -75,6 +76,7 @@ export class PostsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly audit: AuditLogger,
+    private readonly scheduler: PostScheduler,
   ) {}
 
   private db() {
@@ -121,12 +123,18 @@ export class PostsService {
       ...WITH_CAMPAIGN,
     });
     await this.audit.record(workspaceId, actor, "post.create", row.id);
+
+    // Hand scheduled posts to the background worker (no-op without Redis).
+    if (row.status === "scheduled" && row.scheduledAt) {
+      await this.scheduler.schedule(row.id, row.scheduledAt);
+    }
     return mapPost(row);
   }
 
   async remove(workspaceId: string, actor: string, id: string): Promise<void> {
     const { count } = await this.db().post.deleteMany({ where: { id, workspaceSlug: workspaceId } });
     if (count === 0) throw new NotFoundException("Publicación no encontrada.");
+    await this.scheduler.cancel(id);
     await this.audit.record(workspaceId, actor, "post.delete", id);
   }
 }
