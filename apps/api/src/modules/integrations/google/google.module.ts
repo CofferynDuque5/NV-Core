@@ -20,6 +20,7 @@ import type { AppConfig } from "../../../config/configuration";
 import { WorkspaceId } from "../../../common/tenant/workspace.decorator";
 import { WorkspaceGuard } from "../../../common/tenant/workspace.guard";
 import { PrismaService } from "../../../prisma/prisma.service";
+import { CryptoService } from "../../../common/crypto/crypto.service";
 import { Public } from "../../../auth/decorators/public.decorator";
 import { CurrentUser } from "../../../auth/decorators/current-user.decorator";
 import { Roles } from "../../../auth/decorators/roles.decorator";
@@ -41,6 +42,7 @@ export class GoogleService {
     private readonly config: ConfigService<AppConfig, true>,
     private readonly prisma: PrismaService,
     private readonly jwt: JwtService,
+    private readonly crypto: CryptoService,
   ) {}
 
   private google() {
@@ -117,6 +119,21 @@ export class GoogleService {
     await this.prisma.googleConnection.deleteMany({ where: { workspaceSlug: workspaceId } });
   }
 
+  /** Decrypted OAuth tokens for the workspace (for Calendar/Drive calls). */
+  async getTokens(
+    workspaceId: string,
+  ): Promise<{ accessToken: string; refreshToken: string | null } | null> {
+    if (!this.prisma.enabled) return null;
+    const conn = await this.prisma.googleConnection.findUnique({
+      where: { workspaceSlug: workspaceId },
+    });
+    if (!conn) return null;
+    return {
+      accessToken: this.crypto.decrypt(conn.accessToken),
+      refreshToken: conn.refreshToken ? this.crypto.decrypt(conn.refreshToken) : null,
+    };
+  }
+
   private async exchangeCode(
     code: string,
     clientId: string,
@@ -155,10 +172,11 @@ export class GoogleService {
     const expiresAt = tokens.expires_in
       ? new Date(Date.now() + tokens.expires_in * 1000)
       : null;
+    // Encrypt OAuth tokens at rest.
     const data = {
       email,
-      accessToken: tokens.access_token,
-      refreshToken: tokens.refresh_token,
+      accessToken: this.crypto.encrypt(tokens.access_token),
+      refreshToken: this.crypto.encryptNullable(tokens.refresh_token),
       scope: tokens.scope,
       expiresAt,
     };
@@ -166,7 +184,7 @@ export class GoogleService {
       where: { workspaceSlug },
       create: { workspaceSlug, ...data },
       // Keep a previously stored refresh token if Google omits it on re-consent.
-      update: { ...data, refreshToken: tokens.refresh_token ?? undefined },
+      update: { ...data, refreshToken: data.refreshToken ?? undefined },
     });
   }
 }

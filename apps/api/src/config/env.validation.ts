@@ -15,6 +15,8 @@ export const envSchema = z.object({
 
   // Auth
   JWT_SECRET: z.string().min(16).optional(),
+  // Symmetric key for encrypting secrets at rest (OAuth tokens, etc.).
+  ENCRYPTION_KEY: z.string().min(16).optional(),
   // Access token lifetime (short). Refresh tokens extend the session.
   JWT_EXPIRES_IN: z.string().default("15m"),
   REFRESH_TOKEN_TTL_DAYS: z.coerce.number().int().positive().default(7),

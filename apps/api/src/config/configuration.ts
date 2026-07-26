@@ -13,6 +13,7 @@ export interface AppConfig {
   /** Workspace slug that receives inbound WhatsApp/Telegram messages. */
   inboundWorkspace?: string;
   auth: { secret: string; expiresIn: string; refreshTtlDays: number };
+  security: { encryptionKey: string };
   database: { url?: string };
   redis: { url?: string };
   mail: { from: string };
@@ -46,6 +47,15 @@ export function buildConfig(env: Env): AppConfig {
     secret = "nv-core-dev-secret-change-me";
   }
 
+  // Encryption key for secrets at rest: required in production, dev fallback otherwise.
+  let encryptionKey = env.ENCRYPTION_KEY;
+  if (!encryptionKey) {
+    if (env.NODE_ENV === "production") {
+      throw new Error("ENCRYPTION_KEY es obligatorio en producción.");
+    }
+    encryptionKey = "nv-core-dev-encryption-key-change-me";
+  }
+
   return {
     env: env.NODE_ENV,
     port: env.PORT,
@@ -54,6 +64,7 @@ export function buildConfig(env: Env): AppConfig {
     apiUrl: env.API_URL.replace(/\/$/, ""),
     inboundWorkspace: env.INBOUND_WORKSPACE,
     auth: { secret, expiresIn: env.JWT_EXPIRES_IN, refreshTtlDays: env.REFRESH_TOKEN_TTL_DAYS },
+    security: { encryptionKey },
     database: { url: env.DATABASE_URL },
     redis: { url: env.REDIS_URL },
     mail: { from: env.MAIL_FROM },
