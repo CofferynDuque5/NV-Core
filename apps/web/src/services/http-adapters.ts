@@ -171,13 +171,11 @@ export function createHttpAdapters(opts: HttpAdapterOptions): Services {
     },
     audit: { logs: (id) => get<AuditLogEntry[]>(`${ws(id)}/audit/logs`) },
     ai: {
-      // Action endpoints require a provider (return 501 until configured).
-      generateVariants: (input) =>
-        post<{ tag: string; text: string }[]>(
-          `/workspaces/${encodeURIComponent("__current__")}/ai/variants`,
-          input,
-        ),
-      suggestHashtags: async () => [],
+      // Action endpoints require a provider (return 503 until configured).
+      generateVariants: (id, input) =>
+        post<{ tag: string; text: string }[]>(`${ws(id)}/ai/variants`, input),
+      suggestHashtags: (id, input) =>
+        post<{ hashtags: string[] }>(`${ws(id)}/ai/hashtags`, input).then((r) => r.hashtags),
     },
     messaging: {
       send: (input) =>

@@ -13,7 +13,13 @@ export interface AppConfig {
   redis: { url?: string };
   integrations: {
     n8n: { baseUrl?: string; apiKey?: string };
-    ai: { openai?: string; anthropic?: string; gemini?: string };
+    ai: {
+      provider?: "openai" | "anthropic" | "gemini";
+      openai?: string;
+      anthropic?: string;
+      gemini?: string;
+      models: { openai: string; anthropic: string; gemini: string };
+    };
     whatsapp: { token?: string; phoneNumberId?: string };
     meta: { appId?: string; appSecret?: string };
     telegram: { botToken?: string };
@@ -45,9 +51,15 @@ export function buildConfig(env: Env): AppConfig {
     integrations: {
       n8n: { baseUrl: env.N8N_BASE_URL, apiKey: env.N8N_API_KEY },
       ai: {
+        provider: env.AI_PROVIDER,
         openai: env.OPENAI_API_KEY,
         anthropic: env.ANTHROPIC_API_KEY,
         gemini: env.GEMINI_API_KEY,
+        models: {
+          openai: env.OPENAI_MODEL,
+          anthropic: env.ANTHROPIC_MODEL,
+          gemini: env.GEMINI_MODEL,
+        },
       },
       whatsapp: { token: env.WHATSAPP_TOKEN, phoneNumberId: env.WHATSAPP_PHONE_NUMBER_ID },
       meta: { appId: env.META_APP_ID, appSecret: env.META_APP_SECRET },

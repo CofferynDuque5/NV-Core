@@ -218,13 +218,20 @@ export interface AuditService {
  * Provider-facing contracts (external integrations). Phase 2 only — declared
  * so the UI and future NestJS modules agree on the shape ahead of time.
  */
+export interface AiVariant {
+  tag: string;
+  text: string;
+}
+
+export interface GenerateVariantsInput {
+  prompt: string;
+  channel: string;
+  tone: string;
+}
+
 export interface AiService {
-  generateVariants(input: {
-    prompt: string;
-    channel: string;
-    tone: string;
-  }): Promise<{ tag: string; text: string }[]>;
-  suggestHashtags(input: { prompt: string }): Promise<string[]>;
+  generateVariants(workspaceId: string, input: GenerateVariantsInput): Promise<AiVariant[]>;
+  suggestHashtags(workspaceId: string, input: { prompt: string }): Promise<string[]>;
 }
 
 export interface MessagingService {

@@ -12,6 +12,7 @@ import type {
   CreatePostInput,
   CreateSegmentInput,
   CreateTemplateInput,
+  GenerateVariantsInput,
   UpdateCampaignInput,
   UpdateContactInput,
   UpsertConnectionInput,
@@ -267,6 +268,16 @@ export function useResolveConversation() {
       void qc.invalidateQueries({ queryKey: [ws.id, "inbox"] });
       toast.success("Conversación actualizada");
     },
+    onError: (err) => toast.error(errText(err)),
+  });
+}
+
+// ── AI Studio ─────────────────────────────────────────────────────────────────
+export function useGenerateVariants() {
+  const svc = useServices();
+  const ws = useWorkspace();
+  return useMutation({
+    mutationFn: (input: GenerateVariantsInput) => svc.ai.generateVariants(ws.id, input),
     onError: (err) => toast.error(errText(err)),
   });
 }

@@ -28,6 +28,11 @@ export const envSchema = z.object({
   OPENAI_API_KEY: z.string().optional(),
   ANTHROPIC_API_KEY: z.string().optional(),
   GEMINI_API_KEY: z.string().optional(),
+  // Optional overrides — pick a provider explicitly and/or override models.
+  AI_PROVIDER: z.enum(["openai", "anthropic", "gemini"]).optional(),
+  OPENAI_MODEL: z.string().default("gpt-4o-mini"),
+  ANTHROPIC_MODEL: z.string().default("claude-haiku-4-5-20251001"),
+  GEMINI_MODEL: z.string().default("gemini-1.5-flash"),
 
   // Messaging
   WHATSAPP_TOKEN: z.string().optional(),
