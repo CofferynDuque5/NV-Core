@@ -1,0 +1,20 @@
+{
+  "name": "nsap",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "NSAP — automatización de WhatsApp (Baileys) con panel web. Node.js + Express + Bootstrap.",
+  "engines": { "node": ">=20" },
+  "scripts": {
+    "dev": "node --watch server.js",
+    "start": "node server.js",
+    "test": "node --test"
+  },
+  "dependencies": {
+    "@whiskeysockets/baileys": "^7.0.0-rc.13",
+    "express": "^4.21.2",
+    "nanoid": "^5.0.9",
+    "qrcode": "^1.5.4",
+    "socket.io": "^4.8.1"
+  }
+}
