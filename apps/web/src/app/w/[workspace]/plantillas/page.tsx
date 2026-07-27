@@ -7,8 +7,23 @@ import { useTemplates } from "@/hooks/use-domain-data";
 import { PageHeader } from "@/components/common/page-header";
 import { QueryBoundary } from "@/components/common/query-boundary";
 import { CardGridSkeleton } from "@/components/common/skeletons";
+import { Panel } from "@/components/common/panel";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { TemplateCreateDialog } from "@/components/entities/template-create-dialog";
+
+/** Highlight {{variables}} inside a template body preview. */
+function renderBodyWithVars(body: string): React.ReactNode {
+  return body.split(/(\{\{\s*[\w.-]+\s*\}\})/g).map((part, i) =>
+    /^\{\{\s*[\w.-]+\s*\}\}$/.test(part) ? (
+      <code key={i} className="rounded bg-brand/10 px-1 text-brand">
+        {part}
+      </code>
+    ) : (
+      <React.Fragment key={i}>{part}</React.Fragment>
+    ),
+  );
+}
 
 export default function PlantillasPage() {
   const templates = useTemplates();
@@ -43,7 +58,21 @@ export default function PlantillasPage() {
           ),
         }}
       >
-        {() => null}
+        {(data) => (
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
+            {data.items.map((t) => (
+              <Panel key={t.id} className="flex flex-col gap-2 p-4">
+                <div className="flex items-start justify-between gap-2">
+                  <h3 className="truncate text-sm font-semibold text-ink-bright">{t.name}</h3>
+                  {t.category ? <Badge variant="neutral">{t.category}</Badge> : null}
+                </div>
+                <p className="whitespace-pre-wrap break-words text-xs leading-relaxed text-ink-muted">
+                  {renderBodyWithVars(t.body)}
+                </p>
+              </Panel>
+            ))}
+          </div>
+        )}
       </QueryBoundary>
 
       <TemplateCreateDialog open={open} onOpenChange={setOpen} />

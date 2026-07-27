@@ -74,9 +74,23 @@ export function TemplateCreateDialog({
           rows={5}
           value={body}
           onChange={(e) => setBody(e.target.value)}
-          placeholder="Hola {nombre} 👋 …"
+          placeholder="Hola {{grupo}} 👋, tu cita es el {{fecha}} a las {{hora}}."
           className="min-h-[120px]"
         />
+        <div className="flex flex-wrap items-center gap-1.5 text-[11px] text-ink-faint">
+          <span>Insertar variable:</span>
+          {["grupo", "fecha", "hora"].map((v) => (
+            <button
+              key={v}
+              type="button"
+              onClick={() => setBody((b) => `${b}{{${v}}}`)}
+              className="rounded-full border border-line-soft px-2 py-0.5 text-ink-muted transition-colors hover:border-brand/60 hover:text-ink"
+            >
+              {`{{${v}}}`}
+            </button>
+          ))}
+          <span>· o cualquier variable por grupo.</span>
+        </div>
       </div>
     </FormDialog>
   );

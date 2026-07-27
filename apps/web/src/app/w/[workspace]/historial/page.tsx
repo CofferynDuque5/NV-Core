@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import type { SendLogEntry } from "@nv/domain";
-import { BarChart2, History, Loader2 } from "lucide-react";
+import { BarChart2, Download, History, Loader2 } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 
 import { useCampaignLogs } from "@/hooks/use-domain-data";
@@ -13,6 +13,7 @@ import { QueryBoundary } from "@/components/common/query-boundary";
 import { TableSkeleton } from "@/components/common/skeletons";
 import { Panel } from "@/components/common/panel";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import {
   Dialog,
   DialogContent,
@@ -35,9 +36,38 @@ function destination(entry: SendLogEntry): string {
   return entry.groupName ?? entry.target ?? "—";
 }
 
+const CSV_COLUMNS: { key: keyof SendLogEntry; label: string }[] = [
+  { key: "createdAt", label: "Fecha" },
+  { key: "campaignName", label: "Campaña" },
+  { key: "groupName", label: "Grupo" },
+  { key: "target", label: "Destino" },
+  { key: "format", label: "Formato" },
+  { key: "postId", label: "PostId" },
+  { key: "ok", label: "OK" },
+  { key: "error", label: "Error" },
+  { key: "preview", label: "Mensaje" },
+];
+
+function csvCell(value: unknown): string {
+  return `"${String(value ?? "").replace(/"/g, '""')}"`;
+}
+
+function downloadCsv(rows: SendLogEntry[]): void {
+  const header = CSV_COLUMNS.map((c) => c.label).join(",");
+  const body = rows.map((r) => CSV_COLUMNS.map((c) => csvCell(r[c.key])).join(",")).join("\n");
+  const blob = new Blob(["﻿" + header + "\n" + body], { type: "text/csv;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `historial-nv-core-${new Date().toISOString().slice(0, 10)}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
 export default function HistorialPage() {
   const logs = useCampaignLogs();
   const [insights, setInsights] = React.useState<{ target: string; id: string } | null>(null);
+  const rows = logs.data ?? [];
 
   return (
     <div className="space-y-6">
@@ -45,6 +75,16 @@ export default function HistorialPage() {
         eyebrow="Operaciones"
         title="Historial"
         description="Registro de envíos a grupos de WhatsApp y publicaciones sociales."
+        actions={
+          <Button
+            size="sm"
+            variant="secondary"
+            onClick={() => downloadCsv(rows)}
+            disabled={rows.length === 0}
+          >
+            <Download className="size-4" /> Exportar CSV
+          </Button>
+        }
       />
 
       <QueryBoundary

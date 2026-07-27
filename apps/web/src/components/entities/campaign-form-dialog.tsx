@@ -16,7 +16,7 @@ import {
   useUpdateCampaign,
   useUploadCampaignAttachment,
 } from "@/hooks/use-domain-mutations";
-import { useGroups } from "@/hooks/use-domain-data";
+import { useGroups, useTemplates } from "@/hooks/use-domain-data";
 import { FormDialog, errorMessage } from "./form-dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -65,6 +65,7 @@ export function CampaignFormDialog({
   const update = useUpdateCampaign();
   const upload = useUploadCampaignAttachment();
   const groups = useGroups();
+  const templates = useTemplates();
   const pending = create.isPending || update.isPending;
   const fileInputRef = React.useRef<HTMLInputElement>(null);
 
@@ -215,7 +216,28 @@ export function CampaignFormDialog({
       </div>
 
       <div className="space-y-1.5">
-        <Label htmlFor="cp-message">Mensaje</Label>
+        <div className="flex items-center justify-between gap-2">
+          <Label htmlFor="cp-message">Mensaje</Label>
+          {(templates.data?.items.length ?? 0) > 0 ? (
+            <select
+              aria-label="Usar plantilla"
+              defaultValue=""
+              onChange={(e) => {
+                const t = templates.data?.items.find((x) => x.id === e.target.value);
+                if (t) setMessage(t.body);
+                e.target.value = "";
+              }}
+              className="h-7 rounded-md border border-line-soft bg-panel-raised px-2 text-xs text-ink-muted"
+            >
+              <option value="">Usar plantilla…</option>
+              {templates.data?.items.map((t) => (
+                <option key={t.id} value={t.id}>
+                  {t.name}
+                </option>
+              ))}
+            </select>
+          ) : null}
+        </div>
         <Textarea
           id="cp-message"
           value={message}
