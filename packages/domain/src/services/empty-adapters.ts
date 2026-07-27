@@ -51,6 +51,10 @@ export const emptyAdapters: Services = {
     create: () => notAvailable(),
     update: () => notAvailable(),
     remove: () => notAvailable(),
+    run: () => delay(null),
+    pause: () => notAvailable(),
+    resume: () => notAvailable(),
+    logs: () => delay([]),
   },
   posts: {
     list: () => emptyList(),
@@ -71,6 +75,13 @@ export const emptyAdapters: Services = {
     list: () => emptyList(),
     create: () => notAvailable(),
     remove: () => notAvailable(),
+    getVars: () => delay({}),
+    setVars: () => notAvailable(),
+  },
+  social: {
+    status: () => delay({ facebook: false, instagram: false }),
+    publish: () => notAvailable(),
+    insights: () => notAvailable(),
   },
   segments: {
     list: () => emptyList(),

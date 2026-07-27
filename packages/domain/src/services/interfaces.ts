@@ -15,6 +15,7 @@ import type {
   Post,
   RoleDefinition,
   Segment,
+  SendLogEntry,
   Template,
   TeamMember,
   AuditLogEntry,
@@ -56,6 +57,13 @@ export interface CreateCampaignInput {
   progress?: number;
   nextRunAt?: string;
   accent?: string;
+  message?: string;
+  scheduleType?: "once" | "daily" | "weekly";
+  scheduleAt?: string;
+  scheduleDays?: number[];
+  attachments?: Campaign["attachments"];
+  socialFormat?: string;
+  targetGroups?: string[];
 }
 export type UpdateCampaignInput = Partial<CreateCampaignInput>;
 
@@ -108,6 +116,10 @@ export interface CampaignService {
   create(workspaceId: string, input: CreateCampaignInput): Promise<Campaign>;
   update(workspaceId: string, id: string, input: UpdateCampaignInput): Promise<Campaign>;
   remove(workspaceId: string, id: string): Promise<void>;
+  run(workspaceId: string, id: string): Promise<Campaign | null>;
+  pause(workspaceId: string, id: string): Promise<Campaign>;
+  resume(workspaceId: string, id: string): Promise<Campaign>;
+  logs(workspaceId: string): Promise<SendLogEntry[]>;
 }
 
 export interface CreatePostInput {
@@ -142,6 +154,36 @@ export interface GroupService {
   list(workspaceId: string): Promise<ListResult<Group>>;
   create(workspaceId: string, input: CreateGroupInput): Promise<Group>;
   remove(workspaceId: string, id: string): Promise<void>;
+  getVars(workspaceId: string, id: string): Promise<Record<string, string>>;
+  setVars(workspaceId: string, id: string, vars: Record<string, string>): Promise<Record<string, string>>;
+}
+
+export interface SocialStatus {
+  facebook: boolean;
+  instagram: boolean;
+}
+export interface SocialPublishInput {
+  targets: ("facebook" | "instagram")[];
+  message?: string;
+  attachments?: Campaign["attachments"];
+  format?: string;
+}
+export interface SocialResult {
+  target: "facebook" | "instagram";
+  ok: boolean;
+  id?: string;
+  format?: string;
+  error?: string;
+}
+export interface SocialInsights {
+  target: string;
+  id: string;
+  metrics: Record<string, unknown>;
+}
+export interface SocialService {
+  status(workspaceId: string): Promise<SocialStatus>;
+  publish(workspaceId: string, input: SocialPublishInput): Promise<{ results: SocialResult[] }>;
+  insights(workspaceId: string, target: string, id: string): Promise<SocialInsights>;
 }
 
 export interface SegmentService {
@@ -355,6 +397,7 @@ export interface Services {
   calendar: CalendarService;
   contacts: ContactService;
   groups: GroupService;
+  social: SocialService;
   segments: SegmentService;
   inbox: InboxService;
   media: MediaService;

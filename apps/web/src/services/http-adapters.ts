@@ -20,7 +20,11 @@ import type {
   Post,
   RoleDefinition,
   Segment,
+  SendLogEntry,
   Services,
+  SocialInsights,
+  SocialResult,
+  SocialStatus,
   Template,
   TeamMember,
   AuditLogEntry,
@@ -87,13 +91,14 @@ function createClient(opts: HttpAdapterOptions) {
   const get = <T>(path: string) => send<T>("GET", path);
   const post = <T>(path: string, body: unknown) => send<T>("POST", path, body);
   const patch = <T>(path: string, body: unknown) => send<T>("PATCH", path, body);
+  const put = <T>(path: string, body: unknown) => send<T>("PUT", path, body);
   const del = <T>(path: string) => send<T>("DELETE", path);
 
-  return { get, post, patch, del };
+  return { get, post, patch, put, del };
 }
 
 export function createHttpAdapters(opts: HttpAdapterOptions): Services {
-  const { get, post, patch, del } = createClient(opts);
+  const { get, post, patch, put, del } = createClient(opts);
   const ws = (id: string) => `/workspaces/${encodeURIComponent(id)}`;
 
   return {
@@ -114,6 +119,10 @@ export function createHttpAdapters(opts: HttpAdapterOptions): Services {
       create: (id, input) => post<Campaign>(`${ws(id)}/campaigns`, input),
       update: (id, cid, input) => patch<Campaign>(`${ws(id)}/campaigns/${cid}`, input),
       remove: (id, cid) => del<void>(`${ws(id)}/campaigns/${cid}`),
+      run: (id, cid) => post<Campaign | null>(`${ws(id)}/campaigns/${cid}/run`, {}),
+      pause: (id, cid) => post<Campaign>(`${ws(id)}/campaigns/${cid}/pause`, {}),
+      resume: (id, cid) => post<Campaign>(`${ws(id)}/campaigns/${cid}/resume`, {}),
+      logs: (id) => get<SendLogEntry[]>(`${ws(id)}/campaigns/logs`),
     },
     posts: {
       list: (id) => get<ListResult<Post>>(`${ws(id)}/posts`),
@@ -134,6 +143,14 @@ export function createHttpAdapters(opts: HttpAdapterOptions): Services {
       list: (id) => get<ListResult<Group>>(`${ws(id)}/groups`),
       create: (id, input) => post<Group>(`${ws(id)}/groups`, input),
       remove: (id, gid) => del<void>(`${ws(id)}/groups/${gid}`),
+      getVars: (id, gid) => get<Record<string, string>>(`${ws(id)}/groups/${gid}/vars`),
+      setVars: (id, gid, vars) => put<Record<string, string>>(`${ws(id)}/groups/${gid}/vars`, vars),
+    },
+    social: {
+      status: (id) => get<SocialStatus>(`${ws(id)}/social/status`),
+      publish: (id, input) => post<{ results: SocialResult[] }>(`${ws(id)}/social/publish`, input),
+      insights: (id, target, mediaId) =>
+        get<SocialInsights>(`${ws(id)}/social/insights?target=${target}&id=${encodeURIComponent(mediaId)}`),
     },
     segments: {
       list: (id) => get<ListResult<Segment>>(`${ws(id)}/segments`),

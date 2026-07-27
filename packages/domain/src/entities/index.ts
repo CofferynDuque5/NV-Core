@@ -137,6 +137,23 @@ export interface Post {
   stats?: Record<string, string>;
 }
 
+/** One delivery attempt (WhatsApp group or social) in the send history. */
+export interface SendLogEntry {
+  id: string;
+  campaignId?: string | null;
+  campaignName?: string | null;
+  groupId?: string | null;
+  groupName?: string | null;
+  /** "wa" | "facebook" | "instagram". */
+  target?: string | null;
+  postId?: string | null;
+  format?: string | null;
+  preview?: string | null;
+  ok: boolean;
+  error?: string | null;
+  createdAt: string;
+}
+
 export interface Contact {
   id: string;
   name: string;
