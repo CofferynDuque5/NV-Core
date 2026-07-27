@@ -70,6 +70,8 @@ export const mapGroup = (g: PGroup): Group => ({
   description: g.description ?? undefined,
   tags: g.tags,
   lastActivityAt: iso(g.createdAt),
+  remoteJid: g.remoteJid ?? undefined,
+  synced: g.synced,
 });
 
 export const mapSegment = (s: PSegment): Segment => ({
@@ -80,7 +82,9 @@ export const mapSegment = (s: PSegment): Segment => ({
   rules: (s.rules as unknown as SegmentRule[]) ?? [],
 });
 
-export const mapCampaign = (c: PCampaign & { _count?: { posts: number } }): Campaign => ({
+export const mapCampaign = (
+  c: PCampaign & { _count?: { posts: number }; targets?: { groupId: string }[] },
+): Campaign => ({
   id: c.id,
   name: c.name,
   status: c.status,
@@ -91,6 +95,14 @@ export const mapCampaign = (c: PCampaign & { _count?: { posts: number } }): Camp
   progress: c.progress,
   nextRunAt: iso(c.nextRunAt) ?? null,
   accent: c.accent ?? undefined,
+  message: c.message ?? "",
+  scheduleType: (c.scheduleType as Campaign["scheduleType"]) ?? "once",
+  scheduleAt: c.scheduleAt ?? null,
+  scheduleDays: c.scheduleDays ?? [],
+  attachments: (c.attachments as Campaign["attachments"]) ?? [],
+  socialFormat: c.socialFormat ?? null,
+  lastRunAt: iso(c.lastRunAt) ?? null,
+  targetGroups: c.targets?.map((t) => t.groupId) ?? [],
 });
 
 export const mapPost = (p: PPost & { campaign?: { name: string } | null }): Post => ({

@@ -87,6 +87,15 @@ export interface Connection {
   logs?: ConnectionLog[];
 }
 
+/** Media descriptor attached to a campaign. */
+export interface CampaignAttachment {
+  url?: string;
+  kind?: "image" | "video" | "document" | string;
+  mime?: string | null;
+  filename?: string | null;
+  path?: string;
+}
+
 export interface Campaign {
   id: string;
   name: string;
@@ -99,6 +108,20 @@ export interface Campaign {
   progress: number;
   nextRunAt: string | null;
   accent?: string;
+  /** Message body sent to WhatsApp groups (supports {{variables}}). */
+  message?: string;
+  /** "once" | "daily" | "weekly". */
+  scheduleType?: "once" | "daily" | "weekly";
+  /** once → ISO datetime; daily/weekly → "HH:MM". */
+  scheduleAt?: string | null;
+  /** weekly → days of week (0=Sun … 6=Sat). */
+  scheduleDays?: number[];
+  attachments?: CampaignAttachment[];
+  /** IG format: "feed" | "reel" | "story" | "carousel". */
+  socialFormat?: string | null;
+  /** Ids of the WhatsApp groups this campaign targets. */
+  targetGroups?: string[];
+  lastRunAt?: string | null;
 }
 
 export interface Post {
@@ -137,6 +160,10 @@ export interface Group {
   tags: string[];
   lastActivityAt?: string;
   avatarHue?: number;
+  /** WhatsApp group JID (present when synced from Baileys). */
+  remoteJid?: string;
+  /** True when populated from a WhatsApp sync. */
+  synced?: boolean;
 }
 
 export interface SegmentRule {
