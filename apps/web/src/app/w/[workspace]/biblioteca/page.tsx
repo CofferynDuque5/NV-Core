@@ -1,7 +1,8 @@
 "use client";
 
 import * as React from "react";
-import { Image as ImageIcon, Loader2, Trash2, Upload } from "lucide-react";
+import { Image as ImageIcon, Loader2, Send, Trash2, Upload } from "lucide-react";
+import type { CampaignAttachment } from "@nv/domain";
 
 import { useMediaAssets, useMediaFolders } from "@/hooks/use-domain-data";
 import { useDeleteAsset, useUploadMedia } from "@/hooks/use-domain-mutations";
@@ -11,6 +12,7 @@ import { Panel, PanelHeader } from "@/components/common/panel";
 import { EmptyState } from "@/components/common/empty-state";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
+import { SocialPublishDialog } from "@/components/entities/social-publish";
 
 export default function BibliotecaPage() {
   const folders = useMediaFolders();
@@ -20,6 +22,7 @@ export default function BibliotecaPage() {
   const confirm = useConfirm();
   const inputRef = React.useRef<HTMLInputElement>(null);
   const [deletingId, setDeletingId] = React.useState<string | null>(null);
+  const [publishing, setPublishing] = React.useState<CampaignAttachment | null>(null);
 
   function pickFiles() {
     inputRef.current?.click();
@@ -143,24 +146,49 @@ export default function BibliotecaPage() {
                   <span className="truncate text-xs text-ink-soft" title={asset.title}>
                     {asset.title}
                   </span>
-                  <button
-                    onClick={() => remove(asset.id, asset.title)}
-                    disabled={deletingId === asset.id}
-                    className="grid size-6 shrink-0 place-items-center rounded-md text-ink-faint transition-colors hover:text-state-danger"
-                    title="Eliminar"
-                  >
-                    {deletingId === asset.id ? (
-                      <Loader2 className="size-3.5 animate-spin" />
-                    ) : (
-                      <Trash2 className="size-3.5" />
-                    )}
-                  </button>
+                  <div className="flex shrink-0 items-center gap-0.5">
+                    {asset.url ? (
+                      <button
+                        onClick={() =>
+                          setPublishing({
+                            url: asset.url!,
+                            kind: asset.type === "video" ? "video" : "image",
+                            filename: asset.title,
+                          })
+                        }
+                        className="grid size-6 place-items-center rounded-md text-ink-faint transition-colors hover:text-brand"
+                        title="Publicar en redes"
+                      >
+                        <Send className="size-3.5" />
+                      </button>
+                    ) : null}
+                    <button
+                      onClick={() => remove(asset.id, asset.title)}
+                      disabled={deletingId === asset.id}
+                      className="grid size-6 place-items-center rounded-md text-ink-faint transition-colors hover:text-state-danger"
+                      title="Eliminar"
+                    >
+                      {deletingId === asset.id ? (
+                        <Loader2 className="size-3.5 animate-spin" />
+                      ) : (
+                        <Trash2 className="size-3.5" />
+                      )}
+                    </button>
+                  </div>
                 </div>
               </div>
             ))}
           </div>
         )}
       </div>
+
+      <SocialPublishDialog
+        open={publishing !== null}
+        onOpenChange={(v) => {
+          if (!v) setPublishing(null);
+        }}
+        initialAttachments={publishing ? [publishing] : []}
+      />
     </div>
   );
 }

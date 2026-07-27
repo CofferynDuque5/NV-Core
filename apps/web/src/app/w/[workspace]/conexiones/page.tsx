@@ -15,6 +15,7 @@ import { Button } from "@/components/ui/button";
 import { ConnectionDialog } from "@/components/entities/connection-dialog";
 import { GoogleConnectCard } from "@/components/entities/google-connect-card";
 import { WhatsAppPanel } from "@/components/entities/whatsapp-panel";
+import { SocialPublishForm } from "@/components/entities/social-publish";
 
 const STATUS_TEXT = { ok: "Conectado", warn: "Con advertencias", down: "Caído" } as const;
 
@@ -102,6 +103,16 @@ export default function ConexionesPage() {
           );
         })}
       </div>
+
+      <Panel>
+        <PanelHeader title="Publicar ahora" />
+        <div className="space-y-3 p-4">
+          <p className="text-xs text-ink-faint">
+            Publica directo en Facebook / Instagram vía Meta Graph API.
+          </p>
+          <SocialPublishForm />
+        </div>
+      </Panel>
 
       <Panel>
         <PanelHeader title="Registro OAuth & webhooks" />
