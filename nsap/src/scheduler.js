@@ -3,6 +3,7 @@ import { nanoid } from "nanoid";
 import { store } from "./store.js";
 import { whatsapp } from "./whatsapp.js";
 import { builtinVars, renderTemplate } from "./render.js";
+import { publishToTargets } from "./meta.js";
 
 const TICK_MS = 30_000; // evalúa campañas cada 30s
 const GROUP_DELAY_MS = Number(process.env.NSAP_GROUP_DELAY_MS ?? 4000); // anti-spam entre grupos
@@ -42,48 +43,61 @@ export async function runCampaign(id, io) {
   if (!campaign) throw new Error("Campaña no encontrada.");
   if (campaign.status === "sending") return campaign;
 
-  if (!whatsapp.isConnected()) {
-    store.updateCampaign(id, { status: "failed", lastRunAt: new Date().toISOString() });
-    io?.emit("campaigns:changed");
-    throw new Error("WhatsApp no está conectado.");
-  }
-
   store.updateCampaign(id, { status: "sending" });
   io?.emit("campaigns:changed");
 
+  const groups = campaign.targetGroups ?? [];
+  const social = campaign.socialTargets ?? [];
   const groupsById = new Map(store.getGroups().map((g) => [g.id, g]));
+  const connected = whatsapp.isConnected();
   const results = [];
-  for (const groupId of campaign.targetGroups ?? []) {
+  const log = (entry) => {
+    results.push(entry);
+    store.addLog(entry);
+    io?.emit("logs:changed");
+  };
+
+  // ── WhatsApp: un envío por grupo, personalizado ─────────────────────────────
+  for (const groupId of groups) {
     const groupName = groupsById.get(groupId)?.subject ?? groupId;
-    // Personalización: variables integradas + variables propias del grupo.
     const vars = { ...builtinVars(groupName), ...store.getGroupVars(groupId) };
     const text = renderTemplate(campaign.message, vars);
-    const base = {
-      id: nanoid(),
-      campaignId: id,
-      campaignName: campaign.name,
-      groupId,
-      groupName,
-      preview: text.slice(0, 120),
-      at: new Date().toISOString(),
-    };
-    try {
-      await whatsapp.sendToGroup(groupId, text, campaign.attachment);
-      const entry = { ...base, ok: true, error: null };
-      results.push(entry);
-      store.addLog(entry);
-    } catch (err) {
-      const entry = { ...base, ok: false, error: err.message };
-      results.push(entry);
-      store.addLog(entry);
+    const base = { id: nanoid(), campaignId: id, campaignName: campaign.name, groupId, groupName, preview: text.slice(0, 120), at: new Date().toISOString() };
+    if (!connected) {
+      log({ ...base, ok: false, error: "WhatsApp no conectado" });
+    } else {
+      try {
+        await whatsapp.sendToGroup(groupId, text, campaign.attachment);
+        log({ ...base, ok: true, error: null });
+      } catch (err) {
+        log({ ...base, ok: false, error: err.message });
+      }
+      await sleep(GROUP_DELAY_MS);
     }
-    io?.emit("campaigns:progress", { campaignId: id, done: results.length, total: campaign.targetGroups.length });
-    io?.emit("logs:changed");
-    await sleep(GROUP_DELAY_MS);
+    io?.emit("campaigns:progress", { campaignId: id, done: results.length, total: groups.length });
   }
 
-  const allOk = results.every((r) => r.ok);
-  const recurring = campaign.schedule?.type === "daily";
+  // ── Facebook / Instagram (Graph API): una publicación por red ───────────────
+  if (social.length) {
+    const text = renderTemplate(campaign.message, builtinVars(""));
+    const pub = await publishToTargets(social, { message: text, attachment: campaign.attachment });
+    for (const r of pub) {
+      log({
+        id: nanoid(),
+        campaignId: id,
+        campaignName: campaign.name,
+        groupId: r.target,
+        groupName: r.target === "facebook" ? "Facebook" : "Instagram",
+        preview: text.slice(0, 120),
+        ok: r.ok,
+        error: r.error ?? null,
+        at: new Date().toISOString(),
+      });
+    }
+  }
+
+  const allOk = results.length > 0 && results.every((r) => r.ok);
+  const recurring = campaign.schedule?.type === "daily" || campaign.schedule?.type === "weekly";
   store.updateCampaign(id, {
     status: recurring ? "scheduled" : allOk ? "sent" : "failed",
     lastRunAt: new Date().toISOString(),

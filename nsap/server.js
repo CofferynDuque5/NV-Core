@@ -16,7 +16,8 @@ import { groupsRouter } from "./src/routes/groups.routes.js";
 import { campaignsRouter } from "./src/routes/campaigns.routes.js";
 import { templatesRouter } from "./src/routes/templates.routes.js";
 import { logsRouter } from "./src/routes/logs.routes.js";
-import { mediaRouter } from "./src/routes/media.routes.js";
+import { mediaRouter, UPLOAD_DIR } from "./src/routes/media.routes.js";
+import { socialRouter } from "./src/routes/social.routes.js";
 import { aiRouter } from "./src/routes/ai.routes.js";
 import { contentRouter } from "./src/routes/content.routes.js";
 import { n8nRouter, n8nCallbackRouter } from "./src/routes/n8n.routes.js";
@@ -35,6 +36,9 @@ app.get("/api/health", (_req, res) => res.json({ ok: true }));
 app.use("/api/auth", authRouter);
 app.get("/api/auth/me", authMiddleware, (req, res) => res.json(req.user));
 app.use("/api/n8n", n8nCallbackRouter); // callback público (protegido por token)
+// Uploads servidos públicamente (nombres aleatorios) para que Instagram pueda
+// leer image_url. APP_URL debe ser accesible desde internet para publicar en IG.
+app.use("/media", express.static(UPLOAD_DIR));
 
 // Protegido (requiere sesión). Escritura sólo admin/editor.
 app.use("/api/users", authMiddleware, requireRole("admin"), usersRouter);
@@ -46,6 +50,7 @@ app.use("/api/content", authMiddleware, mutationGuard, contentRouter);
 app.use("/api/media", authMiddleware, mutationGuard, mediaRouter);
 app.use("/api/logs", authMiddleware, logsRouter);
 app.use("/api/ai", authMiddleware, mutationGuard, aiRouter);
+app.use("/api/social", authMiddleware, mutationGuard, socialRouter);
 app.use("/api/n8n", authMiddleware, mutationGuard, n8nRouter);
 app.use("/api/integrations", authMiddleware, integrationsRouter);
 

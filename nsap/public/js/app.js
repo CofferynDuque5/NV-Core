@@ -384,11 +384,14 @@ $("#campaign-form").addEventListener("submit", async (e) => {
   if (type === "once") schedule = { type: "once", at: f.onceAt.value ? new Date(f.onceAt.value).toISOString() : null };
   else if (type === "daily") schedule = { type: "daily", at: f.dailyAt.value };
   else schedule = { type: "weekly", at: f.weeklyAt.value, days: $$("#week-days input:checked").map((c) => Number(c.value)) };
+  const socialTargets = [];
+  if ($("#c-fb").checked) socialTargets.push("facebook");
+  if ($("#c-ig").checked) socialTargets.push("instagram");
   try {
     const attachment = await uploadFile($("#campaign-file"));
     await api("/campaigns", {
       method: "POST",
-      body: JSON.stringify({ name: f.name.value, message: f.message.value, targetGroups, schedule, attachment }),
+      body: JSON.stringify({ name: f.name.value, message: f.message.value, targetGroups, schedule, attachment, socialTargets }),
     });
     f.reset();
     $("#daily-at").value = "08:00";
@@ -570,6 +573,33 @@ $("#n8n-dispatch")?.addEventListener("click", async () => {
     alert(err.message);
   }
 });
+// publicar ahora en redes
+$("#social-publish")?.addEventListener("click", async () => {
+  const targets = [];
+  if ($("#s-fb").checked) targets.push("facebook");
+  if ($("#s-ig").checked) targets.push("instagram");
+  const out = $("#social-result");
+  if (!targets.length) return (out.innerHTML = '<span class="text-danger">Elige Facebook y/o Instagram.</span>');
+  const btn = $("#social-publish");
+  btn.disabled = true;
+  out.textContent = "Publicando…";
+  try {
+    const attachment = await uploadFile($("#social-file"));
+    const { results } = await api("/social/publish", {
+      method: "POST",
+      body: JSON.stringify({ targets, message: $("#social-message").value, attachment }),
+    });
+    out.innerHTML = results
+      .map((r) => `${r.target}: ${r.ok ? '<span class="text-success">OK</span>' : `<span class="text-danger">${esc(r.error)}</span>`}`)
+      .join("<br>");
+    loadLogs();
+  } catch (err) {
+    out.innerHTML = `<span class="text-danger">${esc(err.message)}</span>`;
+  } finally {
+    btn.disabled = false;
+  }
+});
+
 async function loadJobs() {
   const box = $("#n8n-jobs");
   if (!box) return;

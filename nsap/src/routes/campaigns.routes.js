@@ -35,13 +35,17 @@ function parseSchedule(schedule) {
 campaignsRouter.get("/", (_req, res) => res.json(store.getCampaigns()));
 
 campaignsRouter.post("/", (req, res) => {
-  const { name, message, targetGroups, schedule, attachment } = req.body ?? {};
+  const { name, message, targetGroups, schedule, attachment, socialTargets } = req.body ?? {};
   if (!name || typeof name !== "string") return res.status(400).json({ message: "Falta el nombre." });
   if ((!message || typeof message !== "string") && !attachment) {
     return res.status(400).json({ message: "Falta el mensaje o un adjunto." });
   }
-  if (!Array.isArray(targetGroups) || targetGroups.length === 0) {
-    return res.status(400).json({ message: "Selecciona al menos un grupo objetivo." });
+  const social = (Array.isArray(socialTargets) ? socialTargets : []).filter(
+    (t) => t === "facebook" || t === "instagram",
+  );
+  const groups = Array.isArray(targetGroups) ? targetGroups : [];
+  if (groups.length === 0 && social.length === 0) {
+    return res.status(400).json({ message: "Elige grupos de WhatsApp y/o redes (Facebook/Instagram)." });
   }
   let parsed;
   try {
@@ -55,7 +59,8 @@ campaignsRouter.post("/", (req, res) => {
     name: name.trim(),
     message: message ?? "",
     attachment: attachment ?? null, // { path, mime, filename, kind: 'image'|'document' }
-    targetGroups,
+    targetGroups: groups,
+    socialTargets: social, // ['facebook','instagram']
     schedule: parsed,
     status: "scheduled",
     createdAt: new Date().toISOString(),

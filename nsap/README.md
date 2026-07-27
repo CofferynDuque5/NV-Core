@@ -32,6 +32,16 @@ las tarjetas en verde cuando estén completas:
 - `IG_BUSINESS_ID`, `IG_ACCESS_TOKEN` — cuenta de Instagram Business vinculada a la
   Página (`instagram_basic`, `instagram_content_publish`).
 
+**Publicación real (Graph API).** Cuando esté configurado:
+- **Facebook**: texto en el feed de la Página, o **foto** (imagen adjunta) con caption.
+- **Instagram**: imagen + caption (flujo `media` → `media_publish`). IG **exige una
+  URL de imagen pública**, así que las imágenes subidas se sirven en
+  `${APP_URL}/media/<archivo>` y **`APP_URL` debe ser accesible desde internet**
+  (dominio público o túnel tipo ngrok; `localhost` no funciona para IG).
+- Publica desde **Conexiones → Publicar ahora**, o marca Facebook/Instagram como
+  destinos de una **campaña** (el scheduler publica al dispararse). Endpoint:
+  `POST /api/social/publish { targets, message, attachment }`.
+
 ## Conectar n8n
 - `N8N_WEBHOOK_URL` (webhook del workflow) **o** `N8N_BASE_URL` (+ `workflow` en el
   dispatch). Opcional: `N8N_API_KEY`, `N8N_CALLBACK_TOKEN` (protege el callback).
