@@ -1,15 +1,21 @@
 "use client";
 
 import * as React from "react";
+import { Loader2, Paperclip, X } from "lucide-react";
 import {
   CAMPAIGN_STATUSES,
   type Campaign,
+  type CampaignAttachment,
   type CampaignStatus,
   type ChannelId,
 } from "@nv/domain";
 
 import { cn } from "@/lib/utils";
-import { useCreateCampaign, useUpdateCampaign } from "@/hooks/use-domain-mutations";
+import {
+  useCreateCampaign,
+  useUpdateCampaign,
+  useUploadCampaignAttachment,
+} from "@/hooks/use-domain-mutations";
 import { useGroups } from "@/hooks/use-domain-data";
 import { FormDialog, errorMessage } from "./form-dialog";
 import { Input } from "@/components/ui/input";
@@ -57,8 +63,10 @@ export function CampaignFormDialog({
   const isEdit = Boolean(campaign);
   const create = useCreateCampaign();
   const update = useUpdateCampaign();
+  const upload = useUploadCampaignAttachment();
   const groups = useGroups();
   const pending = create.isPending || update.isPending;
+  const fileInputRef = React.useRef<HTMLInputElement>(null);
 
   const [name, setName] = React.useState("");
   const [status, setStatus] = React.useState<CampaignStatus>("borrador");
@@ -72,6 +80,7 @@ export function CampaignFormDialog({
   const [fb, setFb] = React.useState(false);
   const [ig, setIg] = React.useState(false);
   const [socialFormat, setSocialFormat] = React.useState("feed");
+  const [attachments, setAttachments] = React.useState<CampaignAttachment[]>([]);
   const [error, setError] = React.useState<string | null>(null);
 
   React.useEffect(() => {
@@ -89,8 +98,26 @@ export function CampaignFormDialog({
     setFb(campaign?.channels?.includes("fb") ?? false);
     setIg(campaign?.channels?.includes("ig") ?? false);
     setSocialFormat(campaign?.socialFormat ?? "feed");
+    setAttachments(campaign?.attachments ?? []);
     setError(null);
   }, [open, campaign]);
+
+  async function onPickFiles(e: React.ChangeEvent<HTMLInputElement>) {
+    const files = Array.from(e.target.files ?? []);
+    e.target.value = ""; // allow re-picking the same file
+    for (const file of files) {
+      try {
+        const att = await upload.mutateAsync(file);
+        setAttachments((prev) => [...prev, att]);
+      } catch {
+        /* toast handled in the hook */
+      }
+    }
+  }
+
+  function removeAttachment(index: number) {
+    setAttachments((prev) => prev.filter((_, i) => i !== index));
+  }
 
   function toggleDay(day: number) {
     setScheduleDays((prev) =>
@@ -127,6 +154,7 @@ export function CampaignFormDialog({
       scheduleAt,
       scheduleDays: scheduleType === "weekly" ? scheduleDays : undefined,
       targetGroups,
+      attachments,
       socialFormat: ig ? socialFormat : undefined,
       ...(campaign?.accent ? { accent: campaign.accent } : {}),
     };
@@ -199,6 +227,57 @@ export function CampaignFormDialog({
           <code className="text-ink-muted">{"{{grupo}}"}</code>{" "}
           <code className="text-ink-muted">{"{{fecha}}"}</code>{" "}
           <code className="text-ink-muted">{"{{hora}}"}</code>
+        </p>
+      </div>
+
+      <div className="space-y-1.5">
+        <Label>Adjuntos</Label>
+        <input
+          ref={fileInputRef}
+          type="file"
+          multiple
+          accept="image/*,video/*"
+          className="hidden"
+          onChange={onPickFiles}
+        />
+        <button
+          type="button"
+          onClick={() => fileInputRef.current?.click()}
+          disabled={upload.isPending}
+          className="flex w-full items-center justify-center gap-2 rounded-lg border border-dashed border-line-soft bg-panel-raised px-3 py-2 text-xs text-ink-muted transition-colors hover:border-line-bright disabled:opacity-60"
+        >
+          {upload.isPending ? (
+            <Loader2 className="size-4 animate-spin" />
+          ) : (
+            <Paperclip className="size-4" />
+          )}
+          {upload.isPending ? "Subiendo…" : "Subir imagen o video (Cloudinary)"}
+        </button>
+        {attachments.length > 0 ? (
+          <div className="space-y-0.5">
+            {attachments.map((att, i) => (
+              <div
+                key={`${att.url}-${i}`}
+                className="flex items-center gap-2 rounded-md bg-panel-raised px-2 py-1.5 text-xs"
+              >
+                <span className="shrink-0 rounded bg-panel-high px-1.5 py-0.5 text-[10px] uppercase text-ink-faint">
+                  {att.kind}
+                </span>
+                <span className="min-w-0 flex-1 truncate text-ink">{att.filename ?? att.url}</span>
+                <button
+                  type="button"
+                  onClick={() => removeAttachment(i)}
+                  className="rounded p-0.5 text-ink-faint hover:text-state-danger"
+                  title="Quitar"
+                >
+                  <X className="size-3.5" />
+                </button>
+              </div>
+            ))}
+          </div>
+        ) : null}
+        <p className="text-[11px] text-ink-faint">
+          El primero se envía por WhatsApp; para carrusel de Instagram sube varios.
         </p>
       </div>
 
