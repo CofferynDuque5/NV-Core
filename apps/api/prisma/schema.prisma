@@ -65,7 +65,9 @@ model User {
   authTokens      AuthToken[]
 }
 
-/** Single-use tokens for password reset ("reset") and email verification ("verify"). */
+/**
+ * Single-use tokens for password reset ("reset") and email verification ("verify").
+ */
 model AuthToken {
   id        String    @id @default(cuid())
   user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -129,8 +131,33 @@ model Group {
   admins        Int       @default(0)
   description   String?
   tags          String[]
+  /// WhatsApp group JID (e.g. "12345-678@g.us") when synced from Baileys.
+  remoteJid     String?
+  /// True when the row was populated from a WhatsApp sync (vs. manual CRUD).
+  synced        Boolean   @default(false)
   createdAt     DateTime  @default(now())
 
+  variables       GroupVariable[]
+  campaignTargets CampaignTarget[]
+  sendLogs        SendLog[]
+
+  @@unique([workspaceSlug, remoteJid])
+  @@index([workspaceSlug])
+}
+
+/**
+ * Per-group merge variables: {{key}} → value when rendering campaign messages.
+ */
+model GroupVariable {
+  id            String   @id @default(cuid())
+  workspaceSlug String
+  group         Group    @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  groupId       String
+  key           String
+  value         String   @default("")
+  createdAt     DateTime @default(now())
+
+  @@unique([groupId, key])
   @@index([workspaceSlug])
 }
 
@@ -150,14 +177,75 @@ model Campaign {
   workspaceSlug String
   name          String
   status        CampaignStatus @default(borrador)
+  /// Delivery channels: `wa` → WhatsApp target groups; `fb`/`ig` → social publish.
   channels      ChannelId[]
   progress      Int            @default(0)
   nextRunAt     DateTime?
   accent        String?
+  /// Message body; supports {{variables}} rendered per target group.
+  message       String         @default("")
+  /// Schedule: "once" | "daily" | "weekly".
+  scheduleType  String         @default("once")
+  /// once → ISO datetime; daily/weekly → "HH:MM".
+  scheduleAt    String?
+  /// weekly → days of week (0=Sun … 6=Sat).
+  scheduleDays  Int[]
+  /// Uploaded media descriptors [{ path, filename, mime, kind, url }]. First is
+  /// used for WhatsApp; all are used for IG carousel.
+  attachments   Json           @default("[]")
+  /// IG publish format: "feed" | "reel" | "story" | "carousel".
+  socialFormat  String?
+  lastRunAt     DateTime?
+  /// Last execution day (YYYY-MM-DD) to dedupe daily/weekly runs.
+  lastRunDay    String?
   createdAt     DateTime       @default(now())
-  posts         Post[]
+
+  posts    Post[]
+  targets  CampaignTarget[]
+  sendLogs SendLog[]
 
   @@index([workspaceSlug])
+}
+
+/**
+ * Join table: which WhatsApp groups a campaign targets.
+ */
+model CampaignTarget {
+  id         String   @id @default(cuid())
+  campaign   Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  campaignId String
+  group      Group    @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  groupId    String
+  createdAt  DateTime @default(now())
+
+  @@unique([campaignId, groupId])
+  @@index([groupId])
+}
+
+/**
+ * Delivery history: one row per group/social send attempt.
+ */
+model SendLog {
+  id            String    @id @default(cuid())
+  workspaceSlug String
+  campaign      Campaign? @relation(fields: [campaignId], references: [id], onDelete: SetNull)
+  campaignId    String?
+  campaignName  String?
+  group         Group?    @relation(fields: [groupId], references: [id], onDelete: SetNull)
+  groupId       String?
+  groupName     String?
+  /// "wa" | "facebook" | "instagram".
+  target        String?
+  /// Social post id returned by the Graph API (for insights lookups).
+  postId        String?
+  format        String?
+  preview       String?
+  ok            Boolean   @default(false)
+  error         String?
+  createdAt     DateTime  @default(now())
+
+  @@index([workspaceSlug])
+  @@index([campaignId])
 }
 
 model Post {
@@ -302,7 +390,9 @@ model AuditLog {
   @@index([workspaceSlug])
 }
 
-/** User-created workspaces, stored alongside the 14 built-in (config) ones. */
+/**
+ * User-created workspaces, stored alongside the 14 built-in (config) ones.
+ */
 model Workspace {
   id        String   @id @default(cuid())
   slug      String   @unique
@@ -314,21 +404,25 @@ model Workspace {
   createdAt DateTime @default(now())
 }
 
-/** Connected Google account for a workspace (Calendar/Drive OAuth). */
+/**
+ * Connected Google account for a workspace (Calendar/Drive OAuth).
+ */
 model GoogleConnection {
-  id            String   @id @default(cuid())
-  workspaceSlug String   @unique
+  id            String    @id @default(cuid())
+  workspaceSlug String    @unique
   email         String?
   // NOTE: tokens are stored as-is for this scaffold; encrypt at rest in production.
   accessToken   String
   refreshToken  String?
   scope         String?
   expiresAt     DateTime?
-  updatedAt     DateTime @updatedAt
-  createdAt     DateTime @default(now())
+  updatedAt     DateTime  @updatedAt
+  createdAt     DateTime  @default(now())
 }
 
-/** WhatsApp (Baileys) connection metadata per workspace; creds live on disk. */
+/**
+ * WhatsApp (Baileys) connection metadata per workspace; creds live on disk.
+ */
 model WhatsappSession {
   id               String    @id @default(cuid())
   workspaceSlug    String    @unique
@@ -340,7 +434,9 @@ model WhatsappSession {
   updatedAt        DateTime  @updatedAt
 }
 
-/** AI usage aggregated per workspace and month (YYYY-MM) for metering/quotas. */
+/**
+ * AI usage aggregated per workspace and month (YYYY-MM) for metering/quotas.
+ */
 model AiUsage {
   id            String   @id @default(cuid())
   workspaceSlug String
@@ -352,7 +448,9 @@ model AiUsage {
   @@unique([workspaceSlug, period])
 }
 
-/** Stripe billing state, one per workspace. */
+/**
+ * Stripe billing state, one per workspace.
+ */
 model BillingAccount {
   id                 String   @id @default(cuid())
   workspaceSlug      String   @unique
