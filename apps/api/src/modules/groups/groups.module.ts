@@ -10,6 +10,7 @@ import {
   Param,
   Patch,
   Post,
+  Put,
   ServiceUnavailableException,
   UseGuards,
 } from "@nestjs/common";
@@ -114,6 +115,41 @@ export class GroupsService {
     if (count === 0) throw new NotFoundException("Grupo no encontrado.");
     await this.audit.record(workspaceId, actor, "group.delete", id);
   }
+
+  /** Per-group merge variables as a flat { key: value } map. */
+  async getVars(workspaceId: string, id: string): Promise<Record<string, string>> {
+    const group = await this.db().group.findFirst({ where: { id, workspaceSlug: workspaceId } });
+    if (!group) throw new NotFoundException("Grupo no encontrado.");
+    const rows = await this.prisma.groupVariable.findMany({ where: { groupId: id } });
+    return Object.fromEntries(rows.map((r) => [r.key, r.value]));
+  }
+
+  /** Replace the whole set of variables for a group. */
+  async setVars(
+    workspaceId: string,
+    id: string,
+    vars: Record<string, string>,
+  ): Promise<Record<string, string>> {
+    const group = await this.db().group.findFirst({ where: { id, workspaceSlug: workspaceId } });
+    if (!group) throw new NotFoundException("Grupo no encontrado.");
+    const entries = Object.entries(vars ?? {}).filter(([k]) => k.trim());
+    await this.prisma.$transaction([
+      this.prisma.groupVariable.deleteMany({ where: { groupId: id } }),
+      ...(entries.length
+        ? [
+            this.prisma.groupVariable.createMany({
+              data: entries.map(([key, value]) => ({
+                workspaceSlug: workspaceId,
+                groupId: id,
+                key: key.trim(),
+                value: String(value ?? ""),
+              })),
+            }),
+          ]
+        : []),
+    ]);
+    return Object.fromEntries(entries.map(([k, v]) => [k.trim(), String(v ?? "")]));
+  }
 }
 
 @ApiTags("groups")
@@ -126,6 +162,22 @@ export class GroupsController {
   @Get()
   list(@WorkspaceId() workspaceId: string) {
     return this.service.list(workspaceId);
+  }
+
+  @Get(":id/vars")
+  getVars(@WorkspaceId() workspaceId: string, @Param("id") id: string) {
+    return this.service.getVars(workspaceId, id);
+  }
+
+  @Put(":id/vars")
+  @Roles("Owner", "Admin", "Editor")
+  @UseGuards(RolesGuard)
+  setVars(
+    @WorkspaceId() workspaceId: string,
+    @Param("id") id: string,
+    @Body() vars: Record<string, string>,
+  ) {
+    return this.service.setVars(workspaceId, id, vars);
   }
 
   @Post()

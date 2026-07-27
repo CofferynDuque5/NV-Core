@@ -7,6 +7,7 @@ import { PrismaService } from "../../prisma/prisma.service";
 import { AuditLogger } from "../../common/audit-logger.service";
 import { WhatsappService } from "../whatsapp/whatsapp.service";
 import type { WhatsappAttachment } from "../whatsapp/whatsapp.types";
+import { MetaService } from "../social/meta.service";
 import { builtinVars, renderTemplate } from "./render";
 
 const TICK_MS = 30_000;
@@ -31,6 +32,7 @@ export class CampaignRunner implements OnModuleInit, OnModuleDestroy {
     config: ConfigService<AppConfig, true>,
     private readonly prisma: PrismaService,
     private readonly whatsapp: WhatsappService,
+    private readonly meta: MetaService,
     private readonly audit: AuditLogger,
   ) {
     this.groupDelayMs = Number(process.env.WHATSAPP_GROUP_DELAY_MS ?? 4000);
@@ -138,15 +140,41 @@ export class CampaignRunner implements OnModuleInit, OnModuleDestroy {
     }
   }
 
-  /** Overridden/extended when the Meta publisher is available (later phase). */
-  protected async publishSocial(
-    _workspaceSlug: string,
-    _campaign: PCampaign,
-    _channels: string[],
-    _attachments: Attachment[],
-    _results: { ok: boolean }[],
+  /** Publish the campaign to Facebook/Instagram via the Meta Graph API. */
+  private async publishSocial(
+    workspaceSlug: string,
+    campaign: PCampaign,
+    channels: string[],
+    attachments: Attachment[],
+    results: { ok: boolean }[],
   ): Promise<void> {
-    /* no-op until MetaPublisher is wired */
+    const targets = (["facebook", "instagram"] as const).filter((t) =>
+      channels.includes(t === "facebook" ? "fb" : "ig"),
+    );
+    if (!targets.length) return;
+    const text = renderTemplate(campaign.message, builtinVars(""));
+    const published = await this.meta.publish(workspaceSlug, targets, {
+      message: text,
+      attachments: attachments.filter((a) => a.url),
+      format: campaign.socialFormat ?? null,
+    });
+    for (const r of published) {
+      await this.prisma.sendLog.create({
+        data: {
+          workspaceSlug,
+          campaignId: campaign.id,
+          campaignName: campaign.name,
+          groupName: r.target === "facebook" ? "Facebook" : "Instagram",
+          target: r.target,
+          postId: r.id ?? null,
+          format: r.format ?? campaign.socialFormat ?? null,
+          preview: text.slice(0, 140),
+          ok: r.ok,
+          error: r.error ?? null,
+        },
+      });
+      results.push({ ok: r.ok });
+    }
   }
 
   private async groupVars(groupId: string): Promise<Record<string, string>> {
