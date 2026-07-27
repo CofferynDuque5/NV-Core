@@ -52,6 +52,8 @@ export const envSchema = z.object({
   META_APP_SECRET: z.string().optional(),
   TELEGRAM_BOT_TOKEN: z.string().optional(),
   TELEGRAM_WEBHOOK_SECRET: z.string().optional(),
+  // Directory where Baileys stores WhatsApp session credentials (per workspace).
+  WHATSAPP_SESSION_DIR: z.string().default("data/whatsapp"),
   // Workspace that receives inbound messages (WhatsApp/Telegram webhooks).
   INBOUND_WORKSPACE: z.string().optional(),
 

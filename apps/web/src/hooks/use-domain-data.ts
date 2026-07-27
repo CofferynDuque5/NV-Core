@@ -127,6 +127,15 @@ export function useIntegrations() {
   });
 }
 
+export function useWhatsappStatus() {
+  const svc = useServices();
+  const ws = useWorkspace();
+  return useQuery({
+    queryKey: [ws.id, "whatsapp", "status"],
+    queryFn: () => svc.whatsapp.status(ws.id),
+  });
+}
+
 export function useAiUsage() {
   const svc = useServices();
   const ws = useWorkspace();

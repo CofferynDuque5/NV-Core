@@ -14,6 +14,7 @@ import { StatusDot } from "@/components/common/status-dot";
 import { Button } from "@/components/ui/button";
 import { ConnectionDialog } from "@/components/entities/connection-dialog";
 import { GoogleConnectCard } from "@/components/entities/google-connect-card";
+import { WhatsAppPanel } from "@/components/entities/whatsapp-panel";
 
 const STATUS_TEXT = { ok: "Conectado", warn: "Con advertencias", down: "Caído" } as const;
 
@@ -46,6 +47,8 @@ export default function ConexionesPage() {
         title="Conexiones"
         description="Conecta tus canales para publicar y recibir mensajes."
       />
+
+      <WhatsAppPanel />
 
       <GoogleConnectCard />
 

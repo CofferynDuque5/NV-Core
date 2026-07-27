@@ -10,6 +10,7 @@ function integrations(overrides: Partial<AppConfig["integrations"]> = {}): AppCo
     whatsapp: {},
     meta: {},
     telegram: {},
+    whatsappSessionDir: "data/whatsapp",
     google: {},
     stripe: {},
     cloudinary: {},

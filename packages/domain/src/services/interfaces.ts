@@ -317,6 +317,23 @@ export interface CreateWorkspaceInput {
   tagline?: string;
 }
 
+export interface WhatsappStatus {
+  status: "disconnected" | "connecting" | "qr" | "connected";
+  provider: "baileys";
+  number: string | null;
+  lastConnectionAt: string | null;
+  groupsCount: number;
+  contactsCount: number;
+}
+
+export interface WhatsappService {
+  status(workspaceId: string): Promise<WhatsappStatus>;
+  connect(workspaceId: string): Promise<WhatsappStatus>;
+  reconnect(workspaceId: string): Promise<WhatsappStatus>;
+  disconnect(workspaceId: string): Promise<WhatsappStatus>;
+  sync(workspaceId: string): Promise<WhatsappStatus>;
+}
+
 export interface WorkspaceService {
   /** All workspaces (built-in config + user-created). */
   list(): Promise<Workspace[]>;
@@ -332,6 +349,7 @@ export interface BillingService {
 /** All services the UI can resolve. */
 export interface Services {
   workspaces: WorkspaceService;
+  whatsapp: WhatsappService;
   campaigns: CampaignService;
   posts: PostService;
   calendar: CalendarService;

@@ -308,6 +308,25 @@ export function useResolveConversation() {
   });
 }
 
+// ── WhatsApp (Baileys) ────────────────────────────────────────────────────────
+function useWhatsappAction(action: "connect" | "reconnect" | "disconnect" | "sync") {
+  const svc = useServices();
+  const ws = useWorkspace();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () => svc.whatsapp[action](ws.id),
+    onSuccess: (status) => {
+      qc.setQueryData([ws.id, "whatsapp", "status"], status);
+      void qc.invalidateQueries({ queryKey: [ws.id, "whatsapp", "status"] });
+    },
+    onError: (err) => toast.error(errText(err)),
+  });
+}
+export const useWhatsappConnect = () => useWhatsappAction("connect");
+export const useWhatsappReconnect = () => useWhatsappAction("reconnect");
+export const useWhatsappDisconnect = () => useWhatsappAction("disconnect");
+export const useWhatsappSync = () => useWhatsappAction("sync");
+
 // ── Google OAuth ──────────────────────────────────────────────────────────────
 export function useGoogleConnect() {
   const svc = useServices();

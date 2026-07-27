@@ -33,6 +33,7 @@ import { AuditModule } from "./modules/audit/audit.module";
 import { AiModule } from "./modules/ai/ai.module";
 import { MessagingModule } from "./modules/messaging/messaging.module";
 import { BillingModule } from "./modules/billing/billing.module";
+import { WhatsappModule } from "./modules/whatsapp/whatsapp.module";
 
 @Module({
   imports: [
@@ -72,6 +73,7 @@ import { BillingModule } from "./modules/billing/billing.module";
     AiModule,
     MessagingModule,
     BillingModule,
+    WhatsappModule,
   ],
   providers: [{ provide: APP_GUARD, useClass: ConditionalThrottlerGuard }],
 })

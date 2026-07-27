@@ -34,7 +34,8 @@ import { mapConversation, mapMessage } from "../../prisma/mappers";
 import { RolesGuard } from "../../auth/guards/roles.guard";
 import { Roles } from "../../auth/decorators/roles.decorator";
 import { Public } from "../../auth/decorators/public.decorator";
-import { MessagingModule, MessagingService } from "../messaging/messaging.module";
+import { WhatsappModule } from "../whatsapp/whatsapp.module";
+import { ProviderManager } from "../whatsapp/provider-manager";
 import { parseTelegramInbound, parseWhatsAppInbound, type InboundMessage } from "./inbound";
 
 export class CreateConversationDto {
@@ -61,7 +62,7 @@ export class InboxService {
 
   constructor(
     private readonly prisma: PrismaService,
-    private readonly messaging: MessagingService,
+    private readonly providers: ProviderManager,
     private readonly config: ConfigService<AppConfig, true>,
     private readonly registry: WorkspaceRegistry,
   ) {}
@@ -157,10 +158,11 @@ export class InboxService {
       data: { conversationId, direction: "out", text: dto.text },
     });
 
-    // Best-effort external delivery: never blocks or fails the persisted reply.
-    if (conv.contactHandle && this.messaging.isConfigured(conv.channel)) {
-      void this.messaging
-        .send(workspaceId, { channel: conv.channel, to: conv.contactHandle, body: dto.text })
+    // Best-effort external delivery (Baileys when connected, else Cloud API).
+    // Never blocks or fails the persisted reply.
+    if (conv.contactHandle) {
+      void this.providers
+        .send(workspaceId, conv.channel, conv.contactHandle, dto.text)
         .catch((err: unknown) =>
           this.logger.warn(`Outbound delivery failed for ${conversationId}: ${(err as Error).message}`),
         );
@@ -311,7 +313,7 @@ export class TelegramWebhookController {
 }
 
 @Module({
-  imports: [MessagingModule],
+  imports: [WhatsappModule],
   controllers: [InboxController, WhatsAppWebhookController, TelegramWebhookController],
   providers: [InboxService],
 })

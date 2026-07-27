@@ -328,6 +328,18 @@ model GoogleConnection {
   createdAt     DateTime @default(now())
 }
 
+/** WhatsApp (Baileys) connection metadata per workspace; creds live on disk. */
+model WhatsappSession {
+  id               String    @id @default(cuid())
+  workspaceSlug    String    @unique
+  status           String    @default("disconnected")
+  number           String?
+  lastConnectionAt DateTime?
+  groupsCount      Int       @default(0)
+  contactsCount    Int       @default(0)
+  updatedAt        DateTime  @updatedAt
+}
+
 /** AI usage aggregated per workspace and month (YYYY-MM) for metering/quotas. */
 model AiUsage {
   id            String   @id @default(cuid())

@@ -23,3 +23,7 @@ coverage/
 
 apps/web/test-results/
 apps/web/playwright-report/
+
+# WhatsApp (Baileys) session credentials — never commit
+apps/api/data/
+data/whatsapp/

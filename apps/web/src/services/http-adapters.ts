@@ -25,6 +25,7 @@ import type {
   TeamMember,
   AuditLogEntry,
   Workspace,
+  WhatsappStatus,
 } from "@nv/domain";
 
 /**
@@ -99,6 +100,13 @@ export function createHttpAdapters(opts: HttpAdapterOptions): Services {
     workspaces: {
       list: () => get<Workspace[]>(`/workspaces`),
       create: (input) => post<Workspace>(`/workspaces`, input),
+    },
+    whatsapp: {
+      status: (id) => get<WhatsappStatus>(`${ws(id)}/whatsapp/status`),
+      connect: (id) => post<WhatsappStatus>(`${ws(id)}/whatsapp/connect`, {}),
+      reconnect: (id) => post<WhatsappStatus>(`${ws(id)}/whatsapp/reconnect`, {}),
+      disconnect: (id) => post<WhatsappStatus>(`${ws(id)}/whatsapp/disconnect`, {}),
+      sync: (id) => post<WhatsappStatus>(`${ws(id)}/whatsapp/sync`, {}),
     },
     campaigns: {
       list: (id) => get<ListResult<Campaign>>(`${ws(id)}/campaigns`),

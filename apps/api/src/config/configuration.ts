@@ -31,6 +31,7 @@ export interface AppConfig {
     whatsapp: { token?: string; phoneNumberId?: string; verifyToken?: string };
     meta: { appId?: string; appSecret?: string };
     telegram: { botToken?: string; webhookSecret?: string };
+    whatsappSessionDir: string;
     google: { clientId?: string; clientSecret?: string };
     stripe: { secretKey?: string; webhookSecret?: string; priceId?: string };
     cloudinary: { url?: string };
@@ -92,6 +93,7 @@ export function buildConfig(env: Env): AppConfig {
       },
       meta: { appId: env.META_APP_ID, appSecret: env.META_APP_SECRET },
       telegram: { botToken: env.TELEGRAM_BOT_TOKEN, webhookSecret: env.TELEGRAM_WEBHOOK_SECRET },
+      whatsappSessionDir: env.WHATSAPP_SESSION_DIR,
       google: { clientId: env.GOOGLE_CLIENT_ID, clientSecret: env.GOOGLE_CLIENT_SECRET },
       stripe: {
         secretKey: env.STRIPE_SECRET_KEY,

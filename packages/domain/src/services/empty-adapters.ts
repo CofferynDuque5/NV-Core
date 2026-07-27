@@ -30,6 +30,21 @@ export const emptyAdapters: Services = {
     list: () => delay([...WORKSPACES]),
     create: () => notAvailable(),
   },
+  whatsapp: {
+    status: () =>
+      delay({
+        status: "disconnected",
+        provider: "baileys",
+        number: null,
+        lastConnectionAt: null,
+        groupsCount: 0,
+        contactsCount: 0,
+      }),
+    connect: () => notAvailable(),
+    reconnect: () => notAvailable(),
+    disconnect: () => notAvailable(),
+    sync: () => notAvailable(),
+  },
   campaigns: {
     list: () => emptyList(),
     get: () => delay(null),
