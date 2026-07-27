@@ -19,3 +19,20 @@ groupsRouter.post("/sync", async (_req, res, next) => {
     next(e);
   }
 });
+
+/** Variables de personalización de un grupo. */
+groupsRouter.get("/:id/vars", (req, res) => res.json(store.getGroupVars(req.params.id)));
+
+groupsRouter.put("/:id/vars", (req, res) => {
+  const vars = req.body ?? {};
+  if (typeof vars !== "object" || Array.isArray(vars)) {
+    return res.status(400).json({ message: "Se espera un objeto clave/valor." });
+  }
+  // Normaliza a strings.
+  const clean = Object.fromEntries(
+    Object.entries(vars)
+      .filter(([k]) => /^[\w.-]+$/.test(k))
+      .map(([k, v]) => [k, String(v)]),
+  );
+  res.json(store.setGroupVars(req.params.id, clean));
+});

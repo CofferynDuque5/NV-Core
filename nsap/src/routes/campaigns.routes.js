@@ -74,3 +74,17 @@ campaignsRouter.post("/:id/run", async (req, res, next) => {
 });
 
 campaignsRouter.get("/:id/logs", (req, res) => res.json(store.getLogs(req.params.id)));
+
+campaignsRouter.post("/:id/pause", (req, res) => {
+  const c = store.updateCampaign(req.params.id, { status: "paused" });
+  if (!c) return res.status(404).json({ message: "Campaña no encontrada." });
+  req.app.get("io")?.emit("campaigns:changed");
+  res.json(c);
+});
+
+campaignsRouter.post("/:id/resume", (req, res) => {
+  const c = store.updateCampaign(req.params.id, { status: "scheduled" });
+  if (!c) return res.status(404).json({ message: "Campaña no encontrada." });
+  req.app.get("io")?.emit("campaigns:changed");
+  res.json(c);
+});

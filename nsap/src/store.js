@@ -11,7 +11,9 @@ const DEFAULTS = {
   whatsapp: { number: null, lastConnectionAt: null, contactsCount: 0 },
   groups: [], // [{ id, subject, size }]
   campaigns: [], // ver createCampaign()
-  logs: [], // [{ id, campaignId, groupId, ok, error, at }]
+  logs: [], // [{ id, campaignId, campaignName, groupId, groupName, preview, ok, error, at }]
+  templates: [], // [{ id, name, body, createdAt }]
+  groupVars: {}, // { [groupId]: { clave: valor } }
 };
 
 let db = load();
@@ -89,5 +91,35 @@ export const store = {
   },
   getLogs(campaignId) {
     return campaignId ? db.logs.filter((l) => l.campaignId === campaignId) : db.logs;
+  },
+
+  // ── Plantillas de mensaje ────────────────────────────────────────────────────
+  getTemplates() {
+    return db.templates;
+  },
+  addTemplate(tpl) {
+    db.templates.unshift(tpl);
+    persist();
+    return tpl;
+  },
+  removeTemplate(id) {
+    const before = db.templates.length;
+    db.templates = db.templates.filter((t) => t.id !== id);
+    const changed = db.templates.length !== before;
+    if (changed) persist();
+    return changed;
+  },
+
+  // ── Variables por grupo (personalización) ─────────────────────────────────────
+  getGroupVars(groupId) {
+    return db.groupVars[groupId] ?? {};
+  },
+  getAllGroupVars() {
+    return db.groupVars;
+  },
+  setGroupVars(groupId, vars) {
+    db.groupVars[groupId] = vars ?? {};
+    persist();
+    return db.groupVars[groupId];
   },
 };

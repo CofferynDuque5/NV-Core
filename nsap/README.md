@@ -8,6 +8,14 @@ Conexión a WhatsApp con **Baileys**, QR mostrado en el panel en tiempo real
 ## Requisitos
 - Node.js 20+
 
+## Novedades
+- **Login básico** que protege el panel y las APIs (sesión por cookie firmada).
+- **Plantillas de mensaje** reutilizables.
+- **Variables por grupo** (personalización): `{{clave}}` se reemplaza por grupo.
+  Integradas: `{{grupo}}`, `{{fecha}}`, `{{hora}}`.
+- **Historial de envíos** con estado por grupo.
+- **Pausar / reanudar** campañas.
+
 ## Uso
 
 ```bash
@@ -51,11 +59,19 @@ Todo se guarda en archivos dentro de `data/` (sin base de datos externa):
 | `NSAP_DATA_DIR` | `data` | Carpeta de datos (db.json) |
 | `NSAP_SESSION_DIR` | `data/session` | Carpeta de la sesión de WhatsApp |
 | `NSAP_GROUP_DELAY_MS` | `4000` | Retardo entre grupos al enviar |
+| `NSAP_USERNAME` | `admin` | Usuario del panel |
+| `NSAP_PASSWORD` | `admin` | Contraseña del panel |
+| `NSAP_SECRET` | (dev) | Secreto para firmar la sesión (defínelo en producción) |
 
 ## APIs (todas dentro del proyecto)
+- `POST /api/auth/{login,logout}`, `GET /api/auth/me`
 - `GET/POST /api/whatsapp/{status,connect,reconnect,disconnect,sync}`
-- `GET /api/groups`, `POST /api/groups/sync`
-- `GET/POST /api/campaigns`, `DELETE /api/campaigns/:id`, `POST /api/campaigns/:id/run`, `GET /api/campaigns/:id/logs`
+- `GET /api/groups`, `POST /api/groups/sync`, `GET/PUT /api/groups/:id/vars`
+- `GET/POST /api/campaigns`, `DELETE /api/campaigns/:id`, `POST /api/campaigns/:id/{run,pause,resume}`
+- `GET/POST /api/templates`, `DELETE /api/templates/:id`
+- `GET /api/logs` (historial de envíos)
+
+Todas las rutas (salvo `login`/`logout`) requieren sesión.
 
 ## Tests
 ```bash

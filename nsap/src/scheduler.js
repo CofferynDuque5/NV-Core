@@ -2,6 +2,7 @@ import { nanoid } from "nanoid";
 
 import { store } from "./store.js";
 import { whatsapp } from "./whatsapp.js";
+import { builtinVars, renderTemplate } from "./render.js";
 
 const TICK_MS = 30_000; // evalúa campañas cada 30s
 const GROUP_DELAY_MS = Number(process.env.NSAP_GROUP_DELAY_MS ?? 4000); // anti-spam entre grupos
@@ -43,19 +44,34 @@ export async function runCampaign(id, io) {
   store.updateCampaign(id, { status: "sending" });
   io?.emit("campaigns:changed");
 
+  const groupsById = new Map(store.getGroups().map((g) => [g.id, g]));
   const results = [];
   for (const groupId of campaign.targetGroups ?? []) {
+    const groupName = groupsById.get(groupId)?.subject ?? groupId;
+    // Personalización: variables integradas + variables propias del grupo.
+    const vars = { ...builtinVars(groupName), ...store.getGroupVars(groupId) };
+    const text = renderTemplate(campaign.message, vars);
+    const base = {
+      id: nanoid(),
+      campaignId: id,
+      campaignName: campaign.name,
+      groupId,
+      groupName,
+      preview: text.slice(0, 120),
+      at: new Date().toISOString(),
+    };
     try {
-      await whatsapp.sendToGroup(groupId, campaign.message);
-      const entry = { id: nanoid(), campaignId: id, groupId, ok: true, error: null, at: new Date().toISOString() };
+      await whatsapp.sendToGroup(groupId, text);
+      const entry = { ...base, ok: true, error: null };
       results.push(entry);
       store.addLog(entry);
     } catch (err) {
-      const entry = { id: nanoid(), campaignId: id, groupId, ok: false, error: err.message, at: new Date().toISOString() };
+      const entry = { ...base, ok: false, error: err.message };
       results.push(entry);
       store.addLog(entry);
     }
     io?.emit("campaigns:progress", { campaignId: id, done: results.length, total: campaign.targetGroups.length });
+    io?.emit("logs:changed");
     await sleep(GROUP_DELAY_MS);
   }
 
