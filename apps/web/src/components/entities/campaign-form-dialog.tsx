@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { Loader2, Paperclip, X } from "lucide-react";
+import { Loader2, Paperclip, Sparkles, X } from "lucide-react";
 import {
   CAMPAIGN_STATUSES,
   type Campaign,
@@ -13,6 +13,7 @@ import {
 import { cn } from "@/lib/utils";
 import {
   useCreateCampaign,
+  useGenerateVariants,
   useUpdateCampaign,
   useUploadCampaignAttachment,
 } from "@/hooks/use-domain-mutations";
@@ -66,6 +67,7 @@ export function CampaignFormDialog({
   const upload = useUploadCampaignAttachment();
   const groups = useGroups();
   const templates = useTemplates();
+  const generate = useGenerateVariants();
   const pending = create.isPending || update.isPending;
   const fileInputRef = React.useRef<HTMLInputElement>(null);
 
@@ -118,6 +120,21 @@ export function CampaignFormDialog({
 
   function removeAttachment(index: number) {
     setAttachments((prev) => prev.filter((_, i) => i !== index));
+  }
+
+  async function generateWithAI() {
+    const brief = message.trim() || name.trim();
+    if (!brief) {
+      setError("Escribe un tema o el nombre de la campaña para generar con IA.");
+      return;
+    }
+    setError(null);
+    try {
+      const variants = await generate.mutateAsync({ prompt: brief, channel: "wa", tone: "cercano" });
+      if (variants[0]?.text) setMessage(variants[0].text);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "No se pudo generar con IA.");
+    }
   }
 
   function toggleDay(day: number) {
@@ -218,25 +235,41 @@ export function CampaignFormDialog({
       <div className="space-y-1.5">
         <div className="flex items-center justify-between gap-2">
           <Label htmlFor="cp-message">Mensaje</Label>
-          {(templates.data?.items.length ?? 0) > 0 ? (
-            <select
-              aria-label="Usar plantilla"
-              defaultValue=""
-              onChange={(e) => {
-                const t = templates.data?.items.find((x) => x.id === e.target.value);
-                if (t) setMessage(t.body);
-                e.target.value = "";
-              }}
-              className="h-7 rounded-md border border-line-soft bg-panel-raised px-2 text-xs text-ink-muted"
+          <div className="flex items-center gap-1.5">
+            {(templates.data?.items.length ?? 0) > 0 ? (
+              <select
+                aria-label="Usar plantilla"
+                defaultValue=""
+                onChange={(e) => {
+                  const t = templates.data?.items.find((x) => x.id === e.target.value);
+                  if (t) setMessage(t.body);
+                  e.target.value = "";
+                }}
+                className="h-7 rounded-md border border-line-soft bg-panel-raised px-2 text-xs text-ink-muted"
+              >
+                <option value="">Usar plantilla…</option>
+                {templates.data?.items.map((t) => (
+                  <option key={t.id} value={t.id}>
+                    {t.name}
+                  </option>
+                ))}
+              </select>
+            ) : null}
+            <button
+              type="button"
+              onClick={generateWithAI}
+              disabled={generate.isPending}
+              className="inline-flex h-7 items-center gap-1 rounded-md border border-line-soft px-2 text-xs text-ink-muted transition-colors hover:border-brand/60 hover:text-ink disabled:opacity-60"
+              title="Generar el mensaje con IA (usa el texto o el nombre como tema)"
             >
-              <option value="">Usar plantilla…</option>
-              {templates.data?.items.map((t) => (
-                <option key={t.id} value={t.id}>
-                  {t.name}
-                </option>
-              ))}
-            </select>
-          ) : null}
+              {generate.isPending ? (
+                <Loader2 className="size-3.5 animate-spin" />
+              ) : (
+                <Sparkles className="size-3.5" />
+              )}
+              IA
+            </button>
+          </div>
         </div>
         <Textarea
           id="cp-message"

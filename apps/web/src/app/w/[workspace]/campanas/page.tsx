@@ -2,11 +2,16 @@
 
 import * as React from "react";
 import type { Campaign } from "@nv/domain";
-import { Loader2, Megaphone, Pencil, Plus, Trash2 } from "lucide-react";
+import { Loader2, Megaphone, Pause, Pencil, Play, Plus, Send, Trash2 } from "lucide-react";
 
 import { EMPTY_METRIC } from "@/lib/utils";
 import { useCampaigns } from "@/hooks/use-domain-data";
-import { useDeleteCampaign } from "@/hooks/use-domain-mutations";
+import {
+  useDeleteCampaign,
+  usePauseCampaign,
+  useResumeCampaign,
+  useRunCampaign,
+} from "@/hooks/use-domain-mutations";
 import { useConfirm } from "@/providers/confirm-provider";
 import { PageHeader } from "@/components/common/page-header";
 import { QueryBoundary } from "@/components/common/query-boundary";
@@ -28,6 +33,9 @@ const STATUS_VARIANT: Record<Campaign["status"], "default" | "success" | "warnin
 export default function CampanasPage() {
   const campaigns = useCampaigns();
   const del = useDeleteCampaign();
+  const run = useRunCampaign();
+  const pause = usePauseCampaign();
+  const resume = useResumeCampaign();
   const confirm = useConfirm();
   const [dialogOpen, setDialogOpen] = React.useState(false);
   const [editing, setEditing] = React.useState<Campaign | null>(null);
@@ -94,6 +102,35 @@ export default function CampanasPage() {
                     </div>
                   </div>
                   <div className="flex shrink-0 items-center gap-0.5">
+                    <button
+                      onClick={() => run.mutate(c.id)}
+                      disabled={run.isPending && run.variables === c.id}
+                      className="rounded-md p-1.5 text-ink-faint transition-colors hover:bg-state-success/10 hover:text-state-success"
+                      title="Enviar ahora"
+                    >
+                      {run.isPending && run.variables === c.id ? (
+                        <Loader2 className="size-4 animate-spin" />
+                      ) : (
+                        <Send className="size-4" />
+                      )}
+                    </button>
+                    {c.status === "pausada" ? (
+                      <button
+                        onClick={() => resume.mutate(c.id)}
+                        className="rounded-md p-1.5 text-ink-faint transition-colors hover:bg-panel-high hover:text-ink"
+                        title="Reanudar"
+                      >
+                        <Play className="size-4" />
+                      </button>
+                    ) : (
+                      <button
+                        onClick={() => pause.mutate(c.id)}
+                        className="rounded-md p-1.5 text-ink-faint transition-colors hover:bg-panel-high hover:text-ink"
+                        title="Pausar"
+                      >
+                        <Pause className="size-4" />
+                      </button>
+                    )}
                     <button
                       onClick={() => openEdit(c)}
                       className="rounded-md p-1.5 text-ink-faint transition-colors hover:bg-panel-high hover:text-ink"
