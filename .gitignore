@@ -27,3 +27,9 @@ apps/web/playwright-report/
 # WhatsApp (Baileys) session credentials — never commit
 apps/api/data/
 data/whatsapp/
+
+# Build artifact (zip generado para descarga)
+nsap.zip
+
+# NSAP runtime data (sesión Baileys, db.json, uploads)
+nsap/data/
