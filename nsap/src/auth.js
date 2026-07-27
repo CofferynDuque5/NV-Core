@@ -28,15 +28,30 @@ function verifyPassword(password, salt, hash) {
   return candidate.length === stored.length && timingSafeEqual(candidate, stored);
 }
 
-/** Crea el admin inicial desde env si aún no hay usuarios. */
+/**
+ * Garantiza que exista un admin con las credenciales de entorno.
+ * - Si no hay usuarios, crea el admin.
+ * - Si ya hay usuarios pero el admin configurado (NSAP_USERNAME) no existe, lo
+ *   crea igualmente como admin (así tu correo queda como admin aunque ya haya
+ *   datos previos).
+ * - Si el usuario ya existe, se asegura de que tenga rol admin (no toca su clave).
+ */
 export function seedAdmin() {
-  if (store.getUsers().length > 0) return;
   const username = process.env.NSAP_USERNAME || "admin";
   const password = process.env.NSAP_PASSWORD || "admin";
+  const existing = store.findUser(username);
+  if (existing) {
+    if (existing.role !== "admin") {
+      store.updateUser(existing.id, { role: "admin" });
+      console.log(`[auth] Usuario "${username}" elevado a admin.`);
+    }
+    return;
+  }
   const { salt, hash } = hashPassword(password);
   store.addUser({ id: nanoid(), username, salt, hash, role: "admin", createdAt: new Date().toISOString() });
+  console.log(`[auth] Admin "${username}" listo.`);
   if (!process.env.NSAP_PASSWORD) {
-    console.warn(`[auth] Admin inicial "${username}" con contraseña por defecto "admin". Cámbiala.`);
+    console.warn(`[auth] Contraseña por defecto "admin". Cámbiala.`);
   }
 }
 
