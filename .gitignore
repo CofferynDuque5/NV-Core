@@ -30,6 +30,7 @@ data/whatsapp/
 
 # Build artifact (zip generado para descarga)
 nsap.zip
+nv-core.zip
 
 # NSAP runtime data (sesión Baileys, db.json, uploads)
 nsap/data/
