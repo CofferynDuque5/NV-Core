@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { fbConfigured, igConfigured } from "../src/meta.js";
+import { fbConfigured, getInsights, igConfigured } from "../src/meta.js";
 
 test("fbConfigured requiere page id + token", () => {
   delete process.env.FB_PAGE_ID;
@@ -20,4 +20,14 @@ test("igConfigured requiere business id + token (propio o de página)", () => {
   assert.equal(igConfigured(), false);
   process.env.IG_BUSINESS_ID = "999";
   assert.equal(igConfigured(), true); // usa FB_PAGE_TOKEN como fallback
+});
+
+test("getInsights rechaza destinos inválidos", async () => {
+  await assert.rejects(() => getInsights("tiktok", "1"), /Destino inválido/);
+});
+
+test("getInsights degrada sin configuración", async () => {
+  delete process.env.FB_PAGE_ID;
+  delete process.env.FB_PAGE_TOKEN;
+  await assert.rejects(() => getInsights("facebook", "1"), /no configurado/);
 });

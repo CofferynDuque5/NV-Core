@@ -33,7 +33,9 @@ las tarjetas en verde cuando estén completas:
   Página (`instagram_basic`, `instagram_content_publish`).
 
 **Publicación real (Graph API).** Cuando esté configurado:
-- **Facebook**: texto, **foto** o **video** en la Página.
+- **Facebook**: texto, **foto** o **video** en la Página. Los videos se publican
+  como **Reel** con **subida resumable por chunks** (apto para archivos grandes:
+  el archivo se lee del disco por trozos y se sube a la API de Reels de FB).
 - **Instagram**: **feed** (imagen o video), **Reel** (video), **Historia**
   (imagen/video) y **carrusel** (2–10 elementos). Los videos se procesan de forma
   asíncrona (NSAP hace polling hasta que estén listos y luego publica).
@@ -43,9 +45,19 @@ las tarjetas en verde cuando estén completas:
 - **Vista previa**: en *Publicar ahora* pulsa «Vista previa» para ver texto +
   media + destinos + formato antes de publicar.
 - Publica desde **Conexiones → Publicar ahora**, o marca Facebook/Instagram como
-  destinos de una **campaña** (el scheduler publica al dispararse).
+  destinos de una **campaña** (el scheduler publica al dispararse). En la campaña
+  eliges el **formato** (feed/reel/historia/carrusel) y puedes **adjuntar varios
+  archivos** (carrusel).
 - Endpoint: `POST /api/social/publish { targets, message, attachment, attachments, format }`
   (`format`: `feed` | `reel` | `story` | `carousel`).
+
+**Métricas / insights (Graph API).** En **Historial**, cada publicación de
+FB/IG muestra un botón 📈 que abre sus métricas (me gusta, comentarios,
+compartidos/guardados, alcance, impresiones, reproducciones de Reel…).
+- Endpoint: `GET /api/social/insights?target=facebook|instagram&id=<postId>`.
+  El `postId` se guarda en el historial al publicar.
+- El conjunto de métricas depende del tipo de media y de los permisos de tu app;
+  las que la API no devuelva se omiten (degradación sin errores).
 
 **n8n dispara publicaciones.** Importa `examples/n8n-publish-workflow.json` en n8n.
 Define en n8n las variables `NSAP_URL` y `NSAP_API_TOKEN`. En NSAP, define

@@ -12,7 +12,7 @@ logsRouter.get("/", (req, res) => {
 
 /** Exporta el historial a CSV. */
 logsRouter.get("/export.csv", (_req, res) => {
-  const cols = ["at", "campaignName", "groupName", "groupId", "ok", "error", "preview"];
+  const cols = ["at", "campaignName", "groupName", "groupId", "target", "format", "postId", "ok", "error", "preview"];
   const escape = (v) => `"${String(v ?? "").replace(/"/g, '""')}"`;
   const rows = store
     .getLogs()

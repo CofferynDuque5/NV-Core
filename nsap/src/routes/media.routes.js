@@ -12,7 +12,9 @@ const storage = multer.diskStorage({
   destination: (_req, _file, cb) => cb(null, UPLOAD_DIR),
   filename: (_req, file, cb) => cb(null, `${nanoid()}${extname(file.originalname) || ""}`),
 });
-const upload = multer({ storage, limits: { fileSize: 25 * 1024 * 1024 } });
+// 200 MB: los videos/Reels pueden ser grandes; a Graph se suben por chunks (resumable).
+const MAX_UPLOAD_MB = Number(process.env.NSAP_MAX_UPLOAD_MB ?? 200);
+const upload = multer({ storage, limits: { fileSize: MAX_UPLOAD_MB * 1024 * 1024 } });
 
 export const mediaRouter = Router();
 

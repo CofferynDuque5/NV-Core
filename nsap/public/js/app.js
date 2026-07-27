@@ -342,11 +342,21 @@ $$('input[name="schedType"]').forEach((r) =>
   }),
 );
 
-// adjunto seleccionado
+// adjunto seleccionado (uno o varios)
 $("#campaign-file").addEventListener("change", (e) => {
-  const f = e.target.files[0];
-  $("#attach-info").textContent = f ? `${f.name} (${Math.round(f.size / 1024)} KB)` : "";
+  const files = Array.from(e.target.files || []);
+  $("#attach-info").textContent = files.length
+    ? files.map((f) => `${f.name} (${Math.round(f.size / 1024)} KB)`).join(", ")
+    : "";
 });
+
+// muestra el formato IG cuando hay una red marcada
+function toggleSocialExtra() {
+  const on = $("#c-fb").checked || $("#c-ig").checked;
+  $("#c-social-extra").classList.toggle("d-none", !on);
+}
+$("#c-fb").addEventListener("change", toggleSocialExtra);
+$("#c-ig").addEventListener("change", toggleSocialExtra);
 
 // generar con IA
 $("#btn-ai").addEventListener("click", async () => {
@@ -387,16 +397,27 @@ $("#campaign-form").addEventListener("submit", async (e) => {
   const socialTargets = [];
   if ($("#c-fb").checked) socialTargets.push("facebook");
   if ($("#c-ig").checked) socialTargets.push("instagram");
+  const socialFormat = socialTargets.length ? $("#c-social-format").value : null;
   try {
-    const attachment = await uploadFile($("#campaign-file"));
+    const attachments = await uploadFiles($("#campaign-file"));
     await api("/campaigns", {
       method: "POST",
-      body: JSON.stringify({ name: f.name.value, message: f.message.value, targetGroups, schedule, attachment, socialTargets }),
+      body: JSON.stringify({
+        name: f.name.value,
+        message: f.message.value,
+        targetGroups,
+        schedule,
+        attachment: attachments[0] ?? null,
+        attachments,
+        socialTargets,
+        socialFormat,
+      }),
     });
     f.reset();
     $("#daily-at").value = "08:00";
     $("#weekly-at").value = "08:00";
     $("#attach-info").textContent = "";
+    $("#c-social-extra").classList.add("d-none");
     renderGroupPicker();
     loadCampaigns();
   } catch (err) {
@@ -411,8 +432,13 @@ const STATUS_BADGE = {
   failed: "text-bg-danger",
   paused: "text-bg-secondary",
 };
+const WEEK_SHORT = ["Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb"];
 function scheduleText(c) {
   if (c.schedule?.type === "daily") return `Diaria a las ${c.schedule.at}`;
+  if (c.schedule?.type === "weekly") {
+    const days = (c.schedule.days ?? []).map((d) => WEEK_SHORT[d]).join(", ");
+    return `Semanal (${days}) a las ${c.schedule.at}`;
+  }
   if (c.schedule?.type === "once") return `Una vez · ${new Date(c.schedule.at).toLocaleString()}`;
   return "—";
 }
@@ -433,7 +459,7 @@ async function loadCampaigns() {
         <div class="d-flex align-items-center justify-content-between">
           <div>
             <div class="fw-semibold">${esc(c.name)} <span class="badge ${STATUS_BADGE[c.status] ?? "text-bg-secondary"}">${esc(c.status)}</span></div>
-            <div class="small text-secondary">${esc(scheduleText(c))} · ${c.targetGroups.length} grupo(s)</div>
+            <div class="small text-secondary">${esc(scheduleText(c))} · ${c.targetGroups.length} grupo(s)${c.socialTargets?.length ? ` · ${c.socialTargets.map((t) => esc(t)).join("/")}${c.socialFormat ? ` (${esc(c.socialFormat)})` : ""}` : ""}</div>
             <div class="small text-secondary" data-progress="${esc(c.id)}">${c.lastRunAt ? "Última ejecución: " + rel(c.lastRunAt) : ""}</div>
           </div>
           <div class="btn-group btn-group-sm">
@@ -469,22 +495,62 @@ async function loadLogs() {
   const logs = await api("/logs").catch(() => []);
   const body = $("#logs-body");
   if (!logs.length) {
-    body.innerHTML = '<tr><td colspan="5" class="text-secondary text-center py-4">Sin envíos todavía.</td></tr>';
+    body.innerHTML = '<tr><td colspan="6" class="text-secondary text-center py-4">Sin envíos todavía.</td></tr>';
     return;
   }
   body.innerHTML = logs
-    .map(
-      (l) => `<tr>
+    .map((l) => {
+      const social = l.ok && l.postId && (l.target === "facebook" || l.target === "instagram");
+      const fmt = l.format ? ` <span class="badge text-bg-dark">${esc(l.format)}</span>` : "";
+      const metricsBtn = social
+        ? `<button class="btn btn-outline-info btn-sm" data-metrics="${esc(l.target)}" data-postid="${esc(l.postId)}"><i class="bi bi-graph-up"></i></button>`
+        : '<span class="text-secondary small">—</span>';
+      return `<tr>
         <td class="small">${new Date(l.at).toLocaleString()}</td>
         <td class="small">${esc(l.campaignName ?? "—")}</td>
-        <td class="small">${esc(l.groupName ?? l.groupId)}</td>
+        <td class="small">${esc(l.groupName ?? l.groupId)}${fmt}</td>
         <td>${l.ok ? '<span class="badge text-bg-success">OK</span>' : '<span class="badge text-bg-danger">Error</span>'}</td>
         <td class="small text-secondary">${esc(l.ok ? l.preview ?? "" : l.error ?? "")}</td>
-      </tr>`,
-    )
+        <td>${metricsBtn}</td>
+      </tr>`;
+    })
     .join("");
+  body.querySelectorAll("[data-metrics]").forEach((b) =>
+    b.addEventListener("click", () => openMetrics(b.dataset.metrics, b.dataset.postid)),
+  );
 }
 $("#btn-refresh-logs").addEventListener("click", loadLogs);
+
+// ── métricas / insights ──────────────────────────────────────────────────────
+const METRIC_LABELS = {
+  likes: "Me gusta",
+  comments: "Comentarios",
+  shares: "Compartidos",
+  reach: "Alcance",
+  impressions: "Impresiones",
+  saved: "Guardados",
+  plays: "Reproducciones",
+  replies: "Respuestas",
+};
+async function openMetrics(target, id) {
+  const modal = bootstrap.Modal.getOrCreateInstance("#metricsModal");
+  $("#metrics-title").textContent = target === "facebook" ? "Facebook" : "Instagram";
+  $("#metrics-body").innerHTML = '<div class="spinner-border spinner-border-sm"></div> Cargando…';
+  modal.show();
+  try {
+    const { metrics } = await api(`/social/insights?target=${encodeURIComponent(target)}&id=${encodeURIComponent(id)}`);
+    const rows = Object.entries(metrics ?? {}).filter(([, v]) => v !== null && v !== undefined);
+    $("#metrics-body").innerHTML = rows.length
+      ? `<table class="table table-sm mb-0"><tbody>${rows
+          .map(
+            ([k, v]) => `<tr><th class="fw-normal text-secondary">${esc(METRIC_LABELS[k] ?? k)}</th><td class="text-end fw-semibold">${esc(v)}</td></tr>`,
+          )
+          .join("")}</tbody></table>`
+      : '<div class="text-secondary">Sin métricas disponibles para esta publicación.</div>';
+  } catch (err) {
+    $("#metrics-body").innerHTML = `<div class="text-danger">${esc(err.message)}</div>`;
+  }
+}
 
 // ── contenidos ─────────────────────────────────────────────────────────────
 async function loadContent() {

@@ -35,14 +35,18 @@ function parseSchedule(schedule) {
 campaignsRouter.get("/", (_req, res) => res.json(store.getCampaigns()));
 
 campaignsRouter.post("/", (req, res) => {
-  const { name, message, targetGroups, schedule, attachment, socialTargets } = req.body ?? {};
+  const { name, message, targetGroups, schedule, attachment, attachments, socialTargets, socialFormat } =
+    req.body ?? {};
   if (!name || typeof name !== "string") return res.status(400).json({ message: "Falta el nombre." });
-  if ((!message || typeof message !== "string") && !attachment) {
+  const media = Array.isArray(attachments) ? attachments : [];
+  if ((!message || typeof message !== "string") && !attachment && !media.length) {
     return res.status(400).json({ message: "Falta el mensaje o un adjunto." });
   }
   const social = (Array.isArray(socialTargets) ? socialTargets : []).filter(
     (t) => t === "facebook" || t === "instagram",
   );
+  const VALID_FORMATS = ["feed", "reel", "story", "carousel"];
+  const format = VALID_FORMATS.includes(socialFormat) ? socialFormat : null;
   const groups = Array.isArray(targetGroups) ? targetGroups : [];
   if (groups.length === 0 && social.length === 0) {
     return res.status(400).json({ message: "Elige grupos de WhatsApp y/o redes (Facebook/Instagram)." });
@@ -58,9 +62,11 @@ campaignsRouter.post("/", (req, res) => {
     id: nanoid(),
     name: name.trim(),
     message: message ?? "",
-    attachment: attachment ?? null, // { path, mime, filename, kind: 'image'|'document' }
+    attachment: attachment ?? null, // { path, mime, filename, kind: 'image'|'document'|'video' }
+    attachments: media, // varios adjuntos (carrusel IG)
     targetGroups: groups,
     socialTargets: social, // ['facebook','instagram']
+    socialFormat: format, // 'feed'|'reel'|'story'|'carousel'|null
     schedule: parsed,
     status: "scheduled",
     createdAt: new Date().toISOString(),

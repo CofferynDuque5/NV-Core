@@ -80,7 +80,13 @@ export async function runCampaign(id, io) {
   // ── Facebook / Instagram (Graph API): una publicación por red ───────────────
   if (social.length) {
     const text = renderTemplate(campaign.message, builtinVars(""));
-    const pub = await publishToTargets(social, { message: text, attachment: campaign.attachment });
+    const media = Array.isArray(campaign.attachments) && campaign.attachments.length ? campaign.attachments : null;
+    const pub = await publishToTargets(social, {
+      message: text,
+      attachment: campaign.attachment,
+      attachments: media,
+      format: campaign.socialFormat ?? null,
+    });
     for (const r of pub) {
       log({
         id: nanoid(),
@@ -91,6 +97,9 @@ export async function runCampaign(id, io) {
         preview: text.slice(0, 120),
         ok: r.ok,
         error: r.error ?? null,
+        target: r.target,
+        postId: r.id ?? null,
+        format: r.format ?? campaign.socialFormat ?? null,
         at: new Date().toISOString(),
       });
     }

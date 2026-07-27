@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { closeSync, openSync, readFileSync, readSync, statSync } from "node:fs";
 import { resolve } from "node:path";
 
 /**
@@ -38,21 +38,67 @@ async function graphForm(url, params) {
 }
 
 // ── Facebook ─────────────────────────────────────────────────────────────────
+/**
+ * Sube un video a Facebook como Reel usando la API resumable (video_reels):
+ * fase start → subida por chunks a rupload → fase finish. Apto para videos
+ * grandes (lee el archivo del disco por trozos, sin cargarlo entero).
+ */
+async function fbUploadReel(page, token, filePath, description) {
+  // 1) start
+  const start = await graphForm(`${GRAPH}/${page}/video_reels`, {
+    upload_phase: "start",
+    access_token: token,
+  });
+  const videoId = start.video_id;
+  const uploadUrl = start.upload_url;
+  if (!videoId || !uploadUrl) throw new Error("FB Reels: respuesta de inicio inválida.");
+
+  // 2) subida por chunks (resumable)
+  const size = statSync(filePath).size;
+  const CHUNK = 4 * 1024 * 1024;
+  const fd = openSync(filePath, "r");
+  try {
+    let offset = 0;
+    while (offset < size) {
+      const len = Math.min(CHUNK, size - offset);
+      const buf = Buffer.alloc(len);
+      readSync(fd, buf, 0, len, offset);
+      const res = await fetch(uploadUrl, {
+        method: "POST",
+        headers: {
+          Authorization: `OAuth ${token}`,
+          offset: String(offset),
+          file_size: String(size),
+          "content-type": "application/octet-stream",
+        },
+        body: buf,
+      });
+      if (!res.ok) throw new Error(`FB Reels upload ${res.status}: ${(await res.text()).slice(0, 200)}`);
+      offset += len;
+    }
+  } finally {
+    closeSync(fd);
+  }
+
+  // 3) finish + publicar
+  const finish = await graphForm(`${GRAPH}/${page}/video_reels`, {
+    upload_phase: "finish",
+    video_id: videoId,
+    video_state: "PUBLISHED",
+    description,
+    access_token: token,
+  });
+  return { id: finish.post_id || videoId, target: "facebook", format: "reel" };
+}
+
 export async function publishFacebook({ message = "", attachment = null }) {
   if (!fbConfigured()) throw fail("Facebook no configurado (FB_PAGE_ID / FB_PAGE_TOKEN).");
   const token = process.env.FB_PAGE_TOKEN;
   const page = process.env.FB_PAGE_ID;
 
   if (attachment?.kind === "video") {
-    const buf = readFileSync(resolve(UPLOAD_DIR, attachment.path));
-    const fd = new FormData();
-    fd.append("description", message);
-    fd.append("access_token", token);
-    fd.append("source", new Blob([buf], { type: attachment.mime }), attachment.filename || "video");
-    const res = await fetch(`${GRAPH}/${page}/videos`, { method: "POST", body: fd });
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok) throw new Error(data?.error?.message || `Graph ${res.status}`);
-    return { id: data.id, target: "facebook" };
+    // Video grande → API de Reels resumable.
+    return fbUploadReel(page, token, resolve(UPLOAD_DIR, attachment.path), message);
   }
   if (attachment?.kind === "image") {
     const buf = readFileSync(resolve(UPLOAD_DIR, attachment.path));
@@ -150,6 +196,82 @@ export async function publishInstagram({ message = "", attachment = null, attach
 
   const published = await graphForm(`${GRAPH}/${igId}/media_publish`, { creation_id: creationId, access_token: token });
   return { id: published.id, target: "instagram", format: fmt };
+}
+
+// ── Insights / métricas ──────────────────────────────────────────────────────
+async function graphGet(path, token, extra = {}) {
+  const qs = new URLSearchParams({ access_token: token, ...extra }).toString();
+  const res = await fetch(`${GRAPH}/${path}?${qs}`);
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data?.error?.message || `Graph ${res.status}`);
+  return data;
+}
+
+/**
+ * Métricas de una publicación de Facebook (Página).
+ * `postId` es el id devuelto al publicar (p.ej. `{pageId}_{postId}`).
+ */
+export async function getFacebookInsights(postId) {
+  if (!fbConfigured()) throw fail("Facebook no configurado.");
+  const token = process.env.FB_PAGE_TOKEN;
+  const data = await graphGet(postId, token, {
+    fields: "likes.summary(true),comments.summary(true),shares",
+  });
+  const metrics = {
+    likes: data?.likes?.summary?.total_count ?? null,
+    comments: data?.comments?.summary?.total_count ?? null,
+    shares: data?.shares?.count ?? null,
+  };
+  // Métricas de alcance/impresiones (pueden no estar disponibles según el tipo).
+  try {
+    const ins = await graphGet(`${postId}/insights`, token, {
+      metric: "post_impressions,post_impressions_unique",
+    });
+    for (const item of ins?.data || []) {
+      const value = item?.values?.[0]?.value ?? null;
+      if (item.name === "post_impressions") metrics.impressions = value;
+      if (item.name === "post_impressions_unique") metrics.reach = value;
+    }
+  } catch {
+    /* insights opcionales; se omiten si la API los rechaza */
+  }
+  return { target: "facebook", id: postId, metrics };
+}
+
+/** Métricas de un media de Instagram. `mediaId` es el id devuelto al publicar. */
+export async function getInstagramInsights(mediaId) {
+  if (!igConfigured()) throw fail("Instagram no configurado.");
+  const token = igToken();
+  const data = await graphGet(mediaId, token, {
+    fields: "like_count,comments_count,media_type,media_product_type",
+  });
+  const metrics = {
+    likes: data?.like_count ?? null,
+    comments: data?.comments_count ?? null,
+  };
+  // El set de métricas válidas depende del tipo (reel/feed/story).
+  const product = data?.media_product_type;
+  const metric =
+    product === "REELS"
+      ? "reach,likes,comments,shares,saved,plays"
+      : product === "STORY"
+        ? "reach,impressions,replies"
+        : "reach,impressions,saved";
+  try {
+    const ins = await graphGet(`${mediaId}/insights`, token, { metric });
+    for (const item of ins?.data || []) {
+      metrics[item.name] = item?.values?.[0]?.value ?? null;
+    }
+  } catch {
+    /* insights opcionales */
+  }
+  return { target: "instagram", id: mediaId, metrics };
+}
+
+export async function getInsights(target, id) {
+  if (target === "facebook") return getFacebookInsights(id);
+  if (target === "instagram") return getInstagramInsights(id);
+  throw fail("Destino inválido para métricas.", 400);
 }
 
 /** Publica en varios destinos; devuelve un resultado por destino. */

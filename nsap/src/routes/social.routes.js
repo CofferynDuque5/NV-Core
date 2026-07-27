@@ -2,7 +2,7 @@ import { Router } from "express";
 import { nanoid } from "nanoid";
 
 import { store } from "../store.js";
-import { fbConfigured, igConfigured, publishToTargets } from "../meta.js";
+import { fbConfigured, igConfigured, getInsights, publishToTargets } from "../meta.js";
 
 export const socialRouter = Router();
 
@@ -37,9 +37,26 @@ socialRouter.post("/publish", async (req, res) => {
       preview: (message ?? "").slice(0, 120),
       ok: r.ok,
       error: r.error ?? null,
+      target: r.target,
+      postId: r.id ?? null,
+      format: r.format ?? format ?? null,
       at: new Date().toISOString(),
     });
   }
   req.app.get("io")?.emit("logs:changed");
   res.json({ results });
+});
+
+/** Métricas/insights de una publicación ya realizada. */
+socialRouter.get("/insights", async (req, res) => {
+  const { target, id } = req.query ?? {};
+  if ((target !== "facebook" && target !== "instagram") || !id) {
+    return res.status(400).json({ message: "Faltan parámetros: target (facebook|instagram) e id." });
+  }
+  try {
+    const data = await getInsights(target, String(id));
+    res.json(data);
+  } catch (err) {
+    res.status(err.status || 502).json({ message: err.message });
+  }
 });
