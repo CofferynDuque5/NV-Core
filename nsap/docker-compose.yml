@@ -1,10 +1,12 @@
-# ── NSAP · docker-compose ─────────────────────────────────────────────────────
-# Levanta la app en un contenedor con datos persistentes.
+# ── NSAP + n8n · docker-compose ───────────────────────────────────────────────
+# Levanta NSAP y (opcional) n8n en la misma red, con datos persistentes.
 #   1) cp .env.example .env   (opcional: edítalo para FB/IG/IA/n8n)
 #   2) docker compose up -d --build
-#   3) abre http://localhost:4000   (login inicial admin / admin)
+#   3) NSAP  → http://localhost:4000   (login inicial admin / admin)
+#      n8n   → http://localhost:5678   (login: N8N_USER / N8N_PASSWORD del .env)
+# Solo NSAP (sin n8n):  docker compose up -d --build nsap
 # Logs:   docker compose logs -f
-# Parar:  docker compose down       (los datos se conservan en el volumen)
+# Parar:  docker compose down          (los datos se conservan en los volúmenes)
 services:
   nsap:
     build: .
@@ -16,7 +18,9 @@ services:
     environment:
       # El contenedor siempre escucha en 4000 (el mapeo de puerto va arriba).
       PORT: 4000
-    # Carga variables desde .env si existe (FB/IG/IA/n8n, NSAP_SECRET, etc.).
+      # NSAP alcanza n8n por el nombre de servicio en la red interna.
+      N8N_BASE_URL: "${N8N_BASE_URL:-http://n8n:5678}"
+    # Carga variables desde .env si existe (FB/IG/IA, NSAP_SECRET, NSAP_API_TOKEN…).
     env_file:
       - path: .env
         required: false
@@ -24,5 +28,32 @@ services:
       # Persiste sesión de WhatsApp (Baileys), db.json y archivos subidos.
       - nsap-data:/app/data
 
+  # n8n solo EJECUTA workflows: NSAP le envía trabajos y recibe el resultado por
+  # callback. No es el backend. Puedes omitirlo con: docker compose up -d nsap
+  n8n:
+    image: docker.n8n.io/n8nio/n8n:latest
+    container_name: n8n
+    restart: unless-stopped
+    ports:
+      - "${N8N_PORT:-5678}:5678"
+    environment:
+      # Acceso al panel de n8n (defínelos en .env).
+      N8N_BASIC_AUTH_ACTIVE: "true"
+      N8N_BASIC_AUTH_USER: "${N8N_USER:-admin}"
+      N8N_BASIC_AUTH_PASSWORD: "${N8N_PASSWORD:-changeme}"
+      # URL pública/host de n8n (para webhooks). Ajusta si usas dominio/túnel.
+      N8N_HOST: "${N8N_HOST:-localhost}"
+      N8N_PORT: 5678
+      N8N_PROTOCOL: "${N8N_PROTOCOL:-http}"
+      WEBHOOK_URL: "${N8N_WEBHOOK_BASE:-http://localhost:5678/}"
+      GENERIC_TIMEZONE: "${TZ:-America/Mexico_City}"
+      # Variables disponibles DENTRO de los workflows de n8n: así el nodo HTTP
+      # llama a NSAP por la red interna con el token de máquina.
+      NSAP_URL: "http://nsap:4000"
+      NSAP_API_TOKEN: "${NSAP_API_TOKEN:-}"
+    volumes:
+      - n8n-data:/home/node/.n8n
+
 volumes:
   nsap-data:
+  n8n-data:

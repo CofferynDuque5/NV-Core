@@ -105,16 +105,28 @@ Abre **http://localhost:4000**.
 ```bash
 cd nsap
 cp .env.example .env          # opcional
-docker compose up -d --build  # construye y levanta en segundo plano
+docker compose up -d --build  # construye y levanta NSAP + n8n
 docker compose logs -f        # ver logs (aquí aparece el estado/QR por consola)
 docker compose down           # parar (los datos se conservan)
 ```
-- Abre **http://localhost:4000**. Cambia el puerto del host con `PORT=8080 docker compose up -d`.
+- **NSAP** → http://localhost:4000 (login inicial `admin` / `admin`). Cambia el
+  puerto del host con `PORT=8080 docker compose up -d`.
 - Los datos (sesión de WhatsApp, `db.json`, uploads) se guardan en el volumen
   `nsap-data`, así que sobreviven a `down`/`up` y a reinicios.
 - Requiere Docker Compose v2.24+ (por `env_file` opcional). Sin compose:
   `docker build -t nsap . && docker run -d -p 4000:4000 --env-file .env -v nsap-data:/app/data nsap`.
 - Para **Instagram**, `APP_URL` debe ser pública también en Docker (túnel o dominio).
+
+#### n8n incluido
+El compose levanta también **n8n** (solo ejecuta workflows; NSAP le envía
+trabajos y recibe el resultado por callback):
+- **n8n** → http://localhost:5678 (login `N8N_USER` / `N8N_PASSWORD` del `.env`).
+- Ambos comparten red interna: NSAP alcanza n8n en `http://n8n:5678`
+  (`N8N_BASE_URL` ya viene apuntado ahí) y n8n alcanza NSAP en `http://nsap:4000`.
+- Dentro de n8n, los nodos HTTP ya tienen `NSAP_URL=http://nsap:4000` y
+  `NSAP_API_TOKEN` (si lo definiste): importa `examples/n8n-publish-workflow.json`
+  y funcionará sin tocar URLs.
+- Solo NSAP (sin n8n): `docker compose up -d --build nsap`.
 
 ### Primera vez
 1. Pestaña **Conexión** → **Conectar**.
