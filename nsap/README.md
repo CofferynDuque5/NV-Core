@@ -128,6 +128,25 @@ trabajos y recibe el resultado por callback):
   y funcionará sin tocar URLs.
 - Solo NSAP (sin n8n): `docker compose up -d --build nsap`.
 
+#### Túnel público para Instagram (opcional)
+Instagram exige que `APP_URL` sea accesible desde internet. El compose incluye un
+**túnel de Cloudflare** (sin cuenta ni configuración) bajo el perfil `tunnel`:
+```bash
+docker compose --profile tunnel up -d --build
+docker compose logs -f tunnel        # copia la URL https://<algo>.trycloudflare.com
+```
+Pon esa URL en `.env` como `APP_URL=https://<algo>.trycloudflare.com` y recarga
+NSAP: `docker compose up -d nsap`. Ya puedes publicar en Instagram. (WhatsApp y
+Facebook no necesitan el túnel.)
+
+#### ¿Error "container name /n8n is already in use"?
+Tenías un contenedor previo con ese nombre. Este compose ya no fija nombres, pero
+elimina el viejo una vez:
+```bash
+docker rm -f n8n nsap 2>$null   # PowerShell  (en bash: docker rm -f n8n nsap)
+docker compose up -d --build
+```
+
 ### Primera vez
 1. Pestaña **Conexión** → **Conectar**.
 2. Aparece el **QR** en el panel → escanéalo desde WhatsApp → *Dispositivos vinculados*.

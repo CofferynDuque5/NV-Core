@@ -1,17 +1,21 @@
-# ── NSAP + n8n · docker-compose ───────────────────────────────────────────────
-# Levanta NSAP y (opcional) n8n en la misma red, con datos persistentes.
+# ── NSAP + n8n (+ túnel opcional) · docker-compose ────────────────────────────
+# Levanta NSAP y n8n en la misma red, con datos persistentes.
 #   1) cp .env.example .env   (opcional: edítalo para FB/IG/IA/n8n)
 #   2) docker compose up -d --build
 #   3) NSAP  → http://localhost:4000   (login inicial admin / admin)
 #      n8n   → http://localhost:5678   (login: N8N_USER / N8N_PASSWORD del .env)
-# Solo NSAP (sin n8n):  docker compose up -d --build nsap
-# Logs:   docker compose logs -f
-# Parar:  docker compose down          (los datos se conservan en los volúmenes)
+#
+# Solo NSAP (sin n8n):        docker compose up -d --build nsap
+# Con túnel público (IG):     docker compose --profile tunnel up -d --build
+# Logs:                       docker compose logs -f
+# Parar:                      docker compose down   (los datos se conservan)
+#
+# Nota: sin container_name fijo, Compose nombra los contenedores con el prefijo
+# del proyecto (p.ej. nsap-nsap-1) para no chocar con contenedores previos.
 services:
   nsap:
     build: .
     image: nsap:latest
-    container_name: nsap
     restart: unless-stopped
     ports:
       - "${PORT:-4000}:4000"
@@ -32,7 +36,6 @@ services:
   # callback. No es el backend. Puedes omitirlo con: docker compose up -d nsap
   n8n:
     image: docker.n8n.io/n8nio/n8n:latest
-    container_name: n8n
     restart: unless-stopped
     ports:
       - "${N8N_PORT:-5678}:5678"
@@ -53,6 +56,22 @@ services:
       NSAP_API_TOKEN: "${NSAP_API_TOKEN:-}"
     volumes:
       - n8n-data:/home/node/.n8n
+
+  # Túnel público (Cloudflare Quick Tunnel) para exponer NSAP en internet SIN
+  # cuenta ni configuración: necesario para que Instagram lea el media (APP_URL).
+  # Arranca solo con el perfil "tunnel":
+  #   docker compose --profile tunnel up -d
+  # Copia la URL https://<algo>.trycloudflare.com que aparece en sus logs:
+  #   docker compose logs -f tunnel
+  # y ponla en .env como APP_URL=..., luego: docker compose up -d nsap
+  tunnel:
+    image: cloudflare/cloudflared:latest
+    restart: unless-stopped
+    command: tunnel --no-autoupdate --url http://nsap:4000
+    depends_on:
+      - nsap
+    profiles:
+      - tunnel
 
 volumes:
   nsap-data:
