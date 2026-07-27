@@ -9,7 +9,7 @@ import { cn } from "@/lib/utils";
 import { useUiStore } from "@/stores/ui-store";
 import { useWorkspace } from "@/hooks/use-workspace";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
-import { getNavIcon } from "./sidebar-icon";
+import { EXTRA_NAV_ITEMS, getNavIcon } from "./sidebar-icon";
 
 export function MobileNav({ onOpenSwitcher }: { onOpenSwitcher: () => void }) {
   const open = useUiStore((s) => s.mobileNavOpen);
@@ -57,7 +57,7 @@ export function MobileNav({ onOpenSwitcher }: { onOpenSwitcher: () => void }) {
                 {section.label}
               </div>
               <ul className="space-y-0.5">
-                {section.items.map((item) => {
+                {[...section.items, ...(EXTRA_NAV_ITEMS[section.label] ?? [])].map((item) => {
                   const href = `/w/${ws.slug}/${item.module}`;
                   const active = pathname === href || pathname.startsWith(`${href}/`);
                   const Icon = getNavIcon(item.icon);

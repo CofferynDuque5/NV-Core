@@ -57,6 +57,34 @@ export function useGroups() {
   return useQuery({ queryKey: [ws.id, "groups"], queryFn: () => svc.groups.list(ws.id) });
 }
 
+export function useGroupVars(groupId: string | null) {
+  const svc = useServices();
+  const ws = useWorkspace();
+  return useQuery({
+    queryKey: [ws.id, "groups", groupId, "vars"],
+    queryFn: () => svc.groups.getVars(ws.id, groupId as string),
+    enabled: Boolean(groupId),
+  });
+}
+
+export function useCampaignLogs() {
+  const svc = useServices();
+  const ws = useWorkspace();
+  return useQuery({
+    queryKey: [ws.id, "campaigns", "logs"],
+    queryFn: () => svc.campaigns.logs(ws.id),
+  });
+}
+
+export function useSocialStatus() {
+  const svc = useServices();
+  const ws = useWorkspace();
+  return useQuery({
+    queryKey: [ws.id, "social", "status"],
+    queryFn: () => svc.social.status(ws.id),
+  });
+}
+
 export function useSegments() {
   const svc = useServices();
   const ws = useWorkspace();

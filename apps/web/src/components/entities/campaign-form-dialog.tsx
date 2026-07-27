@@ -3,7 +3,6 @@
 import * as React from "react";
 import {
   CAMPAIGN_STATUSES,
-  CHANNEL_LIST,
   type Campaign,
   type CampaignStatus,
   type ChannelId,
@@ -11,9 +10,40 @@ import {
 
 import { cn } from "@/lib/utils";
 import { useCreateCampaign, useUpdateCampaign } from "@/hooks/use-domain-mutations";
+import { useGroups } from "@/hooks/use-domain-data";
 import { FormDialog, errorMessage } from "./form-dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+
+type ScheduleType = "once" | "daily" | "weekly";
+
+const SCHEDULE_OPTIONS: { id: ScheduleType; label: string }[] = [
+  { id: "once", label: "Una vez" },
+  { id: "daily", label: "Diario" },
+  { id: "weekly", label: "Semanal" },
+];
+
+const WEEKDAYS = ["Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb"];
+
+const IG_FORMATS: { id: string; label: string }[] = [
+  { id: "feed", label: "Feed" },
+  { id: "reel", label: "Reel" },
+  { id: "story", label: "Historia" },
+  { id: "carousel", label: "Carrusel" },
+];
+
+const selectClass =
+  "flex h-9 w-full rounded-lg border border-line-soft bg-panel-raised px-3 text-sm text-ink focus-visible:border-brand/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/25";
+
+/** Convert an ISO datetime to the value a <input type="datetime-local"> expects. */
+function isoToLocalInput(iso: string | null | undefined): string {
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  const local = new Date(d.getTime() - d.getTimezoneOffset() * 60000);
+  return local.toISOString().slice(0, 16);
+}
 
 export function CampaignFormDialog({
   open,
@@ -27,30 +57,80 @@ export function CampaignFormDialog({
   const isEdit = Boolean(campaign);
   const create = useCreateCampaign();
   const update = useUpdateCampaign();
+  const groups = useGroups();
   const pending = create.isPending || update.isPending;
 
   const [name, setName] = React.useState("");
   const [status, setStatus] = React.useState<CampaignStatus>("borrador");
-  const [channels, setChannels] = React.useState<ChannelId[]>([]);
   const [progress, setProgress] = React.useState(0);
+  const [message, setMessage] = React.useState("");
+  const [scheduleType, setScheduleType] = React.useState<ScheduleType>("once");
+  const [dateTime, setDateTime] = React.useState(""); // once → datetime-local
+  const [time, setTime] = React.useState(""); // daily/weekly → HH:MM
+  const [scheduleDays, setScheduleDays] = React.useState<number[]>([]);
+  const [targetGroups, setTargetGroups] = React.useState<string[]>([]);
+  const [fb, setFb] = React.useState(false);
+  const [ig, setIg] = React.useState(false);
+  const [socialFormat, setSocialFormat] = React.useState("feed");
   const [error, setError] = React.useState<string | null>(null);
 
   React.useEffect(() => {
     if (!open) return;
+    const type = campaign?.scheduleType ?? "once";
     setName(campaign?.name ?? "");
     setStatus(campaign?.status ?? "borrador");
-    setChannels(campaign?.channels ?? []);
     setProgress(campaign?.progress ?? 0);
+    setMessage(campaign?.message ?? "");
+    setScheduleType(type);
+    setDateTime(type === "once" ? isoToLocalInput(campaign?.scheduleAt) : "");
+    setTime(type === "once" ? "" : (campaign?.scheduleAt ?? ""));
+    setScheduleDays(campaign?.scheduleDays ?? []);
+    setTargetGroups(campaign?.targetGroups ?? []);
+    setFb(campaign?.channels?.includes("fb") ?? false);
+    setIg(campaign?.channels?.includes("ig") ?? false);
+    setSocialFormat(campaign?.socialFormat ?? "feed");
     setError(null);
   }, [open, campaign]);
 
-  function toggle(id: ChannelId) {
-    setChannels((prev) => (prev.includes(id) ? prev.filter((c) => c !== id) : [...prev, id]));
+  function toggleDay(day: number) {
+    setScheduleDays((prev) =>
+      prev.includes(day) ? prev.filter((d) => d !== day) : [...prev, day].sort((a, b) => a - b),
+    );
+  }
+
+  function toggleGroup(id: string) {
+    setTargetGroups((prev) => (prev.includes(id) ? prev.filter((g) => g !== id) : [...prev, id]));
   }
 
   function submit() {
     setError(null);
-    const input = { name: name.trim(), status, channels, progress };
+
+    const channels: ChannelId[] = [];
+    if (targetGroups.length > 0) channels.push("wa");
+    if (fb) channels.push("fb");
+    if (ig) channels.push("ig");
+
+    const scheduleAt =
+      scheduleType === "once"
+        ? dateTime
+          ? new Date(dateTime).toISOString()
+          : undefined
+        : time || undefined;
+
+    const input = {
+      name: name.trim(),
+      status,
+      progress,
+      channels,
+      message: message.trim() || undefined,
+      scheduleType,
+      scheduleAt,
+      scheduleDays: scheduleType === "weekly" ? scheduleDays : undefined,
+      targetGroups,
+      socialFormat: ig ? socialFormat : undefined,
+      ...(campaign?.accent ? { accent: campaign.accent } : {}),
+    };
+
     const opts = {
       onSuccess: () => onOpenChange(false),
       onError: (err: unknown) => setError(errorMessage(err)),
@@ -58,6 +138,8 @@ export function CampaignFormDialog({
     if (campaign) update.mutate({ id: campaign.id, input }, opts);
     else create.mutate(input, opts);
   }
+
+  const groupItems = groups.data?.items ?? [];
 
   return (
     <FormDialog
@@ -74,6 +156,7 @@ export function CampaignFormDialog({
         <Label htmlFor="cp-name">Nombre</Label>
         <Input id="cp-name" required value={name} onChange={(e) => setName(e.target.value)} />
       </div>
+
       <div className="grid grid-cols-2 gap-3">
         <div className="space-y-1.5">
           <Label htmlFor="cp-status">Estado</Label>
@@ -81,7 +164,7 @@ export function CampaignFormDialog({
             id="cp-status"
             value={status}
             onChange={(e) => setStatus(e.target.value as CampaignStatus)}
-            className="flex h-9 w-full rounded-lg border border-line-soft bg-panel-raised px-3 text-sm text-ink focus-visible:border-brand/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/25"
+            className={selectClass}
           >
             {CAMPAIGN_STATUSES.map((s) => (
               <option key={s} value={s}>
@@ -102,25 +185,147 @@ export function CampaignFormDialog({
           />
         </div>
       </div>
+
       <div className="space-y-1.5">
-        <Label>Canales</Label>
+        <Label htmlFor="cp-message">Mensaje</Label>
+        <Textarea
+          id="cp-message"
+          value={message}
+          onChange={(e) => setMessage(e.target.value)}
+          placeholder="Hola {{grupo}}, tu cita es el {{fecha}} a las {{hora}}."
+        />
+        <p className="text-[11px] text-ink-faint">
+          Variables disponibles:{" "}
+          <code className="text-ink-muted">{"{{grupo}}"}</code>{" "}
+          <code className="text-ink-muted">{"{{fecha}}"}</code>{" "}
+          <code className="text-ink-muted">{"{{hora}}"}</code>
+        </p>
+      </div>
+
+      <div className="space-y-1.5">
+        <Label>Programación</Label>
         <div className="flex flex-wrap gap-1.5">
-          {CHANNEL_LIST.map((ch) => (
+          {SCHEDULE_OPTIONS.map((opt) => (
             <button
-              key={ch.id}
+              key={opt.id}
               type="button"
-              onClick={() => toggle(ch.id)}
+              onClick={() => setScheduleType(opt.id)}
               className={cn(
                 "rounded-full border px-2.5 py-1 text-xs transition-colors",
-                channels.includes(ch.id)
+                scheduleType === opt.id
                   ? "border-brand/60 bg-brand/10 text-ink"
                   : "border-line-soft text-ink-muted hover:border-line-bright",
               )}
             >
-              {ch.name}
+              {opt.label}
             </button>
           ))}
         </div>
+
+        {scheduleType === "once" ? (
+          <Input
+            type="datetime-local"
+            value={dateTime}
+            onChange={(e) => setDateTime(e.target.value)}
+          />
+        ) : (
+          <div className="space-y-2">
+            {scheduleType === "weekly" ? (
+              <div className="flex flex-wrap gap-1.5">
+                {WEEKDAYS.map((label, day) => (
+                  <button
+                    key={day}
+                    type="button"
+                    onClick={() => toggleDay(day)}
+                    className={cn(
+                      "rounded-full border px-2.5 py-1 text-xs transition-colors",
+                      scheduleDays.includes(day)
+                        ? "border-brand/60 bg-brand/10 text-ink"
+                        : "border-line-soft text-ink-muted hover:border-line-bright",
+                    )}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            ) : null}
+            <Input type="time" value={time} onChange={(e) => setTime(e.target.value)} />
+          </div>
+        )}
+      </div>
+
+      <div className="space-y-1.5">
+        <Label>Grupos de WhatsApp</Label>
+        {groupItems.length === 0 ? (
+          <p className="rounded-lg border border-line-soft bg-panel-raised px-3 py-2 text-xs text-ink-faint">
+            No hay grupos. Conecta WhatsApp y sincroniza para difundir a tus grupos.
+          </p>
+        ) : (
+          <div className="max-h-40 space-y-0.5 overflow-y-auto rounded-lg border border-line-soft bg-panel-raised p-1">
+            {groupItems.map((g) => (
+              <label
+                key={g.id}
+                className="flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-sm hover:bg-panel-high"
+              >
+                <input
+                  type="checkbox"
+                  checked={targetGroups.includes(g.id)}
+                  onChange={() => toggleGroup(g.id)}
+                  className="size-4 rounded border-line-strong accent-brand"
+                />
+                <span className="min-w-0 flex-1 truncate text-ink">{g.name}</span>
+                <span className="shrink-0 text-[11px] text-ink-faint">{g.members} miembros</span>
+              </label>
+            ))}
+          </div>
+        )}
+      </div>
+
+      <div className="space-y-1.5">
+        <Label>Redes sociales</Label>
+        <div className="flex flex-wrap gap-1.5">
+          <button
+            type="button"
+            onClick={() => setFb((v) => !v)}
+            className={cn(
+              "rounded-full border px-2.5 py-1 text-xs transition-colors",
+              fb
+                ? "border-brand/60 bg-brand/10 text-ink"
+                : "border-line-soft text-ink-muted hover:border-line-bright",
+            )}
+          >
+            Facebook
+          </button>
+          <button
+            type="button"
+            onClick={() => setIg((v) => !v)}
+            className={cn(
+              "rounded-full border px-2.5 py-1 text-xs transition-colors",
+              ig
+                ? "border-brand/60 bg-brand/10 text-ink"
+                : "border-line-soft text-ink-muted hover:border-line-bright",
+            )}
+          >
+            Instagram
+          </button>
+        </div>
+        {ig ? (
+          <div className="space-y-1.5 pt-1">
+            <Label htmlFor="cp-igformat">Formato de Instagram</Label>
+            <select
+              id="cp-igformat"
+              value={socialFormat}
+              onChange={(e) => setSocialFormat(e.target.value)}
+              className={selectClass}
+            >
+              {IG_FORMATS.map((f) => (
+                <option key={f.id} value={f.id}>
+                  {f.label}
+                </option>
+              ))}
+            </select>
+          </div>
+        ) : null}
       </div>
     </FormDialog>
   );

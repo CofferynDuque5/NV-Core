@@ -4,6 +4,7 @@ import {
   Contact,
   FileText,
   Filter,
+  History,
   Image,
   Inbox,
   Layers,
@@ -25,6 +26,7 @@ const MAP: Record<string, LucideIcon> = {
   Contact,
   Users,
   Filter,
+  History,
   Inbox,
   Layers,
   Sparkles,
@@ -40,3 +42,18 @@ const MAP: Record<string, LucideIcon> = {
 export function getNavIcon(name: string): LucideIcon {
   return MAP[name] ?? LayoutDashboard;
 }
+
+/** Nav item shape rendered by the shell (superset of the domain NavItem). */
+export interface NavRenderItem {
+  module: string;
+  label: string;
+  icon: string;
+}
+
+/**
+ * Web-only nav entries injected into a section by its label. Kept here (not in
+ * @nv/domain) so pages without a domain module can still appear in the sidebar.
+ */
+export const EXTRA_NAV_ITEMS: Record<string, NavRenderItem[]> = {
+  PRINCIPAL: [{ module: "historial", label: "Historial", icon: "History" }],
+};

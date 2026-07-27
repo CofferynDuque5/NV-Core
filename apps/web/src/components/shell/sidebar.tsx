@@ -14,7 +14,7 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { getNavIcon } from "./sidebar-icon";
+import { EXTRA_NAV_ITEMS, getNavIcon } from "./sidebar-icon";
 
 export function Sidebar({ onOpenSwitcher }: { onOpenSwitcher: () => void }) {
   const collapsed = useUiStore((s) => s.navCollapsed);
@@ -117,7 +117,7 @@ export function Sidebar({ onOpenSwitcher }: { onOpenSwitcher: () => void }) {
               <div className="mx-2 mb-1.5 mt-1 h-px bg-line" />
             )}
             <ul className="space-y-0.5">
-              {section.items.map((item) => {
+              {[...section.items, ...(EXTRA_NAV_ITEMS[section.label] ?? [])].map((item) => {
                 const href = `/w/${ws.slug}/${item.module}`;
                 const active = pathname === href || pathname.startsWith(`${href}/`);
                 const Icon = getNavIcon(item.icon);

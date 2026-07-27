@@ -14,6 +14,7 @@ import type {
   CreateSegmentInput,
   CreateTemplateInput,
   GenerateVariantsInput,
+  SocialPublishInput,
   UpdateCampaignInput,
   UpdateContactInput,
   UpsertConnectionInput,
@@ -140,6 +141,52 @@ export function useDeleteCampaign() {
   });
 }
 
+function invalidateCampaigns(qc: ReturnType<typeof useQueryClient>, wsId: string) {
+  void qc.invalidateQueries({ queryKey: [wsId, "campaigns"] });
+}
+
+export function useRunCampaign() {
+  const svc = useServices();
+  const ws = useWorkspace();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => svc.campaigns.run(ws.id, id),
+    onSuccess: () => {
+      invalidateCampaigns(qc, ws.id);
+      toast.success("Campaña enviada");
+    },
+    onError: (err) => toast.error(errText(err)),
+  });
+}
+
+export function usePauseCampaign() {
+  const svc = useServices();
+  const ws = useWorkspace();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => svc.campaigns.pause(ws.id, id),
+    onSuccess: () => {
+      invalidateCampaigns(qc, ws.id);
+      toast.success("Campaña pausada");
+    },
+    onError: (err) => toast.error(errText(err)),
+  });
+}
+
+export function useResumeCampaign() {
+  const svc = useServices();
+  const ws = useWorkspace();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => svc.campaigns.resume(ws.id, id),
+    onSuccess: () => {
+      invalidateCampaigns(qc, ws.id);
+      toast.success("Campaña reanudada");
+    },
+    onError: (err) => toast.error(errText(err)),
+  });
+}
+
 // ── Posts ─────────────────────────────────────────────────────────────────────
 export function useCreatePost() {
   const svc = useServices();
@@ -178,6 +225,36 @@ export function useCreateGroup() {
       void qc.invalidateQueries({ queryKey: [ws.id, "groups"] });
       toast.success("Grupo creado");
     },
+  });
+}
+
+export function useSetGroupVars(groupId: string) {
+  const svc = useServices();
+  const ws = useWorkspace();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (vars: Record<string, string>) => svc.groups.setVars(ws.id, groupId, vars),
+    onSuccess: (data) => {
+      qc.setQueryData([ws.id, "groups", groupId, "vars"], data);
+      void qc.invalidateQueries({ queryKey: [ws.id, "groups", groupId, "vars"] });
+      toast.success("Variables guardadas");
+    },
+    onError: (err) => toast.error(errText(err)),
+  });
+}
+
+// ── Social (Facebook / Instagram) ─────────────────────────────────────────────
+export function useSocialPublish() {
+  const svc = useServices();
+  const ws = useWorkspace();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: SocialPublishInput) => svc.social.publish(ws.id, input),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: [ws.id, "campaigns", "logs"] });
+      toast.success("Publicación enviada");
+    },
+    onError: (err) => toast.error(errText(err)),
   });
 }
 
