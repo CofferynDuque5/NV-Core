@@ -101,6 +101,21 @@ Abre **http://localhost:4000**.
 > que requiera una integración avisa en vez de romperse. `.env` está en
 > `.gitignore` (nunca se sube).
 
+### Docker
+```bash
+cd nsap
+cp .env.example .env          # opcional
+docker compose up -d --build  # construye y levanta en segundo plano
+docker compose logs -f        # ver logs (aquí aparece el estado/QR por consola)
+docker compose down           # parar (los datos se conservan)
+```
+- Abre **http://localhost:4000**. Cambia el puerto del host con `PORT=8080 docker compose up -d`.
+- Los datos (sesión de WhatsApp, `db.json`, uploads) se guardan en el volumen
+  `nsap-data`, así que sobreviven a `down`/`up` y a reinicios.
+- Requiere Docker Compose v2.24+ (por `env_file` opcional). Sin compose:
+  `docker build -t nsap . && docker run -d -p 4000:4000 --env-file .env -v nsap-data:/app/data nsap`.
+- Para **Instagram**, `APP_URL` debe ser pública también en Docker (túnel o dominio).
+
 ### Primera vez
 1. Pestaña **Conexión** → **Conectar**.
 2. Aparece el **QR** en el panel → escanéalo desde WhatsApp → *Dispositivos vinculados*.

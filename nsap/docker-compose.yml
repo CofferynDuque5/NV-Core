@@ -1,0 +1,28 @@
+# ── NSAP · docker-compose ─────────────────────────────────────────────────────
+# Levanta la app en un contenedor con datos persistentes.
+#   1) cp .env.example .env   (opcional: edítalo para FB/IG/IA/n8n)
+#   2) docker compose up -d --build
+#   3) abre http://localhost:4000   (login inicial admin / admin)
+# Logs:   docker compose logs -f
+# Parar:  docker compose down       (los datos se conservan en el volumen)
+services:
+  nsap:
+    build: .
+    image: nsap:latest
+    container_name: nsap
+    restart: unless-stopped
+    ports:
+      - "${PORT:-4000}:4000"
+    environment:
+      # El contenedor siempre escucha en 4000 (el mapeo de puerto va arriba).
+      PORT: 4000
+    # Carga variables desde .env si existe (FB/IG/IA/n8n, NSAP_SECRET, etc.).
+    env_file:
+      - path: .env
+        required: false
+    volumes:
+      # Persiste sesión de WhatsApp (Baileys), db.json y archivos subidos.
+      - nsap-data:/app/data
+
+volumes:
+  nsap-data:
