@@ -6,7 +6,13 @@ import { PrismaService } from "../../prisma/prisma.service";
 import { BaileysSession } from "./baileys.session";
 import { SessionManager } from "./session-manager";
 import { WhatsappGateway } from "./whatsapp.gateway";
-import type { SessionEvents, WhatsappStatus, WhatsappStatusValue } from "./whatsapp.types";
+import type {
+  SessionEvents,
+  WhatsappAttachment,
+  WhatsappGroup,
+  WhatsappStatus,
+  WhatsappStatusValue,
+} from "./whatsapp.types";
 
 @Injectable()
 export class WhatsappService implements SessionEvents, OnModuleInit {
@@ -56,6 +62,29 @@ export class WhatsappService implements SessionEvents, OnModuleInit {
       contactsCount: meta.contactsCount,
       lastConnectionAt: meta.connectedAt,
     }).then(() => this.emit(workspaceSlug));
+  }
+
+  /** Persist the synced groups so campaigns can target them. */
+  onGroups(workspaceSlug: string, groups: WhatsappGroup[]): void {
+    void this.persistGroups(workspaceSlug, groups);
+  }
+
+  private async persistGroups(workspaceSlug: string, groups: WhatsappGroup[]): Promise<void> {
+    if (!this.prisma.enabled || !groups.length) return;
+    for (const g of groups) {
+      await this.prisma.group.upsert({
+        where: { workspaceSlug_remoteJid: { workspaceSlug, remoteJid: g.remoteJid } },
+        create: {
+          workspaceSlug,
+          remoteJid: g.remoteJid,
+          name: g.subject,
+          members: g.size,
+          channel: "wa",
+          synced: true,
+        },
+        update: { name: g.subject, members: g.size, synced: true },
+      });
+    }
   }
 
   private async persist(
@@ -133,5 +162,28 @@ export class WhatsappService implements SessionEvents, OnModuleInit {
       throw new Error("WhatsApp (Baileys) no está conectado en este workspace.");
     }
     return session.sendText(to, text);
+  }
+
+  /** List the WhatsApp groups synced for a workspace (most members first). */
+  async listGroups(workspaceSlug: string) {
+    if (!this.prisma.enabled) return [];
+    return this.prisma.group.findMany({
+      where: { workspaceSlug, channel: "wa", synced: true },
+      orderBy: { members: "desc" },
+    });
+  }
+
+  /** Send a message (optionally with media) to a group by its JID. */
+  sendToGroup(
+    workspaceSlug: string,
+    remoteJid: string,
+    text: string,
+    attachment?: WhatsappAttachment | null,
+  ): Promise<{ id: string }> {
+    const session = this.live.get(workspaceSlug);
+    if (!session?.isConnected) {
+      throw new Error("WhatsApp (Baileys) no está conectado en este workspace.");
+    }
+    return session.sendToGroup(remoteJid, text, attachment);
   }
 }

@@ -22,6 +22,11 @@ export class WhatsappController {
     return this.service.status(workspaceId);
   }
 
+  @Get("groups")
+  groups(@WorkspaceId() workspaceId: string) {
+    return this.service.listGroups(workspaceId);
+  }
+
   @Post("connect")
   @Roles("Owner", "Admin")
   @UseGuards(RolesGuard)

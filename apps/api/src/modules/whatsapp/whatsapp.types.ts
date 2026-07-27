@@ -9,6 +9,21 @@ export interface WhatsappStatus {
   contactsCount: number;
 }
 
+/** A WhatsApp group as fetched from Baileys. */
+export interface WhatsappGroup {
+  remoteJid: string;
+  subject: string;
+  size: number;
+}
+
+/** Media descriptor for a WhatsApp send (delivered by public URL). */
+export interface WhatsappAttachment {
+  url: string;
+  kind?: "image" | "video" | "document" | string;
+  mime?: string | null;
+  filename?: string | null;
+}
+
 /** Callbacks a BaileysSession uses to report changes back to the service. */
 export interface SessionEvents {
   onQr(workspaceSlug: string, dataUrl: string): void;
@@ -17,6 +32,8 @@ export interface SessionEvents {
     workspaceSlug: string,
     meta: { number?: string | null; groupsCount?: number; contactsCount?: number; connectedAt?: Date },
   ): void;
+  /** Full group list after a sync, so the service can persist it. */
+  onGroups(workspaceSlug: string, groups: WhatsappGroup[]): void;
 }
 
 /** Load the ESM-only Baileys package from CommonJS without TS turning it into require(). */

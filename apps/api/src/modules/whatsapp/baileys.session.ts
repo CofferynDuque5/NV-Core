@@ -7,6 +7,8 @@ import {
   silentLogger,
   toJid,
   type SessionEvents,
+  type WhatsappAttachment,
+  type WhatsappGroup,
   type WhatsappStatusValue,
 } from "./whatsapp.types";
 
@@ -127,18 +129,29 @@ export class BaileysSession {
     }
   }
 
-  /** Fetch groups (and current contact count) and report them. */
+  /** Fetch groups (and current contact count), persist the list, and report counts. */
   async sync(): Promise<{ groupsCount: number; contactsCount: number }> {
-    let groupsCount = 0;
+    const groups = await this.fetchGroups();
+    this.events.onGroups(this.workspaceSlug, groups);
+    const contactsCount = this.contacts.size;
+    this.events.onMeta(this.workspaceSlug, { groupsCount: groups.length, contactsCount });
+    return { groupsCount: groups.length, contactsCount };
+  }
+
+  /** Read the participating groups with their subject and member count. */
+  async fetchGroups(): Promise<WhatsappGroup[]> {
     try {
       const groups = await this.sock?.groupFetchAllParticipating?.();
-      groupsCount = groups ? Object.keys(groups).length : 0;
+      if (!groups) return [];
+      return Object.values(groups).map((g: any) => ({
+        remoteJid: String(g.id),
+        subject: String(g.subject ?? g.id),
+        size: Number(g.size ?? g.participants?.length ?? 0),
+      }));
     } catch (err) {
       this.logger.warn(`No se pudieron sincronizar grupos: ${(err as Error).message}`);
+      return [];
     }
-    const contactsCount = this.contacts.size;
-    this.events.onMeta(this.workspaceSlug, { groupsCount, contactsCount });
-    return { groupsCount, contactsCount };
   }
 
   /** Send a text message. Throws if not connected. */
@@ -147,6 +160,34 @@ export class BaileysSession {
       throw new Error("WhatsApp no está conectado en este workspace.");
     }
     const result = await this.sock.sendMessage(toJid(to), { text });
+    return { id: result?.key?.id ?? "" };
+  }
+
+  /**
+   * Send to a group JID, optionally with media (delivered by public URL). Text
+   * becomes the caption for image/video, or a separate message for documents.
+   */
+  async sendToGroup(remoteJid: string, text: string, attachment?: WhatsappAttachment | null): Promise<{ id: string }> {
+    if (!this.isConnected || !this.sock) {
+      throw new Error("WhatsApp no está conectado en este workspace.");
+    }
+    const jid = remoteJid.includes("@") ? remoteJid : `${remoteJid}@g.us`;
+    let content: any;
+    if (attachment?.url) {
+      const caption = text || undefined;
+      if (attachment.kind === "image") content = { image: { url: attachment.url }, caption };
+      else if (attachment.kind === "video") content = { video: { url: attachment.url }, caption };
+      else
+        content = {
+          document: { url: attachment.url },
+          mimetype: attachment.mime ?? "application/octet-stream",
+          fileName: attachment.filename ?? "archivo",
+          caption,
+        };
+    } else {
+      content = { text };
+    }
+    const result = await this.sock.sendMessage(jid, content);
     return { id: result?.key?.id ?? "" };
   }
 
