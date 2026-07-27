@@ -573,6 +573,45 @@ $("#n8n-dispatch")?.addEventListener("click", async () => {
     alert(err.message);
   }
 });
+// sube varios archivos y devuelve descriptores
+async function uploadFiles(inputEl) {
+  const out = [];
+  for (const file of Array.from(inputEl.files || [])) {
+    const fd = new FormData();
+    fd.append("file", file);
+    const res = await fetch("/api/media/upload", { method: "POST", body: fd });
+    if (!res.ok) throw new Error((await res.json().catch(() => ({}))).message || "Fallo al subir.");
+    out.push(await res.json());
+  }
+  return out;
+}
+
+// vista previa (local, sin subir aún)
+function showPreview({ message, files, targets, format }) {
+  $("#preview-targets").innerHTML =
+    (targets.length ? targets : ["(sin destino)"])
+      .map((t) => `<span class="badge text-bg-info me-1">${esc(t)}</span>`)
+      .join("") + (format ? `<span class="badge text-bg-secondary">${esc(format)}</span>` : "");
+  const media = Array.from(files || []);
+  $("#preview-media").innerHTML = media
+    .map((f) => {
+      const url = URL.createObjectURL(f);
+      return f.type.startsWith("video/")
+        ? `<video src="${url}" controls class="img-fluid rounded mb-1" style="max-height:220px"></video>`
+        : `<img src="${url}" class="img-fluid rounded mb-1" style="max-height:220px" />`;
+    })
+    .join("");
+  $("#preview-text").textContent = message || "(sin texto)";
+  bootstrap.Modal.getOrCreateInstance("#previewModal").show();
+}
+
+$("#social-preview")?.addEventListener("click", () => {
+  const targets = [];
+  if ($("#s-fb").checked) targets.push("facebook");
+  if ($("#s-ig").checked) targets.push("instagram");
+  showPreview({ message: $("#social-message").value, files: $("#social-file").files, targets, format: $("#social-format").value });
+});
+
 // publicar ahora en redes
 $("#social-publish")?.addEventListener("click", async () => {
   const targets = [];
@@ -584,10 +623,16 @@ $("#social-publish")?.addEventListener("click", async () => {
   btn.disabled = true;
   out.textContent = "Publicando…";
   try {
-    const attachment = await uploadFile($("#social-file"));
+    const attachments = await uploadFiles($("#social-file"));
     const { results } = await api("/social/publish", {
       method: "POST",
-      body: JSON.stringify({ targets, message: $("#social-message").value, attachment }),
+      body: JSON.stringify({
+        targets,
+        message: $("#social-message").value,
+        attachment: attachments[0] ?? null,
+        attachments,
+        format: $("#social-format").value,
+      }),
     });
     out.innerHTML = results
       .map((r) => `${r.target}: ${r.ok ? '<span class="text-success">OK</span>' : `<span class="text-danger">${esc(r.error)}</span>`}`)

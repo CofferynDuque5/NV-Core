@@ -99,6 +99,12 @@ function currentUser(req) {
 }
 
 export function authMiddleware(req, res, next) {
+  // Acceso máquina-a-máquina (p.ej. n8n) con token de API.
+  const apiToken = process.env.NSAP_API_TOKEN;
+  if (apiToken && req.headers["x-api-token"] === apiToken) {
+    req.user = { id: "api", username: "api", role: "admin" };
+    return next();
+  }
   const user = currentUser(req);
   if (!user) return res.status(401).json({ message: "No autenticado." });
   req.user = user;

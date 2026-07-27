@@ -12,12 +12,20 @@ socialRouter.get("/status", (_req, res) =>
 
 /** Publica ahora en Facebook y/o Instagram. */
 socialRouter.post("/publish", async (req, res) => {
-  const { targets, message, attachment } = req.body ?? {};
+  const { targets, message, attachment, attachments, format } = req.body ?? {};
   const list = (Array.isArray(targets) ? targets : []).filter((t) => t === "facebook" || t === "instagram");
   if (!list.length) return res.status(400).json({ message: "Elige Facebook y/o Instagram." });
-  if (!message && !attachment) return res.status(400).json({ message: "Escribe un mensaje o adjunta una imagen." });
+  const media = Array.isArray(attachments) ? attachments : [];
+  if (!message && !attachment && !media.length) {
+    return res.status(400).json({ message: "Escribe un mensaje o adjunta imagen/video." });
+  }
 
-  const results = await publishToTargets(list, { message: message ?? "", attachment: attachment ?? null });
+  const results = await publishToTargets(list, {
+    message: message ?? "",
+    attachment: attachment ?? null,
+    attachments: media.length ? media : null,
+    format: format ?? null,
+  });
   // Registrar en el historial.
   for (const r of results) {
     store.addLog({

@@ -1,0 +1,46 @@
+{
+  "name": "NSAP · Publicar en redes",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": { "interval": [{ "field": "hours", "hoursInterval": 24 }] }
+      },
+      "id": "a1111111-1111-4111-8111-111111111111",
+      "name": "Cada día",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.1,
+      "position": [260, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.NSAP_URL }}/api/social/publish",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "x-api-token", "value": "={{ $env.NSAP_API_TOKEN }}" },
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"targets\": [\"facebook\", \"instagram\"],\n  \"message\": \"Publicación automática desde n8n 🚀\",\n  \"format\": \"feed\"\n}",
+        "options": {}
+      },
+      "id": "b2222222-2222-4222-8222-222222222222",
+      "name": "NSAP · publicar",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [520, 300]
+    }
+  ],
+  "connections": {
+    "Cada día": {
+      "main": [[{ "node": "NSAP · publicar", "type": "main", "index": 0 }]]
+    }
+  },
+  "settings": {},
+  "meta": {
+    "templateNote": "Importa este workflow en n8n. Define en n8n las variables de entorno NSAP_URL (p.ej. https://tu-dominio) y NSAP_API_TOKEN (el mismo valor que pusiste en NSAP). El nodo HTTP llama a la API de NSAP para publicar en Facebook/Instagram. Puedes cambiar el trigger por un Webhook para dispararlo bajo demanda."
+  }
+}

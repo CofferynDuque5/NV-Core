@@ -33,14 +33,25 @@ las tarjetas en verde cuando estén completas:
   Página (`instagram_basic`, `instagram_content_publish`).
 
 **Publicación real (Graph API).** Cuando esté configurado:
-- **Facebook**: texto en el feed de la Página, o **foto** (imagen adjunta) con caption.
-- **Instagram**: imagen + caption (flujo `media` → `media_publish`). IG **exige una
-  URL de imagen pública**, así que las imágenes subidas se sirven en
-  `${APP_URL}/media/<archivo>` y **`APP_URL` debe ser accesible desde internet**
-  (dominio público o túnel tipo ngrok; `localhost` no funciona para IG).
+- **Facebook**: texto, **foto** o **video** en la Página.
+- **Instagram**: **feed** (imagen o video), **Reel** (video), **Historia**
+  (imagen/video) y **carrusel** (2–10 elementos). Los videos se procesan de forma
+  asíncrona (NSAP hace polling hasta que estén listos y luego publica).
+- IG **exige URLs públicas**: las imágenes/videos se sirven en
+  `${APP_URL}/media/<archivo>`, así que **`APP_URL` debe ser accesible desde
+  internet** (dominio público o túnel tipo ngrok; `localhost` no sirve para IG).
+- **Vista previa**: en *Publicar ahora* pulsa «Vista previa» para ver texto +
+  media + destinos + formato antes de publicar.
 - Publica desde **Conexiones → Publicar ahora**, o marca Facebook/Instagram como
-  destinos de una **campaña** (el scheduler publica al dispararse). Endpoint:
-  `POST /api/social/publish { targets, message, attachment }`.
+  destinos de una **campaña** (el scheduler publica al dispararse).
+- Endpoint: `POST /api/social/publish { targets, message, attachment, attachments, format }`
+  (`format`: `feed` | `reel` | `story` | `carousel`).
+
+**n8n dispara publicaciones.** Importa `examples/n8n-publish-workflow.json` en n8n.
+Define en n8n las variables `NSAP_URL` y `NSAP_API_TOKEN`. En NSAP, define
+`NSAP_API_TOKEN` (token de máquina): las peticiones con la cabecera
+`x-api-token: <token>` se autentican sin cookie. El workflow llama a
+`POST {NSAP_URL}/api/social/publish` en el horario que definas.
 
 ## Conectar n8n
 - `N8N_WEBHOOK_URL` (webhook del workflow) **o** `N8N_BASE_URL` (+ `workflow` en el

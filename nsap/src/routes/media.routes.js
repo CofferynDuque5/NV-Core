@@ -19,7 +19,11 @@ export const mediaRouter = Router();
 /** Sube un archivo y devuelve su descriptor (para adjuntar a una campaña). */
 mediaRouter.post("/upload", upload.single("file"), (req, res) => {
   if (!req.file) return res.status(400).json({ message: "Falta el archivo." });
-  const kind = req.file.mimetype.startsWith("image/") ? "image" : "document";
+  const kind = req.file.mimetype.startsWith("image/")
+    ? "image"
+    : req.file.mimetype.startsWith("video/")
+      ? "video"
+      : "document";
   res.status(201).json({
     path: req.file.filename,
     filename: req.file.originalname,

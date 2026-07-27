@@ -276,12 +276,27 @@
               <div class="row g-2">
                 <div class="col-md-8">
                   <textarea id="social-message" class="form-control form-control-sm" rows="3" placeholder="Texto de la publicación…"></textarea>
-                  <input type="file" id="social-file" class="form-control form-control-sm mt-2" accept="image/*" />
-                  <div class="form-text">Instagram requiere una imagen. Facebook acepta solo texto o texto+imagen.</div>
+                  <div class="row g-2 mt-1">
+                    <div class="col-6">
+                      <label class="form-label small mb-0">Formato IG</label>
+                      <select id="social-format" class="form-select form-select-sm">
+                        <option value="feed">Feed (imagen/video)</option>
+                        <option value="reel">Reel (video)</option>
+                        <option value="story">Historia</option>
+                        <option value="carousel">Carrusel (2+ imágenes)</option>
+                      </select>
+                    </div>
+                    <div class="col-6">
+                      <label class="form-label small mb-0">Archivos</label>
+                      <input type="file" id="social-file" class="form-control form-control-sm" accept="image/*,video/*" multiple />
+                    </div>
+                  </div>
+                  <div class="form-text">Reel/video e Historia con video usan procesamiento (puede tardar). IG requiere <code>APP_URL</code> pública.</div>
                 </div>
                 <div class="col-md-4">
                   <div class="form-check"><input class="form-check-input" type="checkbox" id="s-fb" value="facebook" /><label class="form-check-label" for="s-fb"><i class="bi bi-facebook text-primary"></i> Facebook</label></div>
                   <div class="form-check mb-2"><input class="form-check-input" type="checkbox" id="s-ig" value="instagram" /><label class="form-check-label" for="s-ig"><i class="bi bi-instagram text-danger"></i> Instagram</label></div>
+                  <button id="social-preview" class="btn btn-outline-light btn-sm w-100 mb-1"><i class="bi bi-eye"></i> Vista previa</button>
                   <button id="social-publish" class="btn btn-success btn-sm w-100"><i class="bi bi-send"></i> Publicar</button>
                   <div id="social-result" class="small mt-2"></div>
                 </div>
@@ -352,6 +367,23 @@
           </div>
         </section>
       </main>
+    </div>
+
+    <!-- ── Modal: vista previa ─────────────────────────────────── -->
+    <div class="modal fade" id="previewModal" tabindex="-1">
+      <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+          <div class="modal-header"><h6 class="modal-title">Vista previa</h6><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+          <div class="modal-body">
+            <div id="preview-targets" class="mb-2"></div>
+            <div class="card"><div class="card-body">
+              <div id="preview-media" class="mb-2"></div>
+              <div id="preview-text" style="white-space:pre-wrap"></div>
+            </div></div>
+            <div class="form-text mt-2">Así se verá el contenido. En campañas, <code>{{grupo}}</code> se sustituye por cada grupo al enviar.</div>
+          </div>
+        </div>
+      </div>
     </div>
 
     <!-- ── Modal: variables por grupo ──────────────────────────── -->
