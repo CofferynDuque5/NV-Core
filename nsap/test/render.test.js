@@ -18,11 +18,23 @@ test("extractVars lists unique variable names", () => {
   assert.deepEqual(extractVars("{{a}} {{b}} {{a}}"), ["a", "b"]);
 });
 
-test("auth signing round-trips and rejects tampering", async () => {
-  const { login, verifyToken } = await import("../src/auth.js");
-  const token = login("admin", "admin");
-  assert.ok(token);
-  assert.equal(verifyToken(token)?.u, "admin");
-  assert.equal(verifyToken(token + "x"), null);
+test("auth: seed + login round-trips, rejects tampering and bad creds", async () => {
+  process.env.NSAP_DATA_DIR = `/tmp/nsap-test-${process.pid}`;
+  process.env.NSAP_USERNAME = "admin";
+  process.env.NSAP_PASSWORD = "admin";
+  const { seedAdmin, login, verifyToken } = await import("../src/auth.js");
+  seedAdmin();
+  const result = login("admin", "admin");
+  assert.ok(result?.token);
+  assert.equal(verifyToken(result.token)?.role, "admin");
+  assert.equal(verifyToken(result.token + "x"), null);
   assert.equal(login("admin", "wrong"), null);
+});
+
+test("hashPassword produces a salted, verifiable hash", async () => {
+  const { hashPassword } = await import("../src/auth.js");
+  const a = hashPassword("secret");
+  const b = hashPassword("secret");
+  assert.notEqual(a.salt, b.salt); // sal aleatoria
+  assert.notEqual(a.hash, b.hash);
 });

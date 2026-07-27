@@ -9,12 +9,37 @@ Conexión a WhatsApp con **Baileys**, QR mostrado en el panel en tiempo real
 - Node.js 20+
 
 ## Novedades
-- **Login básico** que protege el panel y las APIs (sesión por cookie firmada).
+- **Login multiusuario con roles** (admin / editor / viewer); admin gestiona usuarios.
 - **Plantillas de mensaje** reutilizables.
 - **Variables por grupo** (personalización): `{{clave}}` se reemplaza por grupo.
   Integradas: `{{grupo}}`, `{{fecha}}`, `{{hora}}`.
-- **Historial de envíos** con estado por grupo.
+- **Historial de envíos** + **exportar a CSV**.
+- **Programación**: una vez, **diaria** y **semanal** (días de la semana).
+- **Adjuntos** (imagen/archivo) en las campañas.
+- **Gestor de contenidos** (biblioteca de texto/media) y **generación con IA**
+  (OpenAI/Anthropic/Gemini).
+- **n8n** vía REST/Webhooks: el backend envía trabajos y recibe el resultado por
+  callback (n8n solo ejecuta workflows).
+- **Facebook / Instagram**: panel de estado + guía de qué configurar (Meta Graph API).
 - **Pausar / reanudar** campañas.
+
+## Conectar Facebook / Instagram
+Define en el entorno del servidor (y reinicia). El panel → **Conexiones** mostrará
+las tarjetas en verde cuando estén completas:
+- `META_APP_ID`, `META_APP_SECRET` — tu app en developers.facebook.com.
+- `FB_PAGE_ID`, `FB_PAGE_TOKEN` — Página de Facebook + token de Página (permisos
+  `pages_manage_posts`, `pages_read_engagement`; usa un token de larga duración).
+- `IG_BUSINESS_ID`, `IG_ACCESS_TOKEN` — cuenta de Instagram Business vinculada a la
+  Página (`instagram_basic`, `instagram_content_publish`).
+
+## Conectar n8n
+- `N8N_WEBHOOK_URL` (webhook del workflow) **o** `N8N_BASE_URL` (+ `workflow` en el
+  dispatch). Opcional: `N8N_API_KEY`, `N8N_CALLBACK_TOKEN` (protege el callback).
+- El callback público es `POST {APP_URL}/api/n8n/callback?token=...` con `{jobId, result}`.
+
+## IA
+Define **una** clave: `OPENAI_API_KEY`, `ANTHROPIC_API_KEY` o `GEMINI_API_KEY`
+(opcional `AI_PROVIDER`). Sin clave, el botón «IA» avisa que no está configurada.
 
 ## Uso
 

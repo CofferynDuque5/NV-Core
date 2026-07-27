@@ -22,6 +22,13 @@ function isDue(campaign, now) {
     const matches = now.getHours() === h && now.getMinutes() === m;
     return matches && campaign.lastRunDay !== todayKey();
   }
+  if (s.type === "weekly") {
+    const [h, m] = String(s.at ?? "").split(":").map(Number);
+    if (Number.isNaN(h) || Number.isNaN(m)) return false;
+    const days = Array.isArray(s.days) ? s.days.map(Number) : [];
+    const matches = days.includes(now.getDay()) && now.getHours() === h && now.getMinutes() === m;
+    return matches && campaign.lastRunDay !== todayKey();
+  }
   return false;
 }
 
@@ -61,7 +68,7 @@ export async function runCampaign(id, io) {
       at: new Date().toISOString(),
     };
     try {
-      await whatsapp.sendToGroup(groupId, text);
+      await whatsapp.sendToGroup(groupId, text, campaign.attachment);
       const entry = { ...base, ok: true, error: null };
       results.push(entry);
       store.addLog(entry);

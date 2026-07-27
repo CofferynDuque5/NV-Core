@@ -1,51 +1,70 @@
-import { createHash, createHmac, timingSafeEqual } from "node:crypto";
+import { createHmac, randomBytes, scryptSync, timingSafeEqual } from "node:crypto";
+import { nanoid } from "nanoid";
+
+import { store } from "./store.js";
 
 /**
- * Autenticación mínima de un solo administrador, sin dependencias externas.
- * La sesión es un token firmado con HMAC guardado en una cookie httpOnly.
- * Credenciales y secreto se toman de variables de entorno (con aviso si son las
- * de por defecto).
+ * Autenticación multiusuario con roles, sin dependencias externas.
+ * Sesión = token firmado con HMAC en una cookie httpOnly.
+ * Roles: admin (todo), editor (opera), viewer (solo lectura).
  */
 export const COOKIE = "nsap_session";
+export const ROLES = ["admin", "editor", "viewer"];
 const SECRET = process.env.NSAP_SECRET || "nsap-dev-secret-change-me";
-const USERNAME = process.env.NSAP_USERNAME || "admin";
-const PASSWORD = process.env.NSAP_PASSWORD || "admin";
 const TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
-if (!process.env.NSAP_PASSWORD || !process.env.NSAP_SECRET) {
-  console.warn(
-    "[auth] Usando credenciales/secreto por defecto (admin/admin). " +
-      "Define NSAP_USERNAME, NSAP_PASSWORD y NSAP_SECRET en producción.",
-  );
+if (!process.env.NSAP_SECRET) {
+  console.warn("[auth] NSAP_SECRET por defecto (inseguro). Defínelo en producción.");
 }
 
+// ── hashing de contraseñas (scrypt) ──────────────────────────────────────────
+export function hashPassword(password, salt = randomBytes(16).toString("hex")) {
+  const hash = scryptSync(password, salt, 64).toString("hex");
+  return { salt, hash };
+}
+function verifyPassword(password, salt, hash) {
+  const candidate = scryptSync(password, salt, 64);
+  const stored = Buffer.from(hash, "hex");
+  return candidate.length === stored.length && timingSafeEqual(candidate, stored);
+}
+
+/** Crea el admin inicial desde env si aún no hay usuarios. */
+export function seedAdmin() {
+  if (store.getUsers().length > 0) return;
+  const username = process.env.NSAP_USERNAME || "admin";
+  const password = process.env.NSAP_PASSWORD || "admin";
+  const { salt, hash } = hashPassword(password);
+  store.addUser({ id: nanoid(), username, salt, hash, role: "admin", createdAt: new Date().toISOString() });
+  if (!process.env.NSAP_PASSWORD) {
+    console.warn(`[auth] Admin inicial "${username}" con contraseña por defecto "admin". Cámbiala.`);
+  }
+}
+
+export function createUser({ username, password, role }) {
+  if (store.findUser(username)) throw Object.assign(new Error("El usuario ya existe."), { status: 409 });
+  if (!ROLES.includes(role)) throw Object.assign(new Error("Rol inválido."), { status: 400 });
+  const { salt, hash } = hashPassword(password);
+  return store.addUser({ id: nanoid(), username, salt, hash, role, createdAt: new Date().toISOString() });
+}
+
+// ── tokens de sesión ─────────────────────────────────────────────────────────
 const b64 = (s) => Buffer.from(s).toString("base64url");
 const unb64 = (s) => Buffer.from(s, "base64url").toString("utf8");
 const hmac = (data) => createHmac("sha256", SECRET).update(data).digest("base64url");
 
-/** Comparación en tiempo constante de dos strings. */
-function safeEqual(a, b) {
-  const ha = createHash("sha256").update(String(a)).digest();
-  const hb = createHash("sha256").update(String(b)).digest();
-  return timingSafeEqual(ha, hb);
-}
-
-/** Valida credenciales y devuelve un token de sesión, o null. */
 export function login(username, password) {
-  if (safeEqual(username, USERNAME) && safeEqual(password, PASSWORD)) {
-    const payload = b64(JSON.stringify({ u: USERNAME, exp: Date.now() + TTL_MS }));
-    return `${payload}.${hmac(payload)}`;
-  }
-  return null;
+  const user = store.findUser(username);
+  if (!user || !verifyPassword(password, user.salt, user.hash)) return null;
+  const payload = b64(JSON.stringify({ uid: user.id, role: user.role, exp: Date.now() + TTL_MS }));
+  return { token: `${payload}.${hmac(payload)}`, user };
 }
 
-/** Verifica un token y devuelve el payload, o null. */
 export function verifyToken(token) {
   if (!token || typeof token !== "string") return null;
   const [payload, sig] = token.split(".");
   if (!payload || !sig) return null;
   const expected = hmac(payload);
-  if (!safeEqual(sig, expected)) return null;
+  if (sig.length !== expected.length || !timingSafeEqual(Buffer.from(sig), Buffer.from(expected))) return null;
   try {
     const obj = JSON.parse(unb64(payload));
     return obj.exp > Date.now() ? obj : null;
@@ -54,7 +73,7 @@ export function verifyToken(token) {
   }
 }
 
-/** Extrae una cookie por nombre de la cabecera Cookie. */
+// ── cookies ──────────────────────────────────────────────────────────────────
 export function readCookie(header, name = COOKIE) {
   if (!header) return null;
   for (const part of header.split(";")) {
@@ -63,31 +82,46 @@ export function readCookie(header, name = COOKIE) {
   }
   return null;
 }
-
 export function sessionCookie(token) {
-  const maxAge = Math.floor(TTL_MS / 1000);
   const secure = process.env.NODE_ENV === "production" ? " Secure;" : "";
-  return `${COOKIE}=${encodeURIComponent(token)}; HttpOnly; Path=/; SameSite=Lax; Max-Age=${maxAge};${secure}`;
+  return `${COOKIE}=${encodeURIComponent(token)}; HttpOnly; Path=/; SameSite=Lax; Max-Age=${Math.floor(TTL_MS / 1000)};${secure}`;
 }
-
 export function clearCookie() {
   return `${COOKIE}=; HttpOnly; Path=/; SameSite=Lax; Max-Age=0`;
 }
 
-/** Middleware Express: exige una sesión válida. */
+// ── middlewares ───────────────────────────────────────────────────────────────
+function currentUser(req) {
+  const session = verifyToken(readCookie(req.headers.cookie));
+  if (!session) return null;
+  const user = store.findUserById(session.uid);
+  return user ? { id: user.id, username: user.username, role: user.role } : null;
+}
+
 export function authMiddleware(req, res, next) {
-  const token = readCookie(req.headers.cookie);
-  const session = verifyToken(token);
-  if (!session) return res.status(401).json({ message: "No autenticado." });
-  req.user = { username: session.u };
+  const user = currentUser(req);
+  if (!user) return res.status(401).json({ message: "No autenticado." });
+  req.user = user;
   next();
 }
 
-/** Middleware Socket.IO: exige una sesión válida en el handshake. */
+/** Exige uno de los roles indicados (usar tras authMiddleware). */
+export function requireRole(...roles) {
+  return (req, res, next) => {
+    if (!req.user || !roles.includes(req.user.role)) {
+      return res.status(403).json({ message: "No tienes permiso para esta acción." });
+    }
+    next();
+  };
+}
+
 export function socketAuth(socket, next) {
-  const token = readCookie(socket.handshake.headers.cookie);
-  if (verifyToken(token)) return next();
+  if (verifyToken(readCookie(socket.handshake.headers.cookie))) return next();
   next(new Error("unauthorized"));
 }
 
-export const AUTH_USERNAME = USERNAME;
+/** Lectura para cualquiera; escritura (POST/PUT/DELETE) solo admin/editor. */
+export function mutationGuard(req, res, next) {
+  if (req.method === "GET") return next();
+  return requireRole("admin", "editor")(req, res, next);
+}

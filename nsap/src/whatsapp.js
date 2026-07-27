@@ -1,4 +1,4 @@
-import { rmSync, existsSync } from "node:fs";
+import { rmSync, existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import makeWASocket, {
   DisconnectReason,
@@ -155,10 +155,27 @@ class WhatsAppManager {
     return groups;
   }
 
-  /** Envía un mensaje de texto a un grupo. Lanza si no está conectado. */
-  async sendToGroup(groupId, text) {
+  /**
+   * Envía a un grupo: texto y, opcionalmente, un adjunto (imagen o documento).
+   * `attachment` = { path, mime, filename, kind } donde path es el nombre de
+   * archivo dentro de la carpeta de subidas.
+   */
+  async sendToGroup(groupId, text, attachment = null) {
     if (!this.isConnected() || !this.sock) throw new Error("WhatsApp no está conectado.");
-    const res = await this.sock.sendMessage(toGroupJid(groupId), { text });
+    const jid = toGroupJid(groupId);
+
+    if (attachment?.path) {
+      const uploadDir = resolve(process.env.NSAP_UPLOAD_DIR ?? "data/uploads");
+      const buffer = readFileSync(resolve(uploadDir, attachment.path));
+      const msg =
+        attachment.kind === "image"
+          ? { image: buffer, caption: text || undefined }
+          : { document: buffer, mimetype: attachment.mime, fileName: attachment.filename, caption: text || undefined };
+      const res = await this.sock.sendMessage(jid, msg);
+      return { id: res?.key?.id ?? "" };
+    }
+
+    const res = await this.sock.sendMessage(jid, { text });
     return { id: res?.key?.id ?? "" };
   }
 

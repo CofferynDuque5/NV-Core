@@ -47,8 +47,12 @@
             <li class="nav-item"><button class="nav-link" data-tab="grupos">Grupos</button></li>
             <li class="nav-item"><button class="nav-link" data-tab="campanas">Campañas</button></li>
             <li class="nav-item"><button class="nav-link" data-tab="plantillas">Plantillas</button></li>
+            <li class="nav-item"><button class="nav-link" data-tab="contenidos">Contenidos</button></li>
             <li class="nav-item"><button class="nav-link" data-tab="historial">Historial</button></li>
+            <li class="nav-item"><button class="nav-link" data-tab="conexiones">Conexiones</button></li>
+            <li class="nav-item" data-role="admin" hidden><button class="nav-link" data-tab="usuarios">Usuarios</button></li>
           </ul>
+          <span id="who" class="badge text-bg-secondary me-2"></span>
           <button id="btn-logout" class="btn btn-outline-secondary btn-sm" title="Salir"><i class="bi bi-box-arrow-right"></i></button>
         </div>
       </nav>
@@ -122,8 +126,16 @@
                         <span>Mensaje</span>
                         <select id="tpl-select" class="form-select form-select-sm w-auto"><option value="">Plantilla…</option></select>
                       </label>
-                      <textarea class="form-control form-control-sm" name="message" id="campaign-message" rows="4" required placeholder="Hola {{grupo}}, …"></textarea>
-                      <div class="form-text">Variables: <code>{{grupo}}</code> <code>{{fecha}}</code> <code>{{hora}}</code> + las tuyas por grupo.</div>
+                      <textarea class="form-control form-control-sm" name="message" id="campaign-message" rows="4" placeholder="Hola {{grupo}}, …"></textarea>
+                      <div class="d-flex justify-content-between align-items-center mt-1">
+                        <div class="form-text mb-0">Variables: <code>{{grupo}}</code> <code>{{fecha}}</code> <code>{{hora}}</code> + por grupo.</div>
+                        <button type="button" id="btn-ai" class="btn btn-outline-info btn-sm"><i class="bi bi-stars"></i> IA</button>
+                      </div>
+                    </div>
+                    <div>
+                      <label class="form-label small">Adjunto <span class="text-secondary">(opcional)</span></label>
+                      <input type="file" id="campaign-file" class="form-control form-control-sm" accept="image/*,application/pdf,.doc,.docx,.xlsx" />
+                      <div id="attach-info" class="form-text"></div>
                     </div>
                     <div>
                       <label class="form-label small d-flex justify-content-between">
@@ -141,9 +153,15 @@
                         <label class="btn btn-outline-light" for="sched-once">Una vez</label>
                         <input type="radio" class="btn-check" name="schedType" id="sched-daily" value="daily" />
                         <label class="btn btn-outline-light" for="sched-daily">Diaria</label>
+                        <input type="radio" class="btn-check" name="schedType" id="sched-weekly" value="weekly" />
+                        <label class="btn btn-outline-light" for="sched-weekly">Semanal</label>
                       </div>
                       <input type="datetime-local" class="form-control form-control-sm" name="onceAt" id="once-at" />
                       <input type="time" class="form-control form-control-sm d-none" name="dailyAt" id="daily-at" value="08:00" />
+                      <div id="weekly-box" class="d-none">
+                        <div id="week-days" class="btn-group btn-group-sm flex-wrap mb-2"></div>
+                        <input type="time" class="form-control form-control-sm" name="weeklyAt" id="weekly-at" value="08:00" />
+                      </div>
                     </div>
                     <button class="btn btn-success btn-sm" type="submit">Crear campaña</button>
                     <div id="campaign-error" class="text-danger small"></div>
@@ -191,7 +209,10 @@
         <section data-panel="historial" hidden>
           <div class="d-flex align-items-center justify-content-between mb-3">
             <h5 class="mb-0">Historial de envíos</h5>
-            <button id="btn-refresh-logs" class="btn btn-outline-light btn-sm"><i class="bi bi-arrow-repeat"></i> Actualizar</button>
+            <div class="d-flex gap-2">
+              <a id="btn-export-csv" href="/api/logs/export.csv" class="btn btn-outline-success btn-sm"><i class="bi bi-filetype-csv"></i> Exportar CSV</a>
+              <button id="btn-refresh-logs" class="btn btn-outline-light btn-sm"><i class="bi bi-arrow-repeat"></i> Actualizar</button>
+            </div>
           </div>
           <div class="card"><div class="card-body p-0">
             <table class="table table-sm table-hover mb-0 align-middle">
@@ -199,6 +220,109 @@
               <tbody id="logs-body"><tr><td colspan="5" class="text-secondary text-center py-4">Sin envíos todavía.</td></tr></tbody>
             </table>
           </div></div>
+        </section>
+        <!-- ── Contenidos ──────────────────────────────────────── -->
+        <section data-panel="contenidos" hidden>
+          <div class="row g-4">
+            <div class="col-lg-5">
+              <div class="card"><div class="card-header">Nuevo contenido</div>
+                <div class="card-body">
+                  <form id="content-form" class="vstack gap-3">
+                    <div>
+                      <label class="form-label small">Título</label>
+                      <input class="form-control form-control-sm" name="title" required placeholder="Oferta verano" />
+                    </div>
+                    <div>
+                      <label class="form-label small">Texto <span class="text-secondary">(o adjunta un archivo abajo)</span></label>
+                      <textarea class="form-control form-control-sm" name="body" rows="4" placeholder="Contenido reutilizable…"></textarea>
+                    </div>
+                    <div>
+                      <label class="form-label small">Archivo <span class="text-secondary">(opcional)</span></label>
+                      <input type="file" id="content-file" class="form-control form-control-sm" />
+                    </div>
+                    <div>
+                      <label class="form-label small">Etiquetas</label>
+                      <input class="form-control form-control-sm" name="tags" placeholder="promo, verano (separadas por coma)" />
+                    </div>
+                    <button class="btn btn-success btn-sm" type="submit">Guardar contenido</button>
+                    <div id="content-error" class="text-danger small"></div>
+                  </form>
+                </div>
+              </div>
+            </div>
+            <div class="col-lg-7">
+              <h5 class="mb-3">Biblioteca</h5>
+              <div id="content-list" class="row g-2"><div class="text-secondary small">Aún no hay contenidos.</div></div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ── Conexiones (integraciones) ──────────────────────── -->
+        <section data-panel="conexiones" hidden>
+          <h5 class="mb-3">Integraciones</h5>
+          <div id="integrations-cards" class="row g-3 mb-4"></div>
+
+          <div class="card mb-4">
+            <div class="card-header">n8n · enviar trabajo</div>
+            <div class="card-body">
+              <p class="small text-secondary">El backend envía trabajos a n8n (REST/Webhook) y recibe el resultado por callback. n8n solo ejecuta workflows.</p>
+              <div class="row g-2 align-items-end">
+                <div class="col-sm-4"><label class="form-label small">Workflow / path</label><input id="n8n-workflow" class="form-control form-control-sm" placeholder="mi-workflow" /></div>
+                <div class="col-sm-6"><label class="form-label small">Payload (JSON)</label><input id="n8n-payload" class="form-control form-control-sm" placeholder='{"hola":"mundo"}' /></div>
+                <div class="col-sm-2 d-grid"><button id="n8n-dispatch" class="btn btn-info btn-sm">Enviar</button></div>
+              </div>
+              <div id="n8n-jobs" class="mt-3 small"></div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-header">Conectar Facebook / Instagram</div>
+            <div class="card-body small">
+              <p>Publicar en FB/IG usa la <strong>Meta Graph API</strong>. Coloca estas variables en el entorno del servidor y reinicia:</p>
+              <ul>
+                <li><code>META_APP_ID</code> y <code>META_APP_SECRET</code> — de tu app en <a href="https://developers.facebook.com" target="_blank" rel="noopener">developers.facebook.com</a> → Mis Apps.</li>
+                <li><code>FB_PAGE_ID</code> — ID de tu Página de Facebook (Configuración de la página).</li>
+                <li><code>FB_PAGE_TOKEN</code> — token de acceso de la Página (Graph API Explorer → permisos <code>pages_manage_posts</code>, <code>pages_read_engagement</code>; conviértelo a token de larga duración).</li>
+                <li><code>IG_BUSINESS_ID</code> — ID de la cuenta de Instagram <em>Business</em> vinculada a la Página.</li>
+                <li><code>IG_ACCESS_TOKEN</code> — normalmente el mismo token de Página con permisos <code>instagram_basic</code>, <code>instagram_content_publish</code>.</li>
+              </ul>
+              <p class="text-secondary mb-0">Requisitos: cuenta de Instagram <em>Business/Creator</em> vinculada a una Página de Facebook, y la app de Meta con esos permisos aprobados. Cuando estén definidas, las tarjetas de arriba se pondrán en verde.</p>
+            </div>
+          </div>
+        </section>
+
+        <!-- ── Usuarios (admin) ────────────────────────────────── -->
+        <section data-panel="usuarios" hidden>
+          <div class="row g-4">
+            <div class="col-lg-4">
+              <div class="card"><div class="card-header">Nuevo usuario</div>
+                <div class="card-body">
+                  <form id="user-form" class="vstack gap-3">
+                    <div><label class="form-label small">Usuario</label><input class="form-control form-control-sm" name="username" required /></div>
+                    <div><label class="form-label small">Contraseña</label><input class="form-control form-control-sm" type="password" name="password" required minlength="6" /></div>
+                    <div><label class="form-label small">Rol</label>
+                      <select class="form-select form-select-sm" name="role">
+                        <option value="viewer">viewer (solo lectura)</option>
+                        <option value="editor">editor (opera)</option>
+                        <option value="admin">admin (todo)</option>
+                      </select>
+                    </div>
+                    <button class="btn btn-success btn-sm" type="submit">Crear usuario</button>
+                    <div id="user-error" class="text-danger small"></div>
+                  </form>
+                </div>
+              </div>
+            </div>
+            <div class="col-lg-8">
+              <h5 class="mb-3">Usuarios</h5>
+              <div class="card"><div class="card-body p-0">
+                <table class="table table-hover mb-0 align-middle">
+                  <thead><tr><th>Usuario</th><th>Rol</th><th>Creado</th><th></th></tr></thead>
+                  <tbody id="users-body"></tbody>
+                </table>
+              </div></div>
+            </div>
+          </div>
         </section>
       </main>
     </div>

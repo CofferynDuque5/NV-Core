@@ -1,15 +1,15 @@
 import { Router } from "express";
 
-import { AUTH_USERNAME, clearCookie, login, sessionCookie } from "../auth.js";
+import { clearCookie, login, sessionCookie } from "../auth.js";
 
 export const authRouter = Router();
 
 authRouter.post("/login", (req, res) => {
   const { username, password } = req.body ?? {};
-  const token = login(String(username ?? ""), String(password ?? ""));
-  if (!token) return res.status(401).json({ message: "Usuario o contraseña incorrectos." });
-  res.setHeader("Set-Cookie", sessionCookie(token));
-  res.json({ username: AUTH_USERNAME });
+  const result = login(String(username ?? ""), String(password ?? ""));
+  if (!result) return res.status(401).json({ message: "Usuario o contraseña incorrectos." });
+  res.setHeader("Set-Cookie", sessionCookie(result.token));
+  res.json({ username: result.user.username, role: result.user.role });
 });
 
 authRouter.post("/logout", (_req, res) => {

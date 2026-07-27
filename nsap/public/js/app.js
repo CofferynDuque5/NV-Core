@@ -29,11 +29,13 @@ const api = async (path, opts = {}) => {
 };
 
 let socket = null;
+let me = null;
+const canWrite = () => me && (me.role === "admin" || me.role === "editor");
 
 // ── login gate ─────────────────────────────────────────────────────────────
 async function boot() {
   try {
-    await api("/auth/me");
+    me = await api("/auth/me");
     startApp();
   } catch {
     showLogin();
@@ -54,6 +56,7 @@ $("#login-form").addEventListener("submit", async (e) => {
       method: "POST",
       body: JSON.stringify({ username: f.username.value, password: f.password.value }),
     });
+    me = await api("/auth/me");
     $("#login-overlay").classList.add("d-none");
     startApp();
   } catch (err) {
@@ -70,6 +73,8 @@ $("#btn-logout").addEventListener("click", async () => {
 // ── app (tras autenticar) ────────────────────────────────────────────────
 function startApp() {
   $("#app").classList.remove("d-none");
+  applyRole();
+  buildWeekDays();
   socket = io({ autoConnect: true });
   socket.on("wa:status", renderStatus);
   socket.on("wa:qr", ({ dataUrl }) => {
@@ -78,12 +83,22 @@ function startApp() {
   socket.on("wa:groups", renderGroups);
   socket.on("campaigns:changed", loadCampaigns);
   socket.on("logs:changed", loadLogs);
+  socket.on("n8n:changed", loadJobs);
   socket.on("campaigns:progress", ({ campaignId, done, total }) => {
     const el = document.querySelector(`[data-progress="${campaignId}"]`);
     if (el) el.textContent = `Enviando ${done}/${total}…`;
   });
 
   refreshAll();
+}
+
+function applyRole() {
+  $("#who").textContent = `${me.username} · ${me.role}`;
+  $$('[data-role="admin"]').forEach((el) => (el.hidden = me.role !== "admin"));
+  if (!canWrite()) {
+    // viewer: ocultar formularios y botones de acción
+    $$("form").forEach((f) => (f.style.display = f.id === "login-form" ? "" : "none"));
+  }
 }
 
 async function refreshAll() {
@@ -93,6 +108,10 @@ async function refreshAll() {
     loadCampaigns();
     loadTemplates();
     loadLogs();
+    loadContent();
+    loadIntegrations();
+    loadJobs();
+    if (me.role === "admin") loadUsers();
   } catch (e) {
     console.error(e);
   }
@@ -305,30 +324,76 @@ $("#pick-all").addEventListener("click", (e) => {
   const all = boxes.every((b) => b.checked);
   boxes.forEach((b) => (b.checked = !all));
 });
+const WEEK = ["Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb"];
+function buildWeekDays() {
+  const box = $("#week-days");
+  if (!box) return;
+  box.innerHTML = WEEK.map(
+    (d, i) => `<input type="checkbox" class="btn-check" id="wd-${i}" value="${i}" />
+      <label class="btn btn-outline-light" for="wd-${i}">${d}</label>`,
+  ).join("");
+}
 $$('input[name="schedType"]').forEach((r) =>
   r.addEventListener("change", () => {
-    const daily = $("#sched-daily").checked;
-    $("#once-at").classList.toggle("d-none", daily);
-    $("#daily-at").classList.toggle("d-none", !daily);
+    const t = document.querySelector('input[name="schedType"]:checked').value;
+    $("#once-at").classList.toggle("d-none", t !== "once");
+    $("#daily-at").classList.toggle("d-none", t !== "daily");
+    $("#weekly-box").classList.toggle("d-none", t !== "weekly");
   }),
 );
+
+// adjunto seleccionado
+$("#campaign-file").addEventListener("change", (e) => {
+  const f = e.target.files[0];
+  $("#attach-info").textContent = f ? `${f.name} (${Math.round(f.size / 1024)} KB)` : "";
+});
+
+// generar con IA
+$("#btn-ai").addEventListener("click", async () => {
+  const prompt = window.prompt("Describe la campaña (brief) para generar el mensaje con IA:");
+  if (!prompt) return;
+  const btn = $("#btn-ai");
+  btn.disabled = true;
+  try {
+    const { text } = await api("/ai/generate", { method: "POST", body: JSON.stringify({ prompt }) });
+    $("#campaign-message").value = text;
+  } catch (err) {
+    alert(err.message);
+  } finally {
+    btn.disabled = false;
+  }
+});
+
+async function uploadFile(inputEl) {
+  const file = inputEl.files[0];
+  if (!file) return null;
+  const fd = new FormData();
+  fd.append("file", file);
+  const res = await fetch("/api/media/upload", { method: "POST", body: fd });
+  if (!res.ok) throw new Error((await res.json().catch(() => ({}))).message || "Fallo al subir el archivo.");
+  return res.json();
+}
+
 $("#campaign-form").addEventListener("submit", async (e) => {
   e.preventDefault();
   $("#campaign-error").textContent = "";
   const f = e.currentTarget;
   const targetGroups = $$("#group-picker input:checked").map((b) => b.value);
-  const type = f.schedType.value;
-  const schedule =
-    type === "once"
-      ? { type: "once", at: f.onceAt.value ? new Date(f.onceAt.value).toISOString() : null }
-      : { type: "daily", at: f.dailyAt.value };
+  const type = document.querySelector('input[name="schedType"]:checked').value;
+  let schedule;
+  if (type === "once") schedule = { type: "once", at: f.onceAt.value ? new Date(f.onceAt.value).toISOString() : null };
+  else if (type === "daily") schedule = { type: "daily", at: f.dailyAt.value };
+  else schedule = { type: "weekly", at: f.weeklyAt.value, days: $$("#week-days input:checked").map((c) => Number(c.value)) };
   try {
+    const attachment = await uploadFile($("#campaign-file"));
     await api("/campaigns", {
       method: "POST",
-      body: JSON.stringify({ name: f.name.value, message: f.message.value, targetGroups, schedule }),
+      body: JSON.stringify({ name: f.name.value, message: f.message.value, targetGroups, schedule, attachment }),
     });
     f.reset();
     $("#daily-at").value = "08:00";
+    $("#weekly-at").value = "08:00";
+    $("#attach-info").textContent = "";
     renderGroupPicker();
     loadCampaigns();
   } catch (err) {
@@ -417,5 +482,146 @@ async function loadLogs() {
     .join("");
 }
 $("#btn-refresh-logs").addEventListener("click", loadLogs);
+
+// ── contenidos ─────────────────────────────────────────────────────────────
+async function loadContent() {
+  const items = await api("/content").catch(() => []);
+  const wrap = $("#content-list");
+  if (!wrap) return;
+  wrap.innerHTML = items.length
+    ? items
+        .map(
+          (c) => `<div class="col-md-6"><div class="card h-100"><div class="card-body py-2">
+            <div class="d-flex justify-content-between">
+              <div class="fw-semibold">${esc(c.title)} <span class="badge text-bg-secondary">${esc(c.type)}</span></div>
+              <button class="btn btn-outline-danger btn-sm" data-del-content="${esc(c.id)}"><i class="bi bi-trash"></i></button>
+            </div>
+            ${c.type === "media" && c.media ? `<a href="${esc(c.media.url)}" target="_blank" class="small">${esc(c.media.filename)}</a>` : `<div class="small text-secondary" style="white-space:pre-wrap">${esc(c.body)}</div>`}
+            ${c.tags?.length ? `<div class="mt-1">${c.tags.map((t) => `<span class="badge text-bg-dark">${esc(t)}</span>`).join(" ")}</div>` : ""}
+          </div></div></div>`,
+        )
+        .join("")
+    : '<div class="text-secondary small">Aún no hay contenidos.</div>';
+  wrap.querySelectorAll("[data-del-content]").forEach((b) =>
+    b.addEventListener("click", async () => {
+      if (!confirm("¿Eliminar el contenido?")) return;
+      await api(`/content/${b.dataset.delContent}`, { method: "DELETE" }).catch((e) => alert(e.message));
+      loadContent();
+    }),
+  );
+}
+$("#content-form")?.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  $("#content-error").textContent = "";
+  const f = e.currentTarget;
+  const tags = f.tags.value.split(",").map((s) => s.trim()).filter(Boolean);
+  try {
+    const media = await uploadFile($("#content-file"));
+    await api("/content", {
+      method: "POST",
+      body: JSON.stringify({
+        type: media ? "media" : "text",
+        title: f.title.value,
+        body: f.body.value,
+        media,
+        tags,
+      }),
+    });
+    f.reset();
+    loadContent();
+  } catch (err) {
+    $("#content-error").textContent = err.message;
+  }
+});
+
+// ── integraciones (estado) + n8n ────────────────────────────────────────────
+async function loadIntegrations() {
+  const wrap = $("#integrations-cards");
+  if (!wrap) return;
+  const s = await api("/integrations/status").catch(() => null);
+  if (!s) return;
+  const card = (name, ok, note) => `<div class="col-sm-6 col-lg-3"><div class="card h-100"><div class="card-body">
+      <div class="d-flex justify-content-between align-items-center">
+        <span class="fw-semibold">${name}</span>
+        <span class="badge ${ok ? "text-bg-success" : "text-bg-secondary"}">${ok ? "Conectado" : "Sin configurar"}</span>
+      </div>
+      <div class="small text-secondary mt-1">${note}</div>
+    </div></div></div>`;
+  wrap.innerHTML =
+    card("IA", s.ai.configured, s.ai.provider ? `Proveedor: ${s.ai.provider}` : "Define una API key de IA") +
+    card("n8n", s.n8n.configured, s.n8n.configured ? "Listo para enviar workflows" : "Define N8N_WEBHOOK_URL o N8N_BASE_URL") +
+    card("Facebook", s.facebook.configured, s.facebook.needs.join(", ")) +
+    card("Instagram", s.instagram.configured, s.instagram.needs.join(", "));
+}
+$("#n8n-dispatch")?.addEventListener("click", async () => {
+  let payload = {};
+  const raw = $("#n8n-payload").value.trim();
+  if (raw) {
+    try {
+      payload = JSON.parse(raw);
+    } catch {
+      return alert("El payload debe ser JSON válido.");
+    }
+  }
+  try {
+    await api("/n8n/dispatch", { method: "POST", body: JSON.stringify({ workflow: $("#n8n-workflow").value.trim(), payload }) });
+    loadJobs();
+  } catch (err) {
+    alert(err.message);
+  }
+});
+async function loadJobs() {
+  const box = $("#n8n-jobs");
+  if (!box) return;
+  const jobs = await api("/n8n/jobs").catch(() => []);
+  box.innerHTML = jobs.length
+    ? `<table class="table table-sm mb-0"><thead><tr><th>Job</th><th>Workflow</th><th>Estado</th><th>Actualizado</th></tr></thead><tbody>${jobs
+        .map(
+          (j) => `<tr><td><code>${esc(j.id.slice(0, 8))}</code></td><td>${esc(j.workflow ?? "—")}</td>
+            <td><span class="badge ${j.status === "done" ? "text-bg-success" : j.status === "error" ? "text-bg-danger" : "text-bg-warning"}">${esc(j.status)}</span></td>
+            <td class="text-secondary">${rel(j.updatedAt)}</td></tr>`,
+        )
+        .join("")}</tbody></table>`
+    : '<div class="text-secondary">Sin trabajos enviados.</div>';
+}
+
+// ── usuarios (admin) ─────────────────────────────────────────────────────────
+async function loadUsers() {
+  const body = $("#users-body");
+  if (!body) return;
+  const users = await api("/users").catch(() => []);
+  body.innerHTML = users
+    .map(
+      (u) => `<tr>
+        <td>${esc(u.username)}</td>
+        <td><span class="badge text-bg-info">${esc(u.role)}</span></td>
+        <td class="small text-secondary">${new Date(u.createdAt).toLocaleDateString()}</td>
+        <td class="text-end">${u.id === me.id ? '<span class="small text-secondary">tú</span>' : `<button class="btn btn-outline-danger btn-sm" data-del-user="${esc(u.id)}"><i class="bi bi-trash"></i></button>`}</td>
+      </tr>`,
+    )
+    .join("");
+  body.querySelectorAll("[data-del-user]").forEach((b) =>
+    b.addEventListener("click", async () => {
+      if (!confirm("¿Eliminar el usuario?")) return;
+      await api(`/users/${b.dataset.delUser}`, { method: "DELETE" }).catch((e) => alert(e.message));
+      loadUsers();
+    }),
+  );
+}
+$("#user-form")?.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  $("#user-error").textContent = "";
+  const f = e.currentTarget;
+  try {
+    await api("/users", {
+      method: "POST",
+      body: JSON.stringify({ username: f.username.value, password: f.password.value, role: f.role.value }),
+    });
+    f.reset();
+    loadUsers();
+  } catch (err) {
+    $("#user-error").textContent = err.message;
+  }
+});
 
 boot();

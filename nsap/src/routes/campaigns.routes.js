@@ -21,15 +21,25 @@ function parseSchedule(schedule) {
     }
     return { type: "daily", at: s.at };
   }
-  throw new Error("schedule.type debe ser 'once' o 'daily'.");
+  if (s.type === "weekly") {
+    if (!/^\d{1,2}:\d{2}$/.test(String(s.at ?? ""))) {
+      throw new Error("Programación 'weekly' requiere hora en formato HH:MM.");
+    }
+    const days = (Array.isArray(s.days) ? s.days : []).map(Number).filter((d) => d >= 0 && d <= 6);
+    if (!days.length) throw new Error("Programación 'weekly' requiere al menos un día.");
+    return { type: "weekly", at: s.at, days: [...new Set(days)].sort() };
+  }
+  throw new Error("schedule.type debe ser 'once', 'daily' o 'weekly'.");
 }
 
 campaignsRouter.get("/", (_req, res) => res.json(store.getCampaigns()));
 
 campaignsRouter.post("/", (req, res) => {
-  const { name, message, targetGroups, schedule } = req.body ?? {};
+  const { name, message, targetGroups, schedule, attachment } = req.body ?? {};
   if (!name || typeof name !== "string") return res.status(400).json({ message: "Falta el nombre." });
-  if (!message || typeof message !== "string") return res.status(400).json({ message: "Falta el mensaje." });
+  if ((!message || typeof message !== "string") && !attachment) {
+    return res.status(400).json({ message: "Falta el mensaje o un adjunto." });
+  }
   if (!Array.isArray(targetGroups) || targetGroups.length === 0) {
     return res.status(400).json({ message: "Selecciona al menos un grupo objetivo." });
   }
@@ -43,7 +53,8 @@ campaignsRouter.post("/", (req, res) => {
   const campaign = {
     id: nanoid(),
     name: name.trim(),
-    message,
+    message: message ?? "",
+    attachment: attachment ?? null, // { path, mime, filename, kind: 'image'|'document' }
     targetGroups,
     schedule: parsed,
     status: "scheduled",
