@@ -5,11 +5,11 @@
   "type": "module",
   "description": "NSAP — automatización de WhatsApp (Baileys) con panel web. Node.js + Express + Bootstrap.",
   "engines": {
-    "node": ">=20"
+    "node": ">=20.12"
   },
   "scripts": {
-    "dev": "node --watch server.js",
-    "start": "node server.js",
+    "dev": "node --env-file-if-exists=.env --watch server.js",
+    "start": "node --env-file-if-exists=.env server.js",
     "test": "node --test"
   },
   "dependencies": {

@@ -76,13 +76,30 @@ Define **una** clave: `OPENAI_API_KEY`, `ANTHROPIC_API_KEY` o `GEMINI_API_KEY`
 
 ## Uso
 
+### Rápido (con script)
+```bash
+cd nsap
+cp .env.example .env   # opcional: edítalo para FB/IG/IA/n8n
+./start.sh             # instala deps si faltan, carga .env y arranca en --watch
+```
+Otros modos: `./start.sh prod` (sin watch) · `./start.sh test`.
+
+### Manual (npm)
 ```bash
 cd nsap
 npm install
-npm run dev        # o: npm start
+npm run dev            # o: npm start
 ```
+`npm run dev`/`npm start` cargan automáticamente `.env` si existe
+(`--env-file-if-exists`; requiere Node 20.12+). También puedes pasar las
+variables a mano: `PORT=4000 FB_PAGE_ID=... npm run dev`.
 
 Abre **http://localhost:4000**.
+
+> **Configuración**: copia `.env.example` a `.env` y rellena solo lo que
+> necesites. Todo es opcional — sin claves la app arranca igual y cada función
+> que requiera una integración avisa en vez de romperse. `.env` está en
+> `.gitignore` (nunca se sube).
 
 ### Primera vez
 1. Pestaña **Conexión** → **Conectar**.
