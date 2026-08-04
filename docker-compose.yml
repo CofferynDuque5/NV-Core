@@ -42,8 +42,25 @@ services:
       JWT_SECRET: ${JWT_SECRET:-change-me-in-production-please-32chars}
       DATABASE_URL: postgresql://${POSTGRES_USER:-nvcore}:${POSTGRES_PASSWORD:-nvcore}@db:5432/${POSTGRES_DB:-nvcore}?schema=public
       REDIS_URL: redis://redis:6379
+      # Admin inicial: se crea al arrancar y queda como Owner de todo.
+      NV_ADMIN_EMAIL: ${NV_ADMIN_EMAIL:-cofferynduque5@gmail.com}
+      NV_ADMIN_PASSWORD: ${NV_ADMIN_PASSWORD:-valeryn2026}
+      NV_ADMIN_NAME: ${NV_ADMIN_NAME:-Cofferyn}
+      # Claves opcionales (IA, Meta, Cloudinary…) se toman del .env de la raíz.
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      FB_PAGE_ID: ${FB_PAGE_ID:-}
+      FB_PAGE_TOKEN: ${FB_PAGE_TOKEN:-}
+      IG_BUSINESS_ID: ${IG_BUSINESS_ID:-}
+      IG_ACCESS_TOKEN: ${IG_ACCESS_TOKEN:-}
+      CLOUDINARY_URL: ${CLOUDINARY_URL:-}
+      APP_URL: ${APP_URL:-http://localhost:3000}
     ports:
       - "4000:4000"
+    volumes:
+      # Persiste la sesión de WhatsApp (Baileys) entre reinicios.
+      - nvcore-wa:/app/apps/api/data
     depends_on:
       db:
         condition: service_healthy
@@ -64,3 +81,4 @@ services:
 
 volumes:
   nvcore-db:
+  nvcore-wa:

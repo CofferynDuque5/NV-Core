@@ -8,6 +8,7 @@ import { AuthController } from "./auth.controller";
 import { MembersController } from "./members.controller";
 import { AuthService } from "./auth.service";
 import { AuthStore } from "./auth.store";
+import { AdminSeedService } from "./admin-seed.service";
 import { JwtAuthGuard } from "./guards/jwt-auth.guard";
 import { RolesGuard } from "./guards/roles.guard";
 
@@ -39,6 +40,7 @@ import { RolesGuard } from "./guards/roles.guard";
   providers: [
     AuthStore,
     AuthService,
+    AdminSeedService,
     RolesGuard,
     { provide: APP_GUARD, useClass: JwtAuthGuard },
   ],
