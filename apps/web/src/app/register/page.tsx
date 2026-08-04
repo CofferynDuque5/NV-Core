@@ -7,12 +7,12 @@ import { DEFAULT_WORKSPACE_SLUG, WORKSPACES } from "@nv/domain";
 import { Loader2 } from "lucide-react";
 
 import { useAuthStore } from "@/stores/auth-store";
-import { AuthError } from "@/services/auth-client";
 import { isBackendConfigured } from "@/lib/env";
 import { AuthShell } from "@/components/auth/auth-shell";
 import { BackendNotice } from "@/components/auth/backend-notice";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { PasswordInput } from "@/components/ui/password-input";
 import { Label } from "@/components/ui/label";
 
 export default function RegisterPage() {
@@ -44,7 +44,7 @@ export default function RegisterPage() {
       const target = useAuthStore.getState().memberships[0]?.workspaceSlug ?? DEFAULT_WORKSPACE_SLUG;
       router.replace(`/w/${target}/dashboard`);
     } catch (err) {
-      setError(err instanceof AuthError ? err.message : "No se pudo crear la cuenta.");
+      setError(err instanceof Error && err.message ? err.message : "No se pudo crear la cuenta.");
       setSubmitting(false);
     }
   }
@@ -88,9 +88,8 @@ export default function RegisterPage() {
         </div>
         <div className="space-y-1.5">
           <Label htmlFor="password">Contraseña</Label>
-          <Input
+          <PasswordInput
             id="password"
-            type="password"
             autoComplete="new-password"
             required
             minLength={8}

@@ -7,12 +7,12 @@ import { DEFAULT_WORKSPACE_SLUG } from "@nv/domain";
 import { Loader2 } from "lucide-react";
 
 import { useAuthStore } from "@/stores/auth-store";
-import { AuthError } from "@/services/auth-client";
 import { isBackendConfigured } from "@/lib/env";
 import { AuthShell } from "@/components/auth/auth-shell";
 import { BackendNotice } from "@/components/auth/backend-notice";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { PasswordInput } from "@/components/ui/password-input";
 import { Label } from "@/components/ui/label";
 
 export default function LoginPage() {
@@ -37,7 +37,7 @@ export default function LoginPage() {
       const target = useAuthStore.getState().memberships[0]?.workspaceSlug ?? DEFAULT_WORKSPACE_SLUG;
       router.replace(`/w/${target}/dashboard`);
     } catch (err) {
-      setError(err instanceof AuthError ? err.message : "No se pudo iniciar sesión.");
+      setError(err instanceof Error && err.message ? err.message : "No se pudo iniciar sesión.");
       setSubmitting(false);
     }
   }
@@ -76,9 +76,8 @@ export default function LoginPage() {
               ¿Olvidaste tu contraseña?
             </Link>
           </div>
-          <Input
+          <PasswordInput
             id="password"
-            type="password"
             autoComplete="current-password"
             required
             value={password}
