@@ -145,6 +145,13 @@ export const emptyAdapters: Services = {
     generateVariants: () => delay([]),
     suggestHashtags: () => delay([]),
     usage: () => delay({ period: "", calls: 0, tokens: 0, quota: null }),
+    improve: () => notAvailable(),
+    recommendations: () =>
+      delay({
+        recommendations: [],
+        times: { sampleSize: 0, topDay: null, topHour: null, byDay: [] },
+        aiConfigured: false,
+      }),
   },
   messaging: {
     send: () => notAvailable(),

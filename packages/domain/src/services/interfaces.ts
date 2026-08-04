@@ -321,10 +321,29 @@ export interface AiUsage {
   quota: number | null;
 }
 
+export interface AiRecommendation {
+  titulo: string;
+  detalle: string;
+  categoria: string;
+}
+export interface BestTimes {
+  sampleSize: number;
+  topDay: string | null;
+  topHour: string | null;
+  byDay: { label: string; count: number }[];
+}
+export interface AiRecommendationsResult {
+  recommendations: AiRecommendation[];
+  times: BestTimes;
+  aiConfigured: boolean;
+}
+
 export interface AiService {
   generateVariants(workspaceId: string, input: GenerateVariantsInput): Promise<AiVariant[]>;
   suggestHashtags(workspaceId: string, input: { prompt: string }): Promise<string[]>;
   usage(workspaceId: string): Promise<AiUsage>;
+  improve(workspaceId: string, input: { message: string }): Promise<{ text: string }>;
+  recommendations(workspaceId: string): Promise<AiRecommendationsResult>;
 }
 
 export interface SendMessageExternalInput {

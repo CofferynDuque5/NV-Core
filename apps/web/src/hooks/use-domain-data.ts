@@ -170,6 +170,16 @@ export function useAiUsage() {
   return useQuery({ queryKey: [ws.id, "ai", "usage"], queryFn: () => svc.ai.usage(ws.id) });
 }
 
+export function useAiRecommendations(enabled = false) {
+  const svc = useServices();
+  const ws = useWorkspace();
+  return useQuery({
+    queryKey: [ws.id, "ai", "recommendations"],
+    queryFn: () => svc.ai.recommendations(ws.id),
+    enabled,
+  });
+}
+
 export function useGoogleStatus() {
   const svc = useServices();
   const ws = useWorkspace();

@@ -576,6 +576,19 @@ export function useGenerateVariants() {
   });
 }
 
+export function useImproveMessage() {
+  const svc = useServices();
+  const ws = useWorkspace();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (message: string) => svc.ai.improve(ws.id, { message }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: [ws.id, "ai", "usage"] });
+    },
+    onError: (err) => toast.error(errText(err)),
+  });
+}
+
 // ── Team / members ────────────────────────────────────────────────────────────
 function invalidateTeam(qc: ReturnType<typeof useQueryClient>, wsId: string) {
   void qc.invalidateQueries({ queryKey: [wsId, "team"] });

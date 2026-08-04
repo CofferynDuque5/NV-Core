@@ -12,7 +12,7 @@ import {
 } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { ApiBearerAuth, ApiTags } from "@nestjs/swagger";
-import type { AiVariant } from "@nv/domain";
+import type { AiRecommendation, AiVariant, BestTimes } from "@nv/domain";
 import { IsString, MinLength } from "class-validator";
 
 import type { AppConfig } from "../../config/configuration";
@@ -32,6 +32,10 @@ export class GenerateVariantsDto {
 
 export class SuggestHashtagsDto {
   @IsString() @MinLength(3) prompt!: string;
+}
+
+export class ImproveMessageDto {
+  @IsString() @MinLength(2) message!: string;
 }
 
 /** Extracts the first JSON array/object from a model response (tolerates prose/fences). */
@@ -173,6 +177,105 @@ export class AiService {
       .map((h) => (h.startsWith("#") ? h : `#${h}`))
       .slice(0, 12);
   }
+
+  /** Mejora un mensaje manteniendo sus variables {{...}}. */
+  async improve(workspaceId: string, dto: ImproveMessageDto): Promise<{ text: string }> {
+    const provider = this.require();
+    await this.assertWithinQuota(workspaceId);
+    const messages: ChatMessage[] = [
+      {
+        role: "system",
+        content:
+          "Eres copywriter experto de WhatsApp marketing. Mejora el mensaje para que sea más " +
+          "claro, persuasivo y con buen gancho, SIN inventar datos y MANTENIENDO intactas las " +
+          "variables {{...}}. Devuelve solo el mensaje final.",
+      },
+      { role: "user", content: dto.message },
+    ];
+    const raw = await provider.complete(messages, { temperature: 0.7 });
+    await this.record(workspaceId, estimateTokens(dto.message, raw));
+    return { text: raw.trim() };
+  }
+
+  /** Mejores horarios de envío (heurístico desde el historial; no usa IA). */
+  async bestSendTimes(workspaceId: string): Promise<BestTimes> {
+    const DAYS = ["Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb"];
+    const byDay = Array(7).fill(0);
+    const byHour = Array(24).fill(0);
+    let sampleSize = 0;
+    if (this.prisma.enabled) {
+      const rows = await this.prisma.sendLog.findMany({
+        where: { workspaceSlug: workspaceId, ok: true },
+        select: { createdAt: true },
+        take: 1000,
+      });
+      for (const r of rows) {
+        const d = r.createdAt;
+        byDay[d.getDay()]++;
+        byHour[d.getHours()]++;
+        sampleSize++;
+      }
+    }
+    const topDay = sampleSize ? DAYS[byDay.indexOf(Math.max(...byDay))] : null;
+    const topHour = sampleSize ? `${String(byHour.indexOf(Math.max(...byHour))).padStart(2, "0")}:00` : null;
+    return { sampleSize, topDay, topHour, byDay: DAYS.map((label, i) => ({ label, count: byDay[i] })) };
+  }
+
+  /**
+   * Recomendaciones accionables desde los grupos, historial y plantillas.
+   * Degrada limpio: sin proveedor de IA devuelve solo los horarios.
+   */
+  async recommendations(workspaceId: string): Promise<{
+    recommendations: AiRecommendation[];
+    times: BestTimes;
+    aiConfigured: boolean;
+  }> {
+    const times = await this.bestSendTimes(workspaceId);
+    if (!this.provider) return { recommendations: [], times, aiConfigured: false };
+    await this.assertWithinQuota(workspaceId);
+
+    const [groups, logs, templates] = this.prisma.enabled
+      ? await Promise.all([
+          this.prisma.group.findMany({ where: { workspaceSlug: workspaceId }, take: 40 }),
+          this.prisma.sendLog.findMany({
+            where: { workspaceSlug: workspaceId },
+            orderBy: { createdAt: "desc" },
+            take: 40,
+          }),
+          this.prisma.template.findMany({ where: { workspaceSlug: workspaceId }, take: 40 }),
+        ])
+      : [[], [], []];
+
+    const context = {
+      grupos: groups.map((g) => ({ nombre: g.name, miembros: g.members })),
+      envios_recientes: logs.map((l) => ({ campaña: l.campaignName, destino: l.groupName, ok: l.ok })),
+      plantillas: templates.map((t) => t.name),
+    };
+    const messages: ChatMessage[] = [
+      {
+        role: "system",
+        content:
+          "Eres estratega de marketing por WhatsApp y redes. Analiza el contexto y da " +
+          "recomendaciones accionables para mejorar alcance, engagement y conversión. " +
+          "Responde EXCLUSIVAMENTE con un array JSON (máx 6) de objetos " +
+          '{"titulo","detalle","categoria"} donde categoria es uno de ' +
+          '"campaña"|"mensaje"|"segmentacion"|"horario"|"otro". En español, concreto.',
+      },
+      { role: "user", content: `Contexto (JSON):\n${JSON.stringify(context)}` },
+    ];
+    const raw = await this.provider.complete(messages, { temperature: 0.8 });
+    await this.record(workspaceId, estimateTokens(JSON.stringify(context), raw));
+    const parsed = extractJson<AiRecommendation[]>(raw) ?? [];
+    const recommendations = (Array.isArray(parsed) ? parsed : [])
+      .filter((r) => r && (r.titulo || r.detalle))
+      .slice(0, 6)
+      .map((r) => ({
+        titulo: String(r.titulo ?? "Sugerencia"),
+        detalle: String(r.detalle ?? ""),
+        categoria: String(r.categoria ?? "otro"),
+      }));
+    return { recommendations, times, aiConfigured: true };
+  }
 }
 
 @ApiTags("ai")
@@ -197,6 +300,18 @@ export class AiController {
   @RequiresActivePlan()
   async hashtags(@WorkspaceId() workspaceId: string, @Body() dto: SuggestHashtagsDto) {
     return { hashtags: await this.service.suggestHashtags(workspaceId, dto) };
+  }
+
+  @Post("improve")
+  @RequiresActivePlan()
+  improve(@WorkspaceId() workspaceId: string, @Body() dto: ImproveMessageDto) {
+    return this.service.improve(workspaceId, dto);
+  }
+
+  /** Recomendaciones + mejores horarios. No exige plan (degrada sin IA). */
+  @Get("recommendations")
+  recommendations(@WorkspaceId() workspaceId: string) {
+    return this.service.recommendations(workspaceId);
   }
 }
 

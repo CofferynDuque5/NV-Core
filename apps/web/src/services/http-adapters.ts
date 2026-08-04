@@ -1,4 +1,5 @@
 import type {
+  AiRecommendationsResult,
   AiUsage,
   AnalyticsSnapshot,
   Automation,
@@ -225,6 +226,8 @@ export function createHttpAdapters(opts: HttpAdapterOptions): Services {
       suggestHashtags: (id, input) =>
         post<{ hashtags: string[] }>(`${ws(id)}/ai/hashtags`, input).then((r) => r.hashtags),
       usage: (id) => get<AiUsage>(`${ws(id)}/ai/usage`),
+      improve: (id, input) => post<{ text: string }>(`${ws(id)}/ai/improve`, input),
+      recommendations: (id) => get<AiRecommendationsResult>(`${ws(id)}/ai/recommendations`),
     },
     messaging: {
       send: (id, input) => post<{ id: string }>(`${ws(id)}/messaging/send`, input),
