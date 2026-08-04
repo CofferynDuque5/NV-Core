@@ -47,6 +47,15 @@ function showLogin() {
   $("#app").classList.add("d-none");
 }
 
+// Ver / ocultar contraseña en el login.
+$("#toggle-password")?.addEventListener("click", () => {
+  const input = $("#login-password");
+  const icon = $("#toggle-password").querySelector("i");
+  const show = input.type === "password";
+  input.type = show ? "text" : "password";
+  icon.className = show ? "bi bi-eye-slash" : "bi bi-eye";
+});
+
 $("#login-form").addEventListener("submit", async (e) => {
   e.preventDefault();
   $("#login-error").textContent = "";
