@@ -49,6 +49,7 @@
             <li class="nav-item"><button class="nav-link" data-tab="plantillas">Plantillas</button></li>
             <li class="nav-item"><button class="nav-link" data-tab="contenidos">Contenidos</button></li>
             <li class="nav-item"><button class="nav-link" data-tab="historial">Historial</button></li>
+            <li class="nav-item"><button class="nav-link" data-tab="recomendaciones"><i class="bi bi-stars"></i> IA</button></li>
             <li class="nav-item"><button class="nav-link" data-tab="conexiones">Conexiones</button></li>
             <li class="nav-item" data-role="admin" hidden><button class="nav-link" data-tab="usuarios">Usuarios</button></li>
           </ul>
@@ -271,6 +272,40 @@
             <div class="col-lg-7">
               <h5 class="mb-3">Biblioteca</h5>
               <div id="content-list" class="row g-2"><div class="text-secondary small">Aún no hay contenidos.</div></div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ── Recomendaciones IA ──────────────────────────────── -->
+        <section data-panel="recomendaciones" hidden>
+          <div class="d-flex align-items-center justify-content-between mb-3">
+            <div>
+              <h5 class="mb-0"><i class="bi bi-stars text-info"></i> Recomendaciones IA</h5>
+              <div class="small text-secondary">Sugerencias basadas en tus grupos, historial y plantillas.</div>
+            </div>
+            <button id="btn-recs" class="btn btn-info btn-sm"><i class="bi bi-magic"></i> Generar recomendaciones</button>
+          </div>
+
+          <div class="row g-4">
+            <div class="col-lg-8">
+              <div id="recs-status" class="small text-secondary mb-2">Pulsa «Generar» para obtener ideas accionables.</div>
+              <div id="recs-list" class="vstack gap-2"></div>
+            </div>
+            <div class="col-lg-4">
+              <div class="card">
+                <div class="card-header"><i class="bi bi-clock-history"></i> Mejores horarios</div>
+                <div class="card-body">
+                  <div id="best-times" class="small text-secondary">Se calcula con tu historial de envíos.</div>
+                </div>
+              </div>
+              <div class="card mt-3">
+                <div class="card-header"><i class="bi bi-pencil-square"></i> Mejorar un mensaje</div>
+                <div class="card-body">
+                  <textarea id="improve-input" class="form-control form-control-sm mb-2" rows="4" placeholder="Pega aquí un mensaje y la IA lo mejora (mantiene las {{variables}})."></textarea>
+                  <button id="btn-improve" class="btn btn-outline-info btn-sm w-100"><i class="bi bi-stars"></i> Mejorar</button>
+                  <div id="improve-out" class="small mt-2" style="white-space:pre-wrap"></div>
+                </div>
+              </div>
             </div>
           </div>
         </section>

@@ -765,4 +765,86 @@ $("#user-form")?.addEventListener("submit", async (e) => {
   }
 });
 
+// ── recomendaciones IA ───────────────────────────────────────────────────────
+const REC_BADGE = {
+  campaña: "text-bg-primary",
+  mensaje: "text-bg-info",
+  segmentacion: "text-bg-warning",
+  horario: "text-bg-success",
+  otro: "text-bg-secondary",
+};
+function renderBestTimes(times) {
+  const box = $("#best-times");
+  if (!box) return;
+  if (!times || !times.sampleSize) {
+    box.innerHTML = "Aún no hay suficientes envíos para calcular horarios. Envía algunas campañas primero.";
+    return;
+  }
+  const max = Math.max(...times.byDay.map((d) => d.count), 1);
+  const bars = times.byDay
+    .map(
+      (d) =>
+        `<div class="d-flex align-items-center gap-2 mb-1"><span style="width:32px" class="text-secondary">${d.label}</span>
+         <div class="flex-grow-1 bg-body-secondary rounded" style="height:8px"><div class="bg-info rounded" style="height:8px;width:${Math.round((d.count / max) * 100)}%"></div></div>
+         <span class="text-secondary" style="width:24px;text-align:right">${d.count}</span></div>`,
+    )
+    .join("");
+  box.innerHTML =
+    `<div class="mb-2">Mejor día: <span class="badge text-bg-success">${esc(times.topDay ?? "—")}</span> · ` +
+    `Mejor hora: <span class="badge text-bg-success">${esc(times.topHour ?? "—")}</span></div>${bars}` +
+    `<div class="text-secondary mt-2">Basado en ${times.sampleSize} envíos exitosos.</div>`;
+}
+$("#btn-recs")?.addEventListener("click", async () => {
+  const btn = $("#btn-recs");
+  const list = $("#recs-list");
+  const status = $("#recs-status");
+  btn.disabled = true;
+  status.textContent = "Analizando tus grupos e historial…";
+  list.innerHTML = "";
+  try {
+    const data = await api("/ai/recommendations", { method: "POST", body: JSON.stringify({}) });
+    renderBestTimes(data.times);
+    if (!data.aiConfigured) {
+      status.innerHTML =
+        '<span class="text-warning">La IA no está configurada (define OPENAI/ANTHROPIC/GEMINI en el .env). Los horarios de arriba sí funcionan.</span>';
+    } else if (!data.recommendations.length) {
+      status.textContent = "Sin recomendaciones por ahora. Añade grupos y envía campañas para más contexto.";
+    } else {
+      status.textContent = "";
+      list.innerHTML = data.recommendations
+        .map(
+          (r) => `<div class="card"><div class="card-body py-2">
+            <div class="d-flex justify-content-between align-items-start gap-2">
+              <div class="fw-semibold">${esc(r.titulo ?? "Sugerencia")}</div>
+              <span class="badge ${REC_BADGE[r.categoria] ?? "text-bg-secondary"}">${esc(r.categoria ?? "otro")}</span>
+            </div>
+            <div class="small text-secondary" style="white-space:pre-wrap">${esc(r.detalle ?? "")}</div>
+          </div></div>`,
+        )
+        .join("");
+    }
+  } catch (err) {
+    status.innerHTML = `<span class="text-danger">${esc(err.message)}</span>`;
+  } finally {
+    btn.disabled = false;
+  }
+});
+$("#btn-improve")?.addEventListener("click", async () => {
+  const input = $("#improve-input").value.trim();
+  const out = $("#improve-out");
+  if (!input) return (out.innerHTML = '<span class="text-danger">Escribe un mensaje.</span>');
+  const btn = $("#btn-improve");
+  btn.disabled = true;
+  out.textContent = "Mejorando…";
+  try {
+    const { text } = await api("/ai/improve", { method: "POST", body: JSON.stringify({ message: input }) });
+    out.innerHTML = `<div class="border rounded p-2 bg-body-tertiary">${esc(text)}</div><button id="use-improved" class="btn btn-outline-success btn-sm mt-2"><i class="bi bi-clipboard"></i> Copiar</button>`;
+    $("#use-improved").addEventListener("click", () => navigator.clipboard?.writeText(text));
+  } catch (err) {
+    out.innerHTML = `<span class="text-danger">${esc(err.message)}</span>`;
+  } finally {
+    btn.disabled = false;
+  }
+});
+
 boot();

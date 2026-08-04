@@ -18,6 +18,9 @@ Conexión a WhatsApp con **Baileys**, QR mostrado en el panel en tiempo real
 - **Adjuntos** (imagen/archivo) en las campañas.
 - **Gestor de contenidos** (biblioteca de texto/media) y **generación con IA**
   (OpenAI/Anthropic/Gemini).
+- **Recomendaciones IA** (pestaña «IA»): sugerencias accionables según tus grupos,
+  historial y plantillas; **mejorar un mensaje** con IA; y **mejores horarios** de
+  envío calculados desde tu historial (esto último funciona sin clave de IA).
 - **n8n** vía REST/Webhooks: el backend envía trabajos y recibe el resultado por
   callback (n8n solo ejecuta workflows).
 - **Facebook / Instagram**: panel de estado + guía de qué configurar (Meta Graph API).
