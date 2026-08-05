@@ -35,8 +35,30 @@ adapters intercambiables con una **interfaz común** (`connect`, `disconnect`,
 
 El **adapter activo se elige por workspace** en el módulo **Conexiones** y se
 persiste (`ProviderSelection`). Cambiar de proveedor no toca el resto del
-código. **n8n** actúa solo como motor de automatizaciones (el backend invoca
-workflows por REST y recibe el resultado para actualizar PostgreSQL).
+código. **ProviderManager es el único punto de entrada a cualquier proveedor
+externo**: ni CampaignRunner, ni el envío de mensajería, ni la publicación
+social tocan una API externa directamente — todo pasa por él.
+
+### Infraestructura núcleo (desacoplamiento y asíncrono)
+
+- **Event Bus interno** (`CoreModule`): los módulos se comunican publicando
+  **eventos de dominio** (`message.received`, `campaign.completed`,
+  `provider.published`, `job.failed`…) en vez de importarse entre sí.
+- **Queue Manager** (BullMQ + Redis, con fallback en-línea sin Redis):
+  procesamiento asíncrono de trabajos.
+- **Job Manager**: administra **estados** (queued → active → completed | failed),
+  **reintentos** con backoff y **fallos**, persistidos en Postgres (`Job`);
+  incluye API para inspeccionar y reintentar jobs.
+
+### n8n como orquestador principal
+
+La dirección está **invertida**: el backend ya no controla n8n. En su lugar:
+
+- El **Event Bus reenvía los eventos de dominio a n8n** (`N8N_EVENTS_WEBHOOK`).
+- n8n decide y **llama de vuelta al backend** en `POST /api/automation/actions/*`
+  (`send-message`, `publish`, `run-campaign`), autenticado con
+  `N8N_INBOUND_SECRET`. Cada acción se despacha como **Job** y sale por el
+  **ProviderManager**, que actualiza PostgreSQL con el resultado.
 
 ### Los 14 workspaces (empresas)
 Un Ciclo Creativo, Un Código Creativo, El Pulso de Naturaleza, Design Your Core,
