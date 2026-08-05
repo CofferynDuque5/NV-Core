@@ -1,7 +1,4 @@
-"use client";
-
-import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { Link, useLocation } from "react-router-dom";
 import { NAV_SECTIONS } from "@nv/domain";
 import { ChevronLeft, ChevronsUpDown } from "lucide-react";
 
@@ -21,7 +18,7 @@ export function Sidebar({ onOpenSwitcher }: { onOpenSwitcher: () => void }) {
   const toggleNav = useUiStore((s) => s.toggleNav);
   const user = useAuthStore((s) => s.user);
   const ws = useWorkspace();
-  const pathname = usePathname();
+  const { pathname } = useLocation();
 
   const userInitials = user
     ? user.name
@@ -123,7 +120,7 @@ export function Sidebar({ onOpenSwitcher }: { onOpenSwitcher: () => void }) {
                 const Icon = getNavIcon(item.icon);
                 const link = (
                   <Link
-                    href={href}
+                    to={href}
                     className={cn(
                       "group flex items-center gap-2.5 rounded-[9px] px-2 py-2 text-[13px] font-medium transition-colors",
                       collapsed && "justify-center px-0",

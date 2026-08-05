@@ -1,4 +1,3 @@
-"use client";
 
 import type { UseQueryResult } from "@tanstack/react-query";
 import type { LucideIcon } from "lucide-react";

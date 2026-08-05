@@ -1,8 +1,6 @@
-"use client";
 
 import * as React from "react";
-import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { Link, useNavigate } from "react-router-dom";
 import { DEFAULT_WORKSPACE_SLUG } from "@nv/domain";
 import { Loader2 } from "lucide-react";
 
@@ -16,7 +14,7 @@ import { PasswordInput } from "@/components/ui/password-input";
 import { Label } from "@/components/ui/label";
 
 export default function LoginPage() {
-  const router = useRouter();
+  const navigate = useNavigate();
   const login = useAuthStore((s) => s.login);
 
   const [email, setEmail] = React.useState("");
@@ -35,7 +33,7 @@ export default function LoginPage() {
     try {
       await login({ email, password });
       const target = useAuthStore.getState().memberships[0]?.workspaceSlug ?? DEFAULT_WORKSPACE_SLUG;
-      router.replace(`/w/${target}/dashboard`);
+      navigate(`/w/${target}/dashboard`, { replace: true });
     } catch (err) {
       setError(err instanceof Error && err.message ? err.message : "No se pudo iniciar sesión.");
       setSubmitting(false);
@@ -49,7 +47,7 @@ export default function LoginPage() {
       footer={
         <>
           ¿No tienes cuenta?{" "}
-          <Link href="/register" className="font-medium text-brand hover:underline">
+          <Link to="/register" className="font-medium text-brand hover:underline">
             Crear cuenta
           </Link>
         </>
@@ -72,7 +70,7 @@ export default function LoginPage() {
         <div className="space-y-1.5">
           <div className="flex items-center justify-between">
             <Label htmlFor="password">Contraseña</Label>
-            <Link href="/forgot-password" className="text-xs text-ink-muted hover:text-brand">
+            <Link to="/forgot-password" className="text-xs text-ink-muted hover:text-brand">
               ¿Olvidaste tu contraseña?
             </Link>
           </div>

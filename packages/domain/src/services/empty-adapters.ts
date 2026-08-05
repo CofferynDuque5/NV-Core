@@ -22,7 +22,7 @@ function emptyList<T>(): Promise<ListResult<T>> {
 
 /** Mutations are unavailable without a backend (demo mode). */
 function notAvailable(): never {
-  throw new Error("Acción no disponible en modo demo. Configura el backend (NEXT_PUBLIC_API_URL).");
+  throw new Error("Acción no disponible en modo demo. Configura el backend (VITE_API_URL).");
 }
 
 export const emptyAdapters: Services = {

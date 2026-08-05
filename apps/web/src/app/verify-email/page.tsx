@@ -1,7 +1,6 @@
-"use client";
 
 import * as React from "react";
-import Link from "next/link";
+import { Link } from "react-router-dom";
 import { CheckCircle2, Loader2, XCircle } from "lucide-react";
 
 import { authClient } from "@/services/auth-client";
@@ -29,7 +28,7 @@ export default function VerifyEmailPage() {
       title="Verificación de email"
       subtitle="Confirmando tu dirección de correo."
       footer={
-        <Link href="/login" className="font-medium text-brand hover:underline">
+        <Link to="/login" className="font-medium text-brand hover:underline">
           Ir a iniciar sesión
         </Link>
       }

@@ -1,7 +1,5 @@
-"use client";
-
 import * as React from "react";
-import { useRouter } from "next/navigation";
+import { useNavigate } from "react-router-dom";
 import { WORKSPACE_KINDS, type WorkspaceKind } from "@nv/domain";
 
 import { useCreateWorkspace } from "@/hooks/use-domain-mutations";
@@ -33,7 +31,7 @@ export function WorkspaceCreateDialog({
   open: boolean;
   onOpenChange: (v: boolean) => void;
 }) {
-  const router = useRouter();
+  const navigate = useNavigate();
   const mutation = useCreateWorkspace();
   const [name, setName] = React.useState("");
   const [kind, setKind] = React.useState<WorkspaceKind>("creative");
@@ -57,7 +55,7 @@ export function WorkspaceCreateDialog({
         onSuccess: (ws) => {
           reset();
           onOpenChange(false);
-          router.push(`/w/${ws.slug}/dashboard`);
+          navigate(`/w/${ws.slug}/dashboard`);
         },
         onError: (err) => setError(errorMessage(err)),
       },

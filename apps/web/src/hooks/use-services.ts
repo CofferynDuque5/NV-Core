@@ -1,4 +1,3 @@
-"use client";
 
 import { getServices, type Services } from "@nv/domain";
 

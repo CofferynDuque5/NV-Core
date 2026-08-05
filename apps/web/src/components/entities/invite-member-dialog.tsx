@@ -1,4 +1,3 @@
-"use client";
 
 import * as React from "react";
 import { ROLES, type Role } from "@nv/domain";

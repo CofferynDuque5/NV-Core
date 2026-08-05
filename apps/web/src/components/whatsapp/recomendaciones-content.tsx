@@ -1,4 +1,3 @@
-"use client";
 
 import * as React from "react";
 import { BarChart2, Check, Clock, Copy, Loader2, Sparkles, Wand2 } from "lucide-react";

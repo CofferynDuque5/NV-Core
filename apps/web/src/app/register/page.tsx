@@ -1,8 +1,6 @@
-"use client";
 
 import * as React from "react";
-import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { Link, useNavigate } from "react-router-dom";
 import { DEFAULT_WORKSPACE_SLUG, WORKSPACES } from "@nv/domain";
 import { Loader2 } from "lucide-react";
 
@@ -16,7 +14,7 @@ import { PasswordInput } from "@/components/ui/password-input";
 import { Label } from "@/components/ui/label";
 
 export default function RegisterPage() {
-  const router = useRouter();
+  const navigate = useNavigate();
   const register = useAuthStore((s) => s.register);
 
   const [name, setName] = React.useState("");
@@ -42,7 +40,7 @@ export default function RegisterPage() {
         workspaceSlug: workspaceSlug || undefined,
       });
       const target = useAuthStore.getState().memberships[0]?.workspaceSlug ?? DEFAULT_WORKSPACE_SLUG;
-      router.replace(`/w/${target}/dashboard`);
+      navigate(`/w/${target}/dashboard`, { replace: true });
     } catch (err) {
       setError(err instanceof Error && err.message ? err.message : "No se pudo crear la cuenta.");
       setSubmitting(false);
@@ -56,7 +54,7 @@ export default function RegisterPage() {
       footer={
         <>
           ¿Ya tienes cuenta?{" "}
-          <Link href="/login" className="font-medium text-brand hover:underline">
+          <Link to="/login" className="font-medium text-brand hover:underline">
             Inicia sesión
           </Link>
         </>

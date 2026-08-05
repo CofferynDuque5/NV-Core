@@ -51,7 +51,7 @@ jobs:
       DATABASE_URL: postgresql://nvcore:nvcore@localhost:5432/nvcore?schema=public
       JWT_SECRET: ci-secret-at-least-16-characters-long
       CORS_ORIGINS: http://localhost:3000
-      NEXT_PUBLIC_API_URL: http://localhost:4000
+      VITE_API_URL: http://localhost:4000
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -73,7 +73,7 @@ jobs:
         run: |
           node apps/api/dist/main.js &
           API_PID=$!
-          pnpm --filter @nv/web exec next start -p 3000 &
+          pnpm --filter @nv/web exec vite preview --port 3000 --host &
           WEB_PID=$!
           npx -y wait-on http://localhost:4000/api/health http://localhost:3000/login --timeout 90000
           pnpm --filter @nv/web test:e2e

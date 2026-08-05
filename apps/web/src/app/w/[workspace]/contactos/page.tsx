@@ -1,4 +1,3 @@
-"use client";
 
 import * as React from "react";
 import type { Contact as ContactEntity } from "@nv/domain";

@@ -1,4 +1,3 @@
-"use client";
 
 import { create } from "zustand";
 import { WORKSPACES, type Workspace } from "@nv/domain";

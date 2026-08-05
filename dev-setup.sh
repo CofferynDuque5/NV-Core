@@ -80,7 +80,7 @@ if [ ! -f apps/api/.env ]; then
 fi
 if [ ! -f apps/web/.env.local ]; then
   log "Creando apps/web/.env.local (dev)"
-  echo "NEXT_PUBLIC_API_URL=http://localhost:4000" > apps/web/.env.local
+  echo "VITE_API_URL=http://localhost:4000" > apps/web/.env.local
 fi
 
 # ── Dependencias ─────────────────────────────────────────────────────────────

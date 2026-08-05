@@ -1,7 +1,6 @@
-"use client";
 
 import * as React from "react";
-import Link from "next/link";
+import { Link } from "react-router-dom";
 import { Loader2 } from "lucide-react";
 
 import { authClient, AuthError } from "@/services/auth-client";
@@ -41,7 +40,7 @@ export default function ForgotPasswordPage() {
       title="Restablecer contraseña"
       subtitle="Te enviaremos un enlace para crear una nueva."
       footer={
-        <Link href="/login" className="font-medium text-brand hover:underline">
+        <Link to="/login" className="font-medium text-brand hover:underline">
           Volver a iniciar sesión
         </Link>
       }

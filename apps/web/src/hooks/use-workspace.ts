@@ -1,6 +1,4 @@
-"use client";
-
-import { useParams } from "next/navigation";
+import { useParams } from "react-router-dom";
 import { getWorkspaceBySlug, WORKSPACES, type Workspace } from "@nv/domain";
 
 import { useWorkspaceStore } from "@/stores/workspace-store";

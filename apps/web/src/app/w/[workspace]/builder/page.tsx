@@ -1,4 +1,3 @@
-"use client";
 
 import { LayoutTemplate, Save, Sparkles, Type } from "lucide-react";
 

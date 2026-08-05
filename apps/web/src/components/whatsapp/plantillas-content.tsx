@@ -1,4 +1,3 @@
-"use client";
 
 import * as React from "react";
 import { FileText, Plus } from "lucide-react";

@@ -1,4 +1,3 @@
-"use client";
 
 import { PERMISSION_MATRIX, ROLE_DESCRIPTIONS, ROLE_ORDER } from "@nv/domain";
 import { Check, Minus, ScrollText } from "lucide-react";

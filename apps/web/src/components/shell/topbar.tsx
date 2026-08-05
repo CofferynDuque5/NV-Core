@@ -1,4 +1,3 @@
-"use client";
 
 import { Bell, Menu, Plus, Search } from "lucide-react";
 

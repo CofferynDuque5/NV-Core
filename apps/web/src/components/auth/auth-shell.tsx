@@ -1,4 +1,4 @@
-import Link from "next/link";
+import { Link } from "react-router-dom";
 
 export function AuthShell({
   title,
@@ -40,7 +40,7 @@ export function AuthShell({
         {footer ? <div className="mt-4 text-center text-sm text-ink-muted">{footer}</div> : null}
 
         <p className="mt-6 text-center text-[11px] text-ink-faint">
-          <Link href="/" className="hover:text-ink-muted">
+          <Link to="/" className="hover:text-ink-muted">
             ← Volver al inicio
           </Link>
         </p>

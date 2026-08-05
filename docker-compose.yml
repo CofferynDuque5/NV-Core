@@ -73,9 +73,10 @@ services:
       dockerfile: apps/web/Dockerfile
       args:
         # Inlined at build time — must be reachable from the browser.
-        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:4000}
+        VITE_API_URL: ${VITE_API_URL:-http://localhost:4000}
+    # Nginx serves the static SPA on port 80 inside the container.
     ports:
-      - "3000:3000"
+      - "3000:80"
     depends_on:
       - api
 

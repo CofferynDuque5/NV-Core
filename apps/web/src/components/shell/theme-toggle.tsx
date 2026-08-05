@@ -1,13 +1,9 @@
-"use client";
-
-import * as React from "react";
-import { useTheme } from "next-themes";
 import { Moon, Sun } from "lucide-react";
+
+import { useTheme } from "@/providers/theme-provider";
 
 export function ThemeToggle() {
   const { resolvedTheme, setTheme } = useTheme();
-  const [mounted, setMounted] = React.useState(false);
-  React.useEffect(() => setMounted(true), []);
 
   const isDark = resolvedTheme === "dark";
 
@@ -18,14 +14,7 @@ export function ThemeToggle() {
       title={isDark ? "Modo claro" : "Modo oscuro"}
       aria-label="Cambiar tema"
     >
-      {/* Render a stable icon until mounted to avoid hydration mismatch */}
-      {!mounted ? (
-        <Moon className="size-[18px]" />
-      ) : isDark ? (
-        <Sun className="size-[18px]" />
-      ) : (
-        <Moon className="size-[18px]" />
-      )}
+      {isDark ? <Sun className="size-[18px]" /> : <Moon className="size-[18px]" />}
     </button>
   );
 }

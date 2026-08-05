@@ -1,7 +1,5 @@
-"use client";
-
 import * as React from "react";
-import { useRouter } from "next/navigation";
+import { useNavigate } from "react-router-dom";
 import { ArrowRight, Check, Plus } from "lucide-react";
 
 import { cn } from "@/lib/utils";
@@ -23,7 +21,7 @@ export function WorkspaceSwitcher({
   open: boolean;
   onOpenChange: (v: boolean) => void;
 }) {
-  const router = useRouter();
+  const navigate = useNavigate();
   const active = useWorkspace();
   const workspaces = useWorkspaces();
   const memberships = useAuthStore((s) => s.memberships);
@@ -36,7 +34,7 @@ export function WorkspaceSwitcher({
       : workspaces;
 
   function go(slug: string) {
-    router.push(`/w/${slug}/dashboard`);
+    navigate(`/w/${slug}/dashboard`);
     onOpenChange(false);
   }
 

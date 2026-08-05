@@ -1,4 +1,3 @@
-"use client";
 
 import * as React from "react";
 import { CHANNELS, CONNECTION_STATUSES, type ChannelId, type ConnectionStatus } from "@nv/domain";

@@ -1,7 +1,4 @@
-"use client";
-
-import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { Link, useLocation } from "react-router-dom";
 import { NAV_SECTIONS } from "@nv/domain";
 import { ChevronsUpDown } from "lucide-react";
 
@@ -15,7 +12,7 @@ export function MobileNav({ onOpenSwitcher }: { onOpenSwitcher: () => void }) {
   const open = useUiStore((s) => s.mobileNavOpen);
   const setOpen = useUiStore((s) => s.setMobileNavOpen);
   const ws = useWorkspace();
-  const pathname = usePathname();
+  const { pathname } = useLocation();
 
   return (
     <Sheet open={open} onOpenChange={setOpen}>
@@ -64,7 +61,7 @@ export function MobileNav({ onOpenSwitcher }: { onOpenSwitcher: () => void }) {
                   return (
                     <li key={item.module}>
                       <Link
-                        href={href}
+                        to={href}
                         onClick={() => setOpen(false)}
                         className={cn(
                           "flex items-center gap-2.5 rounded-[9px] px-2 py-2 text-[13px] font-medium transition-colors",

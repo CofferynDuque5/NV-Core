@@ -1,7 +1,6 @@
-"use client";
 
 import * as React from "react";
-import { useRouter } from "next/navigation";
+import { useNavigate } from "react-router-dom";
 import { Command } from "cmdk";
 import { MODULE_META, NAV_SECTIONS } from "@nv/domain";
 import { CornerDownLeft, Search } from "lucide-react";
@@ -15,7 +14,7 @@ import { getNavIcon } from "./sidebar-icon";
 
 export function CommandPalette() {
   const { open, setOpen, query, setQuery } = useCommandStore();
-  const router = useRouter();
+  const navigate = useNavigate();
   const ws = useWorkspace();
 
   useKeyboardShortcut("k", () => setOpen(true), { meta: true });
@@ -35,7 +34,7 @@ export function CommandPalette() {
   );
 
   function go(module: string) {
-    router.push(`/w/${ws.slug}/${module}`);
+    navigate(`/w/${ws.slug}/${module}`);
     setOpen(false);
     setQuery("");
   }

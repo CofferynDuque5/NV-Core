@@ -1,4 +1,3 @@
-"use client";
 
 import * as React from "react";
 import { CONTACT_STAGES, type Contact, type ContactStage } from "@nv/domain";

@@ -1,4 +1,3 @@
-"use client";
 
 import * as React from "react";
 import { Loader2, Paperclip, Sparkles, X } from "lucide-react";

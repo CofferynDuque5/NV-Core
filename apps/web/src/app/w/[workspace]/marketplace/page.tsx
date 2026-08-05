@@ -1,4 +1,3 @@
-"use client";
 
 import * as React from "react";
 import { CheckCircle2, Plug, Store } from "lucide-react";

@@ -1,4 +1,3 @@
-"use client";
 
 import { ArrowLeft, ArrowRight, Send, Users } from "lucide-react";
 

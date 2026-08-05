@@ -1,4 +1,4 @@
-import Link from "next/link";
+import { Link } from "react-router-dom";
 import { DEFAULT_WORKSPACE_SLUG } from "@nv/domain";
 
 import { Button } from "@/components/ui/button";
@@ -16,7 +16,7 @@ export default function NotFound() {
         <p className="mt-1 text-sm text-ink-muted">La ruta que buscas no existe en NV Core.</p>
       </div>
       <Button asChild>
-        <Link href={`/w/${DEFAULT_WORKSPACE_SLUG}/dashboard`}>Volver al Dashboard</Link>
+        <Link to={`/w/${DEFAULT_WORKSPACE_SLUG}/dashboard`}>Volver al Dashboard</Link>
       </Button>
     </div>
   );

@@ -1,4 +1,3 @@
-"use client";
 
 import * as React from "react";
 import { Image as ImageIcon, Loader2, Send, Trash2, Upload } from "lucide-react";

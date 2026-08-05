@@ -1,6 +1,4 @@
-"use client";
-
-import { useRouter } from "next/navigation";
+import { useNavigate } from "react-router-dom";
 import { LogIn, LogOut, Settings, User } from "lucide-react";
 
 import { useAuthStore } from "@/stores/auth-store";
@@ -24,13 +22,13 @@ function initialsOf(name: string): string {
 }
 
 export function UserMenu() {
-  const router = useRouter();
+  const navigate = useNavigate();
   const user = useAuthStore((s) => s.user);
   const logout = useAuthStore((s) => s.logout);
 
   function onLogout() {
     logout();
-    router.replace("/login");
+    navigate("/login", { replace: true });
   }
 
   return (
@@ -65,7 +63,7 @@ export function UserMenu() {
             <DropdownMenuLabel>Cuenta</DropdownMenuLabel>
             <div className="px-2.5 pb-2 text-xs text-ink-muted">No hay ninguna sesión iniciada.</div>
             <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={() => router.push("/login")}>
+            <DropdownMenuItem onClick={() => navigate("/login")}>
               <LogIn /> Iniciar sesión
             </DropdownMenuItem>
           </>

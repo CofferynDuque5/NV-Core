@@ -1,8 +1,6 @@
-"use client";
 
 import * as React from "react";
-import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { Link, useNavigate } from "react-router-dom";
 import { Loader2 } from "lucide-react";
 
 import { authClient, AuthError } from "@/services/auth-client";
@@ -12,7 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
 export default function ResetPasswordPage() {
-  const router = useRouter();
+  const navigate = useNavigate();
   const [token, setToken] = React.useState<string | null>(null);
   const [password, setPassword] = React.useState("");
   const [confirm, setConfirm] = React.useState("");
@@ -40,7 +38,7 @@ export default function ResetPasswordPage() {
     try {
       await authClient.resetPassword(token, password);
       setDone(true);
-      setTimeout(() => router.replace("/login"), 1800);
+      setTimeout(() => navigate("/login", { replace: true }), 1800);
     } catch (err) {
       setError(err instanceof AuthError ? err.message : "No se pudo restablecer la contraseña.");
     } finally {
@@ -53,7 +51,7 @@ export default function ResetPasswordPage() {
       title="Nueva contraseña"
       subtitle="Elige una contraseña segura."
       footer={
-        <Link href="/login" className="font-medium text-brand hover:underline">
+        <Link to="/login" className="font-medium text-brand hover:underline">
           Volver a iniciar sesión
         </Link>
       }

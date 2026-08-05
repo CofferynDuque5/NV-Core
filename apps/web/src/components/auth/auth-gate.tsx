@@ -1,7 +1,5 @@
-"use client";
-
 import * as React from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useNavigate, useParams } from "react-router-dom";
 
 import { useAuthStore } from "@/stores/auth-store";
 import { isBackendConfigured } from "@/lib/env";
@@ -25,7 +23,7 @@ function FullScreenLoader() {
  *   /login, and steers members away from workspaces they don't belong to.
  */
 export function AuthGate({ children }: { children: React.ReactNode }) {
-  const router = useRouter();
+  const navigate = useNavigate();
   const params = useParams<{ workspace?: string }>();
   const status = useAuthStore((s) => s.status);
   const memberships = useAuthStore((s) => s.memberships);
@@ -43,7 +41,7 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
   React.useEffect(() => {
     if (!backend) return;
     if (status === "unauthenticated") {
-      router.replace("/login");
+      navigate("/login", { replace: true });
       return;
     }
     // Authenticated but visiting a workspace they don't belong to → steer them
@@ -51,10 +49,10 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
     if (status === "authenticated" && params?.workspace && memberships.length > 0) {
       const isMember = memberships.some((m) => m.workspaceSlug === params.workspace);
       if (!isMember) {
-        router.replace(`/w/${memberships[0]!.workspaceSlug}/dashboard`);
+        navigate(`/w/${memberships[0]!.workspaceSlug}/dashboard`, { replace: true });
       }
     }
-  }, [backend, status, memberships, params?.workspace, router]);
+  }, [backend, status, memberships, params?.workspace, navigate]);
 
   if (!backend) return <>{children}</>;
   if (status !== "authenticated") return <FullScreenLoader />;
