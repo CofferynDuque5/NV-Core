@@ -323,6 +323,8 @@ model Automation {
   runs          Int      @default(0)
   description   String?
   nodes         Json     @default("[]")
+  // Visual-editor connections between nodes (graph edges).
+  edges         Json     @default("[]")
   // Optional n8n webhook (absolute URL or path resolved against N8N_BASE_URL).
   webhookUrl    String?
   createdAt     DateTime @default(now())

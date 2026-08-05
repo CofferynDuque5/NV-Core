@@ -197,6 +197,7 @@ export function createHttpAdapters(opts: HttpAdapterOptions): Services {
     automations: {
       list: (id) => get<ListResult<Automation>>(`${ws(id)}/automations`),
       create: (id, input) => post<Automation>(`${ws(id)}/automations`, input),
+      update: (id, aid, input) => patch<Automation>(`${ws(id)}/automations/${aid}`, input),
       remove: (id, aid) => del<void>(`${ws(id)}/automations/${aid}`),
       run: (id, aid) =>
         post<{ triggered: boolean; runs: number }>(`${ws(id)}/automations/${aid}/run`, {}),

@@ -114,6 +114,7 @@ export const emptyAdapters: Services = {
   automations: {
     list: () => emptyList(),
     create: () => notAvailable(),
+    update: () => notAvailable(),
     remove: () => notAvailable(),
     run: () => notAvailable(),
   },

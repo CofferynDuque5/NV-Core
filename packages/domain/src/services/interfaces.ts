@@ -102,6 +102,17 @@ export interface CreateAutomationInput {
   description?: string;
   status?: Automation["status"];
   nodes?: Automation["nodes"];
+  edges?: Automation["edges"];
+  webhookUrl?: string;
+}
+
+/** Partial update of an automation's graph and metadata. */
+export interface UpdateAutomationInput {
+  name?: string;
+  description?: string;
+  status?: Automation["status"];
+  nodes?: Automation["nodes"];
+  edges?: Automation["edges"];
   webhookUrl?: string;
 }
 
@@ -283,6 +294,7 @@ export interface TemplateService {
 export interface AutomationService {
   list(workspaceId: string): Promise<ListResult<Automation>>;
   create(workspaceId: string, input: CreateAutomationInput): Promise<Automation>;
+  update(workspaceId: string, id: string, input: UpdateAutomationInput): Promise<Automation>;
   remove(workspaceId: string, id: string): Promise<void>;
   /** Trigger the automation's n8n webhook and increment its run count. */
   run(workspaceId: string, id: string): Promise<RunAutomationResult>;

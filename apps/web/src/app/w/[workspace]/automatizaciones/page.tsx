@@ -1,6 +1,7 @@
 
 import * as React from "react";
-import { Loader2, Play, Plus, Trash2, Workflow } from "lucide-react";
+import type { Automation } from "@nv/domain";
+import { Loader2, Pencil, Play, Plus, Trash2, Workflow } from "lucide-react";
 
 import { useAutomations } from "@/hooks/use-domain-data";
 import { useDeleteAutomation, useRunAutomation } from "@/hooks/use-domain-mutations";
@@ -12,6 +13,7 @@ import { Panel } from "@/components/common/panel";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { AutomationCreateDialog } from "@/components/entities/automation-create-dialog";
+import { WorkflowEditor } from "@/components/automations/workflow-editor";
 
 export default function AutomatizacionesPage() {
   const automations = useAutomations();
@@ -19,8 +21,17 @@ export default function AutomatizacionesPage() {
   const run = useRunAutomation();
   const confirm = useConfirm();
   const [open, setOpen] = React.useState(false);
+  const [editingId, setEditingId] = React.useState<string | null>(null);
   const [deletingId, setDeletingId] = React.useState<string | null>(null);
   const [runningId, setRunningId] = React.useState<string | null>(null);
+
+  // When a flow is selected, swap the list for the visual editor (same route).
+  const editing: Automation | undefined = editingId
+    ? automations.data?.items.find((a) => a.id === editingId)
+    : undefined;
+  if (editing) {
+    return <WorkflowEditor automation={editing} onExit={() => setEditingId(null)} />;
+  }
 
   function trigger(id: string) {
     setRunningId(id);
@@ -60,7 +71,7 @@ export default function AutomatizacionesPage() {
           icon: Workflow,
           title: "Sin automatizaciones",
           description:
-            "Diseña tu primer flujo (ej. compra → onboarding, renovación → recordatorio). Se ejecutará con n8n cuando conectes el backend.",
+            "Diseña tu primer flujo visual (ej. compra → onboarding, renovación → recordatorio) con disparadores, acciones, esperas y condiciones.",
           action: (
             <Button size="sm" onClick={() => setOpen(true)}>
               <Plus className="size-4" /> Nuevo flujo
@@ -100,6 +111,13 @@ export default function AutomatizacionesPage() {
                     Ejecutar
                   </button>
                 ) : null}
+                <button
+                  onClick={() => setEditingId(a.id)}
+                  className="flex items-center gap-1.5 rounded-md px-2 py-1.5 text-xs font-medium text-ink-muted transition-colors hover:bg-panel-high hover:text-ink"
+                  title="Editar flujo"
+                >
+                  <Pencil className="size-4" /> Editar
+                </button>
                 <button
                   onClick={() => remove(a.id, a.name)}
                   disabled={deletingId === a.id}

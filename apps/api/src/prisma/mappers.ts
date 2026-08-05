@@ -158,6 +158,7 @@ export const mapAutomation = (a: PAutomation): Automation => ({
   runs: a.runs,
   description: a.description ?? "",
   nodes: (a.nodes as unknown as Automation["nodes"]) ?? [],
+  edges: (a.edges as unknown as Automation["edges"]) ?? [],
   webhookUrl: a.webhookUrl ?? undefined,
 });
 

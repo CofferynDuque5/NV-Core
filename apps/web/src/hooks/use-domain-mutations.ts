@@ -9,6 +9,7 @@ import type {
   Post,
   CreateWorkspaceInput,
   CreateAutomationInput,
+  UpdateAutomationInput,
   CreateCampaignInput,
   CreateContactInput,
   CreateConversationInput,
@@ -407,6 +408,21 @@ export function useCreateAutomation() {
       void qc.invalidateQueries({ queryKey: [ws.id, "automations"] });
       toast.success("Automatización creada");
     },
+  });
+}
+
+export function useUpdateAutomation() {
+  const svc = useServices();
+  const ws = useWorkspace();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (args: { id: string; input: UpdateAutomationInput }) =>
+      svc.automations.update(ws.id, args.id, args.input),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: [ws.id, "automations"] });
+      toast.success("Flujo guardado");
+    },
+    onError: (err) => toast.error(errText(err)),
   });
 }
 

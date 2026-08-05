@@ -8,14 +8,26 @@ import {
   Module,
   NotFoundException,
   Param,
+  Patch,
   Post,
   ServiceUnavailableException,
   UseGuards,
 } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { ApiBearerAuth, ApiPropertyOptional, ApiTags } from "@nestjs/swagger";
+import { AUTOMATION_NODE_TYPES } from "@nv/domain";
 import type { Automation, AutomationNode, RunAutomationResult } from "@nv/domain";
-import { IsArray, IsIn, IsOptional, IsString, MinLength } from "class-validator";
+import {
+  IsArray,
+  IsIn,
+  IsNumber,
+  IsObject,
+  IsOptional,
+  IsString,
+  MinLength,
+  ValidateNested,
+} from "class-validator";
+import { Type } from "class-transformer";
 
 import type { AppConfig } from "../../config/configuration";
 import { ListResultDto } from "../../common/dto/list-result.dto";
@@ -33,6 +45,30 @@ import { ProvidersModule } from "../../providers/providers.module";
 import { AutomationBridgeController, N8nSecretGuard } from "./n8n.bridge";
 import { N8nEventForwarder } from "./n8n.forwarder";
 
+// Nested DTOs for the flow graph. Explicit @ValidateNested + @Type is required
+// so the global ValidationPipe (whitelist + implicit conversion) validates the
+// shape without stripping/mangling it. `config` is left untyped on purpose so
+// its arbitrary per-node keys pass through untouched.
+export class AutomationNodeDto {
+  @IsString() id!: string;
+  @IsIn(AUTOMATION_NODE_TYPES) type!: AutomationNode["type"];
+  @IsString() label!: string;
+
+  @IsOptional() @IsNumber() x?: number;
+  @IsOptional() @IsNumber() y?: number;
+
+  @ApiPropertyOptional({ type: "object", additionalProperties: true })
+  @IsOptional()
+  @IsObject()
+  config?: Record<string, unknown>;
+}
+
+export class AutomationEdgeDto {
+  @IsString() id!: string;
+  @IsString() from!: string;
+  @IsString() to!: string;
+}
+
 export class CreateAutomationDto {
   @IsString() @MinLength(1) name!: string;
 
@@ -46,10 +82,56 @@ export class CreateAutomationDto {
   @IsIn(["activo", "pausado"])
   status?: "activo" | "pausado";
 
-  @ApiPropertyOptional({ type: "array", items: { type: "object" } })
+  @ApiPropertyOptional({ type: [AutomationNodeDto] })
   @IsOptional()
   @IsArray()
-  nodes?: AutomationNode[];
+  @ValidateNested({ each: true })
+  @Type(() => AutomationNodeDto)
+  nodes?: AutomationNodeDto[];
+
+  @ApiPropertyOptional({ type: [AutomationEdgeDto] })
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => AutomationEdgeDto)
+  edges?: AutomationEdgeDto[];
+
+  @ApiPropertyOptional({ description: "Webhook de n8n (URL absoluta o path)." })
+  @IsOptional()
+  @IsString()
+  webhookUrl?: string;
+}
+
+export class UpdateAutomationDto {
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  @MinLength(1)
+  name?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  description?: string;
+
+  @ApiPropertyOptional({ enum: ["activo", "pausado"] })
+  @IsOptional()
+  @IsIn(["activo", "pausado"])
+  status?: "activo" | "pausado";
+
+  @ApiPropertyOptional({ type: [AutomationNodeDto] })
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => AutomationNodeDto)
+  nodes?: AutomationNodeDto[];
+
+  @ApiPropertyOptional({ type: [AutomationEdgeDto] })
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => AutomationEdgeDto)
+  edges?: AutomationEdgeDto[];
 
   @ApiPropertyOptional({ description: "Webhook de n8n (URL absoluta o path)." })
   @IsOptional()
@@ -88,10 +170,38 @@ export class AutomationsService {
         description: dto.description,
         status: dto.status ?? "pausado",
         nodes: (dto.nodes ?? []) as object[],
+        edges: (dto.edges ?? []) as object[],
         webhookUrl: dto.webhookUrl,
       },
     });
     await this.audit.record(workspaceId, actor, "automation.create", row.id);
+    return mapAutomation(row);
+  }
+
+  /** Persist the flow graph (nodes/edges) and metadata for the visual editor. */
+  async update(
+    workspaceId: string,
+    actor: string,
+    id: string,
+    dto: UpdateAutomationDto,
+  ): Promise<Automation> {
+    const existing = await this.db().automation.findFirst({
+      where: { id, workspaceSlug: workspaceId },
+    });
+    if (!existing) throw new NotFoundException("Automatización no encontrada.");
+
+    const row = await this.db().automation.update({
+      where: { id },
+      data: {
+        ...(dto.name !== undefined ? { name: dto.name } : {}),
+        ...(dto.description !== undefined ? { description: dto.description } : {}),
+        ...(dto.status !== undefined ? { status: dto.status } : {}),
+        ...(dto.nodes !== undefined ? { nodes: dto.nodes as object[] } : {}),
+        ...(dto.edges !== undefined ? { edges: dto.edges as object[] } : {}),
+        ...(dto.webhookUrl !== undefined ? { webhookUrl: dto.webhookUrl } : {}),
+      },
+    });
+    await this.audit.record(workspaceId, actor, "automation.update", id);
     return mapAutomation(row);
   }
 
@@ -162,6 +272,18 @@ export class AutomationsController {
     @Body() dto: CreateAutomationDto,
   ) {
     return this.service.create(workspaceId, user.email, dto);
+  }
+
+  @Patch(":id")
+  @Roles("Owner", "Admin", "Editor")
+  @UseGuards(RolesGuard)
+  update(
+    @WorkspaceId() workspaceId: string,
+    @CurrentUser() user: AuthenticatedUser,
+    @Param("id") id: string,
+    @Body() dto: UpdateAutomationDto,
+  ) {
+    return this.service.update(workspaceId, user.email, id, dto);
   }
 
   @Post(":id/run")

@@ -225,6 +225,18 @@ export interface AutomationNode {
   id: string;
   type: AutomationNodeType;
   label: string;
+  /** Canvas position for the visual editor (optional for legacy flows). */
+  x?: number;
+  y?: number;
+  /** Per-node settings: trigger event, action kind + params, wait, condition. */
+  config?: Record<string, unknown>;
+}
+
+/** Directed connection between two nodes in the flow graph. */
+export interface AutomationEdge {
+  id: string;
+  from: string; // source node id
+  to: string; // target node id
 }
 
 export interface Automation {
@@ -234,6 +246,8 @@ export interface Automation {
   runs: number;
   description: string;
   nodes: AutomationNode[];
+  /** Connections between nodes (optional; older flows are node-only). */
+  edges?: AutomationEdge[];
   /** Optional n8n webhook (absolute URL or path) triggered when the flow runs. */
   webhookUrl?: string;
 }
