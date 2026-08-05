@@ -13,9 +13,30 @@ compartido. Monorepo con dos aplicaciones:
 
 - **`apps/api`** — Backend **NestJS + Prisma (PostgreSQL) + Redis**. Es donde
   vive toda la lógica: auth, WhatsApp, campañas, IA, billing, etc.
-- **`apps/web`** — Frontend **Next.js (React)**. Es el panel visual.
+- **`apps/web`** — Frontend **React + Vite (SPA)** con **react-router**. Sin
+  SSR/SSG: `build` genera un `dist/` estático que sirve Nginx/Apache. Se
+  comunica con el backend solo por **REST + Socket.IO** (sin lógica de negocio
+  en el frontend).
 - **`packages/domain`** — Configuración estructural compartida (workspaces,
-  módulos, canales, roles).
+  módulos, canales, roles) y los **contratos de servicio** que consume la web.
+
+### Patrón Provider + Adapter (backend)
+
+Todo canal externo pasa por un **ProviderManager** central; el resto del
+sistema nunca llama a una API externa directamente. Cada proveedor expone
+adapters intercambiables con una **interfaz común** (`connect`, `disconnect`,
+`authenticate`, `refreshCredentials`, `publish`, `sendMessage`, `sendMedia`,
+`healthCheck`, `getStatus`):
+
+- **WhatsAppProvider** → BaileysAdapter · CloudAPIAdapter
+- **FacebookProvider** / **InstagramProvider** → MetaGraphAdapter · BrowserAutomationAdapter
+- **EmailProvider** → ResendAdapter
+- **TikTokProvider** → OfficialApiAdapter
+
+El **adapter activo se elige por workspace** en el módulo **Conexiones** y se
+persiste (`ProviderSelection`). Cambiar de proveedor no toca el resto del
+código. **n8n** actúa solo como motor de automatizaciones (el backend invoca
+workflows por REST y recibe el resultado para actualizar PostgreSQL).
 
 ### Los 14 workspaces (empresas)
 Un Ciclo Creativo, Un Código Creativo, El Pulso de Naturaleza, Design Your Core,

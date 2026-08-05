@@ -10,16 +10,16 @@ Monorepo profesional preparado para crecer a un SaaS comercial.
 
 ## Stack
 
-pnpm workspaces · Turborepo · Next.js 15 (App Router) · React 19 ·
+pnpm workspaces · Turborepo · React 19 + **Vite** (SPA) · react-router ·
 TypeScript estricto · TailwindCSS · shadcn/ui · Zustand · TanStack Query ·
-lucide-react.
+Socket.IO · lucide-react. Backend: **NestJS + PostgreSQL/Prisma + Redis**.
 
 ## Estructura
 
 ```
 apps/
-  web/     Frontend Next.js (implementado)
-  api/     Backend NestJS (placeholder — fase 2)
+  web/     Frontend React + Vite (SPA; build estático → dist/)
+  api/     Backend NestJS
 packages/
   domain/           @nv/domain — entidades, enums, config, contratos de servicio
   config-tailwind/  @nv/tailwind-preset — design tokens

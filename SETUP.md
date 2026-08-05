@@ -166,27 +166,37 @@ Déjala corriendo.
 
 ---
 
-## 6. Configurar y arrancar el frontend (Next.js)
+## 6. Configurar y arrancar el frontend (React + Vite)
 
 Crea `apps/web/.env.local` con **una sola variable**: la URL del backend.
 
 ```bash
-echo "NEXT_PUBLIC_API_URL=http://localhost:4000" > apps/web/.env.local
+echo "VITE_API_URL=http://localhost:4000" > apps/web/.env.local
 ```
 
 | Variable | Qué poner | De dónde sale |
 |---|---|---|
-| `NEXT_PUBLIC_API_URL` | `http://localhost:4000` | La **URL del backend** del paso 5 (host:puerto de la API, sin `/api`). |
+| `VITE_API_URL` | `http://localhost:4000` | La **URL del backend** del paso 5 (host:puerto de la API, sin `/api`). |
 
 En **otra** terminal:
 
 ```bash
-pnpm --filter @nv/web dev
+pnpm --filter @nv/web dev       # desarrollo (Vite) en http://localhost:3000
 ```
+
+Para **producción** (VPS/Nginx/Apache):
+
+```bash
+pnpm --filter @nv/web build     # genera apps/web/dist/ (estático)
+pnpm --filter @nv/web preview   # previsualiza el dist en :3000
+```
+
+Sirve la carpeta `apps/web/dist/` con Nginx/Apache y añade el **fallback SPA**
+(todas las rutas → `index.html`); el `apps/web/Dockerfile` ya lo hace con Nginx.
 
 - App: **http://localhost:3000**
 
-> Si NO pones `NEXT_PUBLIC_API_URL`, la web corre en **modo demo** (sin login,
+> Si NO pones `VITE_API_URL`, la web corre en **modo demo** (sin login,
 > con estados vacíos). Con la variable, te pedirá iniciar sesión.
 
 ---
@@ -217,7 +227,7 @@ pnpm --filter @nv/web dev
 
 Variables que tú defines:
 - `apps/api/.env` → `DATABASE_URL`, `JWT_SECRET`, `CORS_ORIGINS=http://localhost:3000`
-- `apps/web/.env.local` → `NEXT_PUBLIC_API_URL=http://localhost:4000`
+- `apps/web/.env.local` → `VITE_API_URL=http://localhost:4000`
 
 ---
 

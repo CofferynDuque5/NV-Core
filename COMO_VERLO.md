@@ -1,6 +1,6 @@
 # Cómo ver / correr NV Core
 
-Monorepo completo: **frontend Next.js + backend NestJS + PostgreSQL/Prisma**,
+Monorepo completo: **frontend React + Vite (SPA) + backend NestJS + PostgreSQL/Prisma**,
 con autenticación JWT, membresías por workspace y CRUD real. Incluye además una
 **vista estática** para previsualizar sin instalar nada.
 
@@ -55,14 +55,15 @@ pnpm --filter @nv/api dev      # http://localhost:4000/api
 
 - Salud: `GET /api/health` · **Swagger**: `http://localhost:4000/api/docs`
 
-### 3. Frontend (Next.js), apuntando al backend
+### 3. Frontend (React + Vite), apuntando al backend
 
 ```bash
-echo "NEXT_PUBLIC_API_URL=http://localhost:4000" > apps/web/.env.local
+echo "VITE_API_URL=http://localhost:4000" > apps/web/.env.local
 pnpm --filter @nv/web dev      # http://localhost:3000
+# Producción: pnpm --filter @nv/web build  → sirve apps/web/dist/ con Nginx
 ```
 
-Sin `NEXT_PUBLIC_API_URL` la web corre en **modo demo** (estados vacíos, sin
+Sin `VITE_API_URL` la web corre en **modo demo** (estados vacíos, sin
 login). Con la variable, te pedirá **iniciar sesión / registrarte**.
 
 ### Probar el flujo completo
@@ -91,7 +92,7 @@ cd apps/web && STATIC_EXPORT=true pnpm build
 
 ```
 apps/
-  web/     Next.js 15 · React 19 · Tailwind · shadcn/ui   (frontend)
+  web/     React 19 · Vite · react-router · Tailwind · shadcn/ui   (SPA)
   api/     NestJS 11 · Swagger · Prisma · PostgreSQL       (backend)
 packages/
   domain/           @nv/domain — entidades, config, contratos de servicio
