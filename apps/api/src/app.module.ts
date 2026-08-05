@@ -7,6 +7,7 @@ import { buildConfig } from "./config/configuration";
 import { validateEnv } from "./config/env.validation";
 import { ConditionalThrottlerGuard } from "./common/guards/conditional-throttler.guard";
 import { CommonModule } from "./common/common.module";
+import { CoreModule } from "./core/core.module";
 import { PrismaModule } from "./prisma/prisma.module";
 import { SchedulerModule } from "./modules/scheduler/scheduler.module";
 import { HealthModule } from "./health/health.module";
@@ -48,6 +49,7 @@ import { ProvidersModule } from "./providers/providers.module";
     // @Throttle(); the Stripe webhook opts out with @SkipThrottle().
     ThrottlerModule.forRoot([{ name: "default", ttl: 60_000, limit: 120 }]),
     CommonModule,
+    CoreModule,
     PrismaModule,
     SchedulerModule,
     AuthModule,

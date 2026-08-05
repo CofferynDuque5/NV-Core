@@ -29,6 +29,9 @@ import { Roles } from "../../auth/decorators/roles.decorator";
 import { CurrentUser } from "../../auth/decorators/current-user.decorator";
 import type { AuthenticatedUser } from "../../auth/auth.types";
 import { triggerWebhook } from "./n8n.client";
+import { ProvidersModule } from "../../providers/providers.module";
+import { AutomationBridgeController, N8nSecretGuard } from "./n8n.bridge";
+import { N8nEventForwarder } from "./n8n.forwarder";
 
 export class CreateAutomationDto {
   @IsString() @MinLength(1) name!: string;
@@ -185,5 +188,9 @@ export class AutomationsController {
   }
 }
 
-@Module({ controllers: [AutomationsController], providers: [AutomationsService] })
+@Module({
+  imports: [ProvidersModule],
+  controllers: [AutomationsController, AutomationBridgeController],
+  providers: [AutomationsService, N8nSecretGuard, N8nEventForwarder],
+})
 export class AutomationsModule {}

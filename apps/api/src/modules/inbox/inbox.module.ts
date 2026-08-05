@@ -34,8 +34,9 @@ import { mapConversation, mapMessage } from "../../prisma/mappers";
 import { RolesGuard } from "../../auth/guards/roles.guard";
 import { Roles } from "../../auth/decorators/roles.decorator";
 import { Public } from "../../auth/decorators/public.decorator";
-import { WhatsappModule } from "../whatsapp/whatsapp.module";
-import { ProviderManager } from "../whatsapp/provider-manager";
+import { ProviderManager } from "../../providers/provider-manager.service";
+import { ProvidersModule } from "../../providers/providers.module";
+import { EventBus } from "../../core/events/event-bus.service";
 import { parseTelegramInbound, parseWhatsAppInbound, type InboundMessage } from "./inbound";
 
 export class CreateConversationDto {
@@ -65,6 +66,7 @@ export class InboxService {
     private readonly providers: ProviderManager,
     private readonly config: ConfigService<AppConfig, true>,
     private readonly registry: WorkspaceRegistry,
+    private readonly events: EventBus,
   ) {}
 
   private db() {
@@ -112,6 +114,14 @@ export class InboxService {
       data: { conversationId: conversation.id, direction: "in", text: msg.text },
     });
     this.logger.log(`Mensaje entrante (${msg.channel}) de ${msg.contactHandle} → ${slug}.`);
+    // Decouple: publish the domain event (n8n + other modules can react).
+    this.events.emit("message.received", {
+      workspaceSlug: slug,
+      channel: msg.channel,
+      contactHandle: msg.contactHandle,
+      contactName: msg.contactName,
+      text: msg.text,
+    });
   }
 
   async conversations(workspaceId: string): Promise<ListResultDto<Conversation>> {
@@ -162,7 +172,7 @@ export class InboxService {
     // Never blocks or fails the persisted reply.
     if (conv.contactHandle) {
       void this.providers
-        .send(workspaceId, conv.channel, conv.contactHandle, dto.text)
+        .sendByChannel(workspaceId, conv.channel, conv.contactHandle, dto.text)
         .catch((err: unknown) =>
           this.logger.warn(`Outbound delivery failed for ${conversationId}: ${(err as Error).message}`),
         );
@@ -313,7 +323,7 @@ export class TelegramWebhookController {
 }
 
 @Module({
-  imports: [WhatsappModule],
+  imports: [ProvidersModule],
   controllers: [InboxController, WhatsAppWebhookController, TelegramWebhookController],
   providers: [InboxService],
 })

@@ -435,6 +435,27 @@ model WhatsappSession {
 }
 
 /**
+ * Async job managed by the Job Manager: state, attempts, retries and failures
+ * for work processed through the Queue Manager (BullMQ/Redis, or inline).
+ */
+model Job {
+  id            String   @id @default(cuid())
+  workspaceSlug String
+  type          String
+  status        String   @default("queued") // queued | active | completed | failed
+  attempts      Int      @default(0)
+  maxAttempts   Int      @default(3)
+  payload       Json
+  result        Json?
+  lastError     String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([workspaceSlug, status])
+  @@index([type, status])
+}
+
+/**
  * Active adapter chosen per provider, per workspace (Provider + Adapter
  * pattern). e.g. provider "whatsapp" → adapter "baileys" | "cloud-api".
  * When no row exists the provider falls back to its default adapter.

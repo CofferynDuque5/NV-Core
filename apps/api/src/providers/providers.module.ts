@@ -7,20 +7,22 @@ import { WorkspaceGuard } from "../common/tenant/workspace.guard";
 import { RolesGuard } from "../auth/guards/roles.guard";
 import { Roles } from "../auth/decorators/roles.decorator";
 import { WhatsappModule } from "../modules/whatsapp/whatsapp.module";
-import { SocialModule } from "../modules/social/social.module";
-import { MessagingModule } from "../modules/messaging/messaging.module";
+import { MetaModule } from "../modules/social/meta.module";
 
 import { ProviderManager } from "./provider-manager.service";
+import { OutboundDispatcher } from "./outbound-dispatcher.service";
 import { type ProviderId } from "./provider.types";
 import {
   EmailProvider,
   FacebookProvider,
   InstagramProvider,
+  TelegramProvider,
   TiktokProvider,
   WhatsappProvider,
 } from "./providers";
 import { WhatsappBaileysAdapter } from "./adapters/whatsapp-baileys.adapter";
 import { WhatsappCloudApiAdapter } from "./adapters/whatsapp-cloud-api.adapter";
+import { TelegramBotApiAdapter } from "./adapters/telegram-bot-api.adapter";
 import {
   FacebookMetaGraphAdapter,
   InstagramMetaGraphAdapter,
@@ -79,12 +81,14 @@ export class ProvidersController {
 }
 
 @Module({
-  imports: [WhatsappModule, SocialModule, MessagingModule],
+  imports: [WhatsappModule, MetaModule],
   controllers: [ProvidersController],
   providers: [
     ProviderManager,
+    OutboundDispatcher,
     // Providers
     WhatsappProvider,
+    TelegramProvider,
     FacebookProvider,
     InstagramProvider,
     EmailProvider,
@@ -92,6 +96,7 @@ export class ProvidersController {
     // Adapters
     WhatsappBaileysAdapter,
     WhatsappCloudApiAdapter,
+    TelegramBotApiAdapter,
     FacebookMetaGraphAdapter,
     InstagramMetaGraphAdapter,
     FacebookBrowserAutomationAdapter,
@@ -99,6 +104,6 @@ export class ProvidersController {
     ResendAdapter,
     TiktokOfficialApiAdapter,
   ],
-  exports: [ProviderManager],
+  exports: [ProviderManager, OutboundDispatcher],
 })
 export class ProvidersModule {}

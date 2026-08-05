@@ -13,6 +13,7 @@ import {
 } from "./adapters/browser-automation.adapter";
 import { ResendAdapter } from "./adapters/resend.adapter";
 import { TiktokOfficialApiAdapter } from "./adapters/tiktok-official-api.adapter";
+import { TelegramBotApiAdapter } from "./adapters/telegram-bot-api.adapter";
 
 abstract class BaseProvider implements Provider {
   abstract readonly id: ProviderId;
@@ -33,6 +34,18 @@ export class WhatsappProvider extends BaseProvider {
   constructor(baileys: WhatsappBaileysAdapter, cloud: WhatsappCloudApiAdapter) {
     super();
     this.adapters = [baileys, cloud];
+  }
+}
+
+@Injectable()
+export class TelegramProvider extends BaseProvider {
+  readonly id: ProviderId = "telegram";
+  readonly label = "Telegram";
+  readonly defaultAdapterId = "bot-api";
+  readonly adapters: ChannelAdapter[];
+  constructor(bot: TelegramBotApiAdapter) {
+    super();
+    this.adapters = [bot];
   }
 }
 

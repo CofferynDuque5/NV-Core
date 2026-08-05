@@ -35,11 +35,20 @@ function fakeProvider(id: ProviderId, defaultAdapterId: string, adapterIds: stri
 function build(): ProviderManager {
   const prisma = { enabled: false } as never;
   const wa = fakeProvider("whatsapp", "baileys", ["baileys", "cloud-api"]);
+  const tg = fakeProvider("telegram", "bot-api", ["bot-api"]);
   const fb = fakeProvider("facebook", "meta-graph", ["meta-graph", "browser-automation"]);
   const ig = fakeProvider("instagram", "meta-graph", ["meta-graph", "browser-automation"]);
   const email = fakeProvider("email", "resend", ["resend"]);
   const tk = fakeProvider("tiktok", "official-api", ["official-api"]);
-  return new ProviderManager(prisma, wa as never, fb as never, ig as never, email as never, tk as never);
+  return new ProviderManager(
+    prisma,
+    wa as never,
+    tg as never,
+    fb as never,
+    ig as never,
+    email as never,
+    tk as never,
+  );
 }
 
 describe("ProviderManager", () => {
@@ -72,6 +81,7 @@ describe("ProviderManager", () => {
   it("maps channel ids to providers", () => {
     const m = build();
     expect(m.providerForChannel("wa")).toBe("whatsapp");
+    expect(m.providerForChannel("tg")).toBe("telegram");
     expect(m.providerForChannel("ig")).toBe("instagram");
     expect(m.providerForChannel("email")).toBe("email");
     expect(m.providerForChannel("unknown")).toBeUndefined();
@@ -80,7 +90,7 @@ describe("ProviderManager", () => {
   it("lists all providers with their adapters", async () => {
     const m = build();
     const list = await m.listProviders("w1");
-    expect(list).toHaveLength(5);
+    expect(list).toHaveLength(6);
     const wa = list.find((p) => p.id === "whatsapp")!;
     expect(wa.adapters.map((a) => a.id)).toEqual(["baileys", "cloud-api"]);
     expect(wa.activeAdapter).toBe("baileys");

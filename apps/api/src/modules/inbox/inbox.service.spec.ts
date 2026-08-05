@@ -44,11 +44,13 @@ function makeDeps() {
   };
   const config = { get: vi.fn(() => "nv-stream") };
   const registry = { exists: vi.fn(async () => true) };
+  const events = { emit: vi.fn() };
   const service = new InboxService(
     prisma as unknown as PrismaService,
     {} as never,
     config as never,
     registry as never,
+    events as never,
   );
   return { service, conversations, messages };
 }

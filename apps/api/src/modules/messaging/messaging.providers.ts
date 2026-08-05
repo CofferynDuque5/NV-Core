@@ -34,7 +34,7 @@ async function readError(res: Response): Promise<string> {
   return `${res.status} ${res.statusText}${text ? ` — ${text.slice(0, 300)}` : ""}`;
 }
 
-async function sendWhatsApp(
+export async function sendWhatsApp(
   wa: AppConfig["integrations"]["whatsapp"],
   msg: OutboundMessage,
 ): Promise<{ id: string }> {
@@ -59,7 +59,7 @@ async function sendWhatsApp(
   return { id: data.messages?.[0]?.id ?? "" };
 }
 
-async function sendTelegram(
+export async function sendTelegram(
   tg: AppConfig["integrations"]["telegram"],
   msg: OutboundMessage,
 ): Promise<{ id: string }> {

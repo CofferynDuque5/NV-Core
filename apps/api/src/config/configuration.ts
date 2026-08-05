@@ -19,7 +19,7 @@ export interface AppConfig {
   redis: { url?: string };
   mail: { from: string };
   integrations: {
-    n8n: { baseUrl?: string; apiKey?: string };
+    n8n: { baseUrl?: string; apiKey?: string; eventsWebhook?: string; inboundSecret?: string };
     ai: {
       provider?: "openai" | "anthropic" | "gemini";
       openai?: string;
@@ -73,7 +73,12 @@ export function buildConfig(env: Env): AppConfig {
     redis: { url: env.REDIS_URL },
     mail: { from: env.MAIL_FROM },
     integrations: {
-      n8n: { baseUrl: env.N8N_BASE_URL, apiKey: env.N8N_API_KEY },
+      n8n: {
+        baseUrl: env.N8N_BASE_URL,
+        apiKey: env.N8N_API_KEY,
+        eventsWebhook: env.N8N_EVENTS_WEBHOOK,
+        inboundSecret: env.N8N_INBOUND_SECRET,
+      },
       ai: {
         provider: env.AI_PROVIDER,
         openai: env.OPENAI_API_KEY,

@@ -28,9 +28,13 @@ export const envSchema = z.object({
   // Observability
   SENTRY_DSN: z.string().url().optional(),
 
-  // Automation
+  // Automation — n8n as the orchestrator
   N8N_BASE_URL: z.string().url().optional(),
   N8N_API_KEY: z.string().optional(),
+  // Domain events forwarded to n8n so workflows can orchestrate (URL or path).
+  N8N_EVENTS_WEBHOOK: z.string().optional(),
+  // Shared secret n8n must send (X-N8N-Secret) to call backend action endpoints.
+  N8N_INBOUND_SECRET: z.string().optional(),
 
   // AI providers
   OPENAI_API_KEY: z.string().optional(),

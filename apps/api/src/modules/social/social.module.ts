@@ -17,7 +17,11 @@ import { WorkspaceGuard } from "../../common/tenant/workspace.guard";
 import { RolesGuard } from "../../auth/guards/roles.guard";
 import { Roles } from "../../auth/decorators/roles.decorator";
 import { PrismaService } from "../../prisma/prisma.service";
+import { ProviderManager } from "../../providers/provider-manager.service";
+import { ProvidersModule } from "../../providers/providers.module";
+import type { MediaAttachment } from "../../providers/provider.types";
 import { MetaService } from "./meta.service";
+import { MetaModule } from "./meta.module";
 
 class PublishDto {
   @IsArray() @IsIn(["facebook", "instagram"], { each: true }) targets!: ("facebook" | "instagram")[];
@@ -37,6 +41,7 @@ export class SocialController {
   constructor(
     private readonly meta: MetaService,
     private readonly prisma: PrismaService,
+    private readonly providers: ProviderManager,
   ) {}
 
   @Get("status")
@@ -50,19 +55,22 @@ export class SocialController {
   @HttpCode(200)
   async publish(@WorkspaceId() workspaceId: string, @Body() dto: PublishDto) {
     if (!dto.targets?.length) throw new BadRequestException("Elige Facebook y/o Instagram.");
-    const results = await this.meta.publish(workspaceId, dto.targets, {
-      message: dto.message,
-      attachments: dto.attachments,
-      format: dto.format ?? null,
-    });
-    if (this.prisma.enabled) {
-      for (const r of results) {
+    // Every outbound publish goes through the ProviderManager (single entry).
+    const results = [];
+    for (const target of dto.targets) {
+      const r = await this.providers.publish(workspaceId, target, {
+        message: dto.message,
+        attachments: dto.attachments?.filter((a) => a.url) as MediaAttachment[] | undefined,
+        format: dto.format ?? null,
+      });
+      results.push({ target, ok: r.ok, id: r.id, format: r.format, error: r.error });
+      if (this.prisma.enabled) {
         await this.prisma.sendLog.create({
           data: {
             workspaceSlug: workspaceId,
             campaignName: "Publicación directa",
-            groupName: r.target === "facebook" ? "Facebook" : "Instagram",
-            target: r.target,
+            groupName: target === "facebook" ? "Facebook" : "Instagram",
+            target,
             postId: r.id ?? null,
             format: r.format ?? dto.format ?? null,
             preview: (dto.message ?? "").slice(0, 140),
@@ -89,8 +97,7 @@ export class SocialController {
 }
 
 @Module({
+  imports: [MetaModule, ProvidersModule],
   controllers: [SocialController],
-  providers: [MetaService],
-  exports: [MetaService],
 })
 export class SocialModule {}

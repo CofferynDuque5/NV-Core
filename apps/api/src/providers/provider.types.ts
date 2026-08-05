@@ -12,7 +12,14 @@
  */
 
 /** The providers the platform manages. */
-export const PROVIDER_IDS = ["whatsapp", "facebook", "instagram", "email", "tiktok"] as const;
+export const PROVIDER_IDS = [
+  "whatsapp",
+  "telegram",
+  "facebook",
+  "instagram",
+  "email",
+  "tiktok",
+] as const;
 export type ProviderId = (typeof PROVIDER_IDS)[number];
 
 /** Execution context handed to every adapter call. */

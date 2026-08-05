@@ -19,6 +19,7 @@ import {
   EmailProvider,
   FacebookProvider,
   InstagramProvider,
+  TelegramProvider,
   TiktokProvider,
   WhatsappProvider,
 } from "./providers";
@@ -26,6 +27,7 @@ import {
 /** Maps @nv/domain channel ids to provider ids. */
 const CHANNEL_TO_PROVIDER: Record<string, ProviderId> = {
   wa: "whatsapp",
+  tg: "telegram",
   fb: "facebook",
   ig: "instagram",
   email: "email",
@@ -58,12 +60,13 @@ export class ProviderManager {
   constructor(
     private readonly prisma: PrismaService,
     whatsapp: WhatsappProvider,
+    telegram: TelegramProvider,
     facebook: FacebookProvider,
     instagram: InstagramProvider,
     email: EmailProvider,
     tiktok: TiktokProvider,
   ) {
-    for (const p of [whatsapp, facebook, instagram, email, tiktok]) {
+    for (const p of [whatsapp, telegram, facebook, instagram, email, tiktok]) {
       this.providers.set(p.id, p);
     }
   }

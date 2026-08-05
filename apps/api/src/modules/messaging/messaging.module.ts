@@ -1,22 +1,13 @@
-import {
-  Body,
-  Controller,
-  Injectable,
-  Module,
-  Post,
-  ServiceUnavailableException,
-  UseGuards,
-} from "@nestjs/common";
-import { ConfigService } from "@nestjs/config";
+import { Body, Controller, Module, Post, UseGuards } from "@nestjs/common";
 import { ApiBearerAuth, ApiTags } from "@nestjs/swagger";
 import { IsString, MinLength } from "class-validator";
 
-import type { AppConfig } from "../../config/configuration";
 import { WorkspaceId } from "../../common/tenant/workspace.decorator";
 import { WorkspaceGuard } from "../../common/tenant/workspace.guard";
 import { RolesGuard } from "../../auth/guards/roles.guard";
 import { Roles } from "../../auth/decorators/roles.decorator";
-import { deliverMessage, isChannelConfigured, type OutboundMessage } from "./messaging.providers";
+import { ProviderManager } from "../../providers/provider-manager.service";
+import { ProvidersModule } from "../../providers/providers.module";
 
 export class SendMessageDto {
   @IsString() channel!: string;
@@ -24,52 +15,28 @@ export class SendMessageDto {
   @IsString() @MinLength(1) body!: string;
 }
 
-@Injectable()
-export class MessagingService {
-  constructor(private readonly config: ConfigService<AppConfig, true>) {}
-
-  private integrations() {
-    return this.config.get("integrations", { infer: true });
-  }
-
-  /** True when the channel can deliver right now (provider configured). */
-  isConfigured(channel: string): boolean {
-    return isChannelConfigured(this.integrations(), channel);
-  }
-
-  /** Send through the channel provider; throws 503 when unconfigured/unsupported. */
-  async send(_workspaceId: string, dto: OutboundMessage): Promise<{ id: string }> {
-    if (!this.isConfigured(dto.channel)) {
-      throw new ServiceUnavailableException(
-        `Canal "${dto.channel}" sin proveedor configurado (WhatsApp / Telegram).`,
-      );
-    }
-    try {
-      return await deliverMessage(this.integrations(), dto);
-    } catch (err) {
-      throw new ServiceUnavailableException((err as Error).message);
-    }
-  }
-}
-
+/**
+ * Direct outbound messaging. Delivery goes through the ProviderManager (the
+ * single entry point to every external provider) — this module no longer calls
+ * any messaging API directly.
+ */
 @ApiTags("messaging")
 @ApiBearerAuth()
 @UseGuards(WorkspaceGuard)
 @Controller("workspaces/:workspace/messaging")
 export class MessagingController {
-  constructor(private readonly service: MessagingService) {}
+  constructor(private readonly providers: ProviderManager) {}
 
   @Post("send")
   @Roles("Owner", "Admin", "Editor")
   @UseGuards(RolesGuard)
   send(@WorkspaceId() workspaceId: string, @Body() dto: SendMessageDto) {
-    return this.service.send(workspaceId, dto);
+    return this.providers.sendByChannel(workspaceId, dto.channel, dto.to, dto.body);
   }
 }
 
 @Module({
+  imports: [ProvidersModule],
   controllers: [MessagingController],
-  providers: [MessagingService],
-  exports: [MessagingService],
 })
 export class MessagingModule {}
