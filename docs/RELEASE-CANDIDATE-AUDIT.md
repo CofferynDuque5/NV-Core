@@ -7,12 +7,12 @@
 
 ## Veredicto (Fase 11): 🔴 **NO publicar todavía**
 
-Avance real desde la v1: hay **cinco** módulos a nivel premium (Calendario, Media
-Library, Analytics, Workflow Builder y Campaign Builder) sobre una base técnica
-sólida y con **higiene de código verificada**. Pero **4 de 9 fases del roadmap
-siguen sin estar a nivel producto** y **no existe ninguna pieza de adopción**
-(onboarding, ayuda, changelog, estado, backups, import/export). Se mantiene el
-**bloqueo de release** y se entrega el backlog actualizado.
+Avance real desde la v1: hay **seis** módulos a nivel premium (Calendario, Media
+Library, Analytics, Workflow Builder, Campaign Builder e Inbox Omnicanal) sobre
+una base técnica sólida y con **higiene de código verificada**. Pero **3 de 9
+fases del roadmap siguen sin estar a nivel producto** y **no existe ninguna pieza
+de adopción** (onboarding, ayuda, changelog, estado, backups, import/export). Se
+mantiene el **bloqueo de release** y se entrega el backlog actualizado.
 
 ---
 
@@ -26,7 +26,7 @@ siguen sin estar a nivel producto** y **no existe ninguna pieza de adopción**
 | 4 | **Workflow Builder** | ✅ Premium (baseline) | 🔴→✅ editor visual de nodos (disparador/acción/espera/condición), conexiones, inspector, validación y guardado; sincroniza con la orquestación (n8n oculto). *Falta ramas por condición y test-run (P2).* |
 | 5 | AI Content Studio | 🟡 Parcial | = |
 | 6 | **Analytics** | ✅ Premium (baseline) | 🟡→✅ período 7/30/90, KPIs con delta vs período anterior, serie temporal, embudo CRM, tasas de conversión y **heatmap de actividad**. *Falta cohortes/exportación (P2).* |
-| 7 | Inbox Omnicanal | 🟡 Funcional | = |
+| 7 | **Inbox Omnicanal** | ✅ Premium (baseline) | 🟡→✅ asignación por responsable, etiquetas de triage, filtros (búsqueda/canal/estado/responsable). *Falta notas internas y snippets (P2).* |
 | 8 | CRM | 🟡 Funcional | = |
 | 9 | Marketplace | 🔴 No cumple | = |
 
@@ -40,7 +40,7 @@ siguen sin estar a nivel producto** y **no existe ninguna pieza de adopción**
 | Conexiones | 8.5 | 8.5 | Sólido; sin feedback de estado en vivo. |
 | **Media Library** | 6.0 | **8.5** | Búsqueda/carpetas/etiquetas/edición; falta versionado/uso-por-campaña. |
 | Configuración | 8.0 | 8.0 | — |
-| Inbox | 7.5 | 7.5 | Sin asignación/etiquetas. |
+| Inbox | 7.5 | **9.0** | Asignación, etiquetas y filtros (búsqueda/canal/estado/responsable). Falta notas internas. |
 | Campañas | 7.5 | 7.5 | — |
 | Dashboard | 7.5 | 7.5 | No es BI ejecutivo. |
 | AI Studio | 7.0 | 7.0 | Generación básica. |
@@ -120,7 +120,7 @@ siguen sin estar a nivel producto** y **no existe ninguna pieza de adopción**
 1. ✅ **Analytics** (período comparativo, deltas, serie temporal, embudo, conversión, heatmap) — HECHO dentro del freeze.
 2. ✅ **Workflow Builder** (editor visual de nodos + conexiones + validación + guardado; n8n oculto) — HECHO dentro del freeze.
 3. ✅ **Campaign Builder** (editor visual por capas + arrastre/redimensión + z-order + export SVG/PNG) — HECHO dentro del freeze.
-4. AI Studio / Inbox / CRM / Marketplace a nivel premium.
+4. ✅ **Inbox** (asignación + etiquetas + filtros) — HECHO. · AI Studio / CRM / Marketplace a nivel premium.
 
 ### P1 — Piezas de adopción (ninguna existe)
 5. Onboarding interactivo · 6. Centro de ayuda + KB · 7. Tour contextual ·
@@ -142,5 +142,5 @@ smoke real end-to-end contra backend+DB.
 ---
 
 ## ¿Publicarías este producto a clientes reales? **NO.**
-5 de 9 fases premium, 0 de 8 piezas de adopción, y hardening (WCAG, carga real)
+6 de 9 fases premium, 0 de 8 piezas de adopción, y hardening (WCAG, carga real)
 pendiente. La base es sólida y limpia; ejecutar P0→P1→P2 y re-auditar.

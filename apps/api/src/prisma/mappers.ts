@@ -191,6 +191,7 @@ export const mapConversation = (c: PConversation): Conversation => ({
   unread: 0,
   lastMessageAt: c.createdAt.toISOString(),
   assignee: c.assignee ?? undefined,
+  labels: c.labels ?? [],
   resolved: c.resolved,
 });
 

@@ -256,12 +256,25 @@ export interface SendMessageInput {
   text: string;
 }
 
+/** Partial triage update for a conversation. */
+export interface UpdateConversationInput {
+  resolved?: boolean;
+  /** Assignee email, or null / "" to unassign. */
+  assignee?: string | null;
+  labels?: string[];
+}
+
 export interface InboxService {
   conversations(workspaceId: string): Promise<ListResult<Conversation>>;
   messages(workspaceId: string, conversationId: string): Promise<Message[]>;
   createConversation(workspaceId: string, input: CreateConversationInput): Promise<Conversation>;
   sendMessage(workspaceId: string, conversationId: string, input: SendMessageInput): Promise<Message>;
   setResolved(workspaceId: string, conversationId: string, resolved: boolean): Promise<Conversation>;
+  updateConversation(
+    workspaceId: string,
+    conversationId: string,
+    input: UpdateConversationInput,
+  ): Promise<Conversation>;
 }
 
 export interface MediaUploadSignature {

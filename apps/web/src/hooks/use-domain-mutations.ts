@@ -15,6 +15,7 @@ import type {
   CreateCampaignInput,
   CreateContactInput,
   CreateConversationInput,
+  UpdateConversationInput,
   CreateGroupInput,
   CreatePostInput,
   UpdatePostInput,
@@ -539,6 +540,20 @@ export function useResolveConversation() {
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: [ws.id, "inbox"] });
       toast.success("Conversación actualizada");
+    },
+    onError: (err) => toast.error(errText(err)),
+  });
+}
+
+export function useUpdateConversation() {
+  const svc = useServices();
+  const ws = useWorkspace();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (args: { id: string; input: UpdateConversationInput }) =>
+      svc.inbox.updateConversation(ws.id, args.id, args.input),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: [ws.id, "inbox"] });
     },
     onError: (err) => toast.error(errText(err)),
   });

@@ -352,6 +352,8 @@ model Conversation {
   contactHandle String?
   resolved      Boolean   @default(false)
   assignee      String?
+  /// Free-form labels for triage (e.g. "ventas", "urgente").
+  labels        String[]
   createdAt     DateTime  @default(now())
   messages      Message[]
 

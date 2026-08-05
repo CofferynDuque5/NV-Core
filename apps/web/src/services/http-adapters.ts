@@ -170,6 +170,8 @@ export function createHttpAdapters(opts: HttpAdapterOptions): Services {
         post<Message>(`${ws(id)}/inbox/conversations/${cid}/messages`, input),
       setResolved: (id, cid, resolved) =>
         patch<Conversation>(`${ws(id)}/inbox/conversations/${cid}`, { resolved }),
+      updateConversation: (id, cid, input) =>
+        patch<Conversation>(`${ws(id)}/inbox/conversations/${cid}`, input),
     },
     media: {
       folders: (id) => get<MediaFolder[]>(`${ws(id)}/media/folders`),

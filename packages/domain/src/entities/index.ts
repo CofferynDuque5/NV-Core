@@ -280,6 +280,8 @@ export interface Conversation {
   unread: number;
   lastMessageAt: string;
   assignee?: string;
+  /** Triage labels. */
+  labels?: string[];
   resolved: boolean;
 }
 

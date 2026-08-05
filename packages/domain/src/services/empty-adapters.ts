@@ -96,6 +96,7 @@ export const emptyAdapters: Services = {
     createConversation: () => notAvailable(),
     sendMessage: () => notAvailable(),
     setResolved: () => notAvailable(),
+    updateConversation: () => notAvailable(),
   },
   media: {
     folders: () => delay([]),

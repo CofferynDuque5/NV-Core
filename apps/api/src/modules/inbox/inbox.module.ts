@@ -21,7 +21,7 @@ import { ConfigService } from "@nestjs/config";
 import { ApiBearerAuth, ApiExcludeEndpoint, ApiPropertyOptional, ApiTags } from "@nestjs/swagger";
 import { SkipThrottle } from "@nestjs/throttler";
 import { CHANNEL_IDS, type ChannelId, type Conversation, type Message } from "@nv/domain";
-import { IsBoolean, IsIn, IsOptional, IsString, MinLength } from "class-validator";
+import { IsArray, IsBoolean, IsIn, IsOptional, IsString, MinLength } from "class-validator";
 import type { Response } from "express";
 
 import type { AppConfig } from "../../config/configuration";
@@ -53,8 +53,22 @@ export class SendMessageDto {
   @IsString() @MinLength(1) text!: string;
 }
 
-export class SetResolvedDto {
-  @IsBoolean() resolved!: boolean;
+export class UpdateConversationDto {
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsBoolean()
+  resolved?: boolean;
+
+  @ApiPropertyOptional({ description: "Email del responsable; vacío o null para desasignar." })
+  @IsOptional()
+  @IsString()
+  assignee?: string | null;
+
+  @ApiPropertyOptional({ type: [String] })
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  labels?: string[];
 }
 
 @Injectable()
@@ -181,15 +195,20 @@ export class InboxService {
     return mapMessage(row);
   }
 
-  async setResolved(
+  /** Partial triage update: resolve, assign (or unassign with ""/null), labels. */
+  async updateConversation(
     workspaceId: string,
     conversationId: string,
-    resolved: boolean,
+    dto: UpdateConversationDto,
   ): Promise<Conversation> {
     await this.owned(workspaceId, conversationId);
     const row = await this.prisma.conversation.update({
       where: { id: conversationId },
-      data: { resolved },
+      data: {
+        ...(dto.resolved !== undefined ? { resolved: dto.resolved } : {}),
+        ...(dto.assignee !== undefined ? { assignee: dto.assignee ? dto.assignee : null } : {}),
+        ...(dto.labels !== undefined ? { labels: dto.labels } : {}),
+      },
     });
     return mapConversation(row);
   }
@@ -233,12 +252,12 @@ export class InboxController {
   @Patch("conversations/:id")
   @Roles("Owner", "Admin", "Editor")
   @UseGuards(RolesGuard)
-  setResolved(
+  updateConversation(
     @WorkspaceId() workspaceId: string,
     @Param("id") id: string,
-    @Body() dto: SetResolvedDto,
+    @Body() dto: UpdateConversationDto,
   ) {
-    return this.service.setResolved(workspaceId, id, dto.resolved);
+    return this.service.updateConversation(workspaceId, id, dto);
   }
 }
 
