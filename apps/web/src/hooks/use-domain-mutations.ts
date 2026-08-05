@@ -4,6 +4,9 @@ import { toast } from "sonner";
 import type {
   AddMemberInput,
   CampaignAttachment,
+  ChannelId,
+  ListResult,
+  Post,
   CreateWorkspaceInput,
   CreateAutomationInput,
   CreateCampaignInput,
@@ -242,6 +245,55 @@ export function useDeletePost() {
       void qc.invalidateQueries({ queryKey: [ws.id, "posts"] });
       toast.success("Publicación eliminada");
     },
+  });
+}
+
+interface MoveInput {
+  id: string;
+  scheduledAt: string;
+  channel?: ChannelId;
+}
+
+/**
+ * Move (reschedule) a post — the calendar drag & drop primitive. Optimistic:
+ * the chip jumps to the new slot instantly and rolls back if the server
+ * rejects it. The "undo" toast is wired at the call site (it knows the previous
+ * slot). Backing store is the same S1 PATCH endpoint.
+ */
+export function useMovePost() {
+  const svc = useServices();
+  const ws = useWorkspace();
+  const qc = useQueryClient();
+  const key = [ws.id, "posts"];
+
+  return useMutation({
+    mutationFn: ({ id, scheduledAt, channel }: MoveInput) =>
+      svc.posts.update(ws.id, id, { scheduledAt, channel, status: "scheduled" }),
+    onMutate: async ({ id, scheduledAt, channel }: MoveInput) => {
+      await qc.cancelQueries({ queryKey: key });
+      const prev = qc.getQueryData<ListResult<Post>>(key);
+      if (prev) {
+        qc.setQueryData<ListResult<Post>>(key, {
+          ...prev,
+          items: prev.items.map((p) =>
+            p.id === id
+              ? {
+                  ...p,
+                  scheduledAt,
+                  channel: channel ?? p.channel,
+                  status: p.status === "draft" ? "scheduled" : p.status,
+                }
+              : p,
+          ),
+        });
+      }
+      return { prev };
+    },
+    onError: (_e, _v, ctx) => {
+      if (ctx?.prev) qc.setQueryData(key, ctx.prev);
+      toast.error("No se pudo mover la publicación");
+    },
+    onSettled: () => void qc.invalidateQueries({ queryKey: key }),
   });
 }
 

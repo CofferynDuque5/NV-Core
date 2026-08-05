@@ -15,6 +15,7 @@ import { EmptyState } from "@/components/common/empty-state";
 import { Button } from "@/components/ui/button";
 import { CalendarPlus } from "lucide-react";
 import { PostChip } from "./post-chip";
+import { DropZone, useCalendarDnD } from "./dnd-context";
 
 /** Time grid range (06:00–23:00) — the productive window for scheduling. */
 const HOURS = Array.from({ length: 18 }, (_, i) => i + 6);
@@ -45,6 +46,7 @@ function postsByHour(posts: Post[]): Map<number, Post[]> {
 // ── Month ────────────────────────────────────────────────────────────────────
 export function MonthView({ cursor, byDay, onCreate, onSelect, selectedId }: ViewProps) {
   const cells = React.useMemo(() => monthMatrix(cursor), [cursor]);
+  const dnd = useCalendarDnD();
   const today = new Date();
   const MAX = 3;
 
@@ -63,9 +65,13 @@ export function MonthView({ cursor, byDay, onCreate, onSelect, selectedId }: Vie
           const inMonth = d.getMonth() === cursor.getMonth();
           const isToday = sameDay(d, today);
           const dayPosts = byDay.get(key) ?? [];
+          const drag = dnd?.dragging;
+          const danger = Boolean(drag && dayPosts.some((p) => p.id !== drag.id && p.channel === drag.channel));
           return (
-            <div
+            <DropZone
               key={key}
+              onDrop={() => dnd?.drop(d)}
+              danger={danger}
               className={cn(
                 "relative flex min-h-[104px] flex-col border-b border-r border-line-soft p-1",
                 !inMonth && "bg-panel-sunken/40",
@@ -102,7 +108,7 @@ export function MonthView({ cursor, byDay, onCreate, onSelect, selectedId }: Vie
                   </span>
                 ) : null}
               </div>
-            </div>
+            </DropZone>
           );
         })}
       </div>
@@ -118,6 +124,7 @@ function TimeGrid({
   onSelect,
   selectedId,
 }: { days: Date[] } & Omit<ViewProps, "cursor">) {
+  const dnd = useCalendarDnD();
   const today = new Date();
   const nowHour = today.getHours();
 
@@ -158,17 +165,22 @@ function TimeGrid({
               const dayPosts = byDay.get(ymd(d)) ?? [];
               const hourPosts = postsByHour(dayPosts).get(h) ?? [];
               const isNow = sameDay(d, today) && h === nowHour;
+              const drag = dnd?.dragging;
+              const danger = Boolean(drag && hourPosts.some((p) => p.id !== drag.id && p.channel === drag.channel));
+              const slot = `${String(h).padStart(2, "0")}:00`;
               return (
-                <div
+                <DropZone
                   key={`${ymd(d)}-${h}`}
+                  onDrop={() => dnd?.drop(d, slot)}
+                  danger={danger}
                   className={cn(
                     "relative min-h-[52px] border-b border-l border-line-soft p-1",
                     isNow && "bg-brand/5",
                   )}
                 >
                   <button
-                    aria-label={`Programar ${String(h).padStart(2, "0")}:00`}
-                    onClick={() => onCreate(d, `${String(h).padStart(2, "0")}:00`)}
+                    aria-label={`Programar ${slot}`}
+                    onClick={() => onCreate(d, slot)}
                     className="absolute inset-0 z-0 transition-colors hover:bg-panel-raised/50"
                   />
                   {isNow ? <span className="absolute left-0 right-0 top-0 z-10 h-px bg-brand" /> : null}
@@ -177,7 +189,7 @@ function TimeGrid({
                       <PostChip key={p.id} post={p} onSelect={onSelect} selected={p.id === selectedId} />
                     ))}
                   </div>
-                </div>
+                </DropZone>
               );
             })}
           </React.Fragment>
@@ -199,6 +211,7 @@ export function DayView({ cursor, byDay, onCreate, onSelect, selectedId }: ViewP
 // ── Timeline (per-channel swimlanes across the week) ─────────────────────────
 export function TimelineView({ cursor, byDay, onCreate, onSelect, selectedId }: ViewProps) {
   const days = React.useMemo(() => weekDays(cursor), [cursor]);
+  const dnd = useCalendarDnD();
   const today = new Date();
 
   // Only show channels that actually have posts this week (keeps it dense).
@@ -242,9 +255,14 @@ export function TimelineView({ cursor, byDay, onCreate, onSelect, selectedId }: 
             {days.map((d) => {
               const cellPosts = (byDay.get(ymd(d)) ?? []).filter((p) => p.channel === ch.id);
               const isToday = sameDay(d, today);
+              const drag = dnd?.dragging;
+              // Dropping onto another channel's lane re-channels the post.
+              const danger = Boolean(drag && cellPosts.some((p) => p.id !== drag.id));
               return (
-                <div
+                <DropZone
                   key={`${ch.id}-${ymd(d)}`}
+                  onDrop={() => dnd?.drop(d, undefined, ch.id)}
+                  danger={danger}
                   className={cn(
                     "relative min-h-[56px] border-b border-l border-line-soft p-1",
                     isToday && "bg-brand/5",
@@ -260,7 +278,7 @@ export function TimelineView({ cursor, byDay, onCreate, onSelect, selectedId }: 
                       <PostChip key={p.id} post={p} onSelect={onSelect} selected={p.id === selectedId} />
                     ))}
                   </div>
-                </div>
+                </DropZone>
               );
             })}
           </React.Fragment>

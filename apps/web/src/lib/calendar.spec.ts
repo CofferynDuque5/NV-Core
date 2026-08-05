@@ -7,8 +7,10 @@ import {
   conflictsFor,
   countByChannel,
   groupByDay,
+  hm,
   monthMatrix,
   rangeLabel,
+  rescheduleISO,
   sameDayOthers,
   scheduledOnly,
   startOfWeek,
@@ -119,5 +121,20 @@ describe("agendaDays", () => {
     const days = agendaDays(new Date(2026, 8, 2), 14);
     expect(days).toHaveLength(14);
     expect(ymd(days[0]!)).toBe("2026-08-31");
+  });
+});
+
+describe("rescheduleISO", () => {
+  const original = new Date(2026, 8, 2, 10, 30).toISOString(); // 10:30 local
+
+  it("keeps the original time when moving to a day (no slot)", () => {
+    const moved = rescheduleISO(original, new Date(2026, 8, 5));
+    expect(ymd(new Date(moved))).toBe("2026-09-05");
+    expect(hm(new Date(moved))).toBe("10:30");
+  });
+
+  it("takes the slot hour but keeps original minutes", () => {
+    const moved = rescheduleISO(original, new Date(2026, 8, 5), "15:00");
+    expect(hm(new Date(moved))).toBe("15:30");
   });
 });

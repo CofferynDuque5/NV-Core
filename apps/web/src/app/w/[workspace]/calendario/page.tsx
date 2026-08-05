@@ -1,15 +1,18 @@
 import * as React from "react";
 import type { ChannelId, Post } from "@nv/domain";
+import { toast } from "sonner";
 
-import { ymd, rangeLabel, countByChannel, scheduledOnly } from "@/lib/calendar";
+import { ymd, hm, rangeLabel, countByChannel, scheduledOnly, rescheduleISO } from "@/lib/calendar";
 import { useCalendar } from "@/hooks/use-calendar";
 import { usePosts, useCampaigns } from "@/hooks/use-domain-data";
+import { useMovePost } from "@/hooks/use-domain-mutations";
 import { Panel } from "@/components/common/panel";
 import { ErrorState } from "@/components/common/error-state";
 import { PostScheduleDialog } from "@/components/entities/post-schedule-dialog";
 import { CalendarToolbar } from "@/components/calendar/calendar-toolbar";
 import { CalendarRail } from "@/components/calendar/calendar-rail";
 import { PostPanel } from "@/components/calendar/post-panel";
+import { CalendarDnDProvider } from "@/components/calendar/dnd-context";
 import {
   MonthView,
   WeekView,
@@ -30,20 +33,19 @@ export default function CalendarioPage() {
   const cal = useCalendar();
   const posts = usePosts();
   const campaigns = useCampaigns();
+  const move = useMovePost();
 
   const [dialogOpen, setDialogOpen] = React.useState(false);
   const [prefill, setPrefill] = React.useState<{ date?: string; time?: string; channel?: ChannelId }>({});
   const [selectedId, setSelectedId] = React.useState<string | null>(null);
 
   const allItems = posts.data?.items ?? [];
-  // Conflicts/siblings consider ALL scheduled posts (not just the filtered set).
   const allScheduled = React.useMemo(() => scheduledOnly(allItems), [allItems]);
   const selectedPost = React.useMemo<Post | undefined>(
     () => allItems.find((p) => p.id === selectedId),
     [allItems, selectedId],
   );
 
-  // Automation: preselect the workspace's most-used channel for new posts.
   const topChannel = React.useMemo<ChannelId | undefined>(() => {
     const entries = Object.entries(countByChannel(allItems)).sort((a, b) => b[1] - a[1]);
     return (entries[0]?.[0] as ChannelId) ?? undefined;
@@ -58,6 +60,35 @@ export default function CalendarioPage() {
   );
 
   const onSelect = React.useCallback((p: Post) => setSelectedId(p.id), []);
+
+  // The single "move" primitive: drag & drop and the panel nudges both use it.
+  // Optimistic (see useMovePost) + an "undo" toast that restores the old slot.
+  const onMove = React.useCallback(
+    (post: Post, day: Date, time?: string, channel?: ChannelId) => {
+      if (!post.scheduledAt) return;
+      const prevIso = post.scheduledAt;
+      const prevChannel = post.channel;
+      const scheduledAt = rescheduleISO(prevIso, day, time);
+      const reChannel = channel && channel !== post.channel ? channel : undefined;
+      if (scheduledAt === prevIso && !reChannel) return; // no-op
+
+      move.mutate(
+        { id: post.id, scheduledAt, channel: reChannel },
+        {
+          onSuccess: () =>
+            toast("Publicación movida", {
+              description: `${ymd(new Date(scheduledAt))} · ${hm(new Date(scheduledAt))}`,
+              action: {
+                label: "Deshacer",
+                onClick: () =>
+                  move.mutate({ id: post.id, scheduledAt: prevIso, channel: reChannel ? prevChannel : undefined }),
+              },
+            }),
+        },
+      );
+    },
+    [move],
+  );
 
   // Keyboard shortcuts (ignored while typing or a dialog is open).
   React.useEffect(() => {
@@ -101,44 +132,47 @@ export default function CalendarioPage() {
         onCreate={() => openCreate(cal.cursor)}
       />
 
-      <div className="grid grid-cols-1 gap-4 xl:grid-cols-[1fr_340px]">
-        <Panel className="overflow-hidden">
-          {cal.isError ? (
-            <ErrorState onRetry={() => posts.refetch()} />
-          ) : cal.isLoading ? (
-            <div className="grid min-h-[420px] place-items-center text-ink-muted">
-              <span className="size-5 animate-spin rounded-full border-2 border-line-strong border-t-brand" />
-            </div>
-          ) : cal.view === "month" ? (
-            <MonthView {...viewProps} />
-          ) : cal.view === "week" ? (
-            <WeekView {...viewProps} />
-          ) : cal.view === "day" ? (
-            <DayView {...viewProps} />
-          ) : cal.view === "timeline" ? (
-            <TimelineView {...viewProps} />
-          ) : (
-            <AgendaView {...viewProps} />
-          )}
-        </Panel>
+      <CalendarDnDProvider onMove={onMove}>
+        <div className="grid grid-cols-1 gap-4 xl:grid-cols-[1fr_340px]">
+          <Panel className="overflow-hidden">
+            {cal.isError ? (
+              <ErrorState onRetry={() => posts.refetch()} />
+            ) : cal.isLoading ? (
+              <div className="grid min-h-[420px] place-items-center text-ink-muted">
+                <span className="size-5 animate-spin rounded-full border-2 border-line-strong border-t-brand" />
+              </div>
+            ) : cal.view === "month" ? (
+              <MonthView {...viewProps} />
+            ) : cal.view === "week" ? (
+              <WeekView {...viewProps} />
+            ) : cal.view === "day" ? (
+              <DayView {...viewProps} />
+            ) : cal.view === "timeline" ? (
+              <TimelineView {...viewProps} />
+            ) : (
+              <AgendaView {...viewProps} />
+            )}
+          </Panel>
 
-        {selectedPost ? (
-          <PostPanel
-            post={selectedPost}
-            posts={allScheduled}
-            onClose={() => setSelectedId(null)}
-            onSelect={onSelect}
-          />
-        ) : (
-          <CalendarRail
-            filters={cal.filters}
-            setFilters={cal.setFilters}
-            visible={cal.visible}
-            unscheduledCount={cal.unscheduledCount}
-            campaigns={campaigns.data?.items ?? []}
-          />
-        )}
-      </div>
+          {selectedPost ? (
+            <PostPanel
+              post={selectedPost}
+              posts={allScheduled}
+              onClose={() => setSelectedId(null)}
+              onSelect={onSelect}
+              onMove={onMove}
+            />
+          ) : (
+            <CalendarRail
+              filters={cal.filters}
+              setFilters={cal.setFilters}
+              visible={cal.visible}
+              unscheduledCount={cal.unscheduledCount}
+              campaigns={campaigns.data?.items ?? []}
+            />
+          )}
+        </div>
+      </CalendarDnDProvider>
 
       <PostScheduleDialog
         open={dialogOpen}

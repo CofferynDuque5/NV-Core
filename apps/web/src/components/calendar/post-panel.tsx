@@ -4,7 +4,7 @@ import { AlertTriangle, Copy, Save, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
 
 import { cn } from "@/lib/utils";
-import { hm, ymd, conflictsFor, sameDayOthers } from "@/lib/calendar";
+import { addDays, hm, ymd, conflictsFor, sameDayOthers } from "@/lib/calendar";
 import { useDeletePost, useDuplicatePost, useUpdatePost } from "@/hooks/use-domain-mutations";
 import { useConfirm } from "@/providers/confirm-provider";
 import { Button } from "@/components/ui/button";
@@ -30,11 +30,14 @@ export function PostPanel({
   posts,
   onClose,
   onSelect,
+  onMove,
 }: {
   post: Post;
   posts: Post[];
   onClose: () => void;
   onSelect: (p: Post) => void;
+  /** One-click / keyboard-accessible reschedule (same primitive as drag&drop). */
+  onMove?: (post: Post, day: Date, time?: string) => void;
 }) {
   const update = useUpdatePost();
   const duplicate = useDuplicatePost();
@@ -170,6 +173,24 @@ export function PostPanel({
               <Input id="pp-time" type="time" value={time} disabled={readOnly} onChange={(e) => setTime(e.target.value)} />
             </div>
           </div>
+          {!readOnly && onMove && post.scheduledAt ? (
+            <div className="flex flex-wrap items-center gap-1.5">
+              <span className="text-[11px] text-ink-faint">Mover:</span>
+              {[
+                { label: "−1 día", days: -1 },
+                { label: "+1 día", days: 1 },
+                { label: "+1 sem", days: 7 },
+              ].map((n) => (
+                <button
+                  key={n.label}
+                  onClick={() => onMove(post, addDays(new Date(post.scheduledAt!), n.days))}
+                  className="rounded-md border border-line-soft px-2 py-1 text-[11px] text-ink-muted transition-colors hover:border-line-bright hover:text-ink"
+                >
+                  {n.label}
+                </button>
+              ))}
+            </div>
+          ) : null}
           <div className="space-y-1.5">
             <Label htmlFor="pp-channel">Canal</Label>
             <select

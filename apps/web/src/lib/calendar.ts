@@ -162,3 +162,21 @@ export function agendaDays(cursor: Date, count = 14): Date[] {
   const start = startOfWeek(cursor);
   return Array.from({ length: count }, (_, i) => addDays(start, i));
 }
+
+/**
+ * New ISO for a moved post. Keeps the original time of day when dropping on a
+ * day cell (the user changed the DAY, not the time); when dropping on a time
+ * slot, takes that hour but keeps the original minutes.
+ */
+export function rescheduleISO(originalIso: string, day: Date, time?: string): string {
+  const o = new Date(originalIso);
+  const d = new Date(day.getFullYear(), day.getMonth(), day.getDate());
+  let h = o.getHours();
+  const m = o.getMinutes();
+  if (time) {
+    const parsed = Number(time.split(":")[0]);
+    if (!Number.isNaN(parsed)) h = parsed;
+  }
+  d.setHours(h, m, 0, 0);
+  return d.toISOString();
+}
