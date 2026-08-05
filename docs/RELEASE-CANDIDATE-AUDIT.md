@@ -7,12 +7,12 @@
 
 ## Veredicto (Fase 11): 🔴 **NO publicar todavía**
 
-Avance real desde la v1: hay **dos** módulos a nivel premium (Calendario y Media
-Library) sobre una base técnica sólida y con **higiene de código verificada**.
-Pero **7 de 9 fases del roadmap siguen sin estar a nivel producto** y **no existe
-ninguna pieza de adopción** (onboarding, ayuda, changelog, estado, backups,
-import/export). Se mantiene el **bloqueo de release** y se entrega el backlog
-actualizado.
+Avance real desde la v1: hay **tres** módulos a nivel premium (Calendario, Media
+Library y Analytics) sobre una base técnica sólida y con **higiene de código
+verificada**. Pero **6 de 9 fases del roadmap siguen sin estar a nivel producto**
+y **no existe ninguna pieza de adopción** (onboarding, ayuda, changelog, estado,
+backups, import/export). Se mantiene el **bloqueo de release** y se entrega el
+backlog actualizado.
 
 ---
 
@@ -25,7 +25,7 @@ actualizado.
 | 2 | Campaign Builder | 🔴 No cumple | = |
 | 4 | Workflow Builder | 🔴 No cumple | = |
 | 5 | AI Content Studio | 🟡 Parcial | = |
-| 6 | Analytics | 🟡 Parcial | = |
+| 6 | **Analytics** | ✅ Premium (baseline) | 🟡→✅ período 7/30/90, KPIs con delta vs período anterior, serie temporal, embudo CRM, tasas de conversión y **heatmap de actividad**. *Falta cohortes/exportación (P2).* |
 | 7 | Inbox Omnicanal | 🟡 Funcional | = |
 | 8 | CRM | 🟡 Funcional | = |
 | 9 | Marketplace | 🔴 No cumple | = |
@@ -45,7 +45,7 @@ actualizado.
 | Dashboard | 7.5 | 7.5 | No es BI ejecutivo. |
 | AI Studio | 7.0 | 7.0 | Generación básica. |
 | CRM | 7.0 | 7.0 | Básico. |
-| Analytics | 6.5 | 6.5 | Sin embudos/heatmaps/conversiones. |
+| Analytics | 6.5 | **8.5** | Período comparativo, deltas, serie temporal, embudo, conversión y heatmap. Falta cohortes/exportación. |
 | Marketplace | 5.0 | 5.0 | Sin instalación real. |
 | Campaign Builder | 4.0 | 4.0 | No es un editor. |
 | Workflow Builder | 4.0 | 4.0 | Sin editor de nodos. |
@@ -117,7 +117,7 @@ actualizado.
 ## Backlog priorizado (orden acordado)
 
 ### P0 — Feature-complete del roadmap (nivel premium)
-1. Analytics (embudos/conversiones/comparativas) — siguiente, se completa dentro del freeze.
+1. ✅ **Analytics** (período comparativo, deltas, serie temporal, embudo, conversión, heatmap) — HECHO dentro del freeze.
 2. Workflow Builder (editor estructurado que sincroniza con n8n).
 3. Campaign Builder (editor estructurado por capas + preview).
 4. AI Studio / Inbox / CRM / Marketplace a nivel premium.
@@ -142,5 +142,5 @@ smoke real end-to-end contra backend+DB.
 ---
 
 ## ¿Publicarías este producto a clientes reales? **NO.**
-2 de 9 fases premium, 0 de 8 piezas de adopción, y hardening (helmet, WCAG,
-carga) pendiente. La base es sólida y limpia; ejecutar P0→P1→P2 y re-auditar.
+3 de 9 fases premium, 0 de 8 piezas de adopción, y hardening (WCAG, carga real)
+pendiente. La base es sólida y limpia; ejecutar P0→P1→P2 y re-auditar.

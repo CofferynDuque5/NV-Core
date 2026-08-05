@@ -311,6 +311,25 @@ export interface FunnelStep {
 export interface PlatformShare {
   channel: ChannelId;
   pct: string;
+  /** Absolute count in the selected period (optional; older callers omit it). */
+  count?: number;
+}
+
+/** One daily bucket of activity across the workspace, for time-series charts. */
+export interface AnalyticsPoint {
+  /** ISO date (YYYY-MM-DD), start of the day. */
+  date: string;
+  posts: number;
+  contacts: number;
+  conversations: number;
+  messages: number;
+}
+
+/** The window a snapshot was computed over. */
+export interface AnalyticsRange {
+  days: number;
+  from: string;
+  to: string;
 }
 
 export interface AnalyticsSnapshot {
@@ -319,4 +338,10 @@ export interface AnalyticsSnapshot {
   platforms: PlatformShare[];
   heatmap: number[][];
   topCampaigns: Campaign[];
+  /** Period the snapshot covers (optional for backward compatibility). */
+  range?: AnalyticsRange;
+  /** Daily activity buckets over the period, oldest → newest. */
+  series?: AnalyticsPoint[];
+  /** Derived conversion / engagement rates (reuses the FunnelStep shape). */
+  conversion?: FunnelStep[];
 }

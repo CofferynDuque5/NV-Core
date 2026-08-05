@@ -289,7 +289,8 @@ export interface AutomationService {
 }
 
 export interface AnalyticsService {
-  snapshot(workspaceId: string): Promise<AnalyticsSnapshot | null>;
+  /** `days` selects the reporting window (default 30). */
+  snapshot(workspaceId: string, days?: number): Promise<AnalyticsSnapshot | null>;
 }
 
 export interface ConnectionService {

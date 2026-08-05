@@ -201,7 +201,10 @@ export function createHttpAdapters(opts: HttpAdapterOptions): Services {
       run: (id, aid) =>
         post<{ triggered: boolean; runs: number }>(`${ws(id)}/automations/${aid}/run`, {}),
     },
-    analytics: { snapshot: (id) => get<AnalyticsSnapshot | null>(`${ws(id)}/analytics`) },
+    analytics: {
+      snapshot: (id, days) =>
+        get<AnalyticsSnapshot | null>(`${ws(id)}/analytics${days ? `?days=${days}` : ""}`),
+    },
     connections: {
       list: (id) => get<Connection[]>(`${ws(id)}/connections`),
       get: (id, cid) => get<Connection | null>(`${ws(id)}/connections/${cid}`),

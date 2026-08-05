@@ -139,10 +139,13 @@ export function useAutomations() {
   return useQuery({ queryKey: [ws.id, "automations"], queryFn: () => svc.automations.list(ws.id) });
 }
 
-export function useAnalytics() {
+export function useAnalytics(days = 30) {
   const svc = useServices();
   const ws = useWorkspace();
-  return useQuery({ queryKey: [ws.id, "analytics"], queryFn: () => svc.analytics.snapshot(ws.id) });
+  return useQuery({
+    queryKey: [ws.id, "analytics", days],
+    queryFn: () => svc.analytics.snapshot(ws.id, days),
+  });
 }
 
 export function useConnections() {
