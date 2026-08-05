@@ -22,6 +22,7 @@ import type {
 
 import { useServices } from "./use-services";
 import { useWorkspace } from "./use-workspace";
+import { uploadToCloudinary } from "@/lib/cloudinary";
 import { useWorkspaceStore } from "@/stores/workspace-store";
 import { useAuthStore } from "@/stores/auth-store";
 
@@ -442,25 +443,11 @@ export function useUploadMedia() {
       if (!sig) {
         throw new Error("Cloudinary no está configurado. Define CLOUDINARY_URL en el backend.");
       }
-      const form = new FormData();
-      form.append("file", file);
-      form.append("api_key", sig.apiKey);
-      form.append("timestamp", String(sig.timestamp));
-      form.append("signature", sig.signature);
-      form.append("folder", sig.folder);
-      const res = await fetch(`https://api.cloudinary.com/v1_1/${sig.cloudName}/auto/upload`, {
-        method: "POST",
-        body: form,
-      });
-      if (!res.ok) {
-        const body = (await res.json().catch(() => ({}))) as { error?: { message?: string } };
-        throw new Error(body.error?.message ?? "Fallo al subir a Cloudinary.");
-      }
-      const uploaded = (await res.json()) as { secure_url: string; resource_type: string };
+      const uploaded = await uploadToCloudinary(sig, file);
       return svc.media.createAsset(ws.id, {
-        type: uploaded.resource_type === "video" ? "video" : "image",
+        type: uploaded.resourceType === "video" ? "video" : "image",
         title: file.name,
-        url: uploaded.secure_url,
+        url: uploaded.secureUrl,
       });
     },
     onSuccess: () => {
@@ -486,28 +473,19 @@ export function useUploadCampaignAttachment() {
       if (!sig) {
         throw new Error("Cloudinary no está configurado. Define CLOUDINARY_URL en el backend.");
       }
-      const form = new FormData();
-      form.append("file", file);
-      form.append("api_key", sig.apiKey);
-      form.append("timestamp", String(sig.timestamp));
-      form.append("signature", sig.signature);
-      form.append("folder", sig.folder);
-      const res = await fetch(`https://api.cloudinary.com/v1_1/${sig.cloudName}/auto/upload`, {
-        method: "POST",
-        body: form,
-      });
-      if (!res.ok) {
-        const body = (await res.json().catch(() => ({}))) as { error?: { message?: string } };
-        throw new Error(body.error?.message ?? "Fallo al subir a Cloudinary.");
-      }
-      const uploaded = (await res.json()) as { secure_url: string; resource_type: string };
-      const kind = uploaded.resource_type === "video" ? "video" : uploaded.resource_type === "image" ? "image" : "document";
+      const uploaded = await uploadToCloudinary(sig, file);
+      const kind =
+        uploaded.resourceType === "video"
+          ? "video"
+          : uploaded.resourceType === "image"
+            ? "image"
+            : "document";
       // Keep it in the library too (best-effort; ignore failures).
       await svc.media
-        .createAsset(ws.id, { type: kind === "video" ? "video" : "image", title: file.name, url: uploaded.secure_url })
+        .createAsset(ws.id, { type: kind === "video" ? "video" : "image", title: file.name, url: uploaded.secureUrl })
         .catch(() => undefined);
       void qc.invalidateQueries({ queryKey: [ws.id, "media"] });
-      return { url: uploaded.secure_url, kind, mime: file.type || null, filename: file.name };
+      return { url: uploaded.secureUrl, kind, mime: file.type || null, filename: file.name };
     },
     onError: (err) => toast.error(errText(err)),
   });

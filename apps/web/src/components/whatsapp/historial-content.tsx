@@ -7,6 +7,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useCampaignLogs } from "@/hooks/use-domain-data";
 import { useServices } from "@/hooks/use-services";
 import { useWorkspace } from "@/hooks/use-workspace";
+import { formatDateTime } from "@/lib/utils";
 import { PageHeader } from "@/components/common/page-header";
 import { QueryBoundary } from "@/components/common/query-boundary";
 import { TableSkeleton } from "@/components/common/skeletons";
@@ -24,12 +25,6 @@ import {
 const COLUMNS = ["Fecha", "Campaña", "Destino", "Estado", "Detalle", ""];
 
 const SOCIAL_TARGETS = new Set(["facebook", "instagram"]);
-
-function formatDate(iso: string): string {
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return iso;
-  return d.toLocaleString();
-}
 
 function destination(entry: SendLogEntry): string {
   return entry.groupName ?? entry.target ?? "—";
@@ -125,7 +120,7 @@ export function HistorialContent({ showHeader = true }: { showHeader?: boolean }
                       className="border-b border-line last:border-0 align-top hover:bg-panel-raised/40"
                     >
                       <td className="whitespace-nowrap px-4 py-3 text-ink-muted">
-                        {formatDate(entry.createdAt)}
+                        {formatDateTime(entry.createdAt)}
                       </td>
                       <td className="px-4 py-3 text-ink">{entry.campaignName ?? "—"}</td>
                       <td className="px-4 py-3 text-ink-muted">{destination(entry)}</td>

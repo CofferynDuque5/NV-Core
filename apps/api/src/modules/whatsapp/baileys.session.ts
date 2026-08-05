@@ -196,9 +196,8 @@ export class BaileysSession {
    * a bare phone number (routed to `…@s.whatsapp.net`).
    */
   async sendMedia(to: string, text: string, attachment?: WhatsappAttachment | null): Promise<{ id: string }> {
-    if (to.includes("@") || to.endsWith("g.us")) return this.sendToGroup(to, text, attachment);
-    const digits = to.replace(/[^0-9]/g, "");
-    return this.sendToGroup(`${digits}@s.whatsapp.net`, text, attachment);
+    // toJid keeps group/full JIDs as-is and maps a bare number to s.whatsapp.net.
+    return this.sendToGroup(toJid(to), text, attachment);
   }
 
   /** Log out: closes the socket and clears stored credentials. */

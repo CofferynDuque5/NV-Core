@@ -5,6 +5,7 @@ import { Loader2, Plug, QrCode, RefreshCw, Smartphone, Unplug } from "lucide-rea
 import type { WhatsappStatus } from "@nv/domain";
 
 import { API_URL } from "@/lib/env";
+import { relativeTime } from "@/lib/utils";
 import { useWorkspace } from "@/hooks/use-workspace";
 import { useAuthStore } from "@/stores/auth-store";
 import { useWhatsappStatus } from "@/hooks/use-domain-data";
@@ -25,17 +26,6 @@ const STATUS_META: Record<WhatsappStatus["status"], { label: string; dot: string
   qr: { label: "Escanea el QR", dot: "bg-state-warning" },
   disconnected: { label: "Desconectado", dot: "bg-ink-faint" },
 };
-
-function relativeTime(iso: string | null): string {
-  if (!iso) return "—";
-  const diff = Date.now() - new Date(iso).getTime();
-  const min = Math.round(diff / 60000);
-  if (min < 1) return "hace segundos";
-  if (min < 60) return `hace ${min} min`;
-  const h = Math.round(min / 60);
-  if (h < 24) return `hace ${h} h`;
-  return new Date(iso).toLocaleDateString();
-}
 
 export function WhatsAppPanel() {
   const ws = useWorkspace();
@@ -147,7 +137,6 @@ export function WhatsAppPanel() {
         {/* QR / illustration */}
         <div className="grid w-full place-items-center rounded-xl border border-line-soft bg-panel-raised p-4 md:w-56">
           {showQr ? (
-            // eslint-disable-next-line @next/next/no-img-element
             <img src={qr} alt="Código QR de WhatsApp" className="size-44 rounded-lg bg-white p-1" />
           ) : state === "connected" ? (
             <div className="flex flex-col items-center gap-2 text-center text-ink-muted">

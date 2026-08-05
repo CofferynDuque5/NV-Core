@@ -35,7 +35,7 @@ import type {
 
 /**
  * HTTP adapters — implement the shared `Services` contract against the NestJS
- * API (@nv/api). Enabled only when NEXT_PUBLIC_API_URL is set (see
+ * API (@nv/api). Enabled only when VITE_API_URL is set (see
  * ./configure-services). Response shapes match the backend 1:1.
  */
 export interface HttpAdapterOptions {

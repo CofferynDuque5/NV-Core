@@ -2,7 +2,7 @@ import { Injectable } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 
 import type { AppConfig } from "../../config/configuration";
-import { sendWhatsApp } from "../../modules/messaging/messaging.providers";
+import { sendWhatsApp } from "../../modules/messaging/messaging.transport";
 import { BaseAdapter } from "./base.adapter";
 import type {
   AdapterContext,

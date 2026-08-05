@@ -23,7 +23,7 @@ import { PlantillasContent } from "@/components/whatsapp/plantillas-content";
 import { HistorialContent } from "@/components/whatsapp/historial-content";
 import { RecomendacionesContent } from "@/components/whatsapp/recomendaciones-content";
 
-const STATUS_TEXT = { ok: "Conectado", warn: "Con advertencias", down: "Caído" } as const;
+import { CONNECTION_STATUS_LABEL as STATUS_TEXT } from "@/lib/connection-status";
 
 const TABS = [
   { value: "conexion", label: "Conexión" },

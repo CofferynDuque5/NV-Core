@@ -1,27 +1,11 @@
 import type { AppConfig } from "../../config/configuration";
 
-/** Channels that support real outbound delivery through a messaging provider. */
-export const MESSAGING_CHANNELS = ["wa", "tg"] as const;
-export type MessagingChannel = (typeof MESSAGING_CHANNELS)[number];
-
-export function isMessagingChannel(channel: string): channel is MessagingChannel {
-  return (MESSAGING_CHANNELS as readonly string[]).includes(channel);
-}
-
-/** Whether the given channel has a fully-configured provider (pure — testable). */
-export function isChannelConfigured(
-  integrations: AppConfig["integrations"],
-  channel: string,
-): boolean {
-  switch (channel) {
-    case "wa":
-      return Boolean(integrations.whatsapp.token && integrations.whatsapp.phoneNumberId);
-    case "tg":
-      return Boolean(integrations.telegram.botToken);
-    default:
-      return false;
-  }
-}
+/**
+ * Low-level HTTP transport for the official WhatsApp Cloud API and Telegram Bot
+ * API. These are pure functions (no NestJS, no DI) consumed only by the
+ * corresponding provider adapters — they are the single place that touches
+ * those external HTTP endpoints.
+ */
 
 export interface OutboundMessage {
   channel: string;
@@ -72,19 +56,4 @@ export async function sendTelegram(
   const data = (await res.json()) as { ok?: boolean; result?: { message_id?: number } };
   if (!data.ok) throw new Error("Telegram: respuesta no OK");
   return { id: String(data.result?.message_id ?? "") };
-}
-
-/**
- * Deliver a message through the channel's provider. Throws when the channel is
- * unsupported or unconfigured — callers map that to a 503.
- */
-export async function deliverMessage(
-  integrations: AppConfig["integrations"],
-  msg: OutboundMessage,
-): Promise<{ id: string }> {
-  if (!isChannelConfigured(integrations, msg.channel)) {
-    throw new Error(`Canal "${msg.channel}" no soportado o sin proveedor configurado.`);
-  }
-  if (msg.channel === "wa") return sendWhatsApp(integrations.whatsapp, msg);
-  return sendTelegram(integrations.telegram, msg);
 }

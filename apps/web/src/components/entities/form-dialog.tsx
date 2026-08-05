@@ -57,7 +57,7 @@ export function FormDialog({
         >
           {!backend ? (
             <div className="rounded-lg border border-state-warning/30 bg-state-warning/10 px-3 py-2 text-xs text-state-warning">
-              Modo demo: conecta el backend (<code>NEXT_PUBLIC_API_URL</code>) para guardar.
+              Modo demo: conecta el backend (<code>VITE_API_URL</code>) para guardar.
             </div>
           ) : null}
 

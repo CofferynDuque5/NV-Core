@@ -3,15 +3,12 @@ import * as React from "react";
 import { CHANNELS, CONNECTION_STATUSES, type ChannelId, type ConnectionStatus } from "@nv/domain";
 
 import { useUpsertConnection } from "@/hooks/use-domain-mutations";
+import { CONNECTION_STATUS_LABEL } from "@/lib/connection-status";
 import { FormDialog, errorMessage } from "./form-dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
-const STATUS_LABEL: Record<ConnectionStatus, string> = {
-  ok: "Conectado",
-  warn: "Con advertencias",
-  down: "Caído",
-};
+const STATUS_LABEL = CONNECTION_STATUS_LABEL;
 
 export function ConnectionDialog({
   channel,

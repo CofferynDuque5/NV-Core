@@ -7,9 +7,9 @@ import { createHttpAdapters } from "./http-adapters";
 /**
  * Wires the service registry.
  *
- * - No `NEXT_PUBLIC_API_URL` → keep the empty adapters (demo mode): skeletons,
+ * - No `VITE_API_URL` → keep the empty adapters (demo mode): skeletons,
  *   empty states, zero network, no auth.
- * - `NEXT_PUBLIC_API_URL` set → point the app at the NestJS backend. Requests
+ * - `VITE_API_URL` set → point the app at the NestJS backend. Requests
  *   carry the in-memory access token; a 401 triggers a single deduped refresh
  *   (via the httpOnly cookie) and retry. If refresh fails, the session is
  *   cleared and the auth gate redirects to /login.

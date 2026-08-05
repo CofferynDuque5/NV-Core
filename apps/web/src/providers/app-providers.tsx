@@ -8,7 +8,7 @@ import { QueryProvider } from "./query-provider";
 import { ConfirmProvider } from "./confirm-provider";
 import { ThemeProvider } from "./theme-provider";
 
-// Point the service registry at the backend when NEXT_PUBLIC_API_URL is set;
+// Point the service registry at the backend when VITE_API_URL is set;
 // otherwise the app keeps using the empty adapters (skeletons / empty states).
 initServices();
 
