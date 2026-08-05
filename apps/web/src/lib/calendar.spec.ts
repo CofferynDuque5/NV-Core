@@ -4,6 +4,8 @@ import type { Post } from "@nv/domain";
 import {
   agendaDays,
   applyFilters,
+  bestHourFor,
+  bestHours,
   conflictsFor,
   countByChannel,
   groupByDay,
@@ -121,6 +123,33 @@ describe("agendaDays", () => {
     const days = agendaDays(new Date(2026, 8, 2), 14);
     expect(days).toHaveLength(14);
     expect(ymd(days[0]!)).toBe("2026-08-31");
+  });
+});
+
+describe("bestHours", () => {
+  it("returns the most-used hours, most frequent first", () => {
+    const data = [
+      post({ scheduledAt: "2026-09-01T09:00:00.000Z" }),
+      post({ scheduledAt: "2026-09-02T09:00:00.000Z" }),
+      post({ scheduledAt: "2026-09-03T18:00:00.000Z" }),
+    ];
+    // 09:00 appears twice → first. (compared in local hours)
+    const hours = bestHours(data, undefined, 2);
+    expect(hours[0]).toBe(new Date("2026-09-01T09:00:00.000Z").getHours());
+  });
+
+  it("returns [] without enough signal", () => {
+    expect(bestHours([post()])).toEqual([]);
+  });
+
+  it("bestHourFor filters by channel", () => {
+    const data = [
+      post({ channel: "ig", scheduledAt: "2026-09-01T08:00:00.000Z" }),
+      post({ channel: "ig", scheduledAt: "2026-09-02T08:00:00.000Z" }),
+      post({ channel: "wa", scheduledAt: "2026-09-02T20:00:00.000Z" }),
+    ];
+    expect(bestHourFor(data, "ig")).toBe(new Date("2026-09-01T08:00:00.000Z").getHours());
+    expect(bestHourFor(data, "wa")).toBeNull();
   });
 });
 

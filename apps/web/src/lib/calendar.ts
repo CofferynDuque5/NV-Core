@@ -164,6 +164,34 @@ export function agendaDays(cursor: Date, count = 14): Date[] {
 }
 
 /**
+ * Best posting hours inferred from the workspace's own activity (a no-AI-key
+ * heuristic): the hours where this channel — or all channels — already ships
+ * the most content. Returns up to `top` hours (most-used first), or [] when
+ * there isn't enough signal.
+ */
+export function bestHours(posts: Post[], channel?: string, top = 3): number[] {
+  const tally = new Map<number, number>();
+  let n = 0;
+  for (const p of posts) {
+    if (!p.scheduledAt) continue;
+    if (channel && p.channel !== channel) continue;
+    const h = new Date(p.scheduledAt).getHours();
+    tally.set(h, (tally.get(h) ?? 0) + 1);
+    n++;
+  }
+  if (n < 2) return [];
+  return [...tally.entries()]
+    .sort((a, b) => b[1] - a[1] || a[0] - b[0])
+    .slice(0, top)
+    .map(([h]) => h);
+}
+
+/** Single best hour for a channel, or null when there isn't enough signal. */
+export function bestHourFor(posts: Post[], channel: string): number | null {
+  return bestHours(posts, channel, 1)[0] ?? null;
+}
+
+/**
  * New ISO for a moved post. Keeps the original time of day when dropping on a
  * day cell (the user changed the DAY, not the time); when dropping on a time
  * slot, takes that hour but keeps the original minutes.

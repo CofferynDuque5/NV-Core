@@ -13,7 +13,7 @@ import {
 } from "@/lib/calendar";
 import { EmptyState } from "@/components/common/empty-state";
 import { Button } from "@/components/ui/button";
-import { CalendarPlus } from "lucide-react";
+import { CalendarPlus, Sparkles } from "lucide-react";
 import { PostChip } from "./post-chip";
 import { DropZone, useCalendarDnD } from "./dnd-context";
 
@@ -29,6 +29,8 @@ interface ViewProps {
   onSelect?: (post: Post) => void;
   /** Currently selected post id (highlight). */
   selectedId?: string;
+  /** Hours recommended by the best-time heuristic (marked with a spark). */
+  recommendedHours?: number[];
 }
 
 function postsByHour(posts: Post[]): Map<number, Post[]> {
@@ -123,10 +125,12 @@ function TimeGrid({
   onCreate,
   onSelect,
   selectedId,
+  recommendedHours = [],
 }: { days: Date[] } & Omit<ViewProps, "cursor">) {
   const dnd = useCalendarDnD();
   const today = new Date();
   const nowHour = today.getHours();
+  const recommended = new Set(recommendedHours);
 
   return (
     <div className="overflow-x-auto">
@@ -158,7 +162,10 @@ function TimeGrid({
         {/* Hour rows */}
         {HOURS.map((h) => (
           <React.Fragment key={h}>
-            <div className="border-r border-line-soft py-1 pr-2 text-right text-[10px] tabular-nums text-ink-faint">
+            <div className="flex items-center justify-end gap-1 border-r border-line-soft py-1 pr-2 text-right text-[10px] tabular-nums text-ink-faint">
+              {recommended.has(h) ? (
+                <Sparkles className="size-3 text-brand-violet" aria-label="Mejor horario" />
+              ) : null}
               {String(h).padStart(2, "0")}:00
             </div>
             {days.map((d) => {
@@ -199,13 +206,31 @@ function TimeGrid({
   );
 }
 
-export function WeekView({ cursor, byDay, onCreate, onSelect, selectedId }: ViewProps) {
+export function WeekView({ cursor, byDay, onCreate, onSelect, selectedId, recommendedHours }: ViewProps) {
   const days = React.useMemo(() => weekDays(cursor), [cursor]);
-  return <TimeGrid days={days} byDay={byDay} onCreate={onCreate} onSelect={onSelect} selectedId={selectedId} />;
+  return (
+    <TimeGrid
+      days={days}
+      byDay={byDay}
+      onCreate={onCreate}
+      onSelect={onSelect}
+      selectedId={selectedId}
+      recommendedHours={recommendedHours}
+    />
+  );
 }
 
-export function DayView({ cursor, byDay, onCreate, onSelect, selectedId }: ViewProps) {
-  return <TimeGrid days={[cursor]} byDay={byDay} onCreate={onCreate} onSelect={onSelect} selectedId={selectedId} />;
+export function DayView({ cursor, byDay, onCreate, onSelect, selectedId, recommendedHours }: ViewProps) {
+  return (
+    <TimeGrid
+      days={[cursor]}
+      byDay={byDay}
+      onCreate={onCreate}
+      onSelect={onSelect}
+      selectedId={selectedId}
+      recommendedHours={recommendedHours}
+    />
+  );
 }
 
 // ── Timeline (per-channel swimlanes across the week) ─────────────────────────

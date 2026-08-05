@@ -1,10 +1,10 @@
 import * as React from "react";
 import { CHANNELS, CHANNEL_LIST, type ChannelId, type Post, type PostStatus } from "@nv/domain";
-import { AlertTriangle, Copy, Save, Trash2, X } from "lucide-react";
+import { AlertTriangle, Copy, Save, Sparkles, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
 
 import { cn } from "@/lib/utils";
-import { addDays, hm, ymd, conflictsFor, sameDayOthers } from "@/lib/calendar";
+import { addDays, hm, ymd, bestHourFor, conflictsFor, sameDayOthers } from "@/lib/calendar";
 import { useDeletePost, useDuplicatePost, useUpdatePost } from "@/hooks/use-domain-mutations";
 import { useConfirm } from "@/providers/confirm-provider";
 import { Button } from "@/components/ui/button";
@@ -76,6 +76,7 @@ export function PostPanel({
 
   const conflicts = React.useMemo(() => conflictsFor(post, posts), [post, posts]);
   const siblings = React.useMemo(() => sameDayOthers(post, posts), [post, posts]);
+  const suggestedHour = React.useMemo(() => bestHourFor(posts, post.channel), [posts, post.channel]);
   const ch = CHANNELS[channel];
 
   function save() {
@@ -189,6 +190,23 @@ export function PostPanel({
                   {n.label}
                 </button>
               ))}
+            </div>
+          ) : null}
+          {!readOnly && onMove && post.scheduledAt && suggestedHour !== null ? (
+            <div className="flex items-center justify-between gap-2 rounded-lg border border-brand-violet/30 bg-brand-violet/5 px-2.5 py-1.5">
+              <span className="flex items-center gap-1.5 text-[11px] text-ink-muted">
+                <Sparkles className="size-3.5 shrink-0 text-brand-violet" />
+                Mejor horario {ch.name}:{" "}
+                <b className="text-ink">{String(suggestedHour).padStart(2, "0")}:00</b>
+              </span>
+              <button
+                onClick={() =>
+                  onMove(post, new Date(post.scheduledAt!), `${String(suggestedHour).padStart(2, "0")}:00`)
+                }
+                className="shrink-0 rounded-md bg-brand-violet/15 px-2 py-0.5 text-[11px] font-medium text-brand-violet transition-colors hover:bg-brand-violet/25"
+              >
+                Usar
+              </button>
             </div>
           ) : null}
           <div className="space-y-1.5">

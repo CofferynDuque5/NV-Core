@@ -2,7 +2,7 @@ import * as React from "react";
 import type { ChannelId, Post } from "@nv/domain";
 import { toast } from "sonner";
 
-import { ymd, hm, rangeLabel, countByChannel, scheduledOnly, rescheduleISO } from "@/lib/calendar";
+import { ymd, hm, rangeLabel, countByChannel, scheduledOnly, rescheduleISO, bestHours } from "@/lib/calendar";
 import { useCalendar } from "@/hooks/use-calendar";
 import { usePosts, useCampaigns } from "@/hooks/use-domain-data";
 import { useMovePost } from "@/hooks/use-domain-mutations";
@@ -61,6 +61,13 @@ export default function CalendarioPage() {
 
   const onSelect = React.useCallback((p: Post) => setSelectedId(p.id), []);
 
+  // Best-time heuristic from the workspace's own history. When exactly one
+  // channel is isolated, recommend for that channel; otherwise global.
+  const recommendedHours = React.useMemo(() => {
+    const soloChannel = cal.filters.channels.length === 1 ? cal.filters.channels[0] : undefined;
+    return bestHours(allScheduled, soloChannel, 3);
+  }, [allScheduled, cal.filters.channels]);
+
   // The single "move" primitive: drag & drop and the panel nudges both use it.
   // Optimistic (see useMovePost) + an "undo" toast that restores the old slot.
   const onMove = React.useCallback(
@@ -118,6 +125,7 @@ export default function CalendarioPage() {
     onCreate: openCreate,
     onSelect,
     selectedId: selectedId ?? undefined,
+    recommendedHours,
   };
 
   return (
