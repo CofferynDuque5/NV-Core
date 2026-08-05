@@ -10,6 +10,8 @@ import type {
   CreateWorkspaceInput,
   CreateAutomationInput,
   UpdateAutomationInput,
+  CreateDesignInput,
+  UpdateDesignInput,
   CreateCampaignInput,
   CreateContactInput,
   CreateConversationInput,
@@ -449,6 +451,50 @@ export function useRunAutomation() {
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: [ws.id, "automations"] });
       toast.success("Automatización ejecutada");
+    },
+    onError: (err) => toast.error(errText(err)),
+  });
+}
+
+// ── Designs (Campaign Builder) ──────────────────────────────────────────────────
+export function useCreateDesign() {
+  const svc = useServices();
+  const ws = useWorkspace();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: CreateDesignInput) => svc.designs.create(ws.id, input),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: [ws.id, "designs"] });
+      toast.success("Diseño creado");
+    },
+    onError: (err) => toast.error(errText(err)),
+  });
+}
+
+export function useUpdateDesign() {
+  const svc = useServices();
+  const ws = useWorkspace();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (args: { id: string; input: UpdateDesignInput }) =>
+      svc.designs.update(ws.id, args.id, args.input),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: [ws.id, "designs"] });
+      toast.success("Diseño guardado");
+    },
+    onError: (err) => toast.error(errText(err)),
+  });
+}
+
+export function useDeleteDesign() {
+  const svc = useServices();
+  const ws = useWorkspace();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => svc.designs.remove(ws.id, id),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: [ws.id, "designs"] });
+      toast.success("Diseño eliminado");
     },
     onError: (err) => toast.error(errText(err)),
   });

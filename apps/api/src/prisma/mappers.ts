@@ -6,6 +6,7 @@ import type {
   Connection as PConnection,
   Contact as PContact,
   Conversation as PConversation,
+  Design as PDesign,
   Group as PGroup,
   MediaAsset as PMediaAsset,
   MediaFolder as PMediaFolder,
@@ -25,6 +26,8 @@ import type {
   Contact,
   ContactStage,
   Conversation,
+  Design,
+  DesignFormat,
   Group,
   MediaAsset,
   MediaFolder,
@@ -160,6 +163,14 @@ export const mapAutomation = (a: PAutomation): Automation => ({
   nodes: (a.nodes as unknown as Automation["nodes"]) ?? [],
   edges: (a.edges as unknown as Automation["edges"]) ?? [],
   webhookUrl: a.webhookUrl ?? undefined,
+});
+
+export const mapDesign = (d: PDesign): Design => ({
+  id: d.id,
+  name: d.name,
+  format: (d.format as DesignFormat) ?? "square",
+  layers: (d.layers as unknown as Design["layers"]) ?? [],
+  updatedAt: d.updatedAt.toISOString(),
 });
 
 export const mapCalendarEvent = (e: PCalendarEvent): CalendarEvent => ({

@@ -3,6 +3,7 @@ import type {
   AiUsage,
   AnalyticsSnapshot,
   Automation,
+  Design,
   BillingStatus,
   Campaign,
   CalendarEvent,
@@ -201,6 +202,13 @@ export function createHttpAdapters(opts: HttpAdapterOptions): Services {
       remove: (id, aid) => del<void>(`${ws(id)}/automations/${aid}`),
       run: (id, aid) =>
         post<{ triggered: boolean; runs: number }>(`${ws(id)}/automations/${aid}/run`, {}),
+    },
+    designs: {
+      list: (id) => get<ListResult<Design>>(`${ws(id)}/designs`),
+      get: (id, did) => get<Design | null>(`${ws(id)}/designs/${did}`),
+      create: (id, input) => post<Design>(`${ws(id)}/designs`, input),
+      update: (id, did, input) => patch<Design>(`${ws(id)}/designs/${did}`, input),
+      remove: (id, did) => del<void>(`${ws(id)}/designs/${did}`),
     },
     analytics: {
       snapshot: (id, days) =>

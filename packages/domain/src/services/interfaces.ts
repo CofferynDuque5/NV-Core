@@ -6,6 +6,9 @@ import type {
   Connection,
   Contact,
   Conversation,
+  Design,
+  DesignFormat,
+  DesignLayer,
   Group,
   Integration,
   MediaAsset,
@@ -119,6 +122,26 @@ export interface UpdateAutomationInput {
 export interface RunAutomationResult {
   triggered: boolean;
   runs: number;
+}
+
+export interface CreateDesignInput {
+  name: string;
+  format?: DesignFormat;
+  layers?: DesignLayer[];
+}
+
+export interface UpdateDesignInput {
+  name?: string;
+  format?: DesignFormat;
+  layers?: DesignLayer[];
+}
+
+export interface DesignService {
+  list(workspaceId: string): Promise<ListResult<Design>>;
+  get(workspaceId: string, id: string): Promise<Design | null>;
+  create(workspaceId: string, input: CreateDesignInput): Promise<Design>;
+  update(workspaceId: string, id: string, input: UpdateDesignInput): Promise<Design>;
+  remove(workspaceId: string, id: string): Promise<void>;
 }
 
 export interface CampaignService {
@@ -473,6 +496,7 @@ export interface Services {
   media: MediaService;
   templates: TemplateService;
   automations: AutomationService;
+  designs: DesignService;
   analytics: AnalyticsService;
   connections: ConnectionService;
   integrations: IntegrationService;

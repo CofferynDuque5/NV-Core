@@ -7,12 +7,12 @@
 
 ## Veredicto (Fase 11): 🔴 **NO publicar todavía**
 
-Avance real desde la v1: hay **cuatro** módulos a nivel premium (Calendario, Media
-Library, Analytics y Workflow Builder) sobre una base técnica sólida y con
-**higiene de código verificada**. Pero **5 de 9 fases del roadmap siguen sin estar
-a nivel producto** y **no existe ninguna pieza de adopción** (onboarding, ayuda,
-changelog, estado, backups, import/export). Se mantiene el **bloqueo de release**
-y se entrega el backlog actualizado.
+Avance real desde la v1: hay **cinco** módulos a nivel premium (Calendario, Media
+Library, Analytics, Workflow Builder y Campaign Builder) sobre una base técnica
+sólida y con **higiene de código verificada**. Pero **4 de 9 fases del roadmap
+siguen sin estar a nivel producto** y **no existe ninguna pieza de adopción**
+(onboarding, ayuda, changelog, estado, backups, import/export). Se mantiene el
+**bloqueo de release** y se entrega el backlog actualizado.
 
 ---
 
@@ -22,7 +22,7 @@ y se entrega el backlog actualizado.
 |---|---|---|---|
 | 1 | Calendario Inteligente | ✅ Premium | = |
 | 3 | **Media Library** | ✅ Premium (baseline) | 🟡→✅ búsqueda, carpetas, etiquetas, edición. *Falta versionado/compresión (P2).* |
-| 2 | Campaign Builder | 🔴 No cumple | = |
+| 2 | **Campaign Builder** | ✅ Premium (baseline) | 🔴→✅ editor visual por capas (texto/precio/botón/etiqueta/imagen/fondo), arrastre+redimensión, z-order, inspector, formatos y export SVG/PNG; diseños reutilizables. *Falta plantillas prediseñadas y multi-selección (P2).* |
 | 4 | **Workflow Builder** | ✅ Premium (baseline) | 🔴→✅ editor visual de nodos (disparador/acción/espera/condición), conexiones, inspector, validación y guardado; sincroniza con la orquestación (n8n oculto). *Falta ramas por condición y test-run (P2).* |
 | 5 | AI Content Studio | 🟡 Parcial | = |
 | 6 | **Analytics** | ✅ Premium (baseline) | 🟡→✅ período 7/30/90, KPIs con delta vs período anterior, serie temporal, embudo CRM, tasas de conversión y **heatmap de actividad**. *Falta cohortes/exportación (P2).* |
@@ -47,7 +47,7 @@ y se entrega el backlog actualizado.
 | CRM | 7.0 | 7.0 | Básico. |
 | Analytics | 6.5 | **8.5** | Período comparativo, deltas, serie temporal, embudo, conversión y heatmap. Falta cohortes/exportación. |
 | Marketplace | 5.0 | 5.0 | Sin instalación real. |
-| Campaign Builder | 4.0 | 4.0 | No es un editor. |
+| Campaign Builder | 4.0 | **8.5** | Editor por capas con arrastre/redimensión, z-order, estilos y export. Falta plantillas prediseñadas. |
 | Workflow Builder | 4.0 | **8.5** | Editor visual de nodos, conexiones, inspector, validación y guardado. Falta ramas por condición y test-run. |
 
 **Ninguno alcanza 9.5** → sigue habiendo trabajo antes del release.
@@ -119,7 +119,7 @@ y se entrega el backlog actualizado.
 ### P0 — Feature-complete del roadmap (nivel premium)
 1. ✅ **Analytics** (período comparativo, deltas, serie temporal, embudo, conversión, heatmap) — HECHO dentro del freeze.
 2. ✅ **Workflow Builder** (editor visual de nodos + conexiones + validación + guardado; n8n oculto) — HECHO dentro del freeze.
-3. Campaign Builder (editor estructurado por capas + preview).
+3. ✅ **Campaign Builder** (editor visual por capas + arrastre/redimensión + z-order + export SVG/PNG) — HECHO dentro del freeze.
 4. AI Studio / Inbox / CRM / Marketplace a nivel premium.
 
 ### P1 — Piezas de adopción (ninguna existe)
@@ -142,5 +142,5 @@ smoke real end-to-end contra backend+DB.
 ---
 
 ## ¿Publicarías este producto a clientes reales? **NO.**
-4 de 9 fases premium, 0 de 8 piezas de adopción, y hardening (WCAG, carga real)
+5 de 9 fases premium, 0 de 8 piezas de adopción, y hardening (WCAG, carga real)
 pendiente. La base es sólida y limpia; ejecutar P0→P1→P2 y re-auditar.

@@ -24,6 +24,7 @@ import { InboxModule } from "./modules/inbox/inbox.module";
 import { MediaModule } from "./modules/media/media.module";
 import { TemplatesModule } from "./modules/templates/templates.module";
 import { AutomationsModule } from "./modules/automations/automations.module";
+import { DesignsModule } from "./modules/designs/designs.module";
 import { AnalyticsModule } from "./modules/analytics/analytics.module";
 import { ConnectionsModule } from "./modules/connections/connections.module";
 import { IntegrationsModule } from "./modules/integrations/integrations.module";
@@ -67,6 +68,7 @@ import { ProvidersModule } from "./providers/providers.module";
     MediaModule,
     TemplatesModule,
     AutomationsModule,
+    DesignsModule,
     AnalyticsModule,
     ConnectionsModule,
     IntegrationsModule,

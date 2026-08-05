@@ -500,3 +500,19 @@ model BillingAccount {
   updatedAt          DateTime @updatedAt
   createdAt          DateTime @default(now())
 }
+
+/**
+ * Campaign Builder creative — a layered visual design (Canva-like), stored as a
+ * JSON layer list plus its canvas format. Reusable across posts/campaigns.
+ */
+model Design {
+  id            String   @id @default(cuid())
+  workspaceSlug String
+  name          String
+  format        String   @default("square")
+  layers        Json     @default("[]")
+  updatedAt     DateTime @updatedAt
+  createdAt     DateTime @default(now())
+
+  @@index([workspaceSlug])
+}

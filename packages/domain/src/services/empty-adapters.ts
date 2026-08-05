@@ -118,6 +118,13 @@ export const emptyAdapters: Services = {
     remove: () => notAvailable(),
     run: () => notAvailable(),
   },
+  designs: {
+    list: () => emptyList(),
+    get: () => delay(null),
+    create: () => notAvailable(),
+    update: () => notAvailable(),
+    remove: () => notAvailable(),
+  },
   analytics: {
     snapshot: () => delay(null),
   },

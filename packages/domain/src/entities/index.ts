@@ -359,3 +359,43 @@ export interface AnalyticsSnapshot {
   /** Derived conversion / engagement rates (reuses the FunnelStep shape). */
   conversion?: FunnelStep[];
 }
+
+// ── Campaign Builder (visual creative editor) ────────────────────────────────
+
+/** Canvas aspect presets for a design. */
+export type DesignFormat = "square" | "portrait" | "story" | "landscape";
+
+export type DesignLayerType = "text" | "rect" | "button" | "image";
+
+/**
+ * A single positioned layer on the design canvas. Coordinates and sizes are in
+ * canvas units (the format's pixel space), so a design renders identically at
+ * any display scale.
+ */
+export interface DesignLayer {
+  id: string;
+  type: DesignLayerType;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  // Text / button label
+  text?: string;
+  fontSize?: number;
+  color?: string;
+  align?: "left" | "center" | "right";
+  weight?: number;
+  // Box / button background
+  fill?: string;
+  radius?: number;
+  // Image
+  src?: string;
+}
+
+export interface Design {
+  id: string;
+  name: string;
+  format: DesignFormat;
+  layers: DesignLayer[];
+  updatedAt?: string;
+}
