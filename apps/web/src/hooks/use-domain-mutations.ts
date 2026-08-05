@@ -16,6 +16,7 @@ import type {
   CreatePostInput,
   UpdatePostInput,
   DuplicatePostInput,
+  UpdateAssetInput,
   CreateSegmentInput,
   CreateTemplateInput,
   GenerateVariantsInput,
@@ -581,6 +582,21 @@ export function useUploadCampaignAttachment() {
         .catch(() => undefined);
       void qc.invalidateQueries({ queryKey: [ws.id, "media"] });
       return { url: uploaded.secureUrl, kind, mime: file.type || null, filename: file.name };
+    },
+    onError: (err) => toast.error(errText(err)),
+  });
+}
+
+export function useUpdateAsset() {
+  const svc = useServices();
+  const ws = useWorkspace();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, input }: { id: string; input: UpdateAssetInput }) =>
+      svc.media.updateAsset(ws.id, id, input),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: [ws.id, "media"] });
+      toast.success("Archivo actualizado");
     },
     onError: (err) => toast.error(errText(err)),
   });

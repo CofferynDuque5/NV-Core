@@ -172,15 +172,21 @@ export function createHttpAdapters(opts: HttpAdapterOptions): Services {
     },
     media: {
       folders: (id) => get<MediaFolder[]>(`${ws(id)}/media/folders`),
-      assets: (id, folderId) =>
-        get<ListResult<MediaAsset>>(
-          `${ws(id)}/media/assets${folderId ? `?folderId=${folderId}` : ""}`,
-        ),
+      assets: (id, query) => {
+        const params = new URLSearchParams();
+        if (query?.folderId) params.set("folderId", query.folderId);
+        if (query?.q) params.set("q", query.q);
+        if (query?.tag) params.set("tag", query.tag);
+        const qs = params.toString();
+        return get<ListResult<MediaAsset>>(`${ws(id)}/media/assets${qs ? `?${qs}` : ""}`);
+      },
+      tags: (id) => get<string[]>(`${ws(id)}/media/tags`),
       uploadSignature: (id, folder) =>
         get<MediaUploadSignature | null>(
           `${ws(id)}/media/upload-signature${folder ? `?folder=${encodeURIComponent(folder)}` : ""}`,
         ),
       createAsset: (id, input) => post<MediaAsset>(`${ws(id)}/media/assets`, input),
+      updateAsset: (id, assetId, input) => patch<MediaAsset>(`${ws(id)}/media/assets/${assetId}`, input),
       removeAsset: (id, assetId) => del<void>(`${ws(id)}/media/assets/${assetId}`),
     },
     templates: {

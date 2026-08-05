@@ -246,12 +246,31 @@ export interface CreateAssetInput {
   tag?: string;
 }
 
+export interface MediaAssetQuery {
+  folderId?: string;
+  /** Full-text search over the title. */
+  q?: string;
+  /** Filter by exact tag. */
+  tag?: string;
+}
+
+export interface UpdateAssetInput {
+  title?: string;
+  /** Empty string clears the tag. */
+  tag?: string;
+  /** Empty string moves to the root (no folder). */
+  folderId?: string;
+}
+
 export interface MediaService {
   folders(workspaceId: string): Promise<MediaFolder[]>;
-  assets(workspaceId: string, folderId?: string): Promise<ListResult<MediaAsset>>;
+  assets(workspaceId: string, query?: MediaAssetQuery): Promise<ListResult<MediaAsset>>;
+  /** Distinct tags in the workspace (for filter chips). */
+  tags(workspaceId: string): Promise<string[]>;
   /** Signed params for a direct browser→Cloudinary upload; null when unconfigured. */
   uploadSignature(workspaceId: string, folder?: string): Promise<MediaUploadSignature | null>;
   createAsset(workspaceId: string, input: CreateAssetInput): Promise<MediaAsset>;
+  updateAsset(workspaceId: string, id: string, input: UpdateAssetInput): Promise<MediaAsset>;
   removeAsset(workspaceId: string, id: string): Promise<void>;
 }
 

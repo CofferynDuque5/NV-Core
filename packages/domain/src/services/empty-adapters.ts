@@ -100,8 +100,10 @@ export const emptyAdapters: Services = {
   media: {
     folders: () => delay([]),
     assets: () => emptyList(),
+    tags: () => delay([]),
     uploadSignature: () => delay(null),
     createAsset: () => notAvailable(),
+    updateAsset: () => notAvailable(),
     removeAsset: () => notAvailable(),
   },
   templates: {

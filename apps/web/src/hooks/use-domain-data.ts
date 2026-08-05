@@ -112,13 +112,19 @@ export function useMediaFolders() {
   return useQuery({ queryKey: [ws.id, "media", "folders"], queryFn: () => svc.media.folders(ws.id) });
 }
 
-export function useMediaAssets(folderId?: string) {
+export function useMediaAssets(query: { folderId?: string; q?: string; tag?: string } = {}) {
   const svc = useServices();
   const ws = useWorkspace();
   return useQuery({
-    queryKey: [ws.id, "media", "assets", folderId ?? "all"],
-    queryFn: () => svc.media.assets(ws.id, folderId),
+    queryKey: [ws.id, "media", "assets", query.folderId ?? "all", query.q ?? "", query.tag ?? ""],
+    queryFn: () => svc.media.assets(ws.id, query),
   });
+}
+
+export function useMediaTags() {
+  const svc = useServices();
+  const ws = useWorkspace();
+  return useQuery({ queryKey: [ws.id, "media", "tags"], queryFn: () => svc.media.tags(ws.id) });
 }
 
 export function useTemplates() {

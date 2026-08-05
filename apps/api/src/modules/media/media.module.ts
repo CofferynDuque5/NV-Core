@@ -8,6 +8,7 @@ import {
   Module,
   NotFoundException,
   Param,
+  Patch,
   Post,
   Query,
   ServiceUnavailableException,
@@ -53,6 +54,19 @@ export class CreateAssetDto {
   url?: string;
 }
 
+/** Rename / retag / move an asset. All fields optional. */
+export class UpdateAssetDto {
+  @ApiPropertyOptional() @IsOptional() @IsString() @MinLength(1) title?: string;
+  @ApiPropertyOptional({ description: "Etiqueta; cadena vacía para quitarla." })
+  @IsOptional()
+  @IsString()
+  tag?: string;
+  @ApiPropertyOptional({ description: "Carpeta destino; cadena vacía para mover a la raíz." })
+  @IsOptional()
+  @IsString()
+  folderId?: string;
+}
+
 @Injectable()
 export class MediaService {
   constructor(
@@ -96,14 +110,34 @@ export class MediaService {
     return rows.map(mapMediaFolder);
   }
 
-  async assets(workspaceId: string, folderId?: string): Promise<ListResultDto<MediaAsset>> {
+  async assets(
+    workspaceId: string,
+    query: { folderId?: string; q?: string; tag?: string } = {},
+  ): Promise<ListResultDto<MediaAsset>> {
     if (!this.prisma.enabled) return ListResultDto.empty<MediaAsset>();
-    const where = { workspaceSlug: workspaceId, ...(folderId ? { folderId } : {}) };
+    const where = {
+      workspaceSlug: workspaceId,
+      ...(query.folderId ? { folderId: query.folderId } : {}),
+      ...(query.tag ? { tag: query.tag } : {}),
+      ...(query.q ? { title: { contains: query.q, mode: "insensitive" as const } } : {}),
+    };
     const [rows, total] = await Promise.all([
       this.prisma.mediaAsset.findMany({ where, orderBy: { createdAt: "desc" } }),
       this.prisma.mediaAsset.count({ where }),
     ]);
     return new ListResultDto(rows.map(mapMediaAsset), total);
+  }
+
+  /** Distinct non-empty tags in the workspace (for filter chips). */
+  async tags(workspaceId: string): Promise<string[]> {
+    if (!this.prisma.enabled) return [];
+    const rows = await this.prisma.mediaAsset.findMany({
+      where: { workspaceSlug: workspaceId, tag: { not: null } },
+      select: { tag: true },
+      distinct: ["tag"],
+      orderBy: { tag: "asc" },
+    });
+    return rows.map((r) => r.tag).filter((t): t is string => Boolean(t));
   }
 
   async createFolder(workspaceId: string, actor: string, dto: CreateFolderDto): Promise<MediaFolder> {
@@ -130,6 +164,23 @@ export class MediaService {
     return mapMediaAsset(row);
   }
 
+  async updateAsset(
+    workspaceId: string,
+    actor: string,
+    id: string,
+    dto: UpdateAssetDto,
+  ): Promise<MediaAsset> {
+    const existing = await this.db().mediaAsset.findFirst({ where: { id, workspaceSlug: workspaceId } });
+    if (!existing) throw new NotFoundException("Archivo no encontrado.");
+    const data: Record<string, unknown> = {};
+    if (dto.title !== undefined) data.title = dto.title;
+    if (dto.tag !== undefined) data.tag = dto.tag || null;
+    if (dto.folderId !== undefined) data.folderId = dto.folderId || null;
+    const row = await this.db().mediaAsset.update({ where: { id }, data });
+    await this.audit.record(workspaceId, actor, "media.asset.update", id);
+    return mapMediaAsset(row);
+  }
+
   async removeAsset(workspaceId: string, actor: string, id: string): Promise<void> {
     const { count } = await this.db().mediaAsset.deleteMany({
       where: { id, workspaceSlug: workspaceId },
@@ -152,8 +203,18 @@ export class MediaController {
   }
 
   @Get("assets")
-  assets(@WorkspaceId() workspaceId: string, @Query("folderId") folderId?: string) {
-    return this.service.assets(workspaceId, folderId);
+  assets(
+    @WorkspaceId() workspaceId: string,
+    @Query("folderId") folderId?: string,
+    @Query("q") q?: string,
+    @Query("tag") tag?: string,
+  ) {
+    return this.service.assets(workspaceId, { folderId, q, tag });
+  }
+
+  @Get("tags")
+  tags(@WorkspaceId() workspaceId: string) {
+    return this.service.tags(workspaceId);
   }
 
   @Get("upload-signature")
@@ -183,6 +244,18 @@ export class MediaController {
     @Body() dto: CreateAssetDto,
   ) {
     return this.service.createAsset(workspaceId, user.email, dto);
+  }
+
+  @Patch("assets/:id")
+  @Roles("Owner", "Admin", "Editor")
+  @UseGuards(RolesGuard)
+  updateAsset(
+    @WorkspaceId() workspaceId: string,
+    @CurrentUser() user: AuthenticatedUser,
+    @Param("id") id: string,
+    @Body() dto: UpdateAssetDto,
+  ) {
+    return this.service.updateAsset(workspaceId, user.email, id, dto);
   }
 
   @Delete("assets/:id")
