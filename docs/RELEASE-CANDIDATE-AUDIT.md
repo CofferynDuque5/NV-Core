@@ -83,10 +83,17 @@ actualizado.
   logging de datos sensibles.
 
 ## Fase 7 — Testing (verificado, verde)
-- ✅ **API: 102 unit** (23 files) · **Web: 18 unit** · **4 E2E** (auth, calendar,
-  crud, inbox).
-- ⏳ **Pendiente (P1):** E2E por módulo, **carga/estrés** (colas, Socket.IO),
-  regresión ampliada.
+- ✅ **API: 108 unit** (24 files, incl. **6 de carga/estrés** del core async) ·
+  **Web: 18 unit** · **7 E2E** (auth, calendar, crud, inbox, **campaigns,
+  media, route-smoke**).
+- ✅ **CORREGIDO (RC):** E2E **por módulo** ampliado (campañas CRUD+run/pause,
+  Media Library búsqueda/filtros, y **smoke de las 17 rutas** que verifica que
+  cada módulo monta sin crash) + suite de **carga/estrés** para QueueManager /
+  JobManager / EventBus (cientos de jobs concurrentes, tormenta de reintentos,
+  fan-out con aislamiento de handlers). Los E2E se validaron localmente contra
+  API+DB reales (Postgres efímero).
+- ⏳ **Pendiente (P1/P2):** carga/estrés de red real (Socket.IO/BullMQ con Redis
+  bajo concurrencia), regresión ampliada por navegador/dispositivo.
 
 ## Fase 8 — Accessibility
 - ✅ Roles/aria en Calendario, color + etiqueta (no solo color), labels en forms,
@@ -123,7 +130,10 @@ actualizado.
 ### P1 — Hardening detectado por el RC
 13. ✅ **Security headers (helmet + CSP + HSTS)** — HECHO. · 14. Virtualización de listas ·
 15. 🟡 **A11y base** (skip link, landmark, reduced-motion, aria-label notif.) — HECHO;
-falta WCAG formal + DnD por teclado + contraste. · 16. E2E por módulo + carga/estrés.
+falta WCAG formal + DnD por teclado + contraste. ·
+16. 🟡 **E2E por módulo + carga/estrés** — HECHO (campaigns/media/route-smoke +
+suite de carga del core async; un bug de diálogo alto sin scroll detectado y
+corregido); falta carga real con Redis/Socket.IO (P2).
 
 ### P2 — DevOps / Docs
 17. Runbook de deployment · referencia de variables · ADRs · diagramas ·

@@ -19,7 +19,7 @@ const flush = () => new Promise((r) => setTimeout(r, 30));
 describe("JobManager (inline)", () => {
   it("runs a registered handler", async () => {
     const { jobs } = build();
-    const handler = vi.fn(async () => ({ done: true }));
+    const handler = vi.fn(async (_payload: unknown) => ({ done: true }));
     jobs.register("t.ok", handler);
     await jobs.dispatch("t.ok", "w1", { a: 1 });
     await flush();

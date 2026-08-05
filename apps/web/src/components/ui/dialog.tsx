@@ -36,6 +36,9 @@ const DialogContent = React.forwardRef<
       className={cn(
         "fixed left-1/2 top-1/2 z-50 grid w-full max-w-lg -translate-x-1/2 -translate-y-1/2 gap-4",
         "rounded-2xl border border-line-strong bg-panel-high p-6 shadow-panel duration-200",
+        // Tall forms must stay usable on short viewports: cap height and scroll
+        // inside the dialog so the footer/submit is always reachable.
+        "max-h-[calc(100dvh-2rem)] overflow-y-auto",
         "animate-pop-in",
         className,
       )}
