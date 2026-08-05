@@ -75,8 +75,12 @@ actualizado.
   JWT+refresh (cookie httpOnly); guards de rol/workspace; `ValidationPipe`
   (`whitelist` + `forbidNonWhitelisted`); rate limiting; cifrado en reposo;
   CORS restringido; Prisma parametrizado (sin SQLi); secreto del bridge n8n.
-- 🔴 **Pendiente (P1):** **security headers ausentes** (helmet/CSP/HSTS); sin
-  pen-test formal; revisión de límites de subida y logging de datos sensibles.
+- ✅ **CORREGIDO (RC):** **security headers** ahora activos — API con **helmet**
+  (X-Frame-Options, X-Content-Type-Options, HSTS, Referrer-Policy, COOP/CORP,
+  sin `X-Powered-By`) y el SPA con **CSP + HSTS + X-Frame-Options + nosniff +
+  Referrer/Permissions-Policy** en Nginx.
+- 🔴 **Pendiente (P1):** pen-test formal; revisión de límites de subida y
+  logging de datos sensibles.
 
 ## Fase 7 — Testing (verificado, verde)
 - ✅ **API: 102 unit** (23 files) · **Web: 18 unit** · **4 E2E** (auth, calendar,
@@ -113,7 +117,7 @@ actualizado.
 12. Import/Export (contactos, campañas, plantillas).
 
 ### P1 — Hardening detectado por el RC
-13. **Security headers (helmet + CSP + HSTS)** · 14. Virtualización de listas ·
+13. ✅ **Security headers (helmet + CSP + HSTS)** — HECHO. · 14. Virtualización de listas ·
 15. WCAG + DnD por teclado + contraste · 16. E2E por módulo + carga/estrés.
 
 ### P2 — DevOps / Docs

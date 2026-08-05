@@ -4,6 +4,7 @@ import { NestFactory } from "@nestjs/core";
 import { ConfigService } from "@nestjs/config";
 import { DocumentBuilder, SwaggerModule } from "@nestjs/swagger";
 import cookieParser from "cookie-parser";
+import helmet from "helmet";
 
 import { AppModule } from "./app.module";
 import type { AppConfig } from "./config/configuration";
@@ -19,6 +20,11 @@ async function bootstrap(): Promise<void> {
 
   // Error monitoring (no-op unless SENTRY_DSN is set).
   initSentry(config.get("sentry", { infer: true }).dsn, config.get("env", { infer: true }));
+
+  // Security headers (RC hardening). The API is JSON + Swagger; the browser
+  // Content-Security-Policy is set at the web layer (Nginx), so it's disabled
+  // here to keep Swagger UI working.
+  app.use(helmet({ contentSecurityPolicy: false }));
 
   app.use(requestIdMiddleware);
   app.use(cookieParser());
