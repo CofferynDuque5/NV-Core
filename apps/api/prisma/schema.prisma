@@ -435,6 +435,22 @@ model WhatsappSession {
 }
 
 /**
+ * Active adapter chosen per provider, per workspace (Provider + Adapter
+ * pattern). e.g. provider "whatsapp" → adapter "baileys" | "cloud-api".
+ * When no row exists the provider falls back to its default adapter.
+ */
+model ProviderSelection {
+  id            String   @id @default(cuid())
+  workspaceSlug String
+  provider      String
+  adapter       String
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@unique([workspaceSlug, provider])
+}
+
+/**
  * AI usage aggregated per workspace and month (YYYY-MM) for metering/quotas.
  */
 model AiUsage {

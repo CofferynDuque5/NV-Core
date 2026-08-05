@@ -186,4 +186,18 @@ export class WhatsappService implements SessionEvents, OnModuleInit {
     }
     return session.sendToGroup(remoteJid, text, attachment);
   }
+
+  /** Send media (or text) to any target — group JID, full JID, or phone number. */
+  sendMedia(
+    workspaceSlug: string,
+    to: string,
+    text: string,
+    attachment?: WhatsappAttachment | null,
+  ): Promise<{ id: string }> {
+    const session = this.live.get(workspaceSlug);
+    if (!session?.isConnected) {
+      throw new Error("WhatsApp (Baileys) no está conectado en este workspace.");
+    }
+    return session.sendMedia(to, text, attachment);
+  }
 }

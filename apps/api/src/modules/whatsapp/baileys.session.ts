@@ -191,6 +191,16 @@ export class BaileysSession {
     return { id: result?.key?.id ?? "" };
   }
 
+  /**
+   * Send media (or text) to any target — a group JID (`…@g.us`), a full JID, or
+   * a bare phone number (routed to `…@s.whatsapp.net`).
+   */
+  async sendMedia(to: string, text: string, attachment?: WhatsappAttachment | null): Promise<{ id: string }> {
+    if (to.includes("@") || to.endsWith("g.us")) return this.sendToGroup(to, text, attachment);
+    const digits = to.replace(/[^0-9]/g, "");
+    return this.sendToGroup(`${digits}@s.whatsapp.net`, text, attachment);
+  }
+
   /** Log out: closes the socket and clears stored credentials. */
   async logout(): Promise<void> {
     this.manualStop = true;

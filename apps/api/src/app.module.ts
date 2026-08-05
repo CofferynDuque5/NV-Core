@@ -35,6 +35,7 @@ import { MessagingModule } from "./modules/messaging/messaging.module";
 import { BillingModule } from "./modules/billing/billing.module";
 import { WhatsappModule } from "./modules/whatsapp/whatsapp.module";
 import { SocialModule } from "./modules/social/social.module";
+import { ProvidersModule } from "./providers/providers.module";
 
 @Module({
   imports: [
@@ -76,6 +77,7 @@ import { SocialModule } from "./modules/social/social.module";
     BillingModule,
     WhatsappModule,
     SocialModule,
+    ProvidersModule,
   ],
   providers: [{ provide: APP_GUARD, useClass: ConditionalThrottlerGuard }],
 })
