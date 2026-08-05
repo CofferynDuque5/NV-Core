@@ -60,6 +60,8 @@ export const emptyAdapters: Services = {
     list: () => emptyList(),
     today: () => delay([]),
     create: () => notAvailable(),
+    update: () => notAvailable(),
+    duplicate: () => notAvailable(),
     remove: () => notAvailable(),
   },
   calendar: {

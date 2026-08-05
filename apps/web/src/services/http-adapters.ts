@@ -129,6 +129,8 @@ export function createHttpAdapters(opts: HttpAdapterOptions): Services {
       list: (id) => get<ListResult<Post>>(`${ws(id)}/posts`),
       today: (id) => get<Post[]>(`${ws(id)}/posts/today`),
       create: (id, input) => post<Post>(`${ws(id)}/posts`, input),
+      update: (id, pid, input) => patch<Post>(`${ws(id)}/posts/${pid}`, input),
+      duplicate: (id, pid, input) => post<Post>(`${ws(id)}/posts/${pid}/duplicate`, input),
       remove: (id, pid) => del<void>(`${ws(id)}/posts/${pid}`),
     },
     calendar: {

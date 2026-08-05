@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Body,
   Controller,
   Delete,
@@ -8,6 +9,7 @@ import {
   Module,
   NotFoundException,
   Param,
+  Patch,
   Post as HttpPost,
   ServiceUnavailableException,
   UseGuards,
@@ -67,6 +69,43 @@ export class CreatePostDto {
   @IsOptional()
   @IsString()
   campaignId?: string;
+}
+
+/** Partial update: reschedule (move), edit or change status. All fields optional. */
+export class UpdatePostDto {
+  @ApiPropertyOptional({ enum: CHANNEL_IDS })
+  @IsOptional()
+  @IsIn(CHANNEL_IDS)
+  channel?: ChannelId;
+
+  @ApiPropertyOptional() @IsOptional() @IsString() @MinLength(1) title?: string;
+  @ApiPropertyOptional() @IsOptional() @IsString() copy?: string;
+
+  @ApiPropertyOptional({ type: [String] })
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  hashtags?: string[];
+
+  @ApiPropertyOptional({ enum: POST_STATUSES })
+  @IsOptional()
+  @IsIn(POST_STATUSES)
+  status?: PostStatus;
+
+  @ApiPropertyOptional({ description: "ISO date, or null to unschedule." })
+  @IsOptional()
+  @IsDateString()
+  scheduledAt?: string | null;
+
+  @ApiPropertyOptional() @IsOptional() @IsString() campaignId?: string;
+}
+
+/** Duplicate a post; optionally drop the copy on a new date. */
+export class DuplicatePostDto {
+  @ApiPropertyOptional({ description: "ISO date for the copy." })
+  @IsOptional()
+  @IsDateString()
+  scheduledAt?: string;
 }
 
 const WITH_CAMPAIGN = { include: { campaign: { select: { name: true } } } } as const;
@@ -131,6 +170,74 @@ export class PostsService {
     return mapPost(row);
   }
 
+  /** Edit / move / reschedule a post. Re-programs the background job. */
+  async update(
+    workspaceId: string,
+    actor: string,
+    id: string,
+    dto: UpdatePostDto,
+  ): Promise<Post> {
+    const existing = await this.db().post.findFirst({ where: { id, workspaceSlug: workspaceId } });
+    if (!existing) throw new NotFoundException("Publicación no encontrada.");
+    if (existing.status === "sent") {
+      throw new BadRequestException("No se puede modificar una publicación ya enviada.");
+    }
+
+    const data: Record<string, unknown> = {};
+    if (dto.channel !== undefined) data.channel = dto.channel;
+    if (dto.title !== undefined) data.title = dto.title;
+    if (dto.copy !== undefined) data.copy = dto.copy;
+    if (dto.hashtags !== undefined) data.hashtags = dto.hashtags;
+    if (dto.status !== undefined) data.status = dto.status;
+    if (dto.campaignId !== undefined) data.campaignId = dto.campaignId;
+    // scheduledAt: undefined = leave as-is; null = unschedule; string = move.
+    if (dto.scheduledAt !== undefined) {
+      data.scheduledAt = dto.scheduledAt ? new Date(dto.scheduledAt) : null;
+    }
+
+    const row = await this.db().post.update({ where: { id }, data, ...WITH_CAMPAIGN });
+
+    // Re-program the background job to match the new schedule/status.
+    await this.scheduler.cancel(id);
+    if (row.status === "scheduled" && row.scheduledAt) {
+      await this.scheduler.schedule(id, row.scheduledAt);
+    }
+    await this.audit.record(workspaceId, actor, "post.update", id);
+    return mapPost(row);
+  }
+
+  /** Duplicate a post (as a draft, or scheduled onto a new date). */
+  async duplicate(
+    workspaceId: string,
+    actor: string,
+    id: string,
+    dto: DuplicatePostDto,
+  ): Promise<Post> {
+    const src = await this.db().post.findFirst({ where: { id, workspaceSlug: workspaceId } });
+    if (!src) throw new NotFoundException("Publicación no encontrada.");
+
+    const scheduledAt = dto.scheduledAt ? new Date(dto.scheduledAt) : src.scheduledAt;
+    const status = scheduledAt ? "scheduled" : "draft";
+    const row = await this.db().post.create({
+      data: {
+        workspaceSlug: workspaceId,
+        channel: src.channel,
+        title: `${src.title} (copia)`,
+        copy: src.copy,
+        hashtags: src.hashtags,
+        status,
+        scheduledAt,
+        campaignId: src.campaignId,
+      },
+      ...WITH_CAMPAIGN,
+    });
+    if (row.status === "scheduled" && row.scheduledAt) {
+      await this.scheduler.schedule(row.id, row.scheduledAt);
+    }
+    await this.audit.record(workspaceId, actor, "post.duplicate", row.id);
+    return mapPost(row);
+  }
+
   async remove(workspaceId: string, actor: string, id: string): Promise<void> {
     const { count } = await this.db().post.deleteMany({ where: { id, workspaceSlug: workspaceId } });
     if (count === 0) throw new NotFoundException("Publicación no encontrada.");
@@ -165,6 +272,30 @@ export class PostsController {
     @Body() dto: CreatePostDto,
   ) {
     return this.service.create(workspaceId, user.email, dto);
+  }
+
+  @Patch(":id")
+  @Roles("Owner", "Admin", "Editor")
+  @UseGuards(RolesGuard)
+  update(
+    @WorkspaceId() workspaceId: string,
+    @CurrentUser() user: AuthenticatedUser,
+    @Param("id") id: string,
+    @Body() dto: UpdatePostDto,
+  ) {
+    return this.service.update(workspaceId, user.email, id, dto);
+  }
+
+  @HttpPost(":id/duplicate")
+  @Roles("Owner", "Admin", "Editor")
+  @UseGuards(RolesGuard)
+  duplicate(
+    @WorkspaceId() workspaceId: string,
+    @CurrentUser() user: AuthenticatedUser,
+    @Param("id") id: string,
+    @Body() dto: DuplicatePostDto,
+  ) {
+    return this.service.duplicate(workspaceId, user.email, id, dto);
   }
 
   @Delete(":id")

@@ -132,10 +132,29 @@ export interface CreatePostInput {
   campaignId?: string;
 }
 
+/** Partial update — move (reschedule), edit or change status. */
+export interface UpdatePostInput {
+  channel?: Post["channel"];
+  title?: string;
+  copy?: string;
+  hashtags?: string[];
+  status?: Post["status"];
+  /** ISO date, or null to unschedule. */
+  scheduledAt?: string | null;
+  campaignId?: string;
+}
+
+export interface DuplicatePostInput {
+  /** ISO date for the copy; defaults to the source date. */
+  scheduledAt?: string;
+}
+
 export interface PostService {
   list(workspaceId: string): Promise<ListResult<Post>>;
   today(workspaceId: string): Promise<Post[]>;
   create(workspaceId: string, input: CreatePostInput): Promise<Post>;
+  update(workspaceId: string, id: string, input: UpdatePostInput): Promise<Post>;
+  duplicate(workspaceId: string, id: string, input: DuplicatePostInput): Promise<Post>;
   remove(workspaceId: string, id: string): Promise<void>;
 }
 

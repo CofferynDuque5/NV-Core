@@ -11,6 +11,8 @@ import type {
   CreateConversationInput,
   CreateGroupInput,
   CreatePostInput,
+  UpdatePostInput,
+  DuplicatePostInput,
   CreateSegmentInput,
   CreateTemplateInput,
   GenerateVariantsInput,
@@ -198,6 +200,47 @@ export function useCreatePost() {
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: [ws.id, "posts"] });
       toast.success("Publicación programada");
+    },
+  });
+}
+
+/** Edit / move (reschedule) a post. Used by calendar drag & drop. */
+export function useUpdatePost() {
+  const svc = useServices();
+  const ws = useWorkspace();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, input }: { id: string; input: UpdatePostInput }) =>
+      svc.posts.update(ws.id, id, input),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: [ws.id, "posts"] });
+    },
+  });
+}
+
+export function useDuplicatePost() {
+  const svc = useServices();
+  const ws = useWorkspace();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, input }: { id: string; input: DuplicatePostInput }) =>
+      svc.posts.duplicate(ws.id, id, input),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: [ws.id, "posts"] });
+      toast.success("Publicación duplicada");
+    },
+  });
+}
+
+export function useDeletePost() {
+  const svc = useServices();
+  const ws = useWorkspace();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => svc.posts.remove(ws.id, id),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: [ws.id, "posts"] });
+      toast.success("Publicación eliminada");
     },
   });
 }
