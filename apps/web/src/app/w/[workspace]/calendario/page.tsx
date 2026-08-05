@@ -1,7 +1,7 @@
 import * as React from "react";
-import type { ChannelId } from "@nv/domain";
+import type { ChannelId, Post } from "@nv/domain";
 
-import { ymd, rangeLabel, countByChannel } from "@/lib/calendar";
+import { ymd, rangeLabel, countByChannel, scheduledOnly } from "@/lib/calendar";
 import { useCalendar } from "@/hooks/use-calendar";
 import { usePosts, useCampaigns } from "@/hooks/use-domain-data";
 import { Panel } from "@/components/common/panel";
@@ -9,7 +9,14 @@ import { ErrorState } from "@/components/common/error-state";
 import { PostScheduleDialog } from "@/components/entities/post-schedule-dialog";
 import { CalendarToolbar } from "@/components/calendar/calendar-toolbar";
 import { CalendarRail } from "@/components/calendar/calendar-rail";
-import { MonthView, WeekView, DayView } from "@/components/calendar/calendar-views";
+import { PostPanel } from "@/components/calendar/post-panel";
+import {
+  MonthView,
+  WeekView,
+  DayView,
+  TimelineView,
+  AgendaView,
+} from "@/components/calendar/calendar-views";
 
 /** Should a single-key shortcut be ignored (typing / dialog open)? */
 function isTypingTarget(el: EventTarget | null): boolean {
@@ -26,13 +33,21 @@ export default function CalendarioPage() {
 
   const [dialogOpen, setDialogOpen] = React.useState(false);
   const [prefill, setPrefill] = React.useState<{ date?: string; time?: string; channel?: ChannelId }>({});
+  const [selectedId, setSelectedId] = React.useState<string | null>(null);
+
+  const allItems = posts.data?.items ?? [];
+  // Conflicts/siblings consider ALL scheduled posts (not just the filtered set).
+  const allScheduled = React.useMemo(() => scheduledOnly(allItems), [allItems]);
+  const selectedPost = React.useMemo<Post | undefined>(
+    () => allItems.find((p) => p.id === selectedId),
+    [allItems, selectedId],
+  );
 
   // Automation: preselect the workspace's most-used channel for new posts.
   const topChannel = React.useMemo<ChannelId | undefined>(() => {
-    const counts = countByChannel(posts.data?.items ?? []);
-    const entries = Object.entries(counts).sort((a, b) => b[1] - a[1]);
+    const entries = Object.entries(countByChannel(allItems)).sort((a, b) => b[1] - a[1]);
     return (entries[0]?.[0] as ChannelId) ?? undefined;
-  }, [posts.data]);
+  }, [allItems]);
 
   const openCreate = React.useCallback(
     (day?: Date, time?: string) => {
@@ -42,6 +57,8 @@ export default function CalendarioPage() {
     [topChannel],
   );
 
+  const onSelect = React.useCallback((p: Post) => setSelectedId(p.id), []);
+
   // Keyboard shortcuts (ignored while typing or a dialog is open).
   React.useEffect(() => {
     function onKey(e: KeyboardEvent) {
@@ -50,8 +67,11 @@ export default function CalendarioPage() {
       if (k === "m") cal.setView("month");
       else if (k === "s") cal.setView("week");
       else if (k === "d") cal.setView("day");
+      else if (k === "l") cal.setView("timeline");
+      else if (k === "a") cal.setView("agenda");
       else if (k === "t") cal.goToday();
       else if (k === "n") openCreate(cal.cursor);
+      else if (e.key === "Escape") setSelectedId(null);
       else if (e.key === "ArrowLeft") cal.prev();
       else if (e.key === "ArrowRight") cal.next();
       else return;
@@ -61,7 +81,13 @@ export default function CalendarioPage() {
     return () => window.removeEventListener("keydown", onKey);
   }, [cal, dialogOpen, openCreate]);
 
-  const viewProps = { cursor: cal.cursor, byDay: cal.byDay, onCreate: openCreate };
+  const viewProps = {
+    cursor: cal.cursor,
+    byDay: cal.byDay,
+    onCreate: openCreate,
+    onSelect,
+    selectedId: selectedId ?? undefined,
+  };
 
   return (
     <div className="space-y-4">
@@ -75,7 +101,7 @@ export default function CalendarioPage() {
         onCreate={() => openCreate(cal.cursor)}
       />
 
-      <div className="grid grid-cols-1 gap-4 xl:grid-cols-[1fr_320px]">
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-[1fr_340px]">
         <Panel className="overflow-hidden">
           {cal.isError ? (
             <ErrorState onRetry={() => posts.refetch()} />
@@ -87,18 +113,31 @@ export default function CalendarioPage() {
             <MonthView {...viewProps} />
           ) : cal.view === "week" ? (
             <WeekView {...viewProps} />
-          ) : (
+          ) : cal.view === "day" ? (
             <DayView {...viewProps} />
+          ) : cal.view === "timeline" ? (
+            <TimelineView {...viewProps} />
+          ) : (
+            <AgendaView {...viewProps} />
           )}
         </Panel>
 
-        <CalendarRail
-          filters={cal.filters}
-          setFilters={cal.setFilters}
-          visible={cal.visible}
-          unscheduledCount={cal.unscheduledCount}
-          campaigns={campaigns.data?.items ?? []}
-        />
+        {selectedPost ? (
+          <PostPanel
+            post={selectedPost}
+            posts={allScheduled}
+            onClose={() => setSelectedId(null)}
+            onSelect={onSelect}
+          />
+        ) : (
+          <CalendarRail
+            filters={cal.filters}
+            setFilters={cal.setFilters}
+            visible={cal.visible}
+            unscheduledCount={cal.unscheduledCount}
+            campaigns={campaigns.data?.items ?? []}
+          />
+        )}
       </div>
 
       <PostScheduleDialog

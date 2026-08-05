@@ -8,6 +8,8 @@ const VIEWS: { value: CalendarView; label: string; key: string }[] = [
   { value: "month", label: "Mes", key: "M" },
   { value: "week", label: "Semana", key: "S" },
   { value: "day", label: "Día", key: "D" },
+  { value: "timeline", label: "Timeline", key: "L" },
+  { value: "agenda", label: "Agenda", key: "A" },
 ];
 
 /**

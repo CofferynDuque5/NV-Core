@@ -2,11 +2,14 @@ import { describe, expect, it } from "vitest";
 import type { Post } from "@nv/domain";
 
 import {
+  agendaDays,
   applyFilters,
+  conflictsFor,
   countByChannel,
   groupByDay,
   monthMatrix,
   rangeLabel,
+  sameDayOthers,
   scheduledOnly,
   startOfWeek,
   step,
@@ -86,5 +89,35 @@ describe("filtering + grouping", () => {
 
   it("countByChannel tallies per channel", () => {
     expect(countByChannel(posts)).toEqual({ ig: 2, wa: 1 });
+  });
+});
+
+describe("conflicts + same-day", () => {
+  const target = post({ id: "t", channel: "ig", scheduledAt: "2026-09-02T10:00:00.000Z" });
+  const near = post({ id: "near", channel: "ig", scheduledAt: "2026-09-02T10:20:00.000Z" });
+  const far = post({ id: "far", channel: "ig", scheduledAt: "2026-09-02T14:00:00.000Z" });
+  const otherChannel = post({ id: "wa", channel: "wa", scheduledAt: "2026-09-02T10:10:00.000Z" });
+
+  it("flags same-channel posts within the window", () => {
+    const c = conflictsFor(target, [target, near, far, otherChannel], 30);
+    expect(c.map((p) => p.id)).toEqual(["near"]);
+  });
+
+  it("ignores other channels and the post itself", () => {
+    const c = conflictsFor(target, [target, otherChannel], 30);
+    expect(c).toHaveLength(0);
+  });
+
+  it("sameDayOthers lists the rest of the day sorted, excluding self", () => {
+    const others = sameDayOthers(target, [target, far, near]);
+    expect(others.map((p) => p.id)).toEqual(["near", "far"]);
+  });
+});
+
+describe("agendaDays", () => {
+  it("returns N days from the Monday of the week", () => {
+    const days = agendaDays(new Date(2026, 8, 2), 14);
+    expect(days).toHaveLength(14);
+    expect(ymd(days[0]!)).toBe("2026-08-31");
   });
 });

@@ -1,7 +1,7 @@
 import type { ChannelId, Post, PostStatus } from "@nv/domain";
 
-/** Calendar view modes shipped in Slice 2 (timeline/agenda arrive in S3). */
-export type CalendarView = "month" | "week" | "day";
+/** Calendar view modes (S2: month/week/day · S3: timeline/agenda). */
+export type CalendarView = "month" | "week" | "day" | "timeline" | "agenda";
 
 export const MONTHS_ES = [
   "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
@@ -53,28 +53,32 @@ export function monthMatrix(d: Date): Date[] {
   return Array.from({ length: 42 }, (_, i) => addDays(start, i));
 }
 
+function weekRangeLabel(cursor: Date): string {
+  const days = weekDays(cursor);
+  const a = days[0]!;
+  const b = days[6]!;
+  const sameMonth = a.getMonth() === b.getMonth();
+  return sameMonth
+    ? `${a.getDate()}–${b.getDate()} ${MONTHS_ES[a.getMonth()]} ${a.getFullYear()}`
+    : `${a.getDate()} ${MONTHS_ES[a.getMonth()]} – ${b.getDate()} ${MONTHS_ES[b.getMonth()]} ${b.getFullYear()}`;
+}
+
 /** Human range label for the toolbar, per view. */
 export function rangeLabel(view: CalendarView, cursor: Date): string {
   if (view === "day") {
     return `${WEEKDAYS_ES[(cursor.getDay() + 6) % 7]} ${cursor.getDate()} ${MONTHS_ES[cursor.getMonth()]} ${cursor.getFullYear()}`;
   }
-  if (view === "week") {
-    const days = weekDays(cursor);
-    const a = days[0]!;
-    const b = days[6]!;
-    const sameMonth = a.getMonth() === b.getMonth();
-    return sameMonth
-      ? `${a.getDate()}–${b.getDate()} ${MONTHS_ES[a.getMonth()]} ${a.getFullYear()}`
-      : `${a.getDate()} ${MONTHS_ES[a.getMonth()]} – ${b.getDate()} ${MONTHS_ES[b.getMonth()]} ${b.getFullYear()}`;
-  }
+  if (view === "week" || view === "timeline") return weekRangeLabel(cursor);
+  if (view === "agenda") return `Agenda · ${weekRangeLabel(cursor)}`;
   return `${MONTHS_ES[cursor.getMonth()]} ${cursor.getFullYear()}`;
 }
 
 /** Step the cursor by one unit of the current view (dir = -1 | +1). */
 export function step(view: CalendarView, cursor: Date, dir: number): Date {
   if (view === "month") return addMonths(cursor, dir);
-  if (view === "week") return addDays(cursor, 7 * dir);
-  return addDays(cursor, dir);
+  if (view === "day") return addDays(cursor, dir);
+  // week / timeline / agenda all move a week at a time.
+  return addDays(cursor, 7 * dir);
 }
 
 // ── Filtering + grouping ─────────────────────────────────────────────────────
@@ -129,4 +133,32 @@ export function countByChannel(posts: Post[]): Record<string, number> {
   const out: Record<string, number> = {};
   for (const p of posts) out[p.channel] = (out[p.channel] ?? 0) + 1;
   return out;
+}
+
+/**
+ * Posts that clash with `target`: same channel, within `windowMin` minutes.
+ * Used by the side panel to warn before a bad schedule ships.
+ */
+export function conflictsFor(target: Post, posts: Post[], windowMin = 30): Post[] {
+  if (!target.scheduledAt) return [];
+  const t = new Date(target.scheduledAt).getTime();
+  return posts.filter((p) => {
+    if (p.id === target.id || p.channel !== target.channel || !p.scheduledAt) return false;
+    return Math.abs(new Date(p.scheduledAt).getTime() - t) <= windowMin * 60_000;
+  });
+}
+
+/** Other posts scheduled the same local day as `target` (sorted by time). */
+export function sameDayOthers(target: Post, posts: Post[]): Post[] {
+  if (!target.scheduledAt) return [];
+  const key = ymd(new Date(target.scheduledAt));
+  return posts
+    .filter((p) => p.id !== target.id && p.scheduledAt && ymd(new Date(p.scheduledAt)) === key)
+    .sort((a, b) => (a.scheduledAt! < b.scheduledAt! ? -1 : 1));
+}
+
+/** N consecutive days from the Monday of `cursor`'s week (Agenda window). */
+export function agendaDays(cursor: Date, count = 14): Date[] {
+  const start = startOfWeek(cursor);
+  return Array.from({ length: count }, (_, i) => addDays(start, i));
 }

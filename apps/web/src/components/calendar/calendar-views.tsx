@@ -1,8 +1,19 @@
 import * as React from "react";
-import type { Post } from "@nv/domain";
+import { CHANNEL_LIST, CHANNELS, type Post } from "@nv/domain";
 
 import { cn } from "@/lib/utils";
-import { monthMatrix, sameDay, weekDays, WEEKDAYS_ES, ymd } from "@/lib/calendar";
+import {
+  agendaDays,
+  MONTHS_ES,
+  monthMatrix,
+  sameDay,
+  weekDays,
+  WEEKDAYS_ES,
+  ymd,
+} from "@/lib/calendar";
+import { EmptyState } from "@/components/common/empty-state";
+import { Button } from "@/components/ui/button";
+import { CalendarPlus } from "lucide-react";
 import { PostChip } from "./post-chip";
 
 /** Time grid range (06:00–23:00) — the productive window for scheduling. */
@@ -13,6 +24,10 @@ interface ViewProps {
   byDay: Map<string, Post[]>;
   /** Open the composer prefilled for this day (and optional HH:MM slot). */
   onCreate: (day: Date, time?: string) => void;
+  /** Select a post → opens the side panel. */
+  onSelect?: (post: Post) => void;
+  /** Currently selected post id (highlight). */
+  selectedId?: string;
 }
 
 function postsByHour(posts: Post[]): Map<number, Post[]> {
@@ -28,7 +43,7 @@ function postsByHour(posts: Post[]): Map<number, Post[]> {
 }
 
 // ── Month ────────────────────────────────────────────────────────────────────
-export function MonthView({ cursor, byDay, onCreate }: ViewProps) {
+export function MonthView({ cursor, byDay, onCreate, onSelect, selectedId }: ViewProps) {
   const cells = React.useMemo(() => monthMatrix(cursor), [cursor]);
   const today = new Date();
   const MAX = 3;
@@ -78,7 +93,7 @@ export function MonthView({ cursor, byDay, onCreate }: ViewProps) {
               <div className="relative z-10 flex flex-col gap-0.5">
                 {dayPosts.slice(0, MAX).map((p) => (
                   <div key={p.id} className="pointer-events-auto">
-                    <PostChip post={p} compact />
+                    <PostChip post={p} compact onSelect={onSelect} selected={p.id === selectedId} />
                   </div>
                 ))}
                 {dayPosts.length > MAX ? (
@@ -96,7 +111,13 @@ export function MonthView({ cursor, byDay, onCreate }: ViewProps) {
 }
 
 // ── Shared time grid (week / day) ────────────────────────────────────────────
-function TimeGrid({ days, byDay, onCreate }: { days: Date[] } & Omit<ViewProps, "cursor">) {
+function TimeGrid({
+  days,
+  byDay,
+  onCreate,
+  onSelect,
+  selectedId,
+}: { days: Date[] } & Omit<ViewProps, "cursor">) {
   const today = new Date();
   const nowHour = today.getHours();
 
@@ -153,7 +174,7 @@ function TimeGrid({ days, byDay, onCreate }: { days: Date[] } & Omit<ViewProps, 
                   {isNow ? <span className="absolute left-0 right-0 top-0 z-10 h-px bg-brand" /> : null}
                   <div className="relative z-10 flex flex-col gap-0.5">
                     {hourPosts.map((p) => (
-                      <PostChip key={p.id} post={p} />
+                      <PostChip key={p.id} post={p} onSelect={onSelect} selected={p.id === selectedId} />
                     ))}
                   </div>
                 </div>
@@ -166,11 +187,152 @@ function TimeGrid({ days, byDay, onCreate }: { days: Date[] } & Omit<ViewProps, 
   );
 }
 
-export function WeekView({ cursor, byDay, onCreate }: ViewProps) {
+export function WeekView({ cursor, byDay, onCreate, onSelect, selectedId }: ViewProps) {
   const days = React.useMemo(() => weekDays(cursor), [cursor]);
-  return <TimeGrid days={days} byDay={byDay} onCreate={onCreate} />;
+  return <TimeGrid days={days} byDay={byDay} onCreate={onCreate} onSelect={onSelect} selectedId={selectedId} />;
 }
 
-export function DayView({ cursor, byDay, onCreate }: ViewProps) {
-  return <TimeGrid days={[cursor]} byDay={byDay} onCreate={onCreate} />;
+export function DayView({ cursor, byDay, onCreate, onSelect, selectedId }: ViewProps) {
+  return <TimeGrid days={[cursor]} byDay={byDay} onCreate={onCreate} onSelect={onSelect} selectedId={selectedId} />;
+}
+
+// ── Timeline (per-channel swimlanes across the week) ─────────────────────────
+export function TimelineView({ cursor, byDay, onCreate, onSelect, selectedId }: ViewProps) {
+  const days = React.useMemo(() => weekDays(cursor), [cursor]);
+  const today = new Date();
+
+  // Only show channels that actually have posts this week (keeps it dense).
+  const activeChannels = React.useMemo(() => {
+    const used = new Set<string>();
+    for (const d of days) for (const p of byDay.get(ymd(d)) ?? []) used.add(p.channel);
+    return CHANNEL_LIST.filter((c) => used.has(c.id));
+  }, [days, byDay]);
+
+  if (activeChannels.length === 0) {
+    return (
+      <div className="p-6">
+        <EmptyState
+          icon={CalendarPlus}
+          title="Sin publicaciones esta semana"
+          description="Cambia de semana o programa contenido para verlo por canal."
+        />
+      </div>
+    );
+  }
+
+  return (
+    <div className="overflow-x-auto">
+      <div className="grid min-w-[720px]" style={{ gridTemplateColumns: `120px repeat(7, 1fr)` }}>
+        <div className="sticky left-0 z-10 border-b border-line bg-panel" />
+        {days.map((d) => (
+          <div
+            key={ymd(d)}
+            className="border-b border-l border-line bg-panel px-2 py-1.5 text-center text-[10px] uppercase tracking-wide text-ink-faint"
+          >
+            {WEEKDAYS_ES[(d.getDay() + 6) % 7]} {d.getDate()}
+          </div>
+        ))}
+
+        {activeChannels.map((ch) => (
+          <React.Fragment key={ch.id}>
+            <div className="sticky left-0 z-10 flex items-center gap-2 border-b border-r border-line-soft bg-panel px-2.5 py-2">
+              <span className="size-2.5 shrink-0 rounded-full" style={{ background: ch.color }} />
+              <span className="truncate text-xs font-medium text-ink">{ch.name}</span>
+            </div>
+            {days.map((d) => {
+              const cellPosts = (byDay.get(ymd(d)) ?? []).filter((p) => p.channel === ch.id);
+              const isToday = sameDay(d, today);
+              return (
+                <div
+                  key={`${ch.id}-${ymd(d)}`}
+                  className={cn(
+                    "relative min-h-[56px] border-b border-l border-line-soft p-1",
+                    isToday && "bg-brand/5",
+                  )}
+                >
+                  <button
+                    aria-label={`Programar ${ch.name}`}
+                    onClick={() => onCreate(d)}
+                    className="absolute inset-0 z-0 transition-colors hover:bg-panel-raised/50"
+                  />
+                  <div className="relative z-10 flex flex-col gap-0.5">
+                    {cellPosts.map((p) => (
+                      <PostChip key={p.id} post={p} onSelect={onSelect} selected={p.id === selectedId} />
+                    ))}
+                  </div>
+                </div>
+              );
+            })}
+          </React.Fragment>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ── Agenda (chronological list, the fastest "what's next" scan) ──────────────
+export function AgendaView({ cursor, byDay, onCreate, onSelect, selectedId }: ViewProps) {
+  const days = React.useMemo(() => agendaDays(cursor, 14), [cursor]);
+  const today = new Date();
+  const withPosts = days.filter((d) => (byDay.get(ymd(d)) ?? []).length > 0);
+
+  if (withPosts.length === 0) {
+    return (
+      <div className="p-6">
+        <EmptyState
+          icon={CalendarPlus}
+          title="Nada programado en estas dos semanas"
+          description="Programa una publicación para empezar a llenar tu agenda."
+          action={
+            <Button size="sm" onClick={() => onCreate(cursor)}>
+              Programar
+            </Button>
+          }
+        />
+      </div>
+    );
+  }
+
+  return (
+    <div className="divide-y divide-line-soft">
+      {withPosts.map((d) => {
+        const dayPosts = byDay.get(ymd(d)) ?? [];
+        const isToday = sameDay(d, today);
+        return (
+          <div key={ymd(d)} className="flex gap-3 px-4 py-3">
+            <div className="w-20 shrink-0 pt-0.5">
+              <div className={cn("text-sm font-semibold", isToday ? "text-brand" : "text-ink-bright")}>
+                {isToday ? "Hoy" : `${WEEKDAYS_ES[(d.getDay() + 6) % 7]} ${d.getDate()}`}
+              </div>
+              <div className="text-[11px] text-ink-faint">{(MONTHS_ES[d.getMonth()] ?? "").slice(0, 3)}</div>
+            </div>
+            <div className="flex min-w-0 flex-1 flex-col gap-1">
+              {dayPosts.map((p) => {
+                const ch = CHANNELS[p.channel];
+                return (
+                  <button
+                    key={p.id}
+                    onClick={() => onSelect?.(p)}
+                    className={cn(
+                      "flex items-center gap-2 rounded-lg border px-2.5 py-1.5 text-left transition-colors",
+                      p.id === selectedId
+                        ? "border-brand bg-brand/5"
+                        : "border-line-soft bg-panel hover:border-line-bright",
+                    )}
+                  >
+                    <span className="w-10 shrink-0 text-xs tabular-nums text-ink-muted">
+                      {p.scheduledAt ? new Date(p.scheduledAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : ""}
+                    </span>
+                    <span className="size-2 shrink-0 rounded-full" style={{ background: ch.color }} />
+                    <span className="min-w-0 flex-1 truncate text-sm text-ink">{p.title}</span>
+                    <span className="shrink-0 text-[11px] text-ink-faint">{ch.name}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
 }
