@@ -12,15 +12,21 @@ export function PostScheduleDialog({
   open,
   onOpenChange,
   defaultDate,
+  defaultTime,
+  defaultChannel,
 }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
   /** YYYY-MM-DD to prefill (e.g. clicked calendar day). */
   defaultDate?: string;
+  /** HH:MM to prefill (e.g. clicked calendar time slot). */
+  defaultTime?: string;
+  /** Channel to preselect (e.g. the workspace's most-used channel). */
+  defaultChannel?: ChannelId;
 }) {
   const mutation = useCreatePost();
   const [title, setTitle] = React.useState("");
-  const [channel, setChannel] = React.useState<ChannelId>("ig");
+  const [channel, setChannel] = React.useState<ChannelId>(defaultChannel ?? "ig");
   const [date, setDate] = React.useState("");
   const [time, setTime] = React.useState("12:00");
   const [copy, setCopy] = React.useState("");
@@ -29,12 +35,12 @@ export function PostScheduleDialog({
   React.useEffect(() => {
     if (!open) return;
     setTitle("");
-    setChannel("ig");
+    setChannel(defaultChannel ?? "ig");
     setDate(defaultDate ?? "");
-    setTime("12:00");
+    setTime(defaultTime ?? "12:00");
     setCopy("");
     setError(null);
-  }, [open, defaultDate]);
+  }, [open, defaultDate, defaultTime, defaultChannel]);
 
   function submit() {
     setError(null);
