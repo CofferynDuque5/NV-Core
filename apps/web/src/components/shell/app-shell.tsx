@@ -35,12 +35,19 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   return (
     <AuthGate>
       <div className="flex min-h-screen w-full bg-canvas text-ink">
+        {/* Skip link (WCAG 2.4.1): hidden until focused. */}
+        <a
+          href="#main-content"
+          className="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-3 focus:z-50 focus:rounded-lg focus:bg-brand focus:px-3 focus:py-2 focus:text-sm focus:font-medium focus:text-white"
+        >
+          Saltar al contenido
+        </a>
         <Sidebar onOpenSwitcher={() => setSwitcherOpen(true)} />
         <MobileNav onOpenSwitcher={() => setSwitcherOpen(true)} />
 
         <div className="flex min-w-0 flex-1 flex-col">
           <Topbar />
-          <main className="flex-1 px-4 py-6 sm:px-6 lg:px-8">
+          <main id="main-content" tabIndex={-1} className="flex-1 px-4 py-6 outline-none sm:px-6 lg:px-8">
             <div className="mx-auto w-full max-w-[1400px] animate-fadein">{children}</div>
           </main>
         </div>

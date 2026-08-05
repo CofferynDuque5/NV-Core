@@ -12,6 +12,21 @@
 }
 
 /*
+ * Accessibility: honor the user's reduced-motion preference (WCAG 2.3.3).
+ * Neutralizes animations/transitions without touching component code.
+ */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/*
  * NV Core theme — mapped from the design's raw palette to shadcn's HSL tokens.
  * Dark is the primary (and currently only) theme, matching the design.
  */

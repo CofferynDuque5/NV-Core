@@ -53,6 +53,7 @@ export function Topbar() {
           onClick={toggleNotifications}
           className="relative grid size-9 place-items-center rounded-lg border border-line-soft bg-panel text-ink-muted transition-colors hover:border-line-bright hover:text-ink"
           title="Notificaciones"
+          aria-label={unread > 0 ? `Notificaciones, ${unread} sin leer` : "Notificaciones"}
         >
           <Bell className="size-[18px]" />
           {unread > 0 ? (

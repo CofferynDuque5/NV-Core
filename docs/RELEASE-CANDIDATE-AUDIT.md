@@ -91,6 +91,10 @@ actualizado.
 ## Fase 8 — Accessibility
 - ✅ Roles/aria en Calendario, color + etiqueta (no solo color), labels en forms,
   `aria-label` en búsqueda/acciones de la Biblioteca.
+- ✅ **CORREGIDO (RC):** **skip link** (`#main-content`, WCAG 2.4.1) + landmark
+  `<main>` enfocable en el shell; `prefers-reduced-motion` neutraliza
+  animaciones/transiciones (WCAG 2.3.3); `aria-label` con conteo en el botón de
+  notificaciones.
 - ⏳ **Pendiente (P1):** auditoría **WCAG** formal, contraste en ambos temas,
   **DnD accesible por teclado** completo.
 
@@ -118,7 +122,8 @@ actualizado.
 
 ### P1 — Hardening detectado por el RC
 13. ✅ **Security headers (helmet + CSP + HSTS)** — HECHO. · 14. Virtualización de listas ·
-15. WCAG + DnD por teclado + contraste · 16. E2E por módulo + carga/estrés.
+15. 🟡 **A11y base** (skip link, landmark, reduced-motion, aria-label notif.) — HECHO;
+falta WCAG formal + DnD por teclado + contraste. · 16. E2E por módulo + carga/estrés.
 
 ### P2 — DevOps / Docs
 17. Runbook de deployment · referencia de variables · ADRs · diagramas ·
