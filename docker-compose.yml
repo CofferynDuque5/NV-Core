@@ -39,6 +39,7 @@ services:
       PORT: 4000
       CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000}
       JWT_SECRET: ${JWT_SECRET:-change-me-in-production-please-32chars}
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY:-}
       DATABASE_URL: postgresql://${POSTGRES_USER:-nvcore}:${POSTGRES_PASSWORD:-nvcore}@db:5432/${POSTGRES_DB:-nvcore}?schema=public
       REDIS_URL: redis://redis:6379
       # Admin inicial: se crea al arrancar y queda como Owner de todo.
