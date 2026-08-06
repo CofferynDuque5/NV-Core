@@ -378,6 +378,8 @@ export interface IntegrationService {
 export interface NotificationService {
   list(workspaceId: string): Promise<Notification[]>;
   unreadCount(workspaceId: string): Promise<number>;
+  /** Mark every unread notification in the workspace as read. Returns the count updated. */
+  markAllRead(workspaceId: string): Promise<{ updated: number }>;
 }
 
 export interface AddMemberInput {

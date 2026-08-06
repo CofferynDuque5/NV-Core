@@ -199,14 +199,17 @@ API 140 unit + web 81 unit ✅.
    HMAC fail-closed (ver Fase 6).
 2. **[SEG · política, pre-GA]** Telegram fail-open sin secreto; `GET
    /api/workspaces` público enumera todos los tenants.
-3. **[PRODUCTO · bugs cliente-visibles, RC-detectados, aún abiertos]**
-   - **Segmentos** (`segmentos/page.tsx:45`): `{() => null}` — nunca lista, aun
-     con datos del backend.
-   - **Dashboard** (`dashboard/page.tsx:92,140`): "Publicaciones de hoy" y
-     "Campañas activas" renderizan `null` cuando **hay** datos; y `:61-62` dos
-     KPIs con `value={null}` fijo (sin fuente de datos).
-   - **Notificaciones** (`notifications-panel.tsx:21`): botón "Marcar leídas" sin
-     `onClick` (el endpoint backend existe; el contrato no lo expone).
+3. **[PRODUCTO · bugs cliente-visibles, RC-detectados] — ✅ CORREGIDOS (bloque 3)**
+   - **Segmentos**: `{() => null}` → ahora renderiza una grilla de tarjetas
+     (nombre, color, conteo, reglas). Verificado en vivo con datos reales.
+   - **Dashboard**: los paneles "Publicaciones de hoy" y "Campañas activas"
+     ahora listan sus datos; el panel "Alertas" lista notificaciones; y los 2
+     KPIs muertos se cablearon a **datos reales** — "Mensajes (7 días)" (KPI real
+     del snapshot de Analytics) y "Alertas activas" (nº de notificaciones
+     error/warning). Sin datos ficticios. Verificado en vivo.
+   - **Notificaciones**: "Marcar leídas" ahora llama a `POST …/notifications/
+     read-all` (contrato + adaptadores + hook + botón, con estado leído/no-leído
+     en la lista). Verificado en vivo (updated:2 → unread:0, botón se deshabilita).
 4. **[OPS · bloqueadores de release]** `main.ts` **no llama
    `enableShutdownHooks()`** (los `onModuleDestroy` no drenan en SIGTERM);
    `/api/health` devuelve un **flag de config, no un ping real** a DB/Redis; sin
@@ -250,9 +253,10 @@ API 140 unit + web 81 unit ✅.
 **Bloque 2 — Adopción (P1):** onboarding, centro de ayuda/KB, tour, feedback,
 changelog, página de estado, import/export.
 
-**Bloque 3 — Calidad de producto (RC-detectado):** arreglar Segmentos, los 2
-paneles + 2 KPIs del Dashboard, y "Marcar leídas"; decidir política de los 2
-ítems de seguridad (Telegram, enumeración de workspaces).
+**Bloque 3 — Calidad de producto (RC-detectado): ✅ COMPLETO** — Segmentos, los
+2 paneles + 2 KPIs del Dashboard y "Marcar leídas" arreglados y verificados en
+vivo. Queda **decidir política** de los 2 ítems de seguridad (Telegram
+fail-open, enumeración pública de workspaces).
 
 **Bloque 4 — Escala/A11y (P2):** teclado en el editor de workflows, paginación +
 índices compuestos + virtualización, carga real con Redis/Socket.IO, WCAG formal.

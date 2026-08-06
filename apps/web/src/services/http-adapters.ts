@@ -243,6 +243,7 @@ export function createHttpAdapters(opts: HttpAdapterOptions): Services {
       list: (id) => get<Notification[]>(`${ws(id)}/notifications`),
       unreadCount: (id) =>
         get<{ count: number }>(`${ws(id)}/notifications/unread-count`).then((r) => r.count),
+      markAllRead: (id) => post<{ updated: number }>(`${ws(id)}/notifications/read-all`, {}),
     },
     team: {
       members: (id) => get<TeamMember[]>(`${ws(id)}/team/members`),

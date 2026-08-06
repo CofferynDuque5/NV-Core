@@ -822,6 +822,21 @@ export function useUninstallApp() {
   });
 }
 
+// ── Notifications ────────────────────────────────────────────────────────────
+export function useMarkNotificationsRead() {
+  const svc = useServices();
+  const ws = useWorkspace();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () => svc.notifications.markAllRead(ws.id),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: [ws.id, "notifications"] });
+      void qc.invalidateQueries({ queryKey: [ws.id, "notifications", "unread"] });
+    },
+    onError: (err) => toast.error(errText(err)),
+  });
+}
+
 export function useSuggestHashtags() {
   const svc = useServices();
   const ws = useWorkspace();

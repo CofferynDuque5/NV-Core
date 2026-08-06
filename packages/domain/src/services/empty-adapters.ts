@@ -152,6 +152,7 @@ export const emptyAdapters: Services = {
   notifications: {
     list: () => delay([]),
     unreadCount: () => delay(0),
+    markAllRead: () => delay({ updated: 0 }),
   },
   team: {
     members: () => delay([]),
