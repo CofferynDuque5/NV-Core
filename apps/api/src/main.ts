@@ -41,6 +41,11 @@ async function bootstrap(): Promise<void> {
 
   app.useGlobalFilters(new AllExceptionsFilter());
 
+  // Drain in-flight work on SIGTERM/SIGINT: fires every provider's
+  // onModuleDestroy (Prisma disconnect, BullMQ worker/queue close, campaign
+  // runner) so rolling deploys don't drop connections or half-finished jobs.
+  app.enableShutdownHooks();
+
   app.enableCors({
     origin: config.get("corsOrigins", { infer: true }),
     credentials: true,

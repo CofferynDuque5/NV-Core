@@ -53,6 +53,20 @@ export class QueueManager implements OnModuleInit, OnModuleDestroy {
     return Boolean(this.queue);
   }
 
+  /**
+   * Health probe. "inline" when no Redis is configured (jobs run in-process),
+   * "ok" when the Redis connection answers PING, "down" when it doesn't.
+   */
+  async ping(): Promise<"inline" | "ok" | "down"> {
+    if (!this.connection) return "inline";
+    try {
+      const res = await this.connection.ping();
+      return res === "PONG" ? "ok" : "down";
+    } catch {
+      return "down";
+    }
+  }
+
   onModuleInit(): void {
     if (!this.redisUrl) {
       this.logger.log("QueueManager en modo inline (sin REDIS_URL): los jobs se ejecutan en proceso.");

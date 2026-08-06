@@ -38,14 +38,18 @@ services:
       NODE_ENV: production
       PORT: 4000
       CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000}
-      JWT_SECRET: ${JWT_SECRET:-change-me-in-production-please-32chars}
+      # Secretos SIN default: crea un `.env` en la raíz (ver .env.docker.example).
+      # En producción la API no arranca si faltan JWT_SECRET/ENCRYPTION_KEY.
+      JWT_SECRET: ${JWT_SECRET:?define JWT_SECRET en .env (mín. 16 chars)}
       ENCRYPTION_KEY: ${ENCRYPTION_KEY:-}
       DATABASE_URL: postgresql://${POSTGRES_USER:-nvcore}:${POSTGRES_PASSWORD:-nvcore}@db:5432/${POSTGRES_DB:-nvcore}?schema=public
       REDIS_URL: redis://redis:6379
-      # Admin inicial: se crea al arrancar y queda como Owner de todo.
-      NV_ADMIN_EMAIL: ${NV_ADMIN_EMAIL:-cofferynduque5@gmail.com}
-      NV_ADMIN_PASSWORD: ${NV_ADMIN_PASSWORD:-valeryn2026}
-      NV_ADMIN_NAME: ${NV_ADMIN_NAME:-Cofferyn}
+      # Admin inicial OPCIONAL: si defines NV_ADMIN_EMAIL + NV_ADMIN_PASSWORD en
+      # tu .env, ese usuario se crea al arrancar como Owner de todo. Sin ellos no
+      # se siembra ningún admin (nunca uses credenciales por defecto conocidas).
+      NV_ADMIN_EMAIL: ${NV_ADMIN_EMAIL:-}
+      NV_ADMIN_PASSWORD: ${NV_ADMIN_PASSWORD:-}
+      NV_ADMIN_NAME: ${NV_ADMIN_NAME:-}
       # Claves opcionales (IA, Meta, Cloudinary…) se toman del .env de la raíz.
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}

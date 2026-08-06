@@ -1,58 +1,74 @@
 # NV Core — Business Operating System
 
 Plataforma **multi-workspace** de marketing, CRM y automatización omnicanal.
-Monorepo profesional preparado para crecer a un SaaS comercial.
-
-> **Fase 1 (esta entrega):** frontend completo con el shell y todas las
-> pantallas del Core, en **estados vacíos / skeleton loaders** (sin datos
-> ficticios). El backend y las integraciones quedan **preparados como
-> contratos**, sin implementar. Ver [`IMPLEMENTATION_PLAN.md`](./IMPLEMENTATION_PLAN.md).
+Monorepo profesional, en modo **Release Candidate**: frontend y backend
+implementados y funcionando end-to-end (auth, multi-tenancy, colas, billing,
+IA, mensajería, media). Ver el estado real y lo pendiente en
+[`docs/RELEASE-CANDIDATE-AUDIT.md`](./docs/RELEASE-CANDIDATE-AUDIT.md).
 
 ## Stack
 
 pnpm workspaces · Turborepo · React 19 + **Vite** (SPA) · react-router ·
 TypeScript estricto · TailwindCSS · shadcn/ui · Zustand · TanStack Query ·
-Socket.IO · lucide-react. Backend: **NestJS + PostgreSQL/Prisma + Redis**.
+Socket.IO · lucide-react. Backend: **NestJS 11 + PostgreSQL/Prisma + Redis
+(BullMQ)**, JWT + refresh, RBAC por workspace, Stripe, proveedores de IA
+(OpenAI/Anthropic/Gemini), WhatsApp/Telegram, Meta Graph, Google, Cloudinary,
+Resend.
 
 ## Estructura
 
 ```
 apps/
   web/     Frontend React + Vite (SPA; build estático → dist/)
-  api/     Backend NestJS
+  api/     Backend NestJS (25 módulos de feature, Prisma, colas)
 packages/
   domain/           @nv/domain — entidades, enums, config, contratos de servicio
   config-tailwind/  @nv/tailwind-preset — design tokens
   tsconfig/         configs TypeScript compartidas
 ```
 
-## Primeros pasos
+El frontend habla con el backend a través de un **registro de servicios**
+intercambiable: sin `VITE_API_URL` corre en **modo demo** (adaptadores vacíos,
+sin datos ficticios); con `VITE_API_URL` usa los adaptadores HTTP contra la API.
+
+## Primeros pasos (desarrollo)
 
 ```bash
 pnpm install
-pnpm dev            # levanta apps/web en http://localhost:3000
-pnpm build          # build de producción
+pnpm dev            # web en :3000, api en :4000 (necesita Postgres; Redis opcional)
+pnpm build          # build de producción (todos los workspaces)
 pnpm typecheck      # chequeo de tipos (TS estricto)
+pnpm test           # unit tests (API + web + dominio)
 ```
 
-La app redirige a `/w/<workspace>/dashboard`. Cambia de empresa con el
-**workspace switcher** (sidebar) o el **command palette** (`⌘K`).
+La API necesita `DATABASE_URL`, `JWT_SECRET` y `ENCRYPTION_KEY` (ver
+`apps/api/.env.example`). Aplica migraciones con
+`pnpm --filter @nv/api exec prisma migrate deploy`.
+
+## Todo en Docker (una orden)
+
+```bash
+cp .env.docker.example .env     # define JWT_SECRET y ENCRYPTION_KEY
+docker compose up --build       # web en :3000, api en :4000/api
+```
+
+Los secretos **no traen valores por defecto**: defínelos en `.env`. El admin
+inicial es opcional (`NV_ADMIN_EMAIL` + `NV_ADMIN_PASSWORD`). Backups y runbook
+de operación: [`docs/OPERATIONS.md`](./docs/OPERATIONS.md).
 
 ## Principios
 
-- **Cero datos falsos.** Toda pantalla con datos arranca vacía, con skeletons
-  y estados vacíos elegantes. Las métricas muestran `—` hasta que exista el
-  backend.
-- **Preparado, no implementado.** Postgres, Prisma, Redis, n8n, OpenAI,
-  Anthropic, Gemini, WhatsApp Business API, Meta Graph, Telegram, Google,
-  Stripe, Cloudinary y Resend están modelados como interfaces en
-  `@nv/domain/services`. Activar el backend = implementar esos contratos y
-  registrar un adaptador HTTP; **la UI no cambia**.
-- **Multi-workspace.** 14 empresas comparten un Core de 16 módulos.
+- **Cero datos falsos.** En modo demo las pantallas arrancan vacías con
+  skeletons; las métricas muestran `—` hasta que hay backend.
+- **Contratos primero.** Cada servicio de `@nv/domain/services` tiene su
+  adaptador HTTP (web) y su módulo NestJS (api); añadir un proveedor = registrar
+  un adaptador, sin tocar la UI.
+- **Multi-workspace.** Varias empresas comparten un Core de módulos con RBAC y
+  aislamiento por tenant.
 
-## Workspaces
+## Documentación
 
-Un Ciclo Creativo · Un Código Creativo · El Pulso de Naturaleza ·
-Design Your Core · Perla Tour · VAROUDUVA STORE · Software Studio ·
-Marketing Studio · AI Automation Studio · Fitness · Password Vault ·
-Women's Health · NV Streaming · NV Stream.
+- [`docs/RELEASE-CANDIDATE-AUDIT.md`](./docs/RELEASE-CANDIDATE-AUDIT.md) — estado RC y backlog.
+- [`docs/OPERATIONS.md`](./docs/OPERATIONS.md) — deploy, backups/restore, rollback, health checks.
+- [`SETUP.md`](./SETUP.md) — puesta en marcha detallada.
+- API reference: Swagger en `/api/docs` con la API levantada.

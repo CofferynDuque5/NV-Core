@@ -221,14 +221,21 @@ API 140 unit + web 81 unit ✅.
 
 ### Qué falta para una versión ESTABLE (priorizado)
 
-**Bloque 1 — Operabilidad (siguiente, acordado):**
-- `enableShutdownHooks()` + `/api/health` con ping real (readiness/liveness).
-- Backups/restore de Postgres (script + doc) y runbook de deploy/rollback.
-- Quitar credenciales/secretos por defecto de `docker-compose.yml`; corregir README.
-- Config **ESLint flat** para `@nv/api` (hoy el lint de la API no corre) + web
-  unit tests en CI + gate de cobertura.
-- Cobertura de tests en rutas de valor: social/scheduler/campaign-runner/whatsapp,
-  workspaces/team, y un E2E de aislamiento entre tenants.
+**Bloque 1 — Operabilidad (EN CURSO):**
+- ✅ **HECHO:** `enableShutdownHooks()` (drena Prisma + workers BullMQ en SIGTERM,
+  verificado en vivo) + `/api/health` (liveness) y `/api/health/ready`
+  (readiness con **ping real** a DB `SELECT 1` + Redis; 503 si la DB cae —
+  verificado en vivo).
+- ✅ **HECHO:** **backups/restore** de Postgres (`scripts/backup-db.sh` con dump
+  `-Fc` + rotación + verificación, `scripts/restore-db.sh` transaccional) y
+  **runbook** `docs/OPERATIONS.md` (deploy, health, backups, rollback, observab.).
+- ✅ **HECHO:** `docker-compose.yml` sin credenciales/secretos por defecto
+  (JWT obligatorio vía `.env`, admin opcional); README raíz corregido.
+- ✅ **HECHO:** **ESLint flat** para `@nv/api` (el lint ya corre: 0 errores,
+  4 warnings de `any` en `meta.service`).
+- ⏳ **Pendiente:** web unit tests en CI + gate de cobertura; cobertura de tests
+  en rutas de valor (social/scheduler/campaign-runner/whatsapp, workspaces/team)
+  y un E2E de aislamiento entre tenants.
 
 **Bloque 2 — Adopción (P1):** onboarding, centro de ayuda/KB, tour, feedback,
 changelog, página de estado, import/export.
