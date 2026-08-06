@@ -532,3 +532,16 @@ model ContactNote {
 
   @@index([workspaceSlug, contactId])
 }
+
+/**
+ * Marketplace: which catalog apps a workspace has installed.
+ */
+model AppInstallation {
+  id            String   @id @default(cuid())
+  workspaceSlug String
+  appId         String
+  createdAt     DateTime @default(now())
+
+  @@unique([workspaceSlug, appId])
+  @@index([workspaceSlug])
+}

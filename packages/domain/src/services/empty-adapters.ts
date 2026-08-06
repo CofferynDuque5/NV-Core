@@ -138,6 +138,11 @@ export const emptyAdapters: Services = {
     upsert: () => notAvailable(),
     remove: () => notAvailable(),
   },
+  marketplace: {
+    catalog: () => delay([]),
+    install: () => notAvailable(),
+    uninstall: () => notAvailable(),
+  },
   integrations: {
     catalog: () => delay([]),
     googleStatus: () => delay({ configured: false, connected: false, email: null }),

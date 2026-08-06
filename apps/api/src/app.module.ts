@@ -25,6 +25,7 @@ import { MediaModule } from "./modules/media/media.module";
 import { TemplatesModule } from "./modules/templates/templates.module";
 import { AutomationsModule } from "./modules/automations/automations.module";
 import { DesignsModule } from "./modules/designs/designs.module";
+import { MarketplaceModule } from "./modules/marketplace/marketplace.module";
 import { AnalyticsModule } from "./modules/analytics/analytics.module";
 import { ConnectionsModule } from "./modules/connections/connections.module";
 import { IntegrationsModule } from "./modules/integrations/integrations.module";
@@ -72,6 +73,7 @@ import { ProvidersModule } from "./providers/providers.module";
     AnalyticsModule,
     ConnectionsModule,
     IntegrationsModule,
+    MarketplaceModule,
     GoogleModule,
     NotificationsModule,
     TeamModule,

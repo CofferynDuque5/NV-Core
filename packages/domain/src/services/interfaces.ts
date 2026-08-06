@@ -12,6 +12,7 @@ import type {
   DesignLayer,
   Group,
   Integration,
+  MarketplaceEntry,
   MediaAsset,
   MediaFolder,
   Message,
@@ -360,6 +361,12 @@ export interface GoogleStatus {
   email: string | null;
 }
 
+export interface MarketplaceService {
+  catalog(workspaceId: string): Promise<MarketplaceEntry[]>;
+  install(workspaceId: string, appId: string): Promise<MarketplaceEntry>;
+  uninstall(workspaceId: string, appId: string): Promise<void>;
+}
+
 export interface IntegrationService {
   catalog(workspaceId: string): Promise<Integration[]>;
   googleStatus(workspaceId: string): Promise<GoogleStatus>;
@@ -521,6 +528,7 @@ export interface Services {
   analytics: AnalyticsService;
   connections: ConnectionService;
   integrations: IntegrationService;
+  marketplace: MarketplaceService;
   notifications: NotificationService;
   team: TeamService;
   audit: AuditService;

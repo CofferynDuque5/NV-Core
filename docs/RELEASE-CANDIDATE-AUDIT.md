@@ -7,13 +7,15 @@
 
 ## Veredicto (Fase 11): 🔴 **NO publicar todavía**
 
-Avance real desde la v1: hay **ocho** módulos a nivel premium (Calendario, Media
-Library, Analytics, Workflow Builder, Campaign Builder, Inbox Omnicanal, CRM y
-AI Content Studio) sobre una base técnica sólida y con **higiene de código
-verificada**. Solo **1 de 9 fases del roadmap sigue sin estar a nivel producto**
-(Marketplace) y **no existe ninguna pieza de adopción** (onboarding, ayuda,
-changelog, estado, backups, import/export). Se mantiene el **bloqueo de release**
-y se entrega el backlog actualizado.
+Avance real desde la v1: **las 9 fases del roadmap P0 están a nivel premium**
+(Calendario, Media Library, Analytics, Workflow Builder, Campaign Builder, Inbox
+Omnicanal, CRM, AI Content Studio y **Marketplace**) sobre una base técnica
+sólida y con **higiene de código verificada**. El roadmap de producto queda
+**feature-complete**. El bloqueo de release **ya no depende del roadmap**, sino
+de que **no existe ninguna pieza de adopción** (onboarding, ayuda, changelog,
+estado, backups, import/export) y de que falta el hardening final (WCAG formal,
+carga con Redis). Se mantiene el **bloqueo de release** y se entrega el backlog
+actualizado.
 
 ---
 
@@ -29,7 +31,7 @@ y se entrega el backlog actualizado.
 | 6 | **Analytics** | ✅ Premium (baseline) | 🟡→✅ período 7/30/90, KPIs con delta vs período anterior, serie temporal, embudo CRM, tasas de conversión y **heatmap de actividad**. *Falta cohortes/exportación (P2).* |
 | 7 | **Inbox Omnicanal** | ✅ Premium (baseline) | 🟡→✅ asignación por responsable, etiquetas de triage, filtros (búsqueda/canal/estado/responsable). *Falta notas internas y snippets (P2).* |
 | 8 | **CRM** | ✅ Premium (baseline) | 🟡→✅ pipeline kanban con arrastre entre etapas, ficha con actividad/notas, filtros y vista tabla↔pipeline. *Falta campos personalizados y tareas (P2).* |
-| 9 | Marketplace | 🔴 No cumple | = |
+| 9 | **Marketplace** | ✅ Premium (baseline) | 🔴→✅ catálogo de apps instalables por workspace (10 apps curadas), búsqueda + chips de categoría, instalar/desinstalar con persistencia (modelo `AppInstallation`), ficha de app con features, contador de instaladas. *Falta configuración por app y facturación de add-ons (P2).* |
 
 ---
 
@@ -47,7 +49,7 @@ y se entrega el backlog actualizado.
 | AI Studio | 7.0 | **9.0** | Tipo/longitud, mejorar/guardar-plantilla/hashtags por variante, panel de hashtags. Falta generación de imágenes. |
 | CRM | 7.0 | **9.0** | Pipeline kanban con DnD, ficha con notas/actividad, filtros y doble vista. Falta campos personalizados. |
 | Analytics | 6.5 | **8.5** | Período comparativo, deltas, serie temporal, embudo, conversión y heatmap. Falta cohortes/exportación. |
-| Marketplace | 5.0 | 5.0 | Sin instalación real. |
+| Marketplace | 5.0 | **8.5** | Catálogo de apps instalables por workspace con instalación real persistida, búsqueda, categorías y ficha. Falta configuración por app y facturación de add-ons. |
 | Campaign Builder | 4.0 | **8.5** | Editor por capas con arrastre/redimensión, z-order, estilos y export. Falta plantillas prediseñadas. |
 | Workflow Builder | 4.0 | **8.5** | Editor visual de nodos, conexiones, inspector, validación y guardado. Falta ramas por condición y test-run. |
 
@@ -121,7 +123,9 @@ y se entrega el backlog actualizado.
 1. ✅ **Analytics** (período comparativo, deltas, serie temporal, embudo, conversión, heatmap) — HECHO dentro del freeze.
 2. ✅ **Workflow Builder** (editor visual de nodos + conexiones + validación + guardado; n8n oculto) — HECHO dentro del freeze.
 3. ✅ **Campaign Builder** (editor visual por capas + arrastre/redimensión + z-order + export SVG/PNG) — HECHO dentro del freeze.
-4. ✅ **Inbox** (asignación + etiquetas + filtros) — HECHO. · ✅ **CRM** (pipeline kanban + notas + filtros) — HECHO. · ✅ **AI Studio** (tipo/longitud + mejorar/hashtags/plantilla) — HECHO. · Marketplace a nivel premium.
+4. ✅ **Inbox** (asignación + etiquetas + filtros) — HECHO. · ✅ **CRM** (pipeline kanban + notas + filtros) — HECHO. · ✅ **AI Studio** (tipo/longitud + mejorar/hashtags/plantilla) — HECHO. · ✅ **Marketplace** (catálogo de apps instalables por workspace + instalar/desinstalar persistido + búsqueda/categorías/ficha) — HECHO dentro del freeze.
+
+**P0 completo: roadmap feature-complete (9/9 fases a nivel premium).**
 
 ### P1 — Piezas de adopción (ninguna existe)
 5. Onboarding interactivo · 6. Centro de ayuda + KB · 7. Tour contextual ·
@@ -143,5 +147,7 @@ smoke real end-to-end contra backend+DB.
 ---
 
 ## ¿Publicarías este producto a clientes reales? **NO.**
-8 de 9 fases premium, 0 de 8 piezas de adopción, y hardening (WCAG, carga real)
-pendiente. La base es sólida y limpia; ejecutar P0→P1→P2 y re-auditar.
+9 de 9 fases premium (roadmap P0 feature-complete), pero **0 de 8 piezas de
+adopción** y hardening (WCAG formal, carga real con Redis) pendiente. La base es
+sólida y limpia; con P0 cerrado, el siguiente bloque es P1 (adopción) + el
+hardening restante, y luego re-auditar.
