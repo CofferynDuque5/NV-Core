@@ -1,3 +1,29 @@
+import { createHmac, timingSafeEqual } from "node:crypto";
+
+/**
+ * Verify Meta's `X-Hub-Signature-256` header against the raw request body.
+ * Meta signs the exact bytes it sent: `sha256=` + HMAC-SHA256(appSecret, rawBody).
+ * Fail-closed: returns false when the secret is missing or the header is absent
+ * or malformed, so an unauthenticated caller can never inject inbound messages.
+ * Pure — tested.
+ */
+export function verifyMetaSignature(
+  rawBody: Buffer | undefined,
+  header: string | undefined,
+  appSecret: string | undefined,
+): boolean {
+  if (!appSecret || !rawBody || !header) return false;
+  const prefix = "sha256=";
+  if (!header.startsWith(prefix)) return false;
+  const provided = header.slice(prefix.length);
+  const expected = createHmac("sha256", appSecret).update(rawBody).digest("hex");
+  // timingSafeEqual requires equal-length buffers; bail early on a length mismatch.
+  const providedBuf = Buffer.from(provided, "hex");
+  const expectedBuf = Buffer.from(expected, "hex");
+  if (providedBuf.length !== expectedBuf.length || providedBuf.length === 0) return false;
+  return timingSafeEqual(providedBuf, expectedBuf);
+}
+
 /** A normalized inbound message from any messaging provider. */
 export interface InboundMessage {
   channel: "wa" | "tg";

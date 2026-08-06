@@ -82,13 +82,33 @@ actualizado.
   (X-Frame-Options, X-Content-Type-Options, HSTS, Referrer-Policy, COOP/CORP,
   sin `X-Powered-By`) y el SPA con **CSP + HSTS + X-Frame-Options + nosniff +
   Referrer/Permissions-Policy** en Nginx.
+- ✅ **CORREGIDO (RC, re-ejecución):** el **webhook entrante de WhatsApp**
+  (`POST /api/integrations/whatsapp/webhook`) era `@Public()` **sin verificación
+  de firma** — cualquiera podía inyectar mensajes en el Inbox. Ahora valida
+  **HMAC-SHA256 `X-Hub-Signature-256`** contra `META_APP_SECRET` con
+  `timingSafeEqual`, **fail-closed** (rechaza si falta secreto/cabecera/firma).
+  Verificado en vivo: sin firma → 403, firma inválida → 403, firma válida → 200;
+  +4 tests unitarios (`inbound.spec.ts`).
+- 🔴 **Pendiente (decisión de política, pre-GA):** el webhook de **Telegram**
+  falla-abierto si `TELEGRAM_WEBHOOK_SECRET` no está (endurecer a fail-closed en
+  prod); `GET /api/workspaces` y `/:slug` son `@Public()` y **enumeran todos los
+  tenants** (id/slug/nombre/módulos) a cualquiera — decidir si se gatea tras auth
+  o se limita al workspace del login.
+- 🟡 **Pendiente (hardening, no bloqueante):** hashing de password con `scrypt`
+  (defaults) en vez de argon2id/bcrypt con coste ajustado; sin lockout por cuenta
+  (solo throttle por IP); compare no-timing-safe en el bridge n8n.
 - 🔴 **Pendiente (P1):** pen-test formal; revisión de límites de subida y
   logging de datos sensibles.
 
 ## Fase 7 — Testing (verificado, verde)
-- ✅ **API: 108 unit** (24 files, incl. **6 de carga/estrés** del core async) ·
-  **Web: 18 unit** · **7 E2E** (auth, calendar, crud, inbox, **campaigns,
-  media, route-smoke**).
+- ✅ **API: 140 unit** (29 files, incl. **6 de carga/estrés** del core async) ·
+  **Web: 81 unit** · **7 E2E** (auth, calendar, crud, inbox, **campaigns,
+  media, route-smoke**). `packages/domain`: **0 tests**.
+- 🔴 **Hueco de cobertura (P1 operabilidad):** 11 de 25 módulos de API sin spec
+  de servicio — incluidas **rutas de dinero/valor**: `social` (publicación
+  Meta), `scheduler` (publicación programada), `campaigns/campaign-runner` (bucle
+  de envío), la mayor parte de `whatsapp`, y `workspaces`/`team` (multi-tenant e
+  invitaciones). No hay E2E de aislamiento entre tenants ni de billing/checkout.
 - ✅ **CORREGIDO (RC):** E2E **por módulo** ampliado (campañas CRUD+run/pause,
   Media Library búsqueda/filtros, y **smoke de las 17 rutas** que verifica que
   cada módulo monta sin crash) + suite de **carga/estrés** para QueueManager /
@@ -146,8 +166,86 @@ smoke real end-to-end contra backend+DB.
 
 ---
 
+## Fase 12 — Re-ejecución RC (auditoría independiente por dimensiones)
+
+Re-ejecución con 4 auditorías paralelas (producto, seguridad, performance/a11y,
+tests/devops/docs), **verificando por lectura del código real** + build/tests
+como fuente de verdad. Estado objetivo: typecheck ✅, build ✅, lint web ✅,
+API 140 unit + web 81 unit ✅.
+
+### Lo que está sólido (verificado, no asumido)
+- **Arquitectura auth/tenancy/crypto**: JWT global guard, `WorkspaceGuard` +
+  `@Roles` en los 30+ controladores de tenant, scoping por `workspaceSlug` del
+  guard (no del body), refresh opaco hasheado y rotado, reset/verify de un solo
+  uso, AES-256-GCM para tokens en reposo, Stripe webhook con HMAC+replay, OAuth
+  Google con `state` firmado. Sin SQL raw. Sin fuga de `passwordHash`.
+- **Producto**: las **9 fases del roadmap son premium de verdad** (data real,
+  skeletons, estados vacío/error, mutaciones con optimismo/undo/confirm). **Sin
+  datos falsos** en el frontend (el modo demo con adaptadores vacíos es honesto y
+  documentado). Deuda de código muy baja (0 TODO/FIXME reales).
+- **DevOps base**: Dockerfiles multi-stage, docker-compose (pg+redis+api+web con
+  healthchecks), CI (typecheck/lint/build/tests + E2E con Postgres efímero),
+  18 migraciones coherentes, `.env.example` completo con validación zod, Sentry +
+  request-id + helmet.
+
+### Bloqueadores / huecos encontrados (nuevos vs. el doc previo)
+1. **[SEG · CORREGIDO en esta re-ejecución]** Webhook WhatsApp sin firma → ahora
+   HMAC fail-closed (ver Fase 6).
+2. **[SEG · política, pre-GA]** Telegram fail-open sin secreto; `GET
+   /api/workspaces` público enumera todos los tenants.
+3. **[PRODUCTO · bugs cliente-visibles, RC-detectados, aún abiertos]**
+   - **Segmentos** (`segmentos/page.tsx:45`): `{() => null}` — nunca lista, aun
+     con datos del backend.
+   - **Dashboard** (`dashboard/page.tsx:92,140`): "Publicaciones de hoy" y
+     "Campañas activas" renderizan `null` cuando **hay** datos; y `:61-62` dos
+     KPIs con `value={null}` fijo (sin fuente de datos).
+   - **Notificaciones** (`notifications-panel.tsx:21`): botón "Marcar leídas" sin
+     `onClick` (el endpoint backend existe; el contrato no lo expone).
+4. **[OPS · bloqueadores de release]** `main.ts` **no llama
+   `enableShutdownHooks()`** (los `onModuleDestroy` no drenan en SIGTERM);
+   `/api/health` devuelve un **flag de config, no un ping real** a DB/Redis; sin
+   estrategia de **backups/restore**; sin **runbook de deploy/rollback**;
+   `docker-compose.yml:46-47` trae **credenciales de admin personales por
+   defecto** + `JWT_SECRET` default; **`README` raíz desactualizado** (dice que
+   el backend "no está implementado", falso).
+5. **[TESTS · P1]** 11/25 módulos API sin spec, incl. rutas de valor
+   (social/scheduler/campaign-runner/whatsapp, workspaces/team); `packages/domain`
+   sin tests; sin E2E de aislamiento multi-tenant ni de billing.
+6. **[A11Y · borderline]** El **editor de workflows** (canvas) es 100% mouse
+   (`workflow-editor.tsx:248`): nodos sin `tabIndex`/rol/teclado — inaccesible por
+   teclado/AT. Design editor y kanban CRM: degradados pero con ruta alternativa.
+7. **[PERF · P2 escala]** `findMany` sin límite en varias listas (peor:
+   `inbox.messages`), Analytics cuenta en JS, el frontend **capa contactos a 100**
+   y filtra en cliente (búsqueda pierde registros >100), faltan índices compuestos
+   `(workspaceSlug, createdAt)` y virtualización de listas.
+
+### Qué falta para una versión ESTABLE (priorizado)
+
+**Bloque 1 — Operabilidad (siguiente, acordado):**
+- `enableShutdownHooks()` + `/api/health` con ping real (readiness/liveness).
+- Backups/restore de Postgres (script + doc) y runbook de deploy/rollback.
+- Quitar credenciales/secretos por defecto de `docker-compose.yml`; corregir README.
+- Config **ESLint flat** para `@nv/api` (hoy el lint de la API no corre) + web
+  unit tests en CI + gate de cobertura.
+- Cobertura de tests en rutas de valor: social/scheduler/campaign-runner/whatsapp,
+  workspaces/team, y un E2E de aislamiento entre tenants.
+
+**Bloque 2 — Adopción (P1):** onboarding, centro de ayuda/KB, tour, feedback,
+changelog, página de estado, import/export.
+
+**Bloque 3 — Calidad de producto (RC-detectado):** arreglar Segmentos, los 2
+paneles + 2 KPIs del Dashboard, y "Marcar leídas"; decidir política de los 2
+ítems de seguridad (Telegram, enumeración de workspaces).
+
+**Bloque 4 — Escala/A11y (P2):** teclado en el editor de workflows, paginación +
+índices compuestos + virtualización, carga real con Redis/Socket.IO, WCAG formal.
+
+---
+
 ## ¿Publicarías este producto a clientes reales? **NO.**
 9 de 9 fases premium (roadmap P0 feature-complete), pero **0 de 8 piezas de
 adopción** y hardening (WCAG formal, carga real con Redis) pendiente. La base es
-sólida y limpia; con P0 cerrado, el siguiente bloque es P1 (adopción) + el
-hardening restante, y luego re-auditar.
+sólida y limpia; con P0 cerrado y el bloqueador de seguridad del webhook WhatsApp
+corregido, el siguiente bloque acordado es **operabilidad** (shutdown/health,
+backups+runbook, ESLint API + cobertura de rutas de valor), luego adopción (P1),
+y luego re-auditar.

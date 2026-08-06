@@ -13,6 +13,7 @@ import {
   Patch,
   Post,
   Query,
+  Req,
   Res,
   ServiceUnavailableException,
   UseGuards,
@@ -37,7 +38,12 @@ import { Public } from "../../auth/decorators/public.decorator";
 import { ProviderManager } from "../../providers/provider-manager.service";
 import { ProvidersModule } from "../../providers/providers.module";
 import { EventBus } from "../../core/events/event-bus.service";
-import { parseTelegramInbound, parseWhatsAppInbound, type InboundMessage } from "./inbound";
+import {
+  parseTelegramInbound,
+  parseWhatsAppInbound,
+  verifyMetaSignature,
+  type InboundMessage,
+} from "./inbound";
 
 export class CreateConversationDto {
   @IsIn(CHANNEL_IDS) channel!: ChannelId;
@@ -296,7 +302,17 @@ export class WhatsAppWebhookController {
   @Post("webhook")
   @HttpCode(200)
   @ApiExcludeEndpoint()
-  async event(@Body() body: unknown): Promise<{ received: true }> {
+  async event(
+    @Req() req: { rawBody?: Buffer },
+    @Body() body: unknown,
+    @Headers("x-hub-signature-256") signature?: string,
+  ): Promise<{ received: true }> {
+    // Fail-closed: reject any inbound payload whose Meta HMAC signature does not
+    // match. Without this, a public endpoint would let anyone inject messages.
+    const appSecret = this.config.get("integrations", { infer: true }).meta.appSecret;
+    if (!verifyMetaSignature(req.rawBody, signature, appSecret)) {
+      throw new ForbiddenException("Firma de webhook inválida.");
+    }
     const messages = parseWhatsAppInbound(body);
     for (const msg of messages) {
       await this.service.recordInbound(msg).catch((err: unknown) =>
