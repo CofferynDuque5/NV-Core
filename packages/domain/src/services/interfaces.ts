@@ -403,6 +403,10 @@ export interface GenerateVariantsInput {
   prompt: string;
   channel: string;
   tone: string;
+  /** Content type (caption / anuncio / email / bio / hilo). */
+  format?: string;
+  /** Desired length (corto / medio / largo). */
+  length?: string;
 }
 
 export interface AiUsage {

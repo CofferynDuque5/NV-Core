@@ -7,13 +7,13 @@
 
 ## Veredicto (Fase 11): 🔴 **NO publicar todavía**
 
-Avance real desde la v1: hay **siete** módulos a nivel premium (Calendario, Media
-Library, Analytics, Workflow Builder, Campaign Builder, Inbox Omnicanal y CRM)
-sobre una base técnica sólida y con **higiene de código verificada**. Pero **2 de
-9 fases del roadmap siguen sin estar a nivel producto** (AI Studio y Marketplace)
-y **no existe ninguna pieza de adopción** (onboarding, ayuda, changelog, estado,
-backups, import/export). Se mantiene el **bloqueo de release** y se entrega el
-backlog actualizado.
+Avance real desde la v1: hay **ocho** módulos a nivel premium (Calendario, Media
+Library, Analytics, Workflow Builder, Campaign Builder, Inbox Omnicanal, CRM y
+AI Content Studio) sobre una base técnica sólida y con **higiene de código
+verificada**. Solo **1 de 9 fases del roadmap sigue sin estar a nivel producto**
+(Marketplace) y **no existe ninguna pieza de adopción** (onboarding, ayuda,
+changelog, estado, backups, import/export). Se mantiene el **bloqueo de release**
+y se entrega el backlog actualizado.
 
 ---
 
@@ -25,7 +25,7 @@ backlog actualizado.
 | 3 | **Media Library** | ✅ Premium (baseline) | 🟡→✅ búsqueda, carpetas, etiquetas, edición. *Falta versionado/compresión (P2).* |
 | 2 | **Campaign Builder** | ✅ Premium (baseline) | 🔴→✅ editor visual por capas (texto/precio/botón/etiqueta/imagen/fondo), arrastre+redimensión, z-order, inspector, formatos y export SVG/PNG; diseños reutilizables. *Falta plantillas prediseñadas y multi-selección (P2).* |
 | 4 | **Workflow Builder** | ✅ Premium (baseline) | 🔴→✅ editor visual de nodos (disparador/acción/espera/condición), conexiones, inspector, validación y guardado; sincroniza con la orquestación (n8n oculto). *Falta ramas por condición y test-run (P2).* |
-| 5 | AI Content Studio | 🟡 Parcial | = |
+| 5 | **AI Content Studio** | ✅ Premium (baseline) | 🟡→✅ tipo de contenido + longitud, variantes con mejorar/guardar-plantilla/hashtags, panel de hashtags. *Falta generación de imágenes (P2).* |
 | 6 | **Analytics** | ✅ Premium (baseline) | 🟡→✅ período 7/30/90, KPIs con delta vs período anterior, serie temporal, embudo CRM, tasas de conversión y **heatmap de actividad**. *Falta cohortes/exportación (P2).* |
 | 7 | **Inbox Omnicanal** | ✅ Premium (baseline) | 🟡→✅ asignación por responsable, etiquetas de triage, filtros (búsqueda/canal/estado/responsable). *Falta notas internas y snippets (P2).* |
 | 8 | **CRM** | ✅ Premium (baseline) | 🟡→✅ pipeline kanban con arrastre entre etapas, ficha con actividad/notas, filtros y vista tabla↔pipeline. *Falta campos personalizados y tareas (P2).* |
@@ -44,7 +44,7 @@ backlog actualizado.
 | Inbox | 7.5 | **9.0** | Asignación, etiquetas y filtros (búsqueda/canal/estado/responsable). Falta notas internas. |
 | Campañas | 7.5 | 7.5 | — |
 | Dashboard | 7.5 | 7.5 | No es BI ejecutivo. |
-| AI Studio | 7.0 | 7.0 | Generación básica. |
+| AI Studio | 7.0 | **9.0** | Tipo/longitud, mejorar/guardar-plantilla/hashtags por variante, panel de hashtags. Falta generación de imágenes. |
 | CRM | 7.0 | **9.0** | Pipeline kanban con DnD, ficha con notas/actividad, filtros y doble vista. Falta campos personalizados. |
 | Analytics | 6.5 | **8.5** | Período comparativo, deltas, serie temporal, embudo, conversión y heatmap. Falta cohortes/exportación. |
 | Marketplace | 5.0 | 5.0 | Sin instalación real. |
@@ -121,7 +121,7 @@ backlog actualizado.
 1. ✅ **Analytics** (período comparativo, deltas, serie temporal, embudo, conversión, heatmap) — HECHO dentro del freeze.
 2. ✅ **Workflow Builder** (editor visual de nodos + conexiones + validación + guardado; n8n oculto) — HECHO dentro del freeze.
 3. ✅ **Campaign Builder** (editor visual por capas + arrastre/redimensión + z-order + export SVG/PNG) — HECHO dentro del freeze.
-4. ✅ **Inbox** (asignación + etiquetas + filtros) — HECHO. · ✅ **CRM** (pipeline kanban + notas + filtros) — HECHO. · AI Studio / Marketplace a nivel premium.
+4. ✅ **Inbox** (asignación + etiquetas + filtros) — HECHO. · ✅ **CRM** (pipeline kanban + notas + filtros) — HECHO. · ✅ **AI Studio** (tipo/longitud + mejorar/hashtags/plantilla) — HECHO. · Marketplace a nivel premium.
 
 ### P1 — Piezas de adopción (ninguna existe)
 5. Onboarding interactivo · 6. Centro de ayuda + KB · 7. Tour contextual ·
@@ -143,5 +143,5 @@ smoke real end-to-end contra backend+DB.
 ---
 
 ## ¿Publicarías este producto a clientes reales? **NO.**
-7 de 9 fases premium, 0 de 8 piezas de adopción, y hardening (WCAG, carga real)
+8 de 9 fases premium, 0 de 8 piezas de adopción, y hardening (WCAG, carga real)
 pendiente. La base es sólida y limpia; ejecutar P0→P1→P2 y re-auditar.

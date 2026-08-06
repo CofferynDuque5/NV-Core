@@ -13,7 +13,7 @@ import {
 import { ConfigService } from "@nestjs/config";
 import { ApiBearerAuth, ApiTags } from "@nestjs/swagger";
 import type { AiRecommendation, AiVariant, BestTimes } from "@nv/domain";
-import { IsString, MinLength } from "class-validator";
+import { IsOptional, IsString, MinLength } from "class-validator";
 
 import type { AppConfig } from "../../config/configuration";
 import { WorkspaceId } from "../../common/tenant/workspace.decorator";
@@ -28,6 +28,11 @@ export class GenerateVariantsDto {
   @IsString() @MinLength(3) prompt!: string;
   @IsString() channel!: string;
   @IsString() tone!: string;
+
+  /** Content type (caption / anuncio / email / bio / hilo). Optional. */
+  @IsOptional() @IsString() format?: string;
+  /** Desired length (corto / medio / largo). Optional. */
+  @IsOptional() @IsString() length?: string;
 }
 
 export class SuggestHashtagsDto {
@@ -139,7 +144,15 @@ export class AiService {
       },
       {
         role: "user",
-        content: `Plataforma: ${dto.channel}\nTono: ${dto.tone}\nBrief: ${dto.prompt}`,
+        content: [
+          `Plataforma: ${dto.channel}`,
+          `Tono: ${dto.tone}`,
+          dto.format ? `Tipo de contenido: ${dto.format}` : null,
+          dto.length ? `Longitud: ${dto.length}` : null,
+          `Brief: ${dto.prompt}`,
+        ]
+          .filter(Boolean)
+          .join("\n"),
       },
     ];
     const raw = await provider.complete(messages, { temperature: 0.9 });

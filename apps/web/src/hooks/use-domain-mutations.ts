@@ -793,6 +793,17 @@ export function useGenerateVariants() {
   });
 }
 
+export function useSuggestHashtags() {
+  const svc = useServices();
+  const ws = useWorkspace();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (prompt: string) => svc.ai.suggestHashtags(ws.id, { prompt }),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: [ws.id, "ai", "usage"] }),
+    onError: (err) => toast.error(errText(err)),
+  });
+}
+
 export function useImproveMessage() {
   const svc = useServices();
   const ws = useWorkspace();
