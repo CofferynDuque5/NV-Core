@@ -3,6 +3,7 @@ import type {
   AiUsage,
   AnalyticsSnapshot,
   Automation,
+  ContactNote,
   Design,
   BillingStatus,
   Campaign,
@@ -138,10 +139,13 @@ export function createHttpAdapters(opts: HttpAdapterOptions): Services {
       events: (id, month) => get<CalendarEvent[]>(`${ws(id)}/calendar/events?month=${month}`),
     },
     contacts: {
-      list: (id) => get<ListResult<Contact>>(`${ws(id)}/contacts`),
+      list: (id) => get<ListResult<Contact>>(`${ws(id)}/contacts?pageSize=100`),
       create: (id, input) => post<Contact>(`${ws(id)}/contacts`, input),
       update: (id, cid, input) => patch<Contact>(`${ws(id)}/contacts/${cid}`, input),
       remove: (id, cid) => del<void>(`${ws(id)}/contacts/${cid}`),
+      notes: (id, cid) => get<ContactNote[]>(`${ws(id)}/contacts/${cid}/notes`),
+      addNote: (id, cid, body) => post<ContactNote>(`${ws(id)}/contacts/${cid}/notes`, { body }),
+      removeNote: (id, cid, noteId) => del<void>(`${ws(id)}/contacts/${cid}/notes/${noteId}`),
     },
     groups: {
       list: (id) => get<ListResult<Group>>(`${ws(id)}/groups`),

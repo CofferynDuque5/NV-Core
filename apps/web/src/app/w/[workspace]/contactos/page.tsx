@@ -1,10 +1,11 @@
-
 import * as React from "react";
-import type { Contact as ContactEntity } from "@nv/domain";
-import { Contact, Download, Filter, Loader2, Pencil, Plus, Send, Trash2, Upload } from "lucide-react";
+import { CONTACT_STAGES, type Contact as ContactEntity, type ContactStage } from "@nv/domain";
+import { Columns3, Contact, Loader2, Pencil, Plus, Search, Send, Table2, Trash2 } from "lucide-react";
 
+import { cn } from "@/lib/utils";
+import { filterContacts, STAGE_ACCENTS } from "@/lib/crm";
 import { useContacts } from "@/hooks/use-domain-data";
-import { useDeleteContact } from "@/hooks/use-domain-mutations";
+import { useDeleteContact, useMoveContactStage } from "@/hooks/use-domain-mutations";
 import { useConfirm } from "@/providers/confirm-provider";
 import { useUiStore } from "@/stores/ui-store";
 import { PageHeader } from "@/components/common/page-header";
@@ -15,17 +16,42 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { ContactFormDialog } from "@/components/entities/contact-form-dialog";
+import { CrmBoard } from "@/components/crm/crm-board";
+import { ContactDetailDrawer } from "@/components/crm/contact-detail-drawer";
 
-const COLUMNS = ["Contacto", "Teléfono", "Empresa", "Etiquetas", "Estado", "Último", ""];
+const COLUMNS = ["Contacto", "Teléfono", "Empresa", "Etiquetas", "Etapa", ""];
+
+function StageBadge({ stage }: { stage: ContactStage }) {
+  return (
+    <span
+      className="inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-xs"
+      style={{ background: `${STAGE_ACCENTS[stage]}22`, color: STAGE_ACCENTS[stage] }}
+    >
+      <span className="size-1.5 rounded-full" style={{ background: STAGE_ACCENTS[stage] }} />
+      {stage}
+    </span>
+  );
+}
 
 export default function ContactosPage() {
   const contacts = useContacts();
+  const items = React.useMemo(() => contacts.data?.items ?? [], [contacts.data]);
   const openCompose = useUiStore((s) => s.openCompose);
+  const del = useDeleteContact();
+  const move = useMoveContactStage();
+  const confirm = useConfirm();
+
+  const [view, setView] = React.useState<"table" | "board">("board");
+  const [q, setQ] = React.useState("");
+  const [stage, setStage] = React.useState<ContactStage | "">("");
   const [dialogOpen, setDialogOpen] = React.useState(false);
   const [editing, setEditing] = React.useState<ContactEntity | null>(null);
-  const del = useDeleteContact();
-  const confirm = useConfirm();
+  const [drawer, setDrawer] = React.useState<ContactEntity | null>(null);
   const [deletingId, setDeletingId] = React.useState<string | null>(null);
+
+  const filtered = filterContacts(items, { q, stage });
+  // Keep the drawer's contact in sync with fresh data after mutations.
+  const drawerContact = drawer ? (items.find((c) => c.id === drawer.id) ?? drawer) : null;
 
   function openCreate() {
     setEditing(null);
@@ -35,16 +61,19 @@ export default function ContactosPage() {
     setEditing(row);
     setDialogOpen(true);
   }
-  async function remove(id: string, name: string) {
+  async function remove(row: ContactEntity) {
     const ok = await confirm({
       title: "Eliminar contacto",
-      description: `¿Eliminar a ${name}? Esta acción no se puede deshacer.`,
+      description: `¿Eliminar a ${row.name}? Esta acción no se puede deshacer.`,
       confirmLabel: "Eliminar",
       destructive: true,
     });
     if (!ok) return;
-    setDeletingId(id);
-    del.mutate(id, { onSettled: () => setDeletingId(null) });
+    setDeletingId(row.id);
+    del.mutate(row.id, {
+      onSettled: () => setDeletingId(null),
+      onSuccess: () => setDrawer((d) => (d?.id === row.id ? null : d)),
+    });
   }
 
   return (
@@ -52,7 +81,7 @@ export default function ContactosPage() {
       <PageHeader
         eyebrow="Audiencia · CRM"
         title="Contactos"
-        description="Tu base de clientes y prospectos."
+        description="Tu pipeline de clientes y prospectos, con actividad y etapas."
         actions={
           <>
             <Button variant="secondary" size="sm" onClick={openCompose}>
@@ -65,18 +94,40 @@ export default function ContactosPage() {
         }
       />
 
+      {/* Filters + view toggle */}
       <div className="flex flex-wrap items-center gap-2">
-        <Input placeholder="Buscar contactos…" className="h-9 max-w-xs" />
-        <Button variant="outline" size="sm">
-          <Filter className="size-4" /> Filtrar
-        </Button>
-        <div className="ml-auto flex gap-2">
-          <Button variant="ghost" size="sm">
-            <Upload className="size-4" /> Importar
-          </Button>
-          <Button variant="ghost" size="sm">
-            <Download className="size-4" /> Exportar
-          </Button>
+        <div className="relative min-w-[220px] flex-1 sm:max-w-xs">
+          <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-ink-faint" />
+          <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Buscar por nombre, empresa, email…" className="pl-9" aria-label="Buscar contactos" />
+        </div>
+        <select
+          value={stage}
+          onChange={(e) => setStage(e.target.value as ContactStage | "")}
+          className="h-9 rounded-lg border border-line-soft bg-panel px-2 text-sm text-ink"
+          aria-label="Filtrar por etapa"
+        >
+          <option value="">Todas las etapas</option>
+          {CONTACT_STAGES.map((s) => (
+            <option key={s} value={s}>{s}</option>
+          ))}
+        </select>
+        <div className="ml-auto inline-flex rounded-lg border border-line-soft bg-panel p-0.5" role="tablist" aria-label="Vista">
+          <button
+            role="tab"
+            aria-selected={view === "board"}
+            onClick={() => setView("board")}
+            className={cn("flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium transition-colors", view === "board" ? "bg-brand/15 text-ink-bright" : "text-ink-muted hover:text-ink")}
+          >
+            <Columns3 className="size-4" /> Pipeline
+          </button>
+          <button
+            role="tab"
+            aria-selected={view === "table"}
+            onClick={() => setView("table")}
+            className={cn("flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium transition-colors", view === "table" ? "bg-brand/15 text-ink-bright" : "text-ink-muted hover:text-ink")}
+          >
+            <Table2 className="size-4" /> Tabla
+          </button>
         </div>
       </div>
 
@@ -87,8 +138,7 @@ export default function ContactosPage() {
         empty={{
           icon: Contact,
           title: "Tu CRM está vacío",
-          description:
-            "Importa contactos o crea el primero manualmente para empezar a segmentar y hacer difusión.",
+          description: "Crea el primer contacto para empezar a segmentar, hacer difusión y gestionar tu pipeline.",
           action: (
             <Button size="sm" onClick={openCreate}>
               <Plus className="size-4" /> Nuevo contacto
@@ -96,67 +146,71 @@ export default function ContactosPage() {
           ),
         }}
       >
-        {(data) => (
-          <Panel className="overflow-hidden">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-line text-left text-xs text-ink-faint">
-                  {COLUMNS.map((c, i) => (
-                    <th key={i} className="px-4 py-3 font-medium">
-                      {c}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {data.items.map((row) => (
-                  <tr key={row.id} className="border-b border-line last:border-0 hover:bg-panel-raised/40">
-                    <td className="px-4 py-3 font-medium text-ink">{row.name}</td>
-                    <td className="px-4 py-3 text-ink-muted">{row.phone}</td>
-                    <td className="px-4 py-3 text-ink-muted">{row.company}</td>
-                    <td className="px-4 py-3">
-                      <span className="flex flex-wrap gap-1">
-                        {row.tags.map((t) => (
-                          <Badge key={t} variant="neutral">
-                            {t}
-                          </Badge>
-                        ))}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3 text-ink-muted">{row.stage}</td>
-                    <td className="px-4 py-3 text-ink-muted">{row.lastContactAt}</td>
-                    <td className="px-4 py-3">
-                      <div className="flex items-center justify-end gap-1">
-                        <button
-                          onClick={() => openEdit(row)}
-                          className="rounded-md p-1.5 text-ink-faint transition-colors hover:bg-panel-high hover:text-ink"
-                          title="Editar"
-                        >
-                          <Pencil className="size-4" />
-                        </button>
-                        <button
-                          onClick={() => remove(row.id, row.name)}
-                          disabled={deletingId === row.id}
-                          className="rounded-md p-1.5 text-ink-faint transition-colors hover:bg-state-danger/10 hover:text-state-danger"
-                          title="Eliminar"
-                        >
-                          {deletingId === row.id ? (
-                            <Loader2 className="size-4 animate-spin" />
-                          ) : (
-                            <Trash2 className="size-4" />
-                          )}
-                        </button>
-                      </div>
-                    </td>
+        {() =>
+          filtered.length === 0 ? (
+            <Panel className="p-10 text-center text-sm text-ink-faint">Ningún contacto coincide con los filtros.</Panel>
+          ) : view === "board" ? (
+            <CrmBoard contacts={filtered} onOpen={setDrawer} onMove={(id, s) => move.mutate({ id, stage: s })} />
+          ) : (
+            <Panel className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-line text-left text-xs text-ink-faint">
+                    {COLUMNS.map((c, i) => (
+                      <th key={i} className="px-4 py-3 font-medium">{c}</th>
+                    ))}
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </Panel>
-        )}
+                </thead>
+                <tbody>
+                  {filtered.map((row) => (
+                    <tr
+                      key={row.id}
+                      onClick={() => setDrawer(row)}
+                      className="cursor-pointer border-b border-line last:border-0 hover:bg-panel-raised/40"
+                    >
+                      <td className="px-4 py-3 font-medium text-ink">{row.name}</td>
+                      <td className="px-4 py-3 text-ink-muted">{row.phone}</td>
+                      <td className="px-4 py-3 text-ink-muted">{row.company}</td>
+                      <td className="px-4 py-3">
+                        <span className="flex flex-wrap gap-1">
+                          {row.tags.map((t) => (
+                            <Badge key={t} variant="neutral">{t}</Badge>
+                          ))}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3"><StageBadge stage={row.stage} /></td>
+                      <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
+                        <div className="flex items-center justify-end gap-1">
+                          <button onClick={() => openEdit(row)} className="rounded-md p-1.5 text-ink-faint transition-colors hover:bg-panel-high hover:text-ink" title="Editar">
+                            <Pencil className="size-4" />
+                          </button>
+                          <button
+                            onClick={() => remove(row)}
+                            disabled={deletingId === row.id}
+                            className="rounded-md p-1.5 text-ink-faint transition-colors hover:bg-state-danger/10 hover:text-state-danger"
+                            title="Eliminar"
+                          >
+                            {deletingId === row.id ? <Loader2 className="size-4 animate-spin" /> : <Trash2 className="size-4" />}
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </Panel>
+          )
+        }
       </QueryBoundary>
 
       <ContactFormDialog open={dialogOpen} onOpenChange={setDialogOpen} contact={editing} />
+      <ContactDetailDrawer
+        contact={drawerContact}
+        open={drawer !== null}
+        onOpenChange={(v) => { if (!v) setDrawer(null); }}
+        onEdit={(c) => { setDrawer(null); openEdit(c); }}
+        onDelete={(c) => remove(c)}
+      />
     </div>
   );
 }

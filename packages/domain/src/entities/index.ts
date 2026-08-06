@@ -401,3 +401,12 @@ export interface Design {
   layers: DesignLayer[];
   updatedAt?: string;
 }
+
+/** A CRM activity note logged against a contact. */
+export interface ContactNote {
+  id: string;
+  contactId: string;
+  body: string;
+  author: string;
+  createdAt: string;
+}

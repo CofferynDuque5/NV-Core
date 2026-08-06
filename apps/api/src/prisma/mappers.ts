@@ -5,6 +5,7 @@ import type {
   Campaign as PCampaign,
   Connection as PConnection,
   Contact as PContact,
+  ContactNote as PContactNote,
   Conversation as PConversation,
   Design as PDesign,
   Group as PGroup,
@@ -24,6 +25,7 @@ import type {
   ChannelId,
   Connection,
   Contact,
+  ContactNote,
   ContactStage,
   Conversation,
   Design,
@@ -62,6 +64,14 @@ export const mapContact = (c: PContact): Contact => ({
   stage: c.stage as ContactStage,
   createdAt: c.createdAt.toISOString(),
   lastContactAt: iso(c.lastContactAt),
+});
+
+export const mapContactNote = (n: PContactNote): ContactNote => ({
+  id: n.id,
+  contactId: n.contactId,
+  body: n.body,
+  author: n.author,
+  createdAt: n.createdAt.toISOString(),
 });
 
 export const mapGroup = (g: PGroup): Group => ({

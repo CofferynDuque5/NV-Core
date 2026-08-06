@@ -72,6 +72,9 @@ export const emptyAdapters: Services = {
     create: () => notAvailable(),
     update: () => notAvailable(),
     remove: () => notAvailable(),
+    notes: () => delay([]),
+    addNote: () => notAvailable(),
+    removeNote: () => notAvailable(),
   },
   groups: {
     list: () => emptyList(),

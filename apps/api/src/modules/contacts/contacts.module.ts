@@ -24,7 +24,7 @@ import { WorkspaceId } from "../../common/tenant/workspace.decorator";
 import { WorkspaceGuard } from "../../common/tenant/workspace.guard";
 import { AuditLogger } from "../../common/audit-logger.service";
 import { PrismaService } from "../../prisma/prisma.service";
-import { mapContact } from "../../prisma/mappers";
+import { mapContact, mapContactNote } from "../../prisma/mappers";
 import { RolesGuard } from "../../auth/guards/roles.guard";
 import { Roles } from "../../auth/decorators/roles.decorator";
 import { CurrentUser } from "../../auth/decorators/current-user.decorator";
@@ -69,6 +69,10 @@ export class UpdateContactDto {
   @IsOptional() @IsString() company?: string;
   @IsOptional() @IsArray() @IsString({ each: true }) tags?: string[];
   @IsOptional() @IsIn(CONTACT_STAGES) stage?: ContactStage;
+}
+
+export class AddContactNoteDto {
+  @IsString() @MinLength(1) body!: string;
 }
 
 @Injectable()
@@ -134,6 +138,38 @@ export class ContactsService {
     if (count === 0) throw new NotFoundException("Contacto no encontrado.");
     await this.audit.record(workspaceId, actor, "contact.delete", id);
   }
+
+  private async ownedContact(workspaceId: string, contactId: string) {
+    const contact = await this.db().contact.findFirst({ where: { id: contactId, workspaceSlug: workspaceId } });
+    if (!contact) throw new NotFoundException("Contacto no encontrado.");
+    return contact;
+  }
+
+  async notes(workspaceId: string, contactId: string) {
+    if (!this.prisma.enabled) return [];
+    const rows = await this.prisma.contactNote.findMany({
+      where: { workspaceSlug: workspaceId, contactId },
+      orderBy: { createdAt: "desc" },
+    });
+    return rows.map(mapContactNote);
+  }
+
+  async addNote(workspaceId: string, actor: string, contactId: string, body: string) {
+    await this.ownedContact(workspaceId, contactId);
+    const row = await this.db().contactNote.create({
+      data: { workspaceSlug: workspaceId, contactId, body, author: actor },
+    });
+    await this.audit.record(workspaceId, actor, "contact.note.add", contactId);
+    return mapContactNote(row);
+  }
+
+  async removeNote(workspaceId: string, actor: string, contactId: string, noteId: string): Promise<void> {
+    const { count } = await this.db().contactNote.deleteMany({
+      where: { id: noteId, contactId, workspaceSlug: workspaceId },
+    });
+    if (count === 0) throw new NotFoundException("Nota no encontrada.");
+    await this.audit.record(workspaceId, actor, "contact.note.delete", noteId);
+  }
 }
 
 @ApiTags("contacts")
@@ -181,6 +217,36 @@ export class ContactsController {
     @Param("id") id: string,
   ) {
     return this.service.remove(workspaceId, user.email, id);
+  }
+
+  @Get(":id/notes")
+  notes(@WorkspaceId() workspaceId: string, @Param("id") id: string) {
+    return this.service.notes(workspaceId, id);
+  }
+
+  @Post(":id/notes")
+  @Roles("Owner", "Admin", "Editor")
+  @UseGuards(RolesGuard)
+  addNote(
+    @WorkspaceId() workspaceId: string,
+    @CurrentUser() user: AuthenticatedUser,
+    @Param("id") id: string,
+    @Body() dto: AddContactNoteDto,
+  ) {
+    return this.service.addNote(workspaceId, user.email, id, dto.body);
+  }
+
+  @Delete(":id/notes/:noteId")
+  @Roles("Owner", "Admin", "Editor")
+  @UseGuards(RolesGuard)
+  @HttpCode(204)
+  removeNote(
+    @WorkspaceId() workspaceId: string,
+    @CurrentUser() user: AuthenticatedUser,
+    @Param("id") id: string,
+    @Param("noteId") noteId: string,
+  ) {
+    return this.service.removeNote(workspaceId, user.email, id, noteId);
   }
 }
 

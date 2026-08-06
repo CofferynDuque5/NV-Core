@@ -5,6 +5,8 @@ import type {
   AddMemberInput,
   CampaignAttachment,
   ChannelId,
+  Contact,
+  ContactStage,
   ListResult,
   Post,
   CreateWorkspaceInput,
@@ -106,6 +108,56 @@ export function useDeleteContact() {
       void qc.invalidateQueries({ queryKey: [ws.id, "contacts"] });
       toast.success("Contacto eliminado");
     },
+    onError: (err) => toast.error(errText(err)),
+  });
+}
+
+/** Optimistic, silent stage change for the CRM pipeline (drag between columns). */
+export function useMoveContactStage() {
+  const svc = useServices();
+  const ws = useWorkspace();
+  const qc = useQueryClient();
+  const key = [ws.id, "contacts"];
+  return useMutation({
+    mutationFn: ({ id, stage }: { id: string; stage: ContactStage }) =>
+      svc.contacts.update(ws.id, id, { stage }),
+    onMutate: async ({ id, stage }) => {
+      await qc.cancelQueries({ queryKey: key });
+      const prev = qc.getQueryData<ListResult<Contact>>(key);
+      if (prev) {
+        qc.setQueryData<ListResult<Contact>>(key, {
+          ...prev,
+          items: prev.items.map((c) => (c.id === id ? { ...c, stage } : c)),
+        });
+      }
+      return { prev };
+    },
+    onError: (err, _v, ctx) => {
+      if (ctx?.prev) qc.setQueryData(key, ctx.prev);
+      toast.error(errText(err));
+    },
+    onSettled: () => void qc.invalidateQueries({ queryKey: key }),
+  });
+}
+
+export function useAddContactNote(contactId: string) {
+  const svc = useServices();
+  const ws = useWorkspace();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: string) => svc.contacts.addNote(ws.id, contactId, body),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: [ws.id, "contacts", contactId, "notes"] }),
+    onError: (err) => toast.error(errText(err)),
+  });
+}
+
+export function useDeleteContactNote(contactId: string) {
+  const svc = useServices();
+  const ws = useWorkspace();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (noteId: string) => svc.contacts.removeNote(ws.id, contactId, noteId),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: [ws.id, "contacts", contactId, "notes"] }),
     onError: (err) => toast.error(errText(err)),
   });
 }

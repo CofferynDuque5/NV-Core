@@ -50,6 +50,16 @@ export function useContacts() {
   return useQuery({ queryKey: [ws.id, "contacts"], queryFn: () => svc.contacts.list(ws.id) });
 }
 
+export function useContactNotes(contactId: string | null) {
+  const svc = useServices();
+  const ws = useWorkspace();
+  return useQuery({
+    queryKey: [ws.id, "contacts", contactId, "notes"],
+    queryFn: () => svc.contacts.notes(ws.id, contactId as string),
+    enabled: !!contactId,
+  });
+}
+
 export function useGroups() {
   const svc = useServices();
   const ws = useWorkspace();

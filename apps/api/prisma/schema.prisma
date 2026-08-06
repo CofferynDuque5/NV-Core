@@ -518,3 +518,17 @@ model Design {
 
   @@index([workspaceSlug])
 }
+
+/**
+ * CRM activity: a timestamped note on a contact (manual log / call summary).
+ */
+model ContactNote {
+  id            String   @id @default(cuid())
+  workspaceSlug String
+  contactId     String
+  body          String
+  author        String
+  createdAt     DateTime @default(now())
+
+  @@index([workspaceSlug, contactId])
+}

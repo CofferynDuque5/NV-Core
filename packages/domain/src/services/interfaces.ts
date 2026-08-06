@@ -5,6 +5,7 @@ import type {
   CalendarEvent,
   Connection,
   Contact,
+  ContactNote,
   Conversation,
   Design,
   DesignFormat,
@@ -201,6 +202,9 @@ export interface ContactService {
   create(workspaceId: string, input: CreateContactInput): Promise<Contact>;
   update(workspaceId: string, id: string, input: UpdateContactInput): Promise<Contact>;
   remove(workspaceId: string, id: string): Promise<void>;
+  notes(workspaceId: string, contactId: string): Promise<ContactNote[]>;
+  addNote(workspaceId: string, contactId: string, body: string): Promise<ContactNote>;
+  removeNote(workspaceId: string, contactId: string, noteId: string): Promise<void>;
 }
 
 export interface GroupService {
