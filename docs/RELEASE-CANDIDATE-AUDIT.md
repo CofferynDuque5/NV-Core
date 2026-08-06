@@ -101,14 +101,20 @@ actualizado.
   logging de datos sensibles.
 
 ## Fase 7 — Testing (verificado, verde)
-- ✅ **API: 140 unit** (29 files, incl. **6 de carga/estrés** del core async) ·
-  **Web: 81 unit** · **7 E2E** (auth, calendar, crud, inbox, **campaigns,
-  media, route-smoke**). `packages/domain`: **0 tests**.
-- 🔴 **Hueco de cobertura (P1 operabilidad):** 11 de 25 módulos de API sin spec
-  de servicio — incluidas **rutas de dinero/valor**: `social` (publicación
-  Meta), `scheduler` (publicación programada), `campaigns/campaign-runner` (bucle
-  de envío), la mayor parte de `whatsapp`, y `workspaces`/`team` (multi-tenant e
-  invitaciones). No hay E2E de aislamiento entre tenants ni de billing/checkout.
+- ✅ **API: 169 unit** (33 files, incl. **6 de carga/estrés** del core async) ·
+  **Web: 81 unit** · **8 E2E** (auth, calendar, crud, inbox, campaigns, media,
+  route-smoke y **aislamiento multi-tenant**). `packages/domain`: 0 tests.
+- ✅ **CORREGIDO (re-ejecución, bloque operabilidad):** cubiertas las **rutas de
+  valor** que estaban sin test — `campaign-runner` (isDue + bucle de envío WA +
+  publicación social + transiciones de estado, 9 tests), `scheduler`
+  (schedule/cancel/publish idempotente, 6), `social/meta` (FB feed/foto/reel, IG
+  feed/reel/carrusel, `publish` que nunca lanza, 11) y `team` (miembros + conteo
+  de roles, 3). **E2E de aislamiento multi-tenant** (7 casos): owner B no puede
+  listar/crear en el workspace de A (403), su workspace nunca contiene datos de
+  A, y sin token → 401. Verificado en vivo contra API+DB reales. CI corre ahora
+  también los unit de web.
+- 🟡 **Pendiente (P2):** specs de `whatsapp.service`/Baileys (muy acoplado a
+  sockets), tests de componentes/hooks del front, gate de cobertura numérico.
 - ✅ **CORREGIDO (RC):** E2E **por módulo** ampliado (campañas CRUD+run/pause,
   Media Library búsqueda/filtros, y **smoke de las 17 rutas** que verifica que
   cada módulo monta sin crash) + suite de **carga/estrés** para QueueManager /
@@ -233,9 +239,13 @@ API 140 unit + web 81 unit ✅.
   (JWT obligatorio vía `.env`, admin opcional); README raíz corregido.
 - ✅ **HECHO:** **ESLint flat** para `@nv/api` (el lint ya corre: 0 errores,
   4 warnings de `any` en `meta.service`).
-- ⏳ **Pendiente:** web unit tests en CI + gate de cobertura; cobertura de tests
-  en rutas de valor (social/scheduler/campaign-runner/whatsapp, workspaces/team)
-  y un E2E de aislamiento entre tenants.
+- ✅ **HECHO:** cobertura de rutas de valor (campaign-runner, scheduler,
+  social/meta, team; +29 unit) y **E2E de aislamiento entre tenants** (7 casos);
+  web unit tests añadidos al CI. Ver Fase 7.
+- ⏳ **Pendiente (P2):** gate numérico de cobertura; specs de whatsapp/Baileys;
+  tests de componentes del front.
+
+**Bloque 1 — Operabilidad: COMPLETO.**
 
 **Bloque 2 — Adopción (P1):** onboarding, centro de ayuda/KB, tour, feedback,
 changelog, página de estado, import/export.

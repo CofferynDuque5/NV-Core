@@ -29,6 +29,8 @@ jobs:
       - run: pnpm build
       - name: Unit tests (api)
         run: pnpm --filter @nv/api test
+      - name: Unit tests (web)
+        run: pnpm --filter @nv/web test
 
   e2e:
     name: E2E (Playwright)
