@@ -302,8 +302,9 @@ Leyenda: **E**xiste · **F**unciona · **C**ompleto · **P**roducción-ready.
   - ✅ Transporte Cloud API ampliado: **texto + media (imagen/video/documento por URL) + plantillas** pre-aprobadas.
   - ✅ **Taxonomía de errores del Graph** (auth / rate_limit / media / recipient / transient) con `retriable`, para reacción correcta del runner.
   - ✅ **Suite de integración** con fixtures realistas (19 tests: shaping de requests + todos los modos de fallo) — verde ahora, lista para apuntar a credenciales reales.
+  - ✅ **`meta.service` (Graph FB/IG) endurecido** con la misma taxonomía (`auth` / `rate_limit` / `permission` / `media` / `transient`), fallos de red → transient, y el `kind` **se expone en `SocialResult`** para que el runner/UI reaccione. Suite de Meta ampliada a 21 tests (incl. taxonomía + `kind` en fallos de `publish`).
   - ⏳ **Handoff (requiere tus credenciales):** verificación en vivo contra Meta/WhatsApp reales + job de CI con secrets de sandbox. Pasos en [`OPERATIONS.md` §6](./OPERATIONS.md).
-  - ⏳ **Pendiente:** endurecer `meta.service` (Graph FB/IG) con la misma taxonomía; hacer Redis obligatorio en producción (R8).
+  - ⏳ **Pendiente:** hacer Redis obligatorio en producción (R8); orquestar reintento/backoff en el runner usando el flag `retriable`.
 
 ### Sprint 2 — Escala y robustez de datos (1–2 semanas) · Riesgo: Medio
 - **Objetivo:** que el sistema no se degrade con tenants grandes.

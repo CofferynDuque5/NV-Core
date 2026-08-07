@@ -5,6 +5,56 @@ import { PrismaService } from "../../prisma/prisma.service";
 const GRAPH = `https://graph.facebook.com/${process.env.META_GRAPH_VERSION || "v21.0"}`;
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
+// ── Error taxonomy ───────────────────────────────────────────────────────────
+// The Graph API returns { error: { message, code, error_subcode, type } }.
+// Classifying it lets the caller react correctly: stop-and-alert on auth/permission,
+// back off on rate limits, retry transient/media, surface bad params to the user.
+export type MetaErrorKind = "auth" | "rate_limit" | "permission" | "media" | "transient" | "unknown";
+
+export class MetaGraphError extends Error {
+  constructor(
+    message: string,
+    readonly kind: MetaErrorKind,
+    readonly httpStatus: number,
+    readonly code?: number,
+    readonly subcode?: number,
+  ) {
+    super(message);
+    this.name = "MetaGraphError";
+  }
+
+  /** Whether a retry (with backoff) could plausibly succeed. */
+  get retriable(): boolean {
+    return this.kind === "rate_limit" || this.kind === "transient";
+  }
+}
+
+interface GraphErrorBody {
+  error?: { message?: string; code?: number; error_subcode?: number; type?: string };
+}
+
+/** Classify a Meta Graph error response into an actionable MetaGraphError. */
+export function classifyGraphError(status: number, body: unknown): MetaGraphError {
+  const err = (body as GraphErrorBody)?.error;
+  const code = err?.code;
+  const subcode = err?.error_subcode;
+  const msg = err?.message || `Graph ${status}`;
+
+  let kind: MetaErrorKind = "unknown";
+  if (code === 190) {
+    kind = "auth"; // expired / invalid / revoked access token
+  } else if (code !== undefined && [4, 17, 32, 613, 80001, 80002, 80003, 80004, 80007].includes(code)) {
+    kind = "rate_limit"; // app / page / business rate limiting
+  } else if (code !== undefined && [10, 200, 803, 3].includes(code)) {
+    kind = "permission"; // missing permission / scope / feature not approved
+  } else if (code !== undefined && [9004, 2207003, 2207020, 2207026].includes(code)) {
+    kind = "media"; // media fetch / format / processing failure
+  } else if (status >= 500 || err?.type === "GraphMethodException") {
+    kind = "transient";
+  }
+  return new MetaGraphError(`Graph: ${msg}`, kind, status, code, subcode);
+}
+
 export interface MetaCreds {
   fbPageId?: string | null;
   fbPageToken?: string | null;
@@ -24,6 +74,8 @@ export interface SocialResult {
   id?: string;
   format?: string;
   error?: string;
+  /** Present on failures: the classified Graph error kind for the caller to react. */
+  kind?: MetaErrorKind;
 }
 
 /**
@@ -70,21 +122,31 @@ export class MetaService {
   }
 
   private async graphForm(url: string, params: Record<string, string>): Promise<any> {
-    const res = await fetch(url, {
-      method: "POST",
-      headers: { "content-type": "application/x-www-form-urlencoded" },
-      body: new URLSearchParams(params).toString(),
-    });
+    let res: Response;
+    try {
+      res = await fetch(url, {
+        method: "POST",
+        headers: { "content-type": "application/x-www-form-urlencoded" },
+        body: new URLSearchParams(params).toString(),
+      });
+    } catch (e) {
+      throw new MetaGraphError(`Graph: red no disponible (${(e as Error).message})`, "transient", 0);
+    }
     const data: any = await res.json().catch(() => ({}));
-    if (!res.ok) throw new Error(data?.error?.message || `Graph ${res.status}`);
+    if (!res.ok) throw classifyGraphError(res.status, data);
     return data;
   }
 
   private async graphGet(path: string, token: string, extra: Record<string, string> = {}): Promise<any> {
     const qs = new URLSearchParams({ access_token: token, ...extra }).toString();
-    const res = await fetch(`${GRAPH}/${path}?${qs}`);
+    let res: Response;
+    try {
+      res = await fetch(`${GRAPH}/${path}?${qs}`);
+    } catch (e) {
+      throw new MetaGraphError(`Graph: red no disponible (${(e as Error).message})`, "transient", 0);
+    }
     const data: any = await res.json().catch(() => ({}));
-    if (!res.ok) throw new Error(data?.error?.message || `Graph ${res.status}`);
+    if (!res.ok) throw classifyGraphError(res.status, data);
     return data;
   }
 
@@ -126,11 +188,11 @@ export class MetaService {
       const data = await this.graphGet(creationId, token, { fields: "status_code" }).catch(() => ({}));
       if (data.status_code === "FINISHED") return;
       if (data.status_code === "ERROR" || data.status_code === "EXPIRED") {
-        throw new Error(`Procesamiento de media falló (${data.status_code}).`);
+        throw new MetaGraphError(`Procesamiento de media falló (${data.status_code}).`, "media", 0);
       }
       await sleep(3000);
     }
-    throw new Error("Tiempo de espera agotado procesando el media.");
+    throw new MetaGraphError("Tiempo de espera agotado procesando el media.", "media", 0);
   }
 
   private async igContainer(
@@ -228,7 +290,8 @@ export class MetaService {
         if (target === "facebook") out.push(await this.publishFacebook(c, post));
         else out.push(await this.publishInstagram(c, post));
       } catch (err) {
-        out.push({ target, ok: false, error: (err as Error).message });
+        const kind = err instanceof MetaGraphError ? err.kind : undefined;
+        out.push({ target, ok: false, error: (err as Error).message, kind });
       }
     }
     return out;

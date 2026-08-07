@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { MetaService } from "./meta.service";
+import { MetaGraphError, MetaService, classifyGraphError } from "./meta.service";
 
 /**
  * Meta Graph publishing — the product's primary outbound social channel, which
@@ -177,5 +177,43 @@ describe("MetaService.publish (never throws)", () => {
     expect(results[0]).toMatchObject({ target: "facebook", ok: true });
     expect(results[1]).toMatchObject({ target: "instagram", ok: false });
     expect(results[1]!.error).toBeTruthy();
+    // A 5xx with no code is classified transient and surfaced to the caller.
+    expect(results[1]!.kind).toBe("transient");
   });
+
+  it("surfaces the classified error kind on an auth failure (expired token)", async () => {
+    const svc = service();
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => ({
+        ok: false,
+        status: 401,
+        json: async () => ({ error: { code: 190, message: "Session expired" } }),
+      })),
+    );
+    const results = await svc.publish("w1", ["facebook"], { message: "hola" });
+    expect(results[0]).toMatchObject({ target: "facebook", ok: false, kind: "auth" });
+  });
+});
+
+describe("classifyGraphError (taxonomy)", () => {
+  const cases: { code: number | undefined; status: number; kind: string; retriable: boolean }[] = [
+    { code: 190, status: 401, kind: "auth", retriable: false },
+    { code: 4, status: 400, kind: "rate_limit", retriable: true },
+    { code: 613, status: 400, kind: "rate_limit", retriable: true },
+    { code: 80004, status: 400, kind: "rate_limit", retriable: true },
+    { code: 10, status: 403, kind: "permission", retriable: false },
+    { code: 200, status: 403, kind: "permission", retriable: false },
+    { code: 9004, status: 400, kind: "media", retriable: false },
+    { code: 999999, status: 400, kind: "unknown", retriable: false },
+    { code: undefined, status: 502, kind: "transient", retriable: true },
+  ];
+  for (const c of cases) {
+    it(`classifies code ${c.code} / status ${c.status} as ${c.kind}`, () => {
+      const err = classifyGraphError(c.status, c.code ? { error: { code: c.code, message: "x" } } : {});
+      expect(err).toBeInstanceOf(MetaGraphError);
+      expect(err.kind).toBe(c.kind);
+      expect(err.retriable).toBe(c.retriable);
+    });
+  }
 });
