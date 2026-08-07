@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Body,
   Controller,
   Delete,
@@ -19,6 +20,7 @@ import {
   CHANNEL_IDS,
   type Campaign,
   type CampaignAttachment,
+  type CampaignImportResult,
   type CampaignStatus,
   type ChannelId,
 } from "@nv/domain";
@@ -30,10 +32,12 @@ import {
   IsOptional,
   IsString,
   Max,
+  MaxLength,
   Min,
   MinLength,
 } from "class-validator";
 
+import { parseCsv, toCsv } from "../../common/csv";
 import { ListResultDto } from "../../common/dto/list-result.dto";
 import { WorkspaceId } from "../../common/tenant/workspace.decorator";
 import { WorkspaceGuard } from "../../common/tenant/workspace.guard";
@@ -119,6 +123,10 @@ export class CreateCampaignDto {
   @IsArray()
   @IsString({ each: true })
   targetGroups?: string[];
+}
+
+export class ImportCampaignsDto {
+  @IsString() @MaxLength(5_000_000) csv!: string;
 }
 
 export class UpdateCampaignDto {
@@ -275,6 +283,164 @@ export class CampaignsService {
       take: 500,
     });
   }
+
+  private static readonly EXPORT_COLUMNS = [
+    "name",
+    "status",
+    "channels",
+    "message",
+    "scheduleType",
+    "scheduleAt",
+    "scheduleDays",
+    "targets",
+  ];
+
+  /** Export campaigns as CSV. Recipients are the target group NAMES (portable). */
+  async exportCsv(workspaceId: string): Promise<string> {
+    const cols = CampaignsService.EXPORT_COLUMNS;
+    if (!this.prisma.enabled) return toCsv([], cols);
+
+    const groups = await this.prisma.group.findMany({
+      where: { workspaceSlug: workspaceId },
+      select: { id: true, name: true },
+    });
+    const nameById = new Map(groups.map((g) => [g.id, g.name] as const));
+
+    const rows: Record<string, unknown>[] = [];
+    let cursor: string | undefined;
+    for (;;) {
+      const batch = await this.prisma.campaign.findMany({
+        where: { workspaceSlug: workspaceId },
+        orderBy: { id: "asc" },
+        take: 1000,
+        include: { targets: { select: { groupId: true } } },
+        ...(cursor ? { skip: 1, cursor: { id: cursor } } : {}),
+      });
+      if (batch.length === 0) break;
+      for (const c of batch) {
+        const targetNames = c.targets
+          .map((t) => nameById.get(t.groupId))
+          .filter((n): n is string => Boolean(n));
+        rows.push({
+          name: c.name,
+          status: c.status,
+          channels: c.channels.join(";"),
+          message: c.message,
+          scheduleType: c.scheduleType,
+          scheduleAt: c.scheduleAt ?? "",
+          scheduleDays: c.scheduleDays.join(";"),
+          targets: targetNames.join(";"),
+        });
+      }
+      cursor = batch[batch.length - 1]!.id;
+      if (batch.length < 1000) break;
+    }
+    return toCsv(rows, cols);
+  }
+
+  /**
+   * Import campaigns from CSV. Dedupes by name; resolves recipient group names
+   * to this workspace's groups (missing ones are reported, campaign still
+   * created). Imported campaigns are always created as drafts ("borrador") so an
+   * import never auto-launches a campaign.
+   */
+  async importCsv(workspaceId: string, actor: string, csv: string): Promise<CampaignImportResult> {
+    const db = this.db();
+    const records = parseCsv(csv);
+    const MAX = 2000;
+    if (records.length > MAX) {
+      throw new BadRequestException(`Máximo ${MAX} filas por importación (recibidas ${records.length}).`);
+    }
+
+    const [existing, groups] = await Promise.all([
+      db.campaign.findMany({ where: { workspaceSlug: workspaceId }, select: { name: true } }),
+      db.group.findMany({ where: { workspaceSlug: workspaceId }, select: { id: true, name: true } }),
+    ]);
+    const seen = new Set(existing.map((c) => c.name.toLowerCase()));
+    const groupIdByName = new Map(groups.map((g) => [g.name.toLowerCase(), g.id] as const));
+
+    const pick = (r: Record<string, string>, ...keys: string[]) => {
+      for (const k of keys) {
+        const v = r[k];
+        if (v && v.trim()) return v.trim();
+      }
+      return "";
+    };
+    const splitList = (v: string) =>
+      v
+        .split(/[;,|]/)
+        .map((s) => s.trim())
+        .filter(Boolean);
+
+    let created = 0;
+    let skipped = 0;
+    const errors: string[] = [];
+    const schedules = ["once", "daily", "weekly"];
+
+    for (let i = 0; i < records.length; i++) {
+      const r = records[i]!;
+      const line = i + 2; // +1 header, +1 to 1-index
+      const name = pick(r, "name", "nombre");
+      if (!name) {
+        errors.push(`Fila ${line}: falta el nombre.`);
+        continue;
+      }
+      const nameKey = name.toLowerCase();
+      if (seen.has(nameKey)) {
+        skipped++;
+        continue;
+      }
+
+      const channels = splitList(pick(r, "channels", "canales")).filter((c): c is ChannelId =>
+        (CHANNEL_IDS as readonly string[]).includes(c),
+      );
+      const scheduleTypeRaw = pick(r, "scheduleType", "programacion");
+      const scheduleType = schedules.includes(scheduleTypeRaw) ? scheduleTypeRaw : "once";
+      const scheduleDays = splitList(pick(r, "scheduleDays", "dias"))
+        .map((d) => Number(d))
+        .filter((n) => Number.isInteger(n) && n >= 0 && n <= 6);
+
+      // Resolve recipient group names → ids; report any that don't exist here.
+      const targetNames = splitList(pick(r, "targets", "grupos", "destinatarios"));
+      const groupIds: string[] = [];
+      const missing: string[] = [];
+      for (const gn of targetNames) {
+        const id = groupIdByName.get(gn.toLowerCase());
+        if (id) groupIds.push(id);
+        else missing.push(gn);
+      }
+      if (missing.length) {
+        errors.push(`Fila ${line} ("${name}"): grupos no encontrados: ${missing.join(", ")}.`);
+      }
+
+      try {
+        const campaign = await db.campaign.create({
+          data: {
+            workspaceSlug: workspaceId,
+            name,
+            status: "borrador", // never auto-launch an imported campaign
+            channels,
+            message: pick(r, "message", "mensaje"),
+            scheduleType,
+            scheduleAt: pick(r, "scheduleAt", "hora") || null,
+            scheduleDays,
+          },
+        });
+        if (groupIds.length) {
+          await db.campaignTarget.createMany({
+            data: groupIds.map((groupId) => ({ campaignId: campaign.id, groupId })),
+            skipDuplicates: true,
+          });
+        }
+        created++;
+        seen.add(nameKey);
+      } catch (err) {
+        errors.push(`Fila ${line}: ${(err as Error).message}`);
+      }
+    }
+    await this.audit.record(workspaceId, actor, "campaigns.import", `created=${created} skipped=${skipped}`);
+    return { created, skipped, errors: errors.slice(0, 50) };
+  }
 }
 
 @ApiTags("campaigns")
@@ -295,6 +461,22 @@ export class CampaignsController {
   @Get("logs")
   logs(@WorkspaceId() workspaceId: string) {
     return this.service.logs(workspaceId);
+  }
+
+  @Get("export")
+  async export(@WorkspaceId() workspaceId: string): Promise<{ csv: string }> {
+    return { csv: await this.service.exportCsv(workspaceId) };
+  }
+
+  @Post("import")
+  @Roles("Owner", "Admin", "Editor")
+  @UseGuards(RolesGuard)
+  importCsv(
+    @WorkspaceId() workspaceId: string,
+    @CurrentUser() user: AuthenticatedUser,
+    @Body() dto: ImportCampaignsDto,
+  ) {
+    return this.service.importCsv(workspaceId, user.email, dto.csv);
   }
 
   @Get(":id")

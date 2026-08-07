@@ -188,6 +188,45 @@ export function useImportContacts() {
   });
 }
 
+export function useExportCampaigns() {
+  const svc = useServices();
+  const ws = useWorkspace();
+  return useMutation({
+    mutationFn: async () => {
+      const csv = await svc.campaigns.exportCsv(ws.id);
+      const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `campanas-${ws.slug}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+      return csv;
+    },
+    onSuccess: () => toast.success("Campañas exportadas"),
+    onError: (err) => toast.error(errText(err)),
+  });
+}
+
+export function useImportCampaigns() {
+  const svc = useServices();
+  const ws = useWorkspace();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (csv: string) => svc.campaigns.importCsv(ws.id, csv),
+    onSuccess: (res) => {
+      void qc.invalidateQueries({ queryKey: [ws.id, "campaigns"] });
+      const parts = [`${res.created} creadas`];
+      if (res.skipped) parts.push(`${res.skipped} omitidas`);
+      if (res.errors.length) parts.push(`${res.errors.length} con avisos`);
+      toast.success(`Importación: ${parts.join(", ")}`);
+    },
+    onError: (err) => toast.error(errText(err)),
+  });
+}
+
 export function useExportTemplates() {
   const svc = useServices();
   const ws = useWorkspace();

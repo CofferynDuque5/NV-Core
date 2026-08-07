@@ -235,6 +235,13 @@ export interface TemplateImportResult {
   errors: string[];
 }
 
+/** Summary of a CSV campaign import (incl. recipient groups by name). */
+export interface CampaignImportResult {
+  created: number;
+  skipped: number;
+  errors: string[];
+}
+
 export interface AutomationNode {
   id: string;
   type: AutomationNodeType;

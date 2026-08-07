@@ -2,6 +2,7 @@ import type {
   AnalyticsSnapshot,
   Automation,
   Campaign,
+  CampaignImportResult,
   CalendarEvent,
   Connection,
   Contact,
@@ -177,6 +178,10 @@ export interface CampaignService {
   pause(workspaceId: string, id: string): Promise<Campaign>;
   resume(workspaceId: string, id: string): Promise<Campaign>;
   logs(workspaceId: string): Promise<SendLogEntry[]>;
+  /** Export all campaigns as CSV, incl. recipient groups by name. */
+  exportCsv(workspaceId: string): Promise<string>;
+  /** Import campaigns from CSV; dedupes by name, resolves recipient groups. */
+  importCsv(workspaceId: string, csv: string): Promise<CampaignImportResult>;
 }
 
 export interface CreatePostInput {

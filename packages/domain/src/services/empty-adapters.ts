@@ -92,6 +92,8 @@ export const emptyAdapters: Services = {
     pause: () => notAvailable(),
     resume: () => notAvailable(),
     logs: () => delay([]),
+    exportCsv: () => delay(""),
+    importCsv: () => notAvailable(),
   },
   posts: {
     list: () => emptyList(),
