@@ -54,15 +54,19 @@ enum Role {
 }
 
 model User {
-  id              String         @id @default(cuid())
-  email           String         @unique
-  name            String
-  passwordHash    String
-  emailVerifiedAt DateTime?
-  createdAt       DateTime       @default(now())
-  memberships     Membership[]
-  refreshTokens   RefreshToken[]
-  authTokens      AuthToken[]
+  id                  String         @id @default(cuid())
+  email               String         @unique
+  name                String
+  passwordHash        String
+  emailVerifiedAt     DateTime?
+  /// Consecutive failed logins; reset to 0 on success. Drives account lockout.
+  failedLoginAttempts Int            @default(0)
+  /// When set and in the future, logins are refused (brute-force lockout).
+  lockedUntil         DateTime?
+  createdAt           DateTime       @default(now())
+  memberships         Membership[]
+  refreshTokens       RefreshToken[]
+  authTokens          AuthToken[]
 }
 
 /**

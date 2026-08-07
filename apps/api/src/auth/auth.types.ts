@@ -7,6 +7,10 @@ export interface UserRecord {
   name: string;
   passwordHash: string;
   createdAt: string;
+  /** Consecutive failed logins (0 when clean). */
+  failedLoginAttempts: number;
+  /** ISO time until which logins are locked, or null. */
+  lockedUntil: string | null;
 }
 
 /** A user's membership in a workspace, with their role. */

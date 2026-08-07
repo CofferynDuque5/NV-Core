@@ -1,6 +1,8 @@
 import {
   BadRequestException,
   ConflictException,
+  HttpException,
+  HttpStatus,
   Injectable,
   NotFoundException,
   UnauthorizedException,
@@ -126,10 +128,36 @@ export class AuthService {
     await this.store.revokeAllRefreshTokens(consumed.userId);
   }
 
+  /** Lock an account for this long after too many consecutive failed logins. */
+  private static readonly MAX_FAILED_LOGINS = 5;
+  private static readonly LOCK_DURATION_MS = 15 * 60_000; // 15 minutes
+
   async login(dto: LoginDto): Promise<AuthResult> {
     const user = await this.store.findUserByEmail(dto.email);
+
+    // Refuse while locked — even with the correct password — until the window
+    // passes. Applies only to real accounts (we can't lock a non-existent one).
+    if (user?.lockedUntil && new Date(user.lockedUntil).getTime() > Date.now()) {
+      throw new HttpException(
+        "Cuenta bloqueada temporalmente por demasiados intentos. Inténtalo más tarde.",
+        HttpStatus.TOO_MANY_REQUESTS,
+      );
+    }
+
     if (!user || !(await verifyPassword(dto.password, user.passwordHash))) {
+      // Count the failure and lock the account once the threshold is reached.
+      if (user) {
+        const attempts = await this.store.incrementFailedLogins(user.id);
+        if (attempts >= AuthService.MAX_FAILED_LOGINS) {
+          await this.store.lockUser(user.id, new Date(Date.now() + AuthService.LOCK_DURATION_MS));
+        }
+      }
       throw new UnauthorizedException("Credenciales inválidas.");
+    }
+
+    // Success: clear any accumulated failures / lock.
+    if (user.failedLoginAttempts > 0 || user.lockedUntil) {
+      await this.store.clearFailedLogins(user.id);
     }
     return this.issueTokens(user);
   }

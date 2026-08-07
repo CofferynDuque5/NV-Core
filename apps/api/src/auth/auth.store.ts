@@ -21,6 +21,8 @@ export class AuthStore {
     name: string;
     passwordHash: string;
     createdAt: Date;
+    failedLoginAttempts?: number;
+    lockedUntil?: Date | null;
   }): UserRecord {
     return {
       id: u.id,
@@ -28,6 +30,8 @@ export class AuthStore {
       name: u.name,
       passwordHash: u.passwordHash,
       createdAt: u.createdAt.toISOString(),
+      failedLoginAttempts: u.failedLoginAttempts ?? 0,
+      lockedUntil: u.lockedUntil ? u.lockedUntil.toISOString() : null,
     };
   }
 
@@ -50,6 +54,29 @@ export class AuthStore {
       data: { email: input.email.toLowerCase(), name: input.name, passwordHash: input.passwordHash },
     });
     return this.toUser(u);
+  }
+
+  /** Atomically increment failed-login count; returns the new value. */
+  async incrementFailedLogins(userId: string): Promise<number> {
+    const u = await this.prisma.user.update({
+      where: { id: userId },
+      data: { failedLoginAttempts: { increment: 1 } },
+      select: { failedLoginAttempts: true },
+    });
+    return u.failedLoginAttempts;
+  }
+
+  /** Lock the account until the given time (keeps the failed count). */
+  async lockUser(userId: string, until: Date): Promise<void> {
+    await this.prisma.user.update({ where: { id: userId }, data: { lockedUntil: until } });
+  }
+
+  /** Clear failed-login count and any lock (on a successful login). */
+  async clearFailedLogins(userId: string): Promise<void> {
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: { failedLoginAttempts: 0, lockedUntil: null },
+    });
   }
 
   async membershipsOf(userId: string): Promise<MembershipRecord[]> {
