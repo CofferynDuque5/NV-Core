@@ -48,7 +48,7 @@ export function Topbar() {
       </button>
 
       <div className="ml-auto flex items-center gap-1.5">
-        <Button size="sm" className="gap-1.5" onClick={openCompose}>
+        <Button size="sm" className="gap-1.5" onClick={openCompose} data-tour="topbar-create">
           <Plus className="size-4" />
           <span className="hidden sm:inline">Crear</span>
         </Button>

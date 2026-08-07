@@ -1,9 +1,11 @@
 import * as React from "react";
 import {
   ArrowRight,
+  Compass,
   LifeBuoy,
   Lightbulb,
   Megaphone,
+  PlayCircle,
   Plug,
   Rocket,
   Search,
@@ -21,7 +23,9 @@ import {
 
 import { useWorkspace } from "@/hooks/use-workspace";
 import { useUiStore } from "@/stores/ui-store";
+import { useTourStore } from "@/stores/tour-store";
 import { countInCategory, filterArticles } from "@/lib/help";
+import { TOURS } from "@/lib/tours";
 import { PageHeader } from "@/components/common/page-header";
 import { EmptyState } from "@/components/common/empty-state";
 import { Input } from "@/components/ui/input";
@@ -44,6 +48,7 @@ const CATEGORY_LABEL: Record<HelpCategoryId, string> = Object.fromEntries(
 export default function AyudaPage() {
   const ws = useWorkspace();
   const openFeedback = useUiStore((s) => s.openFeedback);
+  const startTour = useTourStore((s) => s.start);
   const [query, setQuery] = React.useState("");
   const [category, setCategory] = React.useState<HelpCategoryId | "">("");
   const [detail, setDetail] = React.useState<HelpArticle | null>(null);
@@ -86,6 +91,32 @@ export default function AyudaPage() {
           ))}
         </div>
       </div>
+
+      {/* Guided tours — only on the default view */}
+      {!searching && category === "" && TOURS.length > 0 ? (
+        <div className="rounded-xl border border-line-soft bg-panel-raised p-4">
+          <div className="mb-3 flex items-center gap-2">
+            <Compass className="size-4 text-brand" />
+            <h2 className="text-sm font-semibold text-ink-bright">Tours guiados</h2>
+          </div>
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+            {TOURS.map((t) => (
+              <div
+                key={t.id}
+                className="flex items-center justify-between gap-3 rounded-lg border border-line-soft bg-panel p-3"
+              >
+                <div className="min-w-0">
+                  <div className="text-sm font-medium text-ink">{t.name}</div>
+                  <div className="truncate text-xs text-ink-muted">{t.description}</div>
+                </div>
+                <Button size="sm" className="shrink-0" onClick={() => startTour(t.id)}>
+                  <PlayCircle className="size-4" /> Iniciar
+                </Button>
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : null}
 
       {/* Category overview — only on the default view (no search, no category) */}
       {!searching && category === "" ? (

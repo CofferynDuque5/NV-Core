@@ -121,6 +121,7 @@ export function Sidebar({ onOpenSwitcher }: { onOpenSwitcher: () => void }) {
                 const link = (
                   <Link
                     to={href}
+                    data-tour={`nav-${item.module}`}
                     className={cn(
                       "group flex items-center gap-2.5 rounded-[9px] px-2 py-2 text-[13px] font-medium transition-colors",
                       collapsed && "justify-center px-0",
