@@ -20,6 +20,7 @@ import {
   useTodayPosts,
 } from "@/hooks/use-domain-data";
 import { PageHeader } from "@/components/common/page-header";
+import { OnboardingChecklist } from "@/components/dashboard/onboarding-checklist";
 import { Panel, PanelHeader } from "@/components/common/panel";
 import { KpiCard } from "@/components/common/kpi-card";
 import { EmptyState } from "@/components/common/empty-state";
@@ -76,6 +77,9 @@ export default function DashboardPage() {
           </>
         }
       />
+
+      {/* Guided onboarding — hides itself once dismissed or when the DB has no signal */}
+      <OnboardingChecklist />
 
       {/* KPI tiles — every value is real; metrics show em-dash until the backend has data */}
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">

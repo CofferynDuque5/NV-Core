@@ -18,6 +18,7 @@ import type {
   MediaFolder,
   Message,
   Notification,
+  OnboardingStatus,
   Post,
   RoleDefinition,
   Segment,
@@ -519,6 +520,13 @@ export interface WorkspaceService {
   create(input: CreateWorkspaceInput): Promise<Workspace>;
 }
 
+export interface OnboardingService {
+  /** The workspace's first-value checklist, with data-derived completion. */
+  status(workspaceId: string): Promise<OnboardingStatus>;
+  /** Hide the checklist for the current user; returns the updated status. */
+  dismiss(workspaceId: string): Promise<OnboardingStatus>;
+}
+
 export interface BillingService {
   status(workspaceId: string): Promise<BillingStatus>;
   checkout(workspaceId: string, input: CheckoutInput): Promise<{ url: string }>;
@@ -528,6 +536,7 @@ export interface BillingService {
 /** All services the UI can resolve. */
 export interface Services {
   workspaces: WorkspaceService;
+  onboarding: OnboardingService;
   whatsapp: WhatsappService;
   campaigns: CampaignService;
   posts: PostService;

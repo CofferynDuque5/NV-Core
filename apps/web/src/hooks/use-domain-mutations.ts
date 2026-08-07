@@ -70,6 +70,19 @@ export function useCreateWorkspace() {
   });
 }
 
+export function useDismissOnboarding() {
+  const svc = useServices();
+  const ws = useWorkspace();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () => svc.onboarding.dismiss(ws.id),
+    onSuccess: (status) => {
+      qc.setQueryData([ws.id, "onboarding"], status);
+    },
+    onError: (err) => toast.error(errText(err)),
+  });
+}
+
 // ── Contacts ────────────────────────────────────────────────────────────────
 export function useCreateContact() {
   const svc = useServices();

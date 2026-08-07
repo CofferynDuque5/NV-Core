@@ -30,6 +30,22 @@ export const emptyAdapters: Services = {
     list: () => delay([...WORKSPACES]),
     create: () => notAvailable(),
   },
+  onboarding: {
+    status: () =>
+      delay({
+        steps: [
+          { key: "connect", done: false },
+          { key: "audience", done: false },
+          { key: "content", done: false },
+          { key: "publish", done: false },
+        ],
+        completed: 0,
+        total: 4,
+        allDone: false,
+        dismissed: false,
+      }),
+    dismiss: () => notAvailable(),
+  },
   whatsapp: {
     status: () =>
       delay({

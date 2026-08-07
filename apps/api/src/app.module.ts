@@ -14,6 +14,7 @@ import { HealthModule } from "./health/health.module";
 import { AuthModule } from "./auth/auth.module";
 
 import { WorkspacesModule } from "./modules/workspaces/workspaces.module";
+import { OnboardingModule } from "./modules/onboarding/onboarding.module";
 import { ContactsModule } from "./modules/contacts/contacts.module";
 import { GroupsModule } from "./modules/groups/groups.module";
 import { SegmentsModule } from "./modules/segments/segments.module";
@@ -59,6 +60,7 @@ import { ProvidersModule } from "./providers/providers.module";
 
     // Feature modules (one per @nv/domain service)
     WorkspacesModule,
+    OnboardingModule,
     ContactsModule,
     GroupsModule,
     SegmentsModule,

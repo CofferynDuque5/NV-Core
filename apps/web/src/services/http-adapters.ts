@@ -22,6 +22,7 @@ import type {
   MediaUploadSignature,
   Message,
   Notification,
+  OnboardingStatus,
   Post,
   RoleDefinition,
   Segment,
@@ -110,6 +111,10 @@ export function createHttpAdapters(opts: HttpAdapterOptions): Services {
     workspaces: {
       list: () => get<Workspace[]>(`/workspaces`),
       create: (input) => post<Workspace>(`/workspaces`, input),
+    },
+    onboarding: {
+      status: (id) => get<OnboardingStatus>(`/workspaces/${id}/onboarding`),
+      dismiss: (id) => post<OnboardingStatus>(`/workspaces/${id}/onboarding/dismiss`, {}),
     },
     whatsapp: {
       status: (id) => get<WhatsappStatus>(`${ws(id)}/whatsapp/status`),

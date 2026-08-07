@@ -35,6 +35,15 @@ export function usePosts() {
   return useQuery({ queryKey: [ws.id, "posts"], queryFn: () => svc.posts.list(ws.id) });
 }
 
+export function useOnboarding() {
+  const svc = useServices();
+  const ws = useWorkspace();
+  return useQuery({
+    queryKey: [ws.id, "onboarding"],
+    queryFn: () => svc.onboarding.status(ws.id),
+  });
+}
+
 export function useCalendarEvents(month: string) {
   const svc = useServices();
   const ws = useWorkspace();

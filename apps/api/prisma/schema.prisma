@@ -559,3 +559,20 @@ model AppInstallation {
   @@unique([workspaceSlug, appId])
   @@index([workspaceSlug])
 }
+
+/**
+ * Per-user onboarding state for a workspace. Step completion is derived from
+ * live workspace data; this row only persists the user's choice to dismiss the
+ * guided checklist (works for both built-in and DB workspaces).
+ */
+model OnboardingState {
+  id            String    @id @default(cuid())
+  workspaceSlug String
+  userId        String
+  dismissedAt   DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@unique([workspaceSlug, userId])
+  @@index([workspaceSlug])
+}

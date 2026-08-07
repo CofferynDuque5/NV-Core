@@ -436,3 +436,27 @@ export interface MarketplaceEntry extends MarketplaceApp {
   installed: boolean;
   installedAt?: string;
 }
+
+// ── Onboarding (guided first-value checklist) ────────────────────────────────
+
+/** The steps a new workspace completes on the way to its first published post. */
+export type OnboardingStepKey = "connect" | "audience" | "content" | "publish";
+
+/** One checklist step with its data-derived completion state. */
+export interface OnboardingStep {
+  key: OnboardingStepKey;
+  done: boolean;
+}
+
+/**
+ * A workspace's onboarding progress. Step completion is derived from real
+ * workspace data (a connection exists, contacts exist, a post was published…);
+ * `dismissed` is the current user's choice to hide the checklist.
+ */
+export interface OnboardingStatus {
+  steps: OnboardingStep[];
+  completed: number;
+  total: number;
+  allDone: boolean;
+  dismissed: boolean;
+}
