@@ -16,6 +16,7 @@ import {
 } from "@nestjs/common";
 import { ApiBearerAuth, ApiPropertyOptional, ApiTags } from "@nestjs/swagger";
 import { CONTACT_STAGES, type Contact, type ContactStage } from "@nv/domain";
+import { Prisma } from "@prisma/client";
 import { IsArray, IsIn, IsOptional, IsString, MinLength } from "class-validator";
 
 import { ListResultDto } from "../../common/dto/list-result.dto";
@@ -29,6 +30,14 @@ import { RolesGuard } from "../../auth/guards/roles.guard";
 import { Roles } from "../../auth/decorators/roles.decorator";
 import { CurrentUser } from "../../auth/decorators/current-user.decorator";
 import type { AuthenticatedUser } from "../../auth/auth.types";
+
+/** Contacts list query: pagination + server-side search + stage filter. */
+export class ContactsQueryDto extends PaginationQueryDto {
+  @ApiPropertyOptional({ enum: CONTACT_STAGES })
+  @IsOptional()
+  @IsIn(CONTACT_STAGES)
+  stage?: ContactStage;
+}
 
 export class CreateContactDto {
   @IsString()
@@ -89,9 +98,27 @@ export class ContactsService {
     return this.prisma;
   }
 
-  async list(workspaceId: string, query: PaginationQueryDto): Promise<ListResultDto<Contact>> {
+  async list(workspaceId: string, query: ContactsQueryDto): Promise<ListResultDto<Contact>> {
     if (!this.prisma.enabled) return ListResultDto.empty<Contact>();
-    const where = { workspaceSlug: workspaceId };
+    const q = query.q?.trim();
+    // Search/stage run in the DB so results are authoritative across the whole
+    // workspace — never limited to the current page (the old client-side filter
+    // over the first 100 rows silently missed matches beyond it).
+    const where: Prisma.ContactWhereInput = {
+      workspaceSlug: workspaceId,
+      ...(query.stage ? { stage: query.stage } : {}),
+      ...(q
+        ? {
+            OR: [
+              { name: { contains: q, mode: "insensitive" } },
+              { company: { contains: q, mode: "insensitive" } },
+              { email: { contains: q, mode: "insensitive" } },
+              { phone: { contains: q, mode: "insensitive" } },
+              { tags: { has: q } },
+            ],
+          }
+        : {}),
+    };
     const [rows, total] = await Promise.all([
       this.prisma.contact.findMany({
         where,
@@ -180,7 +207,7 @@ export class ContactsController {
   constructor(private readonly service: ContactsService) {}
 
   @Get()
-  list(@WorkspaceId() workspaceId: string, @Query() query: PaginationQueryDto) {
+  list(@WorkspaceId() workspaceId: string, @Query() query: ContactsQueryDto) {
     return this.service.list(workspaceId, query);
   }
 

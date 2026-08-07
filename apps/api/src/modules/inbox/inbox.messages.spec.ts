@@ -30,13 +30,13 @@ describe("InboxService.messages (scale bound)", () => {
       row("m2", new Date("2026-01-02")),
       row("m1", new Date("2026-01-01")),
     ];
-    const findMany = vi.fn(async () => desc);
+    const findMany = vi.fn(async (_args: { take?: number; orderBy?: { createdAt?: string } }) => desc);
     const service = makeService(findMany);
 
     const out = await service.messages("w1", "c1");
 
     expect(out.map((m) => m.id)).toEqual(["m1", "m2", "m3"]); // chronological
-    const args = findMany.mock.calls[0]![0] as { take: number; orderBy: { createdAt: string } };
+    const args = findMany.mock.calls[0]![0];
     expect(args.take).toBe(THREAD_CAP);
     expect(args.orderBy).toEqual({ createdAt: "desc" });
   });

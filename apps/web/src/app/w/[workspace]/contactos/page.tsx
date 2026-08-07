@@ -3,7 +3,7 @@ import { CONTACT_STAGES, type Contact as ContactEntity, type ContactStage } from
 import { Columns3, Contact, Loader2, Pencil, Plus, Search, Send, Table2, Trash2 } from "lucide-react";
 
 import { cn } from "@/lib/utils";
-import { filterContacts, STAGE_ACCENTS } from "@/lib/crm";
+import { STAGE_ACCENTS } from "@/lib/crm";
 import { useContacts } from "@/hooks/use-domain-data";
 import { useDeleteContact, useMoveContactStage } from "@/hooks/use-domain-mutations";
 import { useConfirm } from "@/providers/confirm-provider";
@@ -34,22 +34,39 @@ function StageBadge({ stage }: { stage: ContactStage }) {
 }
 
 export default function ContactosPage() {
-  const contacts = useContacts();
-  const items = React.useMemo(() => contacts.data?.items ?? [], [contacts.data]);
   const openCompose = useUiStore((s) => s.openCompose);
   const del = useDeleteContact();
   const move = useMoveContactStage();
   const confirm = useConfirm();
 
+  const PAGE_SIZE = 100;
   const [view, setView] = React.useState<"table" | "board">("board");
   const [q, setQ] = React.useState("");
+  const [debouncedQ, setDebouncedQ] = React.useState("");
   const [stage, setStage] = React.useState<ContactStage | "">("");
+  const [page, setPage] = React.useState(1);
   const [dialogOpen, setDialogOpen] = React.useState(false);
   const [editing, setEditing] = React.useState<ContactEntity | null>(null);
   const [drawer, setDrawer] = React.useState<ContactEntity | null>(null);
   const [deletingId, setDeletingId] = React.useState<string | null>(null);
 
-  const filtered = filterContacts(items, { q, stage });
+  // Debounce the search so we query the server once the user pauses typing.
+  React.useEffect(() => {
+    const t = setTimeout(() => setDebouncedQ(q.trim()), 300);
+    return () => clearTimeout(t);
+  }, [q]);
+  // Any filter change returns to the first page.
+  React.useEffect(() => setPage(1), [debouncedQ, stage]);
+
+  // Search + stage filtering run on the SERVER — authoritative across the whole
+  // workspace, not just the loaded page (the old client filter over 100 rows
+  // silently missed matches beyond it).
+  const contacts = useContacts({ q: debouncedQ, stage: stage || undefined, page, pageSize: PAGE_SIZE });
+  const items = React.useMemo(() => contacts.data?.items ?? [], [contacts.data]);
+  const total = contacts.data?.total ?? 0;
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  const hasFilters = Boolean(debouncedQ || stage);
+
   // Keep the drawer's contact in sync with fresh data after mutations.
   const drawerContact = drawer ? (items.find((c) => c.id === drawer.id) ?? drawer) : null;
 
@@ -134,7 +151,7 @@ export default function ContactosPage() {
       <QueryBoundary
         query={contacts}
         skeleton={<TableSkeleton rows={7} cols={6} />}
-        isEmpty={(d) => d.items.length === 0}
+        isEmpty={(d) => d.items.length === 0 && !hasFilters}
         empty={{
           icon: Contact,
           title: "Tu CRM está vacío",
@@ -147,11 +164,20 @@ export default function ContactosPage() {
         }}
       >
         {() =>
-          filtered.length === 0 ? (
+          items.length === 0 ? (
             <Panel className="p-10 text-center text-sm text-ink-faint">Ningún contacto coincide con los filtros.</Panel>
           ) : view === "board" ? (
-            <CrmBoard contacts={filtered} onOpen={setDrawer} onMove={(id, s) => move.mutate({ id, stage: s })} />
+            <div className="space-y-3">
+              <CrmBoard contacts={items} onOpen={setDrawer} onMove={(id, s) => move.mutate({ id, stage: s })} />
+              {total > items.length ? (
+                <p className="text-xs text-ink-faint">
+                  Mostrando {items.length} de {total} contactos. Afina la búsqueda o el filtro de
+                  etapa, o usa la vista <strong>Tabla</strong> para paginar.
+                </p>
+              ) : null}
+            </div>
           ) : (
+            <div className="space-y-3">
             <Panel className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
@@ -162,7 +188,7 @@ export default function ContactosPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {filtered.map((row) => (
+                  {items.map((row) => (
                     <tr
                       key={row.id}
                       onClick={() => setDrawer(row)}
@@ -199,6 +225,23 @@ export default function ContactosPage() {
                 </tbody>
               </table>
             </Panel>
+            <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-ink-faint">
+              <span>
+                Mostrando {(page - 1) * PAGE_SIZE + 1}–{Math.min(page * PAGE_SIZE, total)} de {total}
+              </span>
+              {totalPages > 1 ? (
+                <div className="flex items-center gap-2">
+                  <Button variant="secondary" size="sm" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>
+                    Anterior
+                  </Button>
+                  <span>Página {page} / {totalPages}</span>
+                  <Button variant="secondary" size="sm" disabled={page >= totalPages} onClick={() => setPage((p) => p + 1)}>
+                    Siguiente
+                  </Button>
+                </div>
+              ) : null}
+            </div>
+            </div>
           )
         }
       </QueryBoundary>

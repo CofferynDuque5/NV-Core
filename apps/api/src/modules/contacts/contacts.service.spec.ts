@@ -44,6 +44,54 @@ function makeService(opts: { contactExists?: boolean; notes?: Note[] } = {}) {
   return { service, notes };
 }
 
+describe("ContactsService.list (server-side search + stage)", () => {
+  function makeListService() {
+    const findMany = vi.fn(async (_args: Record<string, unknown>) => [] as unknown[]);
+    const count = vi.fn(async (_args: Record<string, unknown>) => 0);
+    const prisma = { enabled: true, contact: { findMany, count } };
+    const service = new ContactsService(prisma as unknown as PrismaService, { record: vi.fn() } as never);
+    return { service, findMany, count };
+  }
+
+  it("applies pagination only when there are no filters", async () => {
+    const { service, findMany } = makeListService();
+    await service.list("w1", { page: 2, pageSize: 50 } as never);
+    const args = findMany.mock.calls[0]![0] as { where: Record<string, unknown>; skip: number; take: number };
+    expect(args.where).toEqual({ workspaceSlug: "w1" });
+    expect(args.skip).toBe(50); // (2-1)*50
+    expect(args.take).toBe(50);
+  });
+
+  it("builds an OR search across name/company/email/phone/tags", async () => {
+    const { service, findMany } = makeListService();
+    await service.list("w1", { page: 1, pageSize: 100, q: "  ana  " } as never);
+    const where = (findMany.mock.calls[0]![0] as { where: { OR?: unknown[] } }).where;
+    expect(Array.isArray(where.OR)).toBe(true);
+    expect(where.OR).toEqual([
+      { name: { contains: "ana", mode: "insensitive" } },
+      { company: { contains: "ana", mode: "insensitive" } },
+      { email: { contains: "ana", mode: "insensitive" } },
+      { phone: { contains: "ana", mode: "insensitive" } },
+      { tags: { has: "ana" } },
+    ]);
+  });
+
+  it("filters by stage in the where clause", async () => {
+    const { service, findMany } = makeListService();
+    await service.list("w1", { page: 1, pageSize: 100, stage: "Cliente" } as never);
+    const where = (findMany.mock.calls[0]![0] as { where: Record<string, unknown> }).where;
+    expect(where.stage).toBe("Cliente");
+  });
+
+  it("returns an empty list when the DB is disabled", async () => {
+    const prisma = { enabled: false, contact: { findMany: vi.fn(), count: vi.fn() } };
+    const service = new ContactsService(prisma as unknown as PrismaService, { record: vi.fn() } as never);
+    const res = await service.list("w1", { page: 1, pageSize: 100 } as never);
+    expect(res.items).toEqual([]);
+    expect(prisma.contact.findMany).not.toHaveBeenCalled();
+  });
+});
+
 describe("ContactsService notes", () => {
   it("adds a note authored by the actor", async () => {
     const { service } = makeService();

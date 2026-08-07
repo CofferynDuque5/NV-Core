@@ -317,7 +317,9 @@ Leyenda: **E**xiste · **F**unciona · **C**ompleto · **P**roducción-ready.
 - **Progreso (tranche A, verificado):**
   - ✅ **10 endpoints de lista acotados** con `take` (LIST_CAP=500) + `inbox.messages` con THREAD_CAP (más recientes, orden cronológico restaurado). Ningún endpoint de request devuelve ya la tabla completa del tenant.
   - ✅ **14 índices compuestos** `(workspaceSlug, createdAt/scheduledAt/date/updatedAt)` y `(conversationId, createdAt)` — migración aplicada y **verificada en vivo** (índices presentes, sin drift). +2 tests (cap+orden de mensajes).
-  - ⏳ **Tranche B (pendiente):** cap de 100 en Contactos del frontend → búsqueda/paginación server-side; virtualización de listas largas; Analytics con agregación SQL; prueba de carga real con 100k filas.
+  - 🟡 **Tranche B (en curso):**
+    - ✅ **Cap de 100 en Contactos corregido**: búsqueda + filtro de etapa ahora **server-side** (autoritativo sobre toda la tabla del tenant), con paginación real en la tabla y búsqueda con debounce. Verificado en vivo: un contacto **fuera de la primera página de 100** ahora aparece al buscar (antes se perdía). +8 tests backend (where OR/stage/paginación).
+    - ⏳ **Pendiente:** virtualización de listas largas; Analytics con agregación SQL; prueba de carga real con 100k filas.
 
 ### Sprint 3 — Capa de adopción/negocio (2–3 semanas) · Riesgo: Medio · **Bloqueante comercial**
 - **Objetivo:** que un cliente pueda empezar y migrar solo.

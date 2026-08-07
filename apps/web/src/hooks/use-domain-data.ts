@@ -44,10 +44,20 @@ export function useCalendarEvents(month: string) {
   });
 }
 
-export function useContacts() {
+export function useContacts(query: { q?: string; stage?: string; page?: number; pageSize?: number } = {}) {
   const svc = useServices();
   const ws = useWorkspace();
-  return useQuery({ queryKey: [ws.id, "contacts"], queryFn: () => svc.contacts.list(ws.id) });
+  return useQuery({
+    queryKey: [ws.id, "contacts", query.q ?? "", query.stage ?? "", query.page ?? 1, query.pageSize ?? 100],
+    queryFn: () =>
+      svc.contacts.list(ws.id, {
+        q: query.q,
+        stage: query.stage as never,
+        page: query.page,
+        pageSize: query.pageSize,
+      }),
+    placeholderData: (prev) => prev, // keep previous page visible while refetching (no flicker)
+  });
 }
 
 export function useContactNotes(contactId: string | null) {

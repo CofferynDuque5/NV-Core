@@ -26,7 +26,16 @@ import type {
   AuditLogEntry,
   Workspace,
 } from "../entities";
-import type { Role, WorkspaceKind } from "../enums";
+import type { ContactStage, Role, WorkspaceKind } from "../enums";
+
+/** Server-side query for the contacts list (search + stage + pagination). */
+export interface ContactListQuery {
+  /** Free-text search across name/company/email/phone/tags. */
+  q?: string;
+  stage?: ContactStage;
+  page?: number;
+  pageSize?: number;
+}
 
 /**
  * Service contracts.
@@ -199,7 +208,7 @@ export interface CalendarService {
 }
 
 export interface ContactService {
-  list(workspaceId: string): Promise<ListResult<Contact>>;
+  list(workspaceId: string, query?: ContactListQuery): Promise<ListResult<Contact>>;
   create(workspaceId: string, input: CreateContactInput): Promise<Contact>;
   update(workspaceId: string, id: string, input: UpdateContactInput): Promise<Contact>;
   remove(workspaceId: string, id: string): Promise<void>;

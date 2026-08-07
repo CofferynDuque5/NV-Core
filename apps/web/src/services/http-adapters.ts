@@ -140,7 +140,14 @@ export function createHttpAdapters(opts: HttpAdapterOptions): Services {
       events: (id, month) => get<CalendarEvent[]>(`${ws(id)}/calendar/events?month=${month}`),
     },
     contacts: {
-      list: (id) => get<ListResult<Contact>>(`${ws(id)}/contacts?pageSize=100`),
+      list: (id, query) => {
+        const p = new URLSearchParams();
+        p.set("pageSize", String(query?.pageSize ?? 100));
+        if (query?.page) p.set("page", String(query.page));
+        if (query?.q) p.set("q", query.q);
+        if (query?.stage) p.set("stage", query.stage);
+        return get<ListResult<Contact>>(`${ws(id)}/contacts?${p.toString()}`);
+      },
       create: (id, input) => post<Contact>(`${ws(id)}/contacts`, input),
       update: (id, cid, input) => patch<Contact>(`${ws(id)}/contacts/${cid}`, input),
       remove: (id, cid) => del<void>(`${ws(id)}/contacts/${cid}`),
