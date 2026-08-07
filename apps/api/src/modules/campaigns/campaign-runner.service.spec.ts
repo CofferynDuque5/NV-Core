@@ -116,9 +116,84 @@ describe("CampaignRunner.isDue", () => {
 describe("CampaignRunner.run", () => {
   beforeEach(() => {
     process.env.WHATSAPP_GROUP_DELAY_MS = "0";
+    process.env.WHATSAPP_RETRY_BASE_MS = "0"; // instant backoff in tests
+    process.env.WHATSAPP_MAX_ATTEMPTS = "3";
   });
   afterEach(() => {
     delete process.env.WHATSAPP_GROUP_DELAY_MS;
+    delete process.env.WHATSAPP_RETRY_BASE_MS;
+    delete process.env.WHATSAPP_MAX_ATTEMPTS;
+  });
+
+  const retriableError = () => Object.assign(new Error("rate limited"), { retriable: true });
+
+  it("retries a retriable WhatsApp send with backoff, then succeeds", async () => {
+    const c = campaign({ targets: [{ group: { id: "g1", name: "A", remoteJid: "1@g.us" } }] });
+    let calls = 0;
+    const send = vi.fn(async () => {
+      calls += 1;
+      if (calls < 3) throw retriableError();
+      return { id: "wamid.ok" };
+    });
+    const { runner, sendLogs } = makeRunner({ campaign: c, send });
+
+    await runner.run("w1", "c1");
+
+    expect(send).toHaveBeenCalledTimes(3); // 2 failures + 1 success
+    expect(sendLogs).toHaveLength(1);
+    expect(sendLogs[0]!.ok).toBe(true);
+  });
+
+  it("does NOT retry a non-retriable WhatsApp send (fails fast)", async () => {
+    const c = campaign({ targets: [{ group: { id: "g1", name: "A", remoteJid: "1@g.us" } }] });
+    const send = vi.fn(async () => {
+      throw Object.assign(new Error("token expirado"), { retriable: false });
+    });
+    const { runner, sendLogs } = makeRunner({ campaign: c, send });
+
+    await runner.run("w1", "c1");
+
+    expect(send).toHaveBeenCalledTimes(1); // no retries
+    expect(sendLogs[0]!.ok).toBe(false);
+  });
+
+  it("gives up a retriable WhatsApp send after maxAttempts and logs failure", async () => {
+    const c = campaign({ targets: [{ group: { id: "g1", name: "A", remoteJid: "1@g.us" } }] });
+    const send = vi.fn(async () => {
+      throw retriableError();
+    });
+    const { runner, sendLogs } = makeRunner({ campaign: c, send });
+
+    await runner.run("w1", "c1");
+
+    expect(send).toHaveBeenCalledTimes(3); // maxAttempts
+    expect(sendLogs[0]!.ok).toBe(false);
+  });
+
+  it("retries a retriable social publish, then succeeds", async () => {
+    const c = campaign({ channels: ["fb"], targets: [] });
+    let calls = 0;
+    const publish = vi.fn(async () => {
+      calls += 1;
+      return calls < 2 ? { ok: false, retriable: true, error: "throttled" } : { ok: true, id: "p1" };
+    });
+    const { runner, sendLogs } = makeRunner({ campaign: c, publish });
+
+    await runner.run("w1", "c1");
+
+    expect(publish).toHaveBeenCalledTimes(2);
+    expect(sendLogs).toHaveLength(1);
+    expect(sendLogs[0]!.ok).toBe(true);
+  });
+
+  it("does NOT retry a non-retriable social publish failure", async () => {
+    const c = campaign({ channels: ["fb"], targets: [] });
+    const publish = vi.fn(async () => ({ ok: false, retriable: false, error: "sin permiso" }));
+    const { runner } = makeRunner({ campaign: c, publish });
+
+    await runner.run("w1", "c1");
+
+    expect(publish).toHaveBeenCalledTimes(1);
   });
 
   it("delivers to every WhatsApp target and completes a one-off on full success", async () => {

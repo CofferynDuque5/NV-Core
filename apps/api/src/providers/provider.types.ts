@@ -88,6 +88,8 @@ export interface PublishResult {
   id?: string;
   format?: string | null;
   error?: string;
+  /** On failure: whether a retry with backoff could plausibly succeed. */
+  retriable?: boolean;
 }
 
 /**

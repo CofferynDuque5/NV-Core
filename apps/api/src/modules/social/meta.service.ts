@@ -76,6 +76,8 @@ export interface SocialResult {
   error?: string;
   /** Present on failures: the classified Graph error kind for the caller to react. */
   kind?: MetaErrorKind;
+  /** Present on failures: whether a retry with backoff could plausibly succeed. */
+  retriable?: boolean;
 }
 
 /**
@@ -290,8 +292,14 @@ export class MetaService {
         if (target === "facebook") out.push(await this.publishFacebook(c, post));
         else out.push(await this.publishInstagram(c, post));
       } catch (err) {
-        const kind = err instanceof MetaGraphError ? err.kind : undefined;
-        out.push({ target, ok: false, error: (err as Error).message, kind });
+        const graphErr = err instanceof MetaGraphError ? err : undefined;
+        out.push({
+          target,
+          ok: false,
+          error: (err as Error).message,
+          kind: graphErr?.kind,
+          retriable: graphErr?.retriable ?? false,
+        });
       }
     }
     return out;

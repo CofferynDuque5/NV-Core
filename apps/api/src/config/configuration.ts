@@ -59,6 +59,15 @@ export function buildConfig(env: Env): AppConfig {
     encryptionKey = "nv-core-dev-encryption-key-change-me";
   }
 
+  // Redis powers the job queue (BullMQ). Without it the queue runs inline, which
+  // means scheduled publishing NEVER fires (a future-dated post can't run inline).
+  // Requiring it in production turns a silent data-loss bug into a loud boot error.
+  if (env.NODE_ENV === "production" && !env.REDIS_URL) {
+    throw new Error(
+      "REDIS_URL es obligatorio en producción: la publicación programada (posts/campañas) lo requiere.",
+    );
+  }
+
   return {
     env: env.NODE_ENV,
     port: env.PORT,

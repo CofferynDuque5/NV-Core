@@ -303,8 +303,11 @@ Leyenda: **E**xiste · **F**unciona · **C**ompleto · **P**roducción-ready.
   - ✅ **Taxonomía de errores del Graph** (auth / rate_limit / media / recipient / transient) con `retriable`, para reacción correcta del runner.
   - ✅ **Suite de integración** con fixtures realistas (19 tests: shaping de requests + todos los modos de fallo) — verde ahora, lista para apuntar a credenciales reales.
   - ✅ **`meta.service` (Graph FB/IG) endurecido** con la misma taxonomía (`auth` / `rate_limit` / `permission` / `media` / `transient`), fallos de red → transient, y el `kind` **se expone en `SocialResult`** para que el runner/UI reaccione. Suite de Meta ampliada a 21 tests (incl. taxonomía + `kind` en fallos de `publish`).
+  - ✅ **Redis obligatorio en producción (R8)**: la API falla-rápido en el arranque si `NODE_ENV=production` sin `REDIS_URL` (antes: los posts programados nunca se publicaban en silencio). En dev sigue el fallback inline. Verificado en vivo (prod → boot bloqueado; dev → arranca).
+  - ✅ **Retry/backoff en el CampaignRunner**: reintento exponencial solo en errores `retriable` (rate_limit/transient), fail-fast en auth/media/recipient. Aplica a envío WhatsApp (throw) y a publicación social (resultado con `retriable`, ahora propagado por `PublishResult`). +5 tests (runner 9 → 14).
   - ⏳ **Handoff (requiere tus credenciales):** verificación en vivo contra Meta/WhatsApp reales + job de CI con secrets de sandbox. Pasos en [`OPERATIONS.md` §6](./OPERATIONS.md).
-  - ⏳ **Pendiente:** hacer Redis obligatorio en producción (R8); orquestar reintento/backoff en el runner usando el flag `retriable`.
+
+  **Sprint 1 (código, verificable en sandbox): COMPLETO.** Falta solo la verificación con credenciales reales (handoff).
 
 ### Sprint 2 — Escala y robustez de datos (1–2 semanas) · Riesgo: Medio
 - **Objetivo:** que el sistema no se degrade con tenants grandes.

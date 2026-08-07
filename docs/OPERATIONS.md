@@ -17,7 +17,7 @@ Mínimos de producción:
 | `JWT_SECRET` | ✅ | ≥16 chars. `openssl rand -base64 48`. |
 | `ENCRYPTION_KEY` | ✅ | 32 hex (16 bytes). `openssl rand -hex 16`. Cifra tokens en reposo. |
 | `CORS_ORIGINS` | ✅ | Allowlist separada por comas (sin `*`). |
-| `REDIS_URL` | ⛅ | Sin ella, las colas corren *inline* (sin worker distribuido). |
+| `REDIS_URL` | ✅ (prod) | **Obligatoria en producción** (la API no arranca sin ella): la publicación programada usa BullMQ; sin Redis los posts programados nunca se publican. En dev/local es opcional (cola *inline*). |
 | `NV_ADMIN_EMAIL` / `NV_ADMIN_PASSWORD` | ⛅ | Si ambas, siembra un Owner al arrancar. Úsalas solo para el bootstrap y rota la contraseña. |
 
 Nunca subas `.env` al repo. `docker-compose.yml` no trae secretos por defecto.

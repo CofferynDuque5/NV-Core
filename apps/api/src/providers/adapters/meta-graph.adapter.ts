@@ -39,7 +39,13 @@ abstract class MetaGraphAdapter extends BaseAdapter {
       format: input.format ?? null,
     });
     if (!result) return { ok: false, error: "Sin resultado del publicador Meta." };
-    return { ok: result.ok, id: result.id, format: result.format, error: result.error };
+    return {
+      ok: result.ok,
+      id: result.id,
+      format: result.format,
+      error: result.error,
+      retriable: result.retriable,
+    };
   }
 
   override async connect(ctx: AdapterContext): Promise<AdapterStatus> {

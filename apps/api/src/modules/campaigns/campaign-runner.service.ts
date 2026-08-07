@@ -8,7 +8,7 @@ import { AuditLogger } from "../../common/audit-logger.service";
 import { EventBus } from "../../core/events/event-bus.service";
 import { JobManager } from "../../core/jobs/job-manager.service";
 import { ProviderManager } from "../../providers/provider-manager.service";
-import type { MediaAttachment } from "../../providers/provider.types";
+import type { MediaAttachment, PublishInput, PublishResult } from "../../providers/provider.types";
 import { builtinVars, renderTemplate } from "./render";
 
 const TICK_MS = 30_000;
@@ -29,6 +29,8 @@ type Attachment = { url?: string; kind?: string; mime?: string | null; filename?
 export class CampaignRunner implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(CampaignRunner.name);
   private readonly groupDelayMs: number;
+  private readonly retryBaseMs: number;
+  private readonly maxAttempts: number;
   private timer?: NodeJS.Timeout;
 
   constructor(
@@ -40,7 +42,48 @@ export class CampaignRunner implements OnModuleInit, OnModuleDestroy {
     private readonly audit: AuditLogger,
   ) {
     this.groupDelayMs = Number(process.env.WHATSAPP_GROUP_DELAY_MS ?? 4000);
+    // Retry policy for transient/rate-limited sends (exponential backoff).
+    this.retryBaseMs = Number(process.env.WHATSAPP_RETRY_BASE_MS ?? 1000);
+    this.maxAttempts = Math.max(1, Number(process.env.WHATSAPP_MAX_ATTEMPTS ?? 3));
     void config; // reserved for future tuning
+  }
+
+  /**
+   * Run a send that throws (WhatsApp), retrying with exponential backoff only
+   * when the thrown error is classified `retriable` (rate-limit / transient).
+   * Non-retriable errors (auth, media, recipient) fail fast — retrying them
+   * would only burn quota and delay the operator's alert.
+   */
+  private async withRetry<T>(fn: () => Promise<T>): Promise<T> {
+    let lastErr: unknown;
+    for (let attempt = 0; attempt < this.maxAttempts; attempt++) {
+      try {
+        return await fn();
+      } catch (err) {
+        lastErr = err;
+        const retriable = Boolean((err as { retriable?: boolean })?.retriable);
+        if (!retriable || attempt === this.maxAttempts - 1) throw err;
+        await sleep(this.retryBaseMs * 2 ** attempt);
+      }
+    }
+    throw lastErr;
+  }
+
+  /**
+   * Run a publish that returns a result (Meta), retrying with backoff while the
+   * result is a failure flagged `retriable`. Returns the final result either way.
+   */
+  private async publishWithRetry(
+    workspaceSlug: string,
+    target: "facebook" | "instagram",
+    input: PublishInput,
+  ): Promise<PublishResult> {
+    let result = await this.providers.publish(workspaceSlug, target, input);
+    for (let attempt = 1; attempt < this.maxAttempts && !result.ok && result.retriable; attempt++) {
+      await sleep(this.retryBaseMs * 2 ** (attempt - 1));
+      result = await this.providers.publish(workspaceSlug, target, input);
+    }
+    return result;
   }
 
   onModuleInit(): void {
@@ -119,9 +162,11 @@ export class CampaignRunner implements OnModuleInit, OnModuleDestroy {
         const text = renderTemplate(campaign.message, vars);
         const to = group.remoteJid ?? group.id;
         try {
-          const res = waAttachment
-            ? await this.providers.sendMedia(workspaceSlug, "whatsapp", { to, body: text, attachment: waAttachment })
-            : await this.providers.sendMessage(workspaceSlug, "whatsapp", { to, body: text });
+          const res = await this.withRetry(() =>
+            waAttachment
+              ? this.providers.sendMedia(workspaceSlug, "whatsapp", { to, body: text, attachment: waAttachment })
+              : this.providers.sendMessage(workspaceSlug, "whatsapp", { to, body: text }),
+          );
           results.push(await this.log(workspaceSlug, campaign, group, "wa", text, true, null, res.id));
         } catch (err) {
           results.push(await this.log(workspaceSlug, campaign, group, "wa", text, false, (err as Error).message));
@@ -166,7 +211,7 @@ export class CampaignRunner implements OnModuleInit, OnModuleDestroy {
     if (!targets.length) return;
     const text = renderTemplate(campaign.message, builtinVars(""));
     for (const target of targets) {
-      const r = await this.providers.publish(workspaceSlug, target, {
+      const r = await this.publishWithRetry(workspaceSlug, target, {
         message: text,
         attachments: attachments.filter((a) => a.url) as MediaAttachment[],
         format: campaign.socialFormat ?? null,
