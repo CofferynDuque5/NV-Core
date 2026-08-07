@@ -2,13 +2,18 @@ import { Injectable } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 
 import type { AppConfig } from "../../config/configuration";
-import { sendWhatsApp } from "../../modules/messaging/messaging.transport";
+import {
+  sendWhatsApp,
+  sendWhatsAppMedia,
+  sendWhatsAppTemplate,
+} from "../../modules/messaging/messaging.transport";
 import { BaseAdapter } from "./base.adapter";
 import type {
   AdapterContext,
   AdapterStatus,
   HealthResult,
   ProviderId,
+  SendMediaInput,
   SendMessageInput,
   SendResult,
 } from "../provider.types";
@@ -16,11 +21,11 @@ import type {
 /**
  * WhatsApp via the official Meta Cloud API (token + phone number id).
  *
- * Text delivery is wired through the existing messaging provider. The richer
- * template / media flows of the Cloud API are left as an explicit placeholder
- * (they require a WABA + approved templates) — the adapter reports them as
- * unconfigured through {@link healthCheck} rather than pretending to support
- * them.
+ * This is the recommended primary WhatsApp adapter: it supports text and media
+ * (image/video/document by public URL) and pre-approved templates, and it maps
+ * Graph errors to an actionable taxonomy (auth / rate-limit / media / recipient
+ * / transient) so the campaign runner can react correctly. Template sending is
+ * exposed for callers that need to initiate outside the 24h window.
  */
 @Injectable()
 export class WhatsappCloudApiAdapter extends BaseAdapter {
@@ -45,6 +50,25 @@ export class WhatsappCloudApiAdapter extends BaseAdapter {
     return sendWhatsApp(this.whatsapp, { channel: "wa", to: input.to, body: input.body });
   }
 
+  override async sendMedia(_ctx: AdapterContext, input: SendMediaInput): Promise<SendResult> {
+    if (!this.configured) throw new Error("WhatsApp Cloud API sin configurar.");
+    return sendWhatsAppMedia(this.whatsapp, {
+      to: input.to,
+      body: input.body,
+      attachment: input.attachment,
+    });
+  }
+
+  /** Send a pre-approved template (initiates outside the 24h window). */
+  sendTemplate(
+    to: string,
+    template: string,
+    opts: { language?: string; variables?: string[] } = {},
+  ): Promise<SendResult> {
+    if (!this.configured) throw new Error("WhatsApp Cloud API sin configurar.");
+    return sendWhatsAppTemplate(this.whatsapp, { to, template, ...opts });
+  }
+
   override async getStatus(_ctx: AdapterContext): Promise<AdapterStatus> {
     return {
       provider: this.provider,
@@ -61,7 +85,7 @@ export class WhatsappCloudApiAdapter extends BaseAdapter {
       healthy: this.configured,
       configured: this.configured,
       message: this.configured
-        ? "Cloud API lista para enviar texto."
+        ? "Cloud API lista (texto, media y plantillas)."
         : "Configura WHATSAPP_TOKEN y WHATSAPP_PHONE_NUMBER_ID.",
     };
   }

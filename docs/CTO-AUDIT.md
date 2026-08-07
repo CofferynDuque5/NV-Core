@@ -297,6 +297,14 @@ Leyenda: **E**xiste · **F**unciona · **C**ompleto · **P**roducción-ready.
 - **Dependencias:** cuentas de prueba reales (Meta, WhatsApp Business), Redis obligatorio.
 - **DoD:** publicar en FB/IG y enviar/recibir WhatsApp contra APIs reales, con suite de integración en CI (con credenciales de sandbox) verde; documentado el estado ToS/legal de Baileys.
 
+- **Progreso (código, verificado en sandbox sin credenciales externas):**
+  - ✅ WhatsApp **Cloud API oficial es ahora el adaptador por defecto** (antes Baileys). Baileys queda como opción con aviso de riesgo. Selecciones por-workspace previas se preservan.
+  - ✅ Transporte Cloud API ampliado: **texto + media (imagen/video/documento por URL) + plantillas** pre-aprobadas.
+  - ✅ **Taxonomía de errores del Graph** (auth / rate_limit / media / recipient / transient) con `retriable`, para reacción correcta del runner.
+  - ✅ **Suite de integración** con fixtures realistas (19 tests: shaping de requests + todos los modos de fallo) — verde ahora, lista para apuntar a credenciales reales.
+  - ⏳ **Handoff (requiere tus credenciales):** verificación en vivo contra Meta/WhatsApp reales + job de CI con secrets de sandbox. Pasos en [`OPERATIONS.md` §6](./OPERATIONS.md).
+  - ⏳ **Pendiente:** endurecer `meta.service` (Graph FB/IG) con la misma taxonomía; hacer Redis obligatorio en producción (R8).
+
 ### Sprint 2 — Escala y robustez de datos (1–2 semanas) · Riesgo: Medio
 - **Objetivo:** que el sistema no se degrade con tenants grandes.
 - **Módulos:** todos los `findMany` (paginación), índices compuestos, virtualización de listas, arreglar cap de 100 en Contactos.

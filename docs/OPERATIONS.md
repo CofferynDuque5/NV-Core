@@ -98,7 +98,39 @@ pnpm --filter @nv/api exec prisma migrate deploy
    backup — de ahí la importancia de la frecuencia del cron.
 3. **Verifica** con `GET /api/health/ready` (debe dar `200`) y un login de prueba.
 
-## 6. Observabilidad
+## 6. Verificación de integraciones (handoff con credenciales)
+
+El código de los canales está probado con **fixtures realistas** (unit, mock de
+`fetch`), pero la **verificación contra las APIs reales requiere credenciales de
+sandbox** que no viven en el repo. Pasos para cerrar el DoD del Sprint 1:
+
+### WhatsApp — Cloud API oficial (canal primario)
+El adaptador por defecto es ahora `cloud-api` (oficial). Baileys queda como
+opción con riesgo (librería no oficial → posible baneo del número).
+1. Crea una app de Meta + WhatsApp Business, obtén `WHATSAPP_TOKEN`,
+   `WHATSAPP_PHONE_NUMBER_ID`, `WHATSAPP_VERIFY_TOKEN` y `META_APP_SECRET`.
+2. Define esas variables en el entorno de la API.
+3. **Enviar texto:** `POST /api/workspaces/:ws/messaging/send` (o lanzar una
+   campaña WhatsApp). Debe devolver un `wamid.*`.
+4. **Media/plantilla:** el transporte soporta imagen/video/documento por URL y
+   plantillas pre-aprobadas (`sendWhatsAppMedia`, `sendWhatsAppTemplate`).
+5. **Recepción:** registra el webhook `POST /api/integrations/whatsapp/webhook`
+   en Meta (verifica firma HMAC `X-Hub-Signature-256`).
+6. **Errores esperados** (taxonomía ya implementada): token expirado (code 190 →
+   `auth`), throttling (`rate_limit`, reintenta con backoff), media (`media`),
+   fuera de ventana 24h (`recipient`), 5xx (`transient`).
+
+### Meta Graph — Facebook / Instagram
+1. Conecta una Página + cuenta IG Business (Connection rows o env `FB_*`/`IG_*`).
+2. Publica una campaña a `fb`/`ig` y valida el `post_id`/media id real.
+3. Verifica manejo de expiración de token y límites de rate contra la Graph real.
+
+> **Recomendación CTO:** ejecutar estos pasos en una **beta cerrada** con 3–5
+> números/cuentas reales antes de la venta general. Añadir un job de CI que corra
+> la suite de integración con credenciales de sandbox (secrets del repo) para que
+> "verde en CI" signifique "funciona contra Meta".
+
+## 7. Observabilidad
 
 - **Sentry**: activa con `SENTRY_DSN` (no-op sin ella).
 - **request-id**: cada request lleva `x-request-id` (middleware) para correlación.

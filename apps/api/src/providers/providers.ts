@@ -29,11 +29,15 @@ abstract class BaseProvider implements Provider {
 export class WhatsappProvider extends BaseProvider {
   readonly id: ProviderId = "whatsapp";
   readonly label = "WhatsApp";
-  readonly defaultAdapterId = "baileys";
+  // Official Cloud API is the primary/default channel (stable, ToS-compliant).
+  // Baileys stays available as an opt-in for users who accept its risks
+  // (unofficial library → possible number ban). Workspaces that already chose an
+  // adapter keep their stored ProviderSelection; only the fallback default moves.
+  readonly defaultAdapterId = "cloud-api";
   readonly adapters: ChannelAdapter[];
-  constructor(baileys: WhatsappBaileysAdapter, cloud: WhatsappCloudApiAdapter) {
+  constructor(cloud: WhatsappCloudApiAdapter, baileys: WhatsappBaileysAdapter) {
     super();
-    this.adapters = [baileys, cloud];
+    this.adapters = [cloud, baileys];
   }
 }
 
