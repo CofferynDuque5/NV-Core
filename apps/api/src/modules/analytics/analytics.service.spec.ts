@@ -33,8 +33,13 @@ function makeService(seed: Seed) {
   const prisma = {
     enabled: true,
     post: {
-      findMany: async ({ where }: { where: Record<string, unknown> }) => s.posts.filter((r) => match(r, where)),
       count: async ({ where }: { where: Record<string, unknown> }) => s.posts.filter((r) => match(r, where)).length,
+      groupBy: async ({ where }: { where: Record<string, unknown> }) => {
+        const counts = new Map<string, number>();
+        for (const r of s.posts.filter((x) => match(x, where)))
+          counts.set(r.channel, (counts.get(r.channel) ?? 0) + 1);
+        return [...counts.entries()].map(([channel, _count]) => ({ channel, _count }));
+      },
     },
     contact: {
       findMany: async ({ where }: { where: Record<string, unknown> }) => s.contacts.filter((r) => match(r, where)),
@@ -63,6 +68,37 @@ function makeService(seed: Seed) {
     campaign: {
       count: async ({ where }: { where: Record<string, unknown> }) => s.campaigns.filter((r) => match(r, where)).length,
       findMany: async () => [],
+    },
+    // Emulates the SQL aggregation helpers (dailyCount / dailyMessageCount /
+    // messageHeatmap) by inspecting the query text + [ws, from, to] params.
+    $queryRaw: async (q: { strings?: string[]; sql?: string; values?: unknown[] }) => {
+      const text = q.strings ? q.strings.join(" ") : (q.sql ?? "");
+      const [ws, from, to] = (q.values ?? []) as [string, Date, Date];
+      const inWin = (d: Date) => d >= from && d < to;
+      const daily = (rows: { workspaceSlug: string; createdAt: Date }[]) => {
+        const m = new Map<string, number>();
+        for (const r of rows.filter((x) => x.workspaceSlug === ws && inWin(x.createdAt))) {
+          const day = dayKey(r.createdAt);
+          m.set(day, (m.get(day) ?? 0) + 1);
+        }
+        return [...m.entries()].map(([day, n]) => ({ day, n }));
+      };
+      if (text.includes("EXTRACT(DOW")) {
+        const m = new Map<string, number>();
+        for (const r of s.messages.filter((x) => x.workspaceSlug === ws && inWin(x.createdAt))) {
+          const k = `${r.createdAt.getUTCDay()}_${r.createdAt.getUTCHours()}`;
+          m.set(k, (m.get(k) ?? 0) + 1);
+        }
+        return [...m.entries()].map(([k, n]) => {
+          const [dow, hour] = k.split("_").map(Number);
+          return { dow, hour, n };
+        });
+      }
+      if (text.includes('"Message"')) return daily(s.messages);
+      if (text.includes('"Post"')) return daily(s.posts);
+      if (text.includes('"Contact"')) return daily(s.contacts);
+      if (text.includes('"Conversation"')) return daily(s.conversations);
+      return [];
     },
   };
   return new AnalyticsService(prisma as unknown as PrismaService);

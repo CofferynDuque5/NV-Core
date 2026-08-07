@@ -18,6 +18,8 @@ import {
   type KpiMetric,
 } from "@nv/domain";
 
+import { Prisma } from "@prisma/client";
+
 import { WorkspaceId } from "../../common/tenant/workspace.decorator";
 import { WorkspaceGuard } from "../../common/tenant/workspace.guard";
 import { PrismaService } from "../../prisma/prisma.service";
@@ -48,14 +50,10 @@ function delta(current: number, previous: number): Pick<KpiMetric, "delta" | "de
   return { delta: `${pct >= 0 ? "+" : ""}${pct}%`, deltaTrend: pct >= 0 ? "up" : "down" };
 }
 
-/** Bucket a list of dates into a continuous day-indexed count map. */
-function bucketByDay(dates: Date[], from: Date, days: number): Map<string, number> {
+/** A `{ day, n }` row from a date_trunc GROUP BY, as a lookup map. */
+function dailyMap(rows: { day: string; n: number }[]): Map<string, number> {
   const map = new Map<string, number>();
-  for (let i = 0; i < days; i++) map.set(dayKey(new Date(from.getTime() + i * DAY_MS)), 0);
-  for (const d of dates) {
-    const k = dayKey(d);
-    if (map.has(k)) map.set(k, (map.get(k) ?? 0) + 1);
-  }
+  for (const r of rows) map.set(r.day, Number(r.n));
   return map;
 }
 
@@ -84,11 +82,11 @@ export class AnalyticsService {
     });
 
     const [
-      // Current-window rows (also feed the time-series / heatmap / platforms).
-      postRows,
-      contactRows,
-      conversationRows,
-      messageRows,
+      // Current-window counts (aggregated in the DB).
+      curPosts,
+      curContacts,
+      curConversations,
+      curMessages,
       campaignsNew,
       // Previous-window counts (for deltas).
       prevPosts,
@@ -104,11 +102,19 @@ export class AnalyticsService {
       campaignsActive,
       campaignsTotal,
       campaignRows,
+      // Channel share (window), grouped in the DB.
+      channelGroups,
+      // Time-series + heatmap (aggregated via SQL — never pulls raw rows).
+      postSeriesRows,
+      contactSeriesRows,
+      convSeriesRows,
+      msgSeriesRows,
+      heatRows,
     ] = await Promise.all([
-      this.prisma.post.findMany({ where: { ...where, createdAt: cur }, select: { createdAt: true, channel: true } }),
-      this.prisma.contact.findMany({ where: { ...where, createdAt: cur }, select: { createdAt: true } }),
-      this.prisma.conversation.findMany({ where: { ...where, createdAt: cur }, select: { createdAt: true } }),
-      this.prisma.message.findMany({ where: msgWhere(cur), select: { createdAt: true } }),
+      this.prisma.post.count({ where: { ...where, createdAt: cur } }),
+      this.prisma.contact.count({ where: { ...where, createdAt: cur } }),
+      this.prisma.conversation.count({ where: { ...where, createdAt: cur } }),
+      this.prisma.message.count({ where: msgWhere(cur) }),
       this.prisma.campaign.count({ where: { ...where, createdAt: cur } }),
       this.prisma.post.count({ where: { ...where, createdAt: prev } }),
       this.prisma.contact.count({ where: { ...where, createdAt: prev } }),
@@ -121,40 +127,55 @@ export class AnalyticsService {
       this.prisma.post.count({ where }),
       this.prisma.campaign.count({ where: { ...where, status: "activa" } }),
       this.prisma.campaign.count({ where }),
-      this.prisma.campaign.findMany({ where, include: { _count: { select: { posts: true } } } }),
+      this.prisma.campaign.findMany({
+        where,
+        include: { _count: { select: { posts: true } } },
+        orderBy: { posts: { _count: "desc" } },
+        take: 5,
+      }),
+      this.prisma.post.groupBy({ by: ["channel"], where: { ...where, createdAt: cur }, _count: true }),
+      this.dailyCount("Post", workspaceSlug, from, to),
+      this.dailyCount("Contact", workspaceSlug, from, to),
+      this.dailyCount("Conversation", workspaceSlug, from, to),
+      this.dailyMessageCount(workspaceSlug, from, to),
+      this.messageHeatmap(workspaceSlug, from, to),
     ]);
 
     // ── KPIs (windowed, period-over-period deltas) ──────────────────────────
     const kpis: KpiMetric[] = [
-      { label: "Contactos nuevos", value: String(contactRows.length), ...delta(contactRows.length, prevContacts) },
-      { label: "Publicaciones", value: String(postRows.length), ...delta(postRows.length, prevPosts) },
-      { label: "Conversaciones", value: String(conversationRows.length), ...delta(conversationRows.length, prevConversations) },
-      { label: "Mensajes", value: String(messageRows.length), ...delta(messageRows.length, prevMessages) },
+      { label: "Contactos nuevos", value: String(curContacts), ...delta(curContacts, prevContacts) },
+      { label: "Publicaciones", value: String(curPosts), ...delta(curPosts, prevPosts) },
+      { label: "Conversaciones", value: String(curConversations), ...delta(curConversations, prevConversations) },
+      { label: "Mensajes", value: String(curMessages), ...delta(curMessages, prevMessages) },
       { label: "Campañas nuevas", value: String(campaignsNew), ...delta(campaignsNew, prevCampaigns) },
     ];
 
-    // ── Time-series (continuous daily buckets) ──────────────────────────────
-    const postBuckets = bucketByDay(postRows.map((r) => r.createdAt), from, window);
-    const contactBuckets = bucketByDay(contactRows.map((r) => r.createdAt), from, window);
-    const convBuckets = bucketByDay(conversationRows.map((r) => r.createdAt), from, window);
-    const msgBuckets = bucketByDay(messageRows.map((r) => r.createdAt), from, window);
-    const series: AnalyticsPoint[] = [...postBuckets.keys()].map((date) => ({
-      date,
-      posts: postBuckets.get(date) ?? 0,
-      contacts: contactBuckets.get(date) ?? 0,
-      conversations: convBuckets.get(date) ?? 0,
-      messages: msgBuckets.get(date) ?? 0,
-    }));
+    // ── Time-series (continuous daily buckets from the SQL aggregates) ───────
+    const postMap = dailyMap(postSeriesRows);
+    const contactMap = dailyMap(contactSeriesRows);
+    const convMap = dailyMap(convSeriesRows);
+    const msgMap = dailyMap(msgSeriesRows);
+    // Continuous buckets for the last `window` calendar days, ENDING today (so
+    // the most recent day is always visible — the old range stopped yesterday).
+    const series: AnalyticsPoint[] = Array.from({ length: window }, (_, i) => {
+      const date = dayKey(new Date(to.getTime() - (window - 1 - i) * DAY_MS));
+      return {
+        date,
+        posts: postMap.get(date) ?? 0,
+        contacts: contactMap.get(date) ?? 0,
+        conversations: convMap.get(date) ?? 0,
+        messages: msgMap.get(date) ?? 0,
+      };
+    });
 
     // ── Channel share (within the window) ───────────────────────────────────
-    const channelCounts = new Map<ChannelId, number>();
-    for (const p of postRows) channelCounts.set(p.channel, (channelCounts.get(p.channel) ?? 0) + 1);
-    const platforms = [...channelCounts.entries()]
-      .sort((a, b) => b[1] - a[1])
-      .map(([channel, count]) => ({
+    const platforms = channelGroups
+      .map((g) => ({ channel: g.channel as ChannelId, count: g._count }))
+      .sort((a, b) => b.count - a.count)
+      .map(({ channel, count }) => ({
         channel,
         count,
-        pct: postRows.length > 0 ? `${Math.round((count / postRows.length) * 100)}%` : "0%",
+        pct: curPosts > 0 ? `${Math.round((count / curPosts) * 100)}%` : "0%",
       }));
 
     // ── Funnel by CRM stage (canonical order, all-time) ─────────────────────
@@ -181,16 +202,14 @@ export class AnalyticsService {
 
     // ── Activity heatmap (weekday × hour, UTC, from messages) ───────────────
     const heatmap: number[][] = Array.from({ length: 7 }, () => new Array(24).fill(0));
-    for (const m of messageRows) {
-      const d = m.createdAt;
-      heatmap[d.getUTCDay()]![d.getUTCHours()]! += 1;
+    for (const r of heatRows) {
+      const dow = Number(r.dow);
+      const hour = Number(r.hour);
+      if (dow >= 0 && dow < 7 && hour >= 0 && hour < 24) heatmap[dow]![hour] = Number(r.n);
     }
 
-    // ── Top campaigns by number of posts ────────────────────────────────────
-    const topCampaigns = campaignRows
-      .sort((a, b) => (b._count?.posts ?? 0) - (a._count?.posts ?? 0))
-      .slice(0, 5)
-      .map(mapCampaign);
+    // ── Top campaigns by number of posts (ordered + limited in the DB) ──────
+    const topCampaigns = campaignRows.map(mapCampaign);
 
     return {
       kpis,
@@ -202,6 +221,57 @@ export class AnalyticsService {
       conversion,
       range: { days: window, from: from.toISOString(), to: to.toISOString() },
     };
+  }
+
+  /**
+   * Daily counts for a workspace-scoped table, grouped in the DB by UTC day.
+   * The table name is a fixed identifier (never user input), quoted safely.
+   */
+  private dailyCount(
+    table: "Post" | "Contact" | "Conversation",
+    workspaceSlug: string,
+    from: Date,
+    to: Date,
+  ): Promise<{ day: string; n: number }[]> {
+    const rel = Prisma.raw(`"${table}"`);
+    return this.prisma.$queryRaw<{ day: string; n: number }[]>(Prisma.sql`
+      SELECT to_char(date_trunc('day', "createdAt"), 'YYYY-MM-DD') AS day, COUNT(*)::int AS n
+      FROM ${rel}
+      WHERE "workspaceSlug" = ${workspaceSlug} AND "createdAt" >= ${from} AND "createdAt" < ${to}
+      GROUP BY 1
+    `);
+  }
+
+  /** Daily message counts, scoped to the workspace via the conversation join. */
+  private dailyMessageCount(
+    workspaceSlug: string,
+    from: Date,
+    to: Date,
+  ): Promise<{ day: string; n: number }[]> {
+    return this.prisma.$queryRaw<{ day: string; n: number }[]>(Prisma.sql`
+      SELECT to_char(date_trunc('day', m."createdAt"), 'YYYY-MM-DD') AS day, COUNT(*)::int AS n
+      FROM "Message" m
+      JOIN "Conversation" c ON c."id" = m."conversationId"
+      WHERE c."workspaceSlug" = ${workspaceSlug} AND m."createdAt" >= ${from} AND m."createdAt" < ${to}
+      GROUP BY 1
+    `);
+  }
+
+  /** Message counts bucketed by UTC weekday (0=Sun) × hour, grouped in the DB. */
+  private messageHeatmap(
+    workspaceSlug: string,
+    from: Date,
+    to: Date,
+  ): Promise<{ dow: number; hour: number; n: number }[]> {
+    return this.prisma.$queryRaw<{ dow: number; hour: number; n: number }[]>(Prisma.sql`
+      SELECT EXTRACT(DOW FROM m."createdAt")::int AS dow,
+             EXTRACT(HOUR FROM m."createdAt")::int AS hour,
+             COUNT(*)::int AS n
+      FROM "Message" m
+      JOIN "Conversation" c ON c."id" = m."conversationId"
+      WHERE c."workspaceSlug" = ${workspaceSlug} AND m."createdAt" >= ${from} AND m."createdAt" < ${to}
+      GROUP BY 1, 2
+    `);
   }
 }
 
