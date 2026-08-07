@@ -38,6 +38,13 @@ export function CommandPalette() {
         icon: "LifeBuoy",
         description: "Guías y respuestas",
       },
+      {
+        module: "novedades",
+        label: "Novedades",
+        section: "SISTEMA",
+        icon: "Sparkles",
+        description: "Registro de cambios del producto",
+      },
     ],
     [],
   );

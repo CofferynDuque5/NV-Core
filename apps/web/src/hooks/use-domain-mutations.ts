@@ -83,6 +83,18 @@ export function useDismissOnboarding() {
   });
 }
 
+export function useMarkChangelogSeen() {
+  const svc = useServices();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () => svc.changelog.markSeen(),
+    onSuccess: (status) => {
+      qc.setQueryData(["changelog"], status);
+    },
+    // Silent: this fires automatically when the user opens Novedades.
+  });
+}
+
 // ── Contacts ────────────────────────────────────────────────────────────────
 export function useCreateContact() {
   const svc = useServices();

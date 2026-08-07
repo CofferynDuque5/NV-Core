@@ -460,3 +460,14 @@ export interface OnboardingStatus {
   allDone: boolean;
   dismissed: boolean;
 }
+
+// ── Changelog (per-user "unseen" state) ──────────────────────────────────────
+
+/**
+ * The current user's changelog state. `unseenCount` is how many published
+ * entries are newer than `lastSeenAt` (null = the user has never opened it).
+ */
+export interface ChangelogStatus {
+  lastSeenAt: string | null;
+  unseenCount: number;
+}

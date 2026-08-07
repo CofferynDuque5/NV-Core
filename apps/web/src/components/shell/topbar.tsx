@@ -1,10 +1,12 @@
 
-import { Bell, Menu, Plus, Search } from "lucide-react";
+import { Bell, Menu, Plus, Search, Sparkles } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 
 import { cn } from "@/lib/utils";
 import { useCommandStore } from "@/stores/command-store";
 import { useUiStore } from "@/stores/ui-store";
-import { useNotifications } from "@/hooks/use-domain-data";
+import { useNotifications, useChangelog } from "@/hooks/use-domain-data";
+import { useWorkspace } from "@/hooks/use-workspace";
 import { Button } from "@/components/ui/button";
 import { UserMenu } from "./user-menu";
 import { ThemeToggle } from "./theme-toggle";
@@ -16,6 +18,10 @@ export function Topbar() {
   const openMobileNav = useUiStore((s) => s.setMobileNavOpen);
   const notifications = useNotifications();
   const unread = (notifications.data ?? []).filter((n) => !n.read).length;
+  const navigate = useNavigate();
+  const ws = useWorkspace();
+  const changelog = useChangelog();
+  const unseen = changelog.data?.unseenCount ?? 0;
 
   return (
     <header className="sticky top-0 z-20 flex h-[57px] items-center gap-3 border-b border-line bg-canvas/80 px-4 backdrop-blur">
@@ -48,6 +54,20 @@ export function Topbar() {
         </Button>
 
         <ThemeToggle />
+
+        <button
+          onClick={() => navigate(`/w/${ws.slug}/novedades`)}
+          className="relative grid size-9 place-items-center rounded-lg border border-line-soft bg-panel text-ink-muted transition-colors hover:border-line-bright hover:text-ink"
+          title="Novedades"
+          aria-label={unseen > 0 ? `Novedades, ${unseen} sin leer` : "Novedades"}
+        >
+          <Sparkles className="size-[18px]" />
+          {unseen > 0 ? (
+            <span className="absolute -right-1 -top-1 grid min-w-4 place-items-center rounded-full bg-brand px-1 text-[10px] font-bold text-white">
+              {unseen}
+            </span>
+          ) : null}
+        </button>
 
         <button
           onClick={toggleNotifications}

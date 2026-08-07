@@ -3,6 +3,7 @@ import type {
   AiUsage,
   AnalyticsSnapshot,
   Automation,
+  ChangelogStatus,
   ContactNote,
   ContactImportResult,
   Design,
@@ -115,6 +116,10 @@ export function createHttpAdapters(opts: HttpAdapterOptions): Services {
     onboarding: {
       status: (id) => get<OnboardingStatus>(`/workspaces/${id}/onboarding`),
       dismiss: (id) => post<OnboardingStatus>(`/workspaces/${id}/onboarding/dismiss`, {}),
+    },
+    changelog: {
+      status: () => get<ChangelogStatus>(`/me/changelog`),
+      markSeen: () => post<ChangelogStatus>(`/me/changelog/seen`, {}),
     },
     whatsapp: {
       status: (id) => get<WhatsappStatus>(`${ws(id)}/whatsapp/status`),

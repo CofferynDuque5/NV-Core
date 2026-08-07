@@ -4,3 +4,4 @@ export * from "./navigation";
 export * from "./rbac";
 export * from "./marketplace";
 export * from "./help";
+export * from "./changelog";

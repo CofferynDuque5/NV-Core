@@ -1,4 +1,5 @@
 import { WORKSPACES } from "../config/workspaces";
+import { CHANGELOG_ENTRIES } from "../config/changelog";
 import type { ListResult, Services } from "./interfaces";
 
 /**
@@ -45,6 +46,10 @@ export const emptyAdapters: Services = {
         dismissed: false,
       }),
     dismiss: () => notAvailable(),
+  },
+  changelog: {
+    status: () => delay({ lastSeenAt: null, unseenCount: CHANGELOG_ENTRIES.length }),
+    markSeen: () => notAvailable(),
   },
   whatsapp: {
     status: () =>

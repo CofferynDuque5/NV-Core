@@ -576,3 +576,15 @@ model OnboardingState {
   @@unique([workspaceSlug, userId])
   @@index([workspaceSlug])
 }
+
+/**
+ * Per-user changelog state. The changelog is product-wide (not workspace
+ * scoped), so this is keyed by user only; `lastSeenAt` drives the "unseen" badge.
+ */
+model ChangelogState {
+  id         String   @id @default(cuid())
+  userId     String   @unique
+  lastSeenAt DateTime
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+}

@@ -44,6 +44,15 @@ export function useOnboarding() {
   });
 }
 
+/** Changelog state is product-wide (per user), so it is not workspace-keyed. */
+export function useChangelog() {
+  const svc = useServices();
+  return useQuery({
+    queryKey: ["changelog"],
+    queryFn: () => svc.changelog.status(),
+  });
+}
+
 export function useCalendarEvents(month: string) {
   const svc = useServices();
   const ws = useWorkspace();

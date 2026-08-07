@@ -14,6 +14,7 @@ import type {
   Group,
   Integration,
   MarketplaceEntry,
+  ChangelogStatus,
   MediaAsset,
   MediaFolder,
   Message,
@@ -527,6 +528,13 @@ export interface OnboardingService {
   dismiss(workspaceId: string): Promise<OnboardingStatus>;
 }
 
+export interface ChangelogService {
+  /** The current user's changelog state (product-wide, not workspace-scoped). */
+  status(): Promise<ChangelogStatus>;
+  /** Mark all current entries as seen; returns the updated status. */
+  markSeen(): Promise<ChangelogStatus>;
+}
+
 export interface BillingService {
   status(workspaceId: string): Promise<BillingStatus>;
   checkout(workspaceId: string, input: CheckoutInput): Promise<{ url: string }>;
@@ -537,6 +545,7 @@ export interface BillingService {
 export interface Services {
   workspaces: WorkspaceService;
   onboarding: OnboardingService;
+  changelog: ChangelogService;
   whatsapp: WhatsappService;
   campaigns: CampaignService;
   posts: PostService;
