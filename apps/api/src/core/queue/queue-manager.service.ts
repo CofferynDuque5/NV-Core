@@ -53,18 +53,42 @@ export class QueueManager implements OnModuleInit, OnModuleDestroy {
     return Boolean(this.queue);
   }
 
+  /** Max time to wait for a Redis PING before treating the node as down. */
+  private static readonly PING_TIMEOUT_MS = 2000;
+
   /**
    * Health probe. "inline" when no Redis is configured (jobs run in-process),
    * "ok" when the Redis connection answers PING, "down" when it doesn't.
+   *
+   * The PING is bounded by a timeout: with `maxRetriesPerRequest: null` an
+   * unreachable Redis would otherwise queue the command forever, hanging the
+   * health/status/readiness endpoints. A node that can't answer in time is down.
    */
   async ping(): Promise<"inline" | "ok" | "down"> {
     if (!this.connection) return "inline";
     try {
-      const res = await this.connection.ping();
+      const res = await this.withTimeout(this.connection.ping(), QueueManager.PING_TIMEOUT_MS);
       return res === "PONG" ? "ok" : "down";
     } catch {
       return "down";
     }
+  }
+
+  /** Reject with a timeout error if `p` doesn't settle within `ms`. */
+  private withTimeout<T>(p: Promise<T>, ms: number): Promise<T> {
+    return new Promise<T>((resolve, reject) => {
+      const timer = setTimeout(() => reject(new Error("timeout")), ms);
+      p.then(
+        (value) => {
+          clearTimeout(timer);
+          resolve(value);
+        },
+        (err) => {
+          clearTimeout(timer);
+          reject(err as Error);
+        },
+      );
+    });
   }
 
   onModuleInit(): void {
