@@ -329,6 +329,9 @@ Leyenda: **E**xiste · **F**unciona · **C**ompleto · **P**roducción-ready.
 - **Objetivo:** que un cliente pueda empezar y migrar solo.
 - **Módulos:** onboarding guiado, centro de ayuda/KB, import/export (contactos/campañas/plantillas), changelog + página de estado.
 - **DoD:** un usuario nuevo llega a "primer valor" (primer post publicado) sin soporte; import/export CSV probado.
+- **Progreso (verificado):**
+  - ✅ **Import/Export CSV de Contactos**: parser/serializador RFC-4180 propio (sin dependencias nuevas; comillas embebidas, comas, saltos de línea, BOM UTF-8, CRLF/LF). Export paginado por cursor (lotes de 1000) con columnas `name,phone,email,company,tags,stage,createdAt`. Import con tope de 5000 filas, **dedupe por email** (precarga de existentes en `Set`), cabeceras EN/ES (`name/nombre`, `email/correo`, `stage/etapa`…), etapa por defecto `Lead`, tags separados por `;`/`,`/`|`, y reporte `{created, skipped, errors[]}` (hasta 50 errores) con auditoría `contacts.import`. Import protegido por rol (Owner/Admin/Editor). +20 tests (csv + service). **Verificado en vivo** contra Postgres real: import 3 filas → `{created:2, skipped:0, errors:["Fila 4: falta el nombre."]}`; export → cabecera + filas correctas (tags `vip;lead`); re-import con 1 email duplicado + 1 nuevo → `{created:1, skipped:1}`; total final consistente.
+  - ⏳ **Pendiente:** import/export de campañas/plantillas, onboarding guiado, centro de ayuda/KB, changelog + página de estado.
 
 ### Sprint 4 — Seguridad, licencias y facturación real (1–2 semanas) · Riesgo: Medio
 - **Objetivo:** cerrar política de seguridad y gating por plan.

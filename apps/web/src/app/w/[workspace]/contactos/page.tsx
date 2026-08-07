@@ -1,11 +1,24 @@
 import * as React from "react";
 import { CONTACT_STAGES, type Contact as ContactEntity, type ContactStage } from "@nv/domain";
-import { Columns3, Contact, Loader2, Pencil, Plus, Search, Send, Table2, Trash2 } from "lucide-react";
+import { Columns3, Contact, Download, Loader2, Pencil, Plus, Search, Send, Table2, Trash2, Upload } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { STAGE_ACCENTS } from "@/lib/crm";
 import { useContacts } from "@/hooks/use-domain-data";
-import { useDeleteContact, useMoveContactStage } from "@/hooks/use-domain-mutations";
+import {
+  useDeleteContact,
+  useExportContacts,
+  useImportContacts,
+  useMoveContactStage,
+} from "@/hooks/use-domain-mutations";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { useConfirm } from "@/providers/confirm-provider";
 import { useUiStore } from "@/stores/ui-store";
 import { PageHeader } from "@/components/common/page-header";
@@ -37,7 +50,12 @@ export default function ContactosPage() {
   const openCompose = useUiStore((s) => s.openCompose);
   const del = useDeleteContact();
   const move = useMoveContactStage();
+  const exportContacts = useExportContacts();
+  const importContacts = useImportContacts();
   const confirm = useConfirm();
+
+  const [importOpen, setImportOpen] = React.useState(false);
+  const [importCsvText, setImportCsvText] = React.useState("");
 
   const PAGE_SIZE = 100;
   const [view, setView] = React.useState<"table" | "board">("board");
@@ -101,6 +119,17 @@ export default function ContactosPage() {
         description="Tu pipeline de clientes y prospectos, con actividad y etapas."
         actions={
           <>
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => exportContacts.mutate()}
+              disabled={exportContacts.isPending}
+            >
+              <Download className="size-4" /> Exportar
+            </Button>
+            <Button variant="secondary" size="sm" onClick={() => setImportOpen(true)}>
+              <Upload className="size-4" /> Importar
+            </Button>
             <Button variant="secondary" size="sm" onClick={openCompose}>
               <Send className="size-4" /> Mensaje masivo
             </Button>
@@ -245,6 +274,57 @@ export default function ContactosPage() {
           )
         }
       </QueryBoundary>
+
+      <Dialog open={importOpen} onOpenChange={setImportOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Importar contactos (CSV)</DialogTitle>
+            <DialogDescription>
+              Cabeceras admitidas: <code>name, phone, email, company, tags, stage</code> (o sus
+              equivalentes en español). Se omiten los emails ya existentes.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            <input
+              type="file"
+              accept=".csv,text/csv"
+              aria-label="Archivo CSV"
+              onChange={async (e) => {
+                const file = e.target.files?.[0];
+                if (file) setImportCsvText(await file.text());
+              }}
+              className="block w-full text-sm text-ink-muted file:mr-3 file:rounded-md file:border-0 file:bg-panel-raised file:px-3 file:py-1.5 file:text-sm file:text-ink"
+            />
+            <textarea
+              value={importCsvText}
+              onChange={(e) => setImportCsvText(e.target.value)}
+              placeholder={"name,email,stage\nAna,ana@x.com,Lead"}
+              rows={6}
+              className="w-full rounded-lg border border-line-soft bg-panel p-2 font-mono text-xs text-ink"
+            />
+          </div>
+          <DialogFooter>
+            <Button variant="secondary" size="sm" onClick={() => setImportOpen(false)}>
+              Cancelar
+            </Button>
+            <Button
+              size="sm"
+              disabled={!importCsvText.trim() || importContacts.isPending}
+              onClick={() =>
+                importContacts.mutate(importCsvText, {
+                  onSuccess: () => {
+                    setImportOpen(false);
+                    setImportCsvText("");
+                  },
+                })
+              }
+            >
+              {importContacts.isPending ? <Loader2 className="size-4 animate-spin" /> : <Upload className="size-4" />}
+              Importar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <ContactFormDialog open={dialogOpen} onOpenChange={setDialogOpen} contact={editing} />
       <ContactDetailDrawer

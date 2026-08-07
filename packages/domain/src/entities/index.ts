@@ -167,6 +167,13 @@ export interface Contact {
   avatarHue?: number;
 }
 
+/** Result of a bulk contact CSV import. */
+export interface ContactImportResult {
+  created: number;
+  skipped: number;
+  errors: string[];
+}
+
 export interface Group {
   id: string;
   name: string;

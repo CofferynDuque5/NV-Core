@@ -4,6 +4,7 @@ import type {
   AnalyticsSnapshot,
   Automation,
   ContactNote,
+  ContactImportResult,
   Design,
   MarketplaceEntry,
   BillingStatus,
@@ -154,6 +155,8 @@ export function createHttpAdapters(opts: HttpAdapterOptions): Services {
       notes: (id, cid) => get<ContactNote[]>(`${ws(id)}/contacts/${cid}/notes`),
       addNote: (id, cid, body) => post<ContactNote>(`${ws(id)}/contacts/${cid}/notes`, { body }),
       removeNote: (id, cid, noteId) => del<void>(`${ws(id)}/contacts/${cid}/notes/${noteId}`),
+      exportCsv: (id) => get<{ csv: string }>(`${ws(id)}/contacts/export`).then((r) => r.csv),
+      importCsv: (id, csv) => post<ContactImportResult>(`${ws(id)}/contacts/import`, { csv }),
     },
     groups: {
       list: (id) => get<ListResult<Group>>(`${ws(id)}/groups`),

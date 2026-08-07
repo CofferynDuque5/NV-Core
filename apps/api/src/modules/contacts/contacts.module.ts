@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Body,
   Controller,
   Delete,
@@ -15,9 +16,16 @@ import {
   UseGuards,
 } from "@nestjs/common";
 import { ApiBearerAuth, ApiPropertyOptional, ApiTags } from "@nestjs/swagger";
-import { CONTACT_STAGES, type Contact, type ContactStage } from "@nv/domain";
+import {
+  CONTACT_STAGES,
+  type Contact,
+  type ContactImportResult,
+  type ContactStage,
+} from "@nv/domain";
 import { Prisma } from "@prisma/client";
-import { IsArray, IsIn, IsOptional, IsString, MinLength } from "class-validator";
+import { IsArray, IsIn, IsOptional, IsString, MaxLength, MinLength } from "class-validator";
+
+import { parseCsv, toCsv } from "../../common/csv";
 
 import { ListResultDto } from "../../common/dto/list-result.dto";
 import { PaginationQueryDto } from "../../common/dto/pagination.dto";
@@ -37,6 +45,13 @@ export class ContactsQueryDto extends PaginationQueryDto {
   @IsOptional()
   @IsIn(CONTACT_STAGES)
   stage?: ContactStage;
+}
+
+export class ImportContactsDto {
+  @ApiPropertyOptional({ description: "Contenido CSV (cabecera + filas)." })
+  @IsString()
+  @MaxLength(5_000_000) // ~5 MB guard
+  csv!: string;
 }
 
 export class CreateContactDto {
@@ -131,6 +146,119 @@ export class ContactsService {
     return new ListResultDto(rows.map(mapContact), total);
   }
 
+  private static readonly EXPORT_COLUMNS = [
+    "name",
+    "phone",
+    "email",
+    "company",
+    "tags",
+    "stage",
+    "createdAt",
+  ];
+
+  /** Export every contact as CSV, paged internally so it scales to large tenants. */
+  async exportCsv(workspaceId: string): Promise<string> {
+    const cols = ContactsService.EXPORT_COLUMNS;
+    if (!this.prisma.enabled) return toCsv([], cols);
+    const rows: Record<string, unknown>[] = [];
+    let cursor: string | undefined;
+    for (;;) {
+      const batch = await this.prisma.contact.findMany({
+        where: { workspaceSlug: workspaceId },
+        orderBy: { id: "asc" },
+        take: 1000,
+        ...(cursor ? { skip: 1, cursor: { id: cursor } } : {}),
+      });
+      if (batch.length === 0) break;
+      for (const c of batch) {
+        rows.push({
+          name: c.name,
+          phone: c.phone ?? "",
+          email: c.email ?? "",
+          company: c.company ?? "",
+          tags: (c.tags ?? []).join(";"),
+          stage: c.stage,
+          createdAt: c.createdAt.toISOString(),
+        });
+      }
+      cursor = batch[batch.length - 1]!.id;
+      if (batch.length < 1000) break;
+    }
+    return toCsv(rows, cols);
+  }
+
+  /** Bulk-create contacts from CSV. Dedupes by email (case-insensitive). */
+  async importCsv(workspaceId: string, actor: string, csv: string): Promise<ContactImportResult> {
+    const db = this.db();
+    const records = parseCsv(csv);
+    const MAX = 5000;
+    if (records.length > MAX) {
+      throw new BadRequestException(`Máximo ${MAX} filas por importación (recibidas ${records.length}).`);
+    }
+
+    // Preload existing emails once for dedupe (bounded set, cheap vs. per-row query).
+    const existingRows = await db.contact.findMany({
+      where: { workspaceSlug: workspaceId, email: { not: null } },
+      select: { email: true },
+    });
+    const seen = new Set(existingRows.map((r) => r.email!.toLowerCase()));
+
+    const pick = (r: Record<string, string>, ...keys: string[]) => {
+      for (const k of keys) {
+        const v = r[k];
+        if (v && v.trim()) return v.trim();
+      }
+      return "";
+    };
+
+    let created = 0;
+    let skipped = 0;
+    const errors: string[] = [];
+
+    for (let i = 0; i < records.length; i++) {
+      const r = records[i]!;
+      const line = i + 2; // +1 header, +1 to 1-index
+      const name = pick(r, "name", "nombre");
+      if (!name) {
+        errors.push(`Fila ${line}: falta el nombre.`);
+        continue;
+      }
+      const email = pick(r, "email", "correo");
+      const emailKey = email.toLowerCase();
+      if (emailKey && seen.has(emailKey)) {
+        skipped++;
+        continue;
+      }
+      const stageRaw = pick(r, "stage", "etapa");
+      const stage = (CONTACT_STAGES as readonly string[]).includes(stageRaw)
+        ? (stageRaw as ContactStage)
+        : "Lead";
+      const tags = pick(r, "tags", "etiquetas")
+        .split(/[;,|]/)
+        .map((t) => t.trim())
+        .filter(Boolean);
+      try {
+        await db.contact.create({
+          data: {
+            workspaceSlug: workspaceId,
+            name,
+            phone: pick(r, "phone", "telefono", "teléfono") || null,
+            email: email || null,
+            company: pick(r, "company", "empresa") || null,
+            tags,
+            stage,
+          },
+        });
+        created++;
+        if (emailKey) seen.add(emailKey);
+      } catch (err) {
+        errors.push(`Fila ${line}: ${(err as Error).message}`);
+      }
+    }
+    await this.audit.record(workspaceId, actor, "contacts.import", `created=${created} skipped=${skipped}`);
+    return { created, skipped, errors: errors.slice(0, 50) };
+  }
+
   async create(workspaceId: string, actor: string, dto: CreateContactDto): Promise<Contact> {
     const row = await this.db().contact.create({
       data: {
@@ -209,6 +337,22 @@ export class ContactsController {
   @Get()
   list(@WorkspaceId() workspaceId: string, @Query() query: ContactsQueryDto) {
     return this.service.list(workspaceId, query);
+  }
+
+  @Get("export")
+  async export(@WorkspaceId() workspaceId: string): Promise<{ csv: string }> {
+    return { csv: await this.service.exportCsv(workspaceId) };
+  }
+
+  @Post("import")
+  @Roles("Owner", "Admin", "Editor")
+  @UseGuards(RolesGuard)
+  import(
+    @WorkspaceId() workspaceId: string,
+    @CurrentUser() user: AuthenticatedUser,
+    @Body() dto: ImportContactsDto,
+  ): Promise<ContactImportResult> {
+    return this.service.importCsv(workspaceId, user.email, dto.csv);
   }
 
   @Post()

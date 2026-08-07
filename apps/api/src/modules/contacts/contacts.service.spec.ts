@@ -92,6 +92,67 @@ describe("ContactsService.list (server-side search + stage)", () => {
   });
 });
 
+describe("ContactsService import/export CSV", () => {
+  type Row = { id: string; workspaceSlug: string; name: string; email: string | null; tags: string[]; stage: string; createdAt: Date; phone?: string | null; company?: string | null };
+  function makeIO(seed: { name: string; email?: string | null }[] = []) {
+    const rows: Row[] = seed.map((c, i) => ({
+      id: "c" + i, workspaceSlug: "w1", name: c.name, email: c.email ?? null, tags: [], stage: "Lead", createdAt: new Date(0),
+    }));
+    const created: Row[] = [];
+    const prisma = {
+      enabled: true,
+      contact: {
+        findMany: vi.fn(async (args: { select?: { email?: boolean }; take?: number; cursor?: { id: string } }) => {
+          if (args.select?.email) return rows.filter((r) => r.email).map((r) => ({ email: r.email }));
+          let list = [...rows].sort((a, b) => (a.id < b.id ? -1 : 1));
+          if (args.cursor) list = list.filter((r) => r.id > args.cursor!.id);
+          return list.slice(0, args.take ?? list.length);
+        }),
+        create: vi.fn(async ({ data }: { data: Record<string, unknown> }) => {
+          const row = { id: "n" + created.length, createdAt: new Date(0), ...data } as Row;
+          created.push(row);
+          rows.push(row);
+          return row;
+        }),
+      },
+    };
+    const service = new ContactsService(prisma as unknown as PrismaService, { record: vi.fn() } as never);
+    return { service, created };
+  }
+
+  it("creates new contacts, skips duplicate emails, and reports name errors", async () => {
+    const { service, created } = makeIO([{ name: "Existing", email: "dup@x.com" }]);
+    const csv = "name,email,stage\nAna,ana@x.com,Cliente\nBob,dup@x.com,Lead\n,no@x.com,Lead";
+    const res = await service.importCsv("w1", "actor", csv);
+    expect(res.created).toBe(1);
+    expect(res.skipped).toBe(1); // dup@x.com already exists
+    expect(res.errors).toHaveLength(1); // missing name
+    expect(created[0]).toMatchObject({ name: "Ana", email: "ana@x.com", stage: "Cliente" });
+  });
+
+  it("defaults an unknown stage to Lead and splits tags", async () => {
+    const { service, created } = makeIO();
+    await service.importCsv("w1", "actor", 'name,stage,tags\nX,Zzz,"a;b;c"');
+    expect(created[0]).toMatchObject({ stage: "Lead", tags: ["a", "b", "c"] });
+  });
+
+  it("accepts Spanish headers (nombre/correo/etapa)", async () => {
+    const { service, created } = makeIO();
+    await service.importCsv("w1", "actor", "nombre,correo,etapa\nLuisa,luisa@x.com,Cliente");
+    expect(created[0]).toMatchObject({ name: "Luisa", email: "luisa@x.com", stage: "Cliente" });
+  });
+
+  it("exports contacts as CSV with a header", async () => {
+    const { service } = makeIO([{ name: "Ana", email: "ana@x.com" }, { name: "Bob" }]);
+    const csv = await service.exportCsv("w1");
+    const lines = csv.split("\r\n");
+    expect(lines[0]).toBe("name,phone,email,company,tags,stage,createdAt");
+    expect(csv).toContain("Ana");
+    expect(csv).toContain("Bob");
+    expect(lines).toHaveLength(3); // header + 2
+  });
+});
+
 describe("ContactsService notes", () => {
   it("adds a note authored by the actor", async () => {
     const { service } = makeService();

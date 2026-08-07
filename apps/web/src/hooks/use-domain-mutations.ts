@@ -112,6 +112,46 @@ export function useDeleteContact() {
   });
 }
 
+export function useExportContacts() {
+  const svc = useServices();
+  const ws = useWorkspace();
+  return useMutation({
+    mutationFn: async () => {
+      const csv = await svc.contacts.exportCsv(ws.id);
+      // Trigger a browser download of the CSV.
+      const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `contactos-${ws.slug}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+      return csv;
+    },
+    onSuccess: () => toast.success("Contactos exportados"),
+    onError: (err) => toast.error(errText(err)),
+  });
+}
+
+export function useImportContacts() {
+  const svc = useServices();
+  const ws = useWorkspace();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (csv: string) => svc.contacts.importCsv(ws.id, csv),
+    onSuccess: (res) => {
+      void qc.invalidateQueries({ queryKey: [ws.id, "contacts"] });
+      const parts = [`${res.created} creados`];
+      if (res.skipped) parts.push(`${res.skipped} omitidos`);
+      if (res.errors.length) parts.push(`${res.errors.length} con error`);
+      toast.success(`Importación: ${parts.join(", ")}`);
+    },
+    onError: (err) => toast.error(errText(err)),
+  });
+}
+
 /** Optimistic, silent stage change for the CRM pipeline (drag between columns). */
 export function useMoveContactStage() {
   const svc = useServices();

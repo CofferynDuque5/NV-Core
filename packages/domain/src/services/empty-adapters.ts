@@ -75,6 +75,8 @@ export const emptyAdapters: Services = {
     notes: () => delay([]),
     addNote: () => notAvailable(),
     removeNote: () => notAvailable(),
+    exportCsv: () => delay(""),
+    importCsv: () => notAvailable(),
   },
   groups: {
     list: () => emptyList(),
