@@ -90,6 +90,18 @@ export class WorkspaceRegistry {
     return [...WORKSPACES, ...rows.map((r) => this.mapDb(r))];
   }
 
+  /**
+   * Workspaces the given user can actually access (their memberships resolved to
+   * workspace objects). This is what the API exposes — never the full tenant
+   * list — so one tenant can't enumerate another's workspaces.
+   */
+  async listForUser(userId: string): Promise<Workspace[]> {
+    if (!this.prisma.enabled) return [...WORKSPACES];
+    const memberships = await this.store.membershipsOf(userId);
+    const resolved = await Promise.all(memberships.map((m) => this.resolve(m.workspaceSlug)));
+    return resolved.filter((w): w is Workspace => w !== null);
+  }
+
   /** Create a DB workspace with a unique slug; the creator becomes Owner. */
   async create(
     input: CreateWorkspaceInput,

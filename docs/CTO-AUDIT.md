@@ -347,6 +347,9 @@ Leyenda: **E**xiste · **F**unciona · **C**ompleto · **P**roducción-ready.
 - **Objetivo:** cerrar política de seguridad y gating por plan.
 - **Módulos:** Telegram fail-closed, `GET /workspaces` gateado, lockout de cuenta, gating de features por plan, límites de uso facturables.
 - **DoD:** pentest interno pasado; un plan Free no puede exceder sus límites.
+- **Progreso (verificado):**
+  - ✅ **`GET /workspaces` gateado (fin de la enumeración cross-tenant)**: antes el endpoint era `@Public` y `listAll()` devolvía **todos** los workspaces de **todos los tenants** a cualquiera. Ahora requiere autenticación y `WorkspaceRegistry.listForUser(userId)` devuelve **solo** los workspaces del usuario (memberships resueltas) — consistente con el `WorkspaceGuard`, que ya exigía membership para entrar. Además `GET /workspaces/:slug` pasó de `@Public` a **gateado por `WorkspaceGuard`** (404 si no existe, 403 si no eres miembro). +2 tests (registry). **Verificado en vivo** contra Postgres real con dos tenants: `GET /workspaces` sin token → **401**; Alice ve **solo `["acme-corp"]`** (no `rival-inc`); `GET /workspaces/rival-inc` como Alice → **403**; su propio → **200**.
+  - ⏳ **Pendiente:** Telegram webhook fail-closed, lockout de cuenta tras intentos fallidos, gating de features/límites por plan.
 
 ### Sprint 5 — Profundidad de producto (2–4 semanas) · Riesgo: Medio
 - **Objetivo:** convertir cascarones en funciones.
