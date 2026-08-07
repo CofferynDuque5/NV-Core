@@ -33,6 +33,7 @@ import type {
   SocialInsights,
   SocialResult,
   SocialStatus,
+  SystemStatus,
   Template,
   TemplateImportResult,
   TeamMember,
@@ -125,6 +126,9 @@ export function createHttpAdapters(opts: HttpAdapterOptions): Services {
     },
     feedback: {
       submit: (id, input) => post<Feedback>(`/workspaces/${id}/feedback`, input),
+    },
+    system: {
+      status: () => get<SystemStatus>(`/health/status`),
     },
     whatsapp: {
       status: (id) => get<WhatsappStatus>(`${ws(id)}/whatsapp/status`),

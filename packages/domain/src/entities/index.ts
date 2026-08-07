@@ -486,6 +486,25 @@ export interface Feedback {
   createdAt: string;
 }
 
+// ── System status (health) ───────────────────────────────────────────────────
+
+export type StatusLevel = "operational" | "degraded" | "down" | "unknown";
+
+/** Health of a single platform component. */
+export interface StatusComponent {
+  key: string;
+  name: string;
+  status: StatusLevel;
+  detail?: string;
+}
+
+/** Overall platform status, aggregated from its components. */
+export interface SystemStatus {
+  overall: StatusLevel;
+  components: StatusComponent[];
+  timestamp: string;
+}
+
 // ── Changelog (per-user "unseen" state) ──────────────────────────────────────
 
 /**

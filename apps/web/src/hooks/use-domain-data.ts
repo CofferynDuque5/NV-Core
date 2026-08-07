@@ -53,6 +53,16 @@ export function useChangelog() {
   });
 }
 
+/** Live platform status (product-wide); polls periodically while the page is open. */
+export function useSystemStatus() {
+  const svc = useServices();
+  return useQuery({
+    queryKey: ["system-status"],
+    queryFn: () => svc.system.status(),
+    refetchInterval: 30_000,
+  });
+}
+
 export function useCalendarEvents(month: string) {
   const svc = useServices();
   const ws = useWorkspace();

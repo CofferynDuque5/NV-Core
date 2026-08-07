@@ -54,6 +54,19 @@ export const emptyAdapters: Services = {
   feedback: {
     submit: () => notAvailable(),
   },
+  system: {
+    // Demo mode: the API responds, but real dependency health is unknown.
+    status: () =>
+      delay({
+        overall: "degraded",
+        components: [
+          { key: "api", name: "API", status: "operational" },
+          { key: "database", name: "Base de datos", status: "unknown", detail: "Sin backend" },
+          { key: "queue", name: "Procesamiento de trabajos", status: "unknown", detail: "Sin backend" },
+        ],
+        timestamp: new Date(0).toISOString(),
+      }),
+  },
   whatsapp: {
     status: () =>
       delay({

@@ -45,6 +45,13 @@ export function CommandPalette() {
         icon: "Sparkles",
         description: "Registro de cambios del producto",
       },
+      {
+        module: "estado",
+        label: "Estado del servicio",
+        section: "SISTEMA",
+        icon: "Activity",
+        description: "Salud de la plataforma",
+      },
     ],
     [],
   );

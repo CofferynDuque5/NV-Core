@@ -1,4 +1,5 @@
 import {
+  Activity,
   BarChart3,
   Calendar,
   Contact,
@@ -21,6 +22,7 @@ import {
 } from "lucide-react";
 
 const MAP: Record<string, LucideIcon> = {
+  Activity,
   LayoutDashboard,
   Calendar,
   Megaphone,
@@ -58,5 +60,8 @@ export interface NavRenderItem {
  */
 export const EXTRA_NAV_ITEMS: Record<string, NavRenderItem[]> = {
   PRINCIPAL: [{ module: "historial", label: "Historial", icon: "History" }],
-  SISTEMA: [{ module: "ayuda", label: "Centro de ayuda", icon: "LifeBuoy" }],
+  SISTEMA: [
+    { module: "ayuda", label: "Centro de ayuda", icon: "LifeBuoy" },
+    { module: "estado", label: "Estado del servicio", icon: "Activity" },
+  ],
 };

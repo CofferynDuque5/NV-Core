@@ -1,6 +1,7 @@
 import { Controller, Get, HttpCode, Module, ServiceUnavailableException } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { ApiTags } from "@nestjs/swagger";
+import type { StatusComponent, StatusLevel, SystemStatus } from "@nv/domain";
 
 import type { AppConfig } from "../config/configuration";
 import { PrismaService } from "../prisma/prisma.service";
@@ -48,6 +49,45 @@ export class HealthController {
     };
     if (!ready) throw new ServiceUnavailableException(body);
     return body;
+  }
+
+  /**
+   * Public status page feed: real per-component health, aggregated into an
+   * overall level. Only reports what we can actually measure — no fake
+   * "all systems operational".
+   */
+  @Get("status")
+  @HttpCode(200)
+  async status(): Promise<SystemStatus> {
+    const [db, redis] = await Promise.all([this.pingDatabase(), this.queue.ping()]);
+
+    const database: StatusLevel =
+      db === "ok" ? "operational" : db === "down" ? "down" : "unknown";
+    const queue: StatusLevel = redis === "down" ? "down" : "operational";
+
+    const components: StatusComponent[] = [
+      { key: "api", name: "API", status: "operational" },
+      {
+        key: "database",
+        name: "Base de datos",
+        status: database,
+        ...(db === "not-configured" ? { detail: "No configurada" } : {}),
+      },
+      {
+        key: "queue",
+        name: "Procesamiento de trabajos",
+        status: queue,
+        ...(redis === "inline" ? { detail: "Modo inline (sin Redis)" } : {}),
+      },
+    ];
+
+    const overall: StatusLevel = components.some((c) => c.status === "down")
+      ? "down"
+      : components.some((c) => c.status === "unknown")
+        ? "degraded"
+        : "operational";
+
+    return { overall, components, timestamp: new Date().toISOString() };
   }
 
   private async pingDatabase(): Promise<"ok" | "down" | "not-configured"> {

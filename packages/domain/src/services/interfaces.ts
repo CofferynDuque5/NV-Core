@@ -21,6 +21,7 @@ import type {
   Message,
   Notification,
   OnboardingStatus,
+  SystemStatus,
   Post,
   RoleDefinition,
   Segment,
@@ -552,6 +553,11 @@ export interface FeedbackService {
   submit(workspaceId: string, input: CreateFeedbackInput): Promise<Feedback>;
 }
 
+export interface SystemService {
+  /** Live platform health (public; product-wide, not workspace-scoped). */
+  status(): Promise<SystemStatus>;
+}
+
 export interface BillingService {
   status(workspaceId: string): Promise<BillingStatus>;
   checkout(workspaceId: string, input: CheckoutInput): Promise<{ url: string }>;
@@ -564,6 +570,7 @@ export interface Services {
   onboarding: OnboardingService;
   changelog: ChangelogService;
   feedback: FeedbackService;
+  system: SystemService;
   whatsapp: WhatsappService;
   campaigns: CampaignService;
   posts: PostService;
