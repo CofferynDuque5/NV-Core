@@ -15,6 +15,7 @@ import type {
   Integration,
   MarketplaceEntry,
   ChangelogStatus,
+  Feedback,
   MediaAsset,
   MediaFolder,
   Message,
@@ -66,6 +67,12 @@ export interface CreateContactInput {
   stage?: Contact["stage"];
 }
 export type UpdateContactInput = Partial<CreateContactInput>;
+
+export interface CreateFeedbackInput {
+  type: Feedback["type"];
+  rating?: number;
+  message: string;
+}
 
 export interface CreateCampaignInput {
   name: string;
@@ -535,6 +542,11 @@ export interface ChangelogService {
   markSeen(): Promise<ChangelogStatus>;
 }
 
+export interface FeedbackService {
+  /** Submit in-app feedback for the current workspace. */
+  submit(workspaceId: string, input: CreateFeedbackInput): Promise<Feedback>;
+}
+
 export interface BillingService {
   status(workspaceId: string): Promise<BillingStatus>;
   checkout(workspaceId: string, input: CheckoutInput): Promise<{ url: string }>;
@@ -546,6 +558,7 @@ export interface Services {
   workspaces: WorkspaceService;
   onboarding: OnboardingService;
   changelog: ChangelogService;
+  feedback: FeedbackService;
   whatsapp: WhatsappService;
   campaigns: CampaignService;
   posts: PostService;

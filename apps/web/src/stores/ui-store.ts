@@ -28,6 +28,11 @@ interface UiState {
   openCompose: () => void;
   closeCompose: () => void;
 
+  /** In-app feedback dialog. */
+  feedbackOpen: boolean;
+  openFeedback: () => void;
+  setFeedbackOpen: (v: boolean) => void;
+
   /** Entity drawer (single, reused for all entities). */
   drawer: DrawerState | null;
   openDrawer: (kind: DrawerKind, id: string) => void;
@@ -49,6 +54,10 @@ export const useUiStore = create<UiState>((set) => ({
   composeOpen: false,
   openCompose: () => set({ composeOpen: true }),
   closeCompose: () => set({ composeOpen: false }),
+
+  feedbackOpen: false,
+  openFeedback: () => set({ feedbackOpen: true }),
+  setFeedbackOpen: (v) => set({ feedbackOpen: v }),
 
   drawer: null,
   openDrawer: (kind, id) => set({ drawer: { kind, id } }),

@@ -9,6 +9,7 @@ import { CommandPalette } from "./command-palette";
 import { NotificationsPanel } from "./notifications-panel";
 import { ComposeWizard } from "@/components/overlays/compose-wizard";
 import { EntityDrawer } from "@/components/overlays/entity-drawer";
+import { FeedbackDialog } from "@/components/overlays/feedback-dialog";
 import { AuthGate } from "@/components/auth/auth-gate";
 import { useServices } from "@/hooks/use-services";
 import { useWorkspaceStore } from "@/stores/workspace-store";
@@ -58,6 +59,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         <NotificationsPanel />
         <ComposeWizard />
         <EntityDrawer />
+        <FeedbackDialog />
       </div>
     </AuthGate>
   );

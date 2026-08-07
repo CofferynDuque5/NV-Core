@@ -51,6 +51,9 @@ export const emptyAdapters: Services = {
     status: () => delay({ lastSeenAt: null, unseenCount: CHANGELOG_ENTRIES.length }),
     markSeen: () => notAvailable(),
   },
+  feedback: {
+    submit: () => notAvailable(),
+  },
   whatsapp: {
     status: () =>
       delay({

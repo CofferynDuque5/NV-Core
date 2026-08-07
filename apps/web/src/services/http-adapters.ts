@@ -5,6 +5,7 @@ import type {
   Automation,
   ChangelogStatus,
   ContactNote,
+  Feedback,
   ContactImportResult,
   Design,
   MarketplaceEntry,
@@ -120,6 +121,9 @@ export function createHttpAdapters(opts: HttpAdapterOptions): Services {
     changelog: {
       status: () => get<ChangelogStatus>(`/me/changelog`),
       markSeen: () => post<ChangelogStatus>(`/me/changelog/seen`, {}),
+    },
+    feedback: {
+      submit: (id, input) => post<Feedback>(`/workspaces/${id}/feedback`, input),
     },
     whatsapp: {
       status: (id) => get<WhatsappStatus>(`${ws(id)}/whatsapp/status`),

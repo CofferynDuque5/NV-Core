@@ -1,7 +1,8 @@
 import { useNavigate } from "react-router-dom";
-import { LogIn, LogOut, Settings, User } from "lucide-react";
+import { LogIn, LogOut, MessageSquarePlus, Settings, User } from "lucide-react";
 
 import { useAuthStore } from "@/stores/auth-store";
+import { useUiStore } from "@/stores/ui-store";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -25,6 +26,7 @@ export function UserMenu() {
   const navigate = useNavigate();
   const user = useAuthStore((s) => s.user);
   const logout = useAuthStore((s) => s.logout);
+  const openFeedback = useUiStore((s) => s.openFeedback);
 
   function onLogout() {
     logout();
@@ -52,6 +54,9 @@ export function UserMenu() {
             </DropdownMenuItem>
             <DropdownMenuItem>
               <Settings /> Preferencias
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={openFeedback}>
+              <MessageSquarePlus /> Enviar comentarios
             </DropdownMenuItem>
             <DropdownMenuSeparator />
             <DropdownMenuItem onClick={onLogout}>

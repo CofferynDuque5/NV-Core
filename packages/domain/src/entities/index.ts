@@ -461,6 +461,24 @@ export interface OnboardingStatus {
   dismissed: boolean;
 }
 
+// ── Feedback (in-app) ────────────────────────────────────────────────────────
+
+/** What kind of feedback the user is sending. */
+export type FeedbackType = "idea" | "bug" | "question" | "other";
+
+export const FEEDBACK_TYPES: FeedbackType[] = ["idea", "bug", "question", "other"];
+
+/** A feedback submission from a workspace member. */
+export interface Feedback {
+  id: string;
+  type: FeedbackType;
+  /** Optional 1–5 satisfaction score. */
+  rating?: number;
+  message: string;
+  author: string;
+  createdAt: string;
+}
+
 // ── Changelog (per-user "unseen" state) ──────────────────────────────────────
 
 /**

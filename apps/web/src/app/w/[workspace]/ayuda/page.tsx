@@ -20,6 +20,7 @@ import {
 } from "@nv/domain";
 
 import { useWorkspace } from "@/hooks/use-workspace";
+import { useUiStore } from "@/stores/ui-store";
 import { countInCategory, filterArticles } from "@/lib/help";
 import { PageHeader } from "@/components/common/page-header";
 import { EmptyState } from "@/components/common/empty-state";
@@ -42,6 +43,7 @@ const CATEGORY_LABEL: Record<HelpCategoryId, string> = Object.fromEntries(
 
 export default function AyudaPage() {
   const ws = useWorkspace();
+  const openFeedback = useUiStore((s) => s.openFeedback);
   const [query, setQuery] = React.useState("");
   const [category, setCategory] = React.useState<HelpCategoryId | "">("");
   const [detail, setDetail] = React.useState<HelpArticle | null>(null);
@@ -145,11 +147,11 @@ export default function AyudaPage() {
           </span>
           <div>
             <div className="text-sm font-medium text-ink">¿No encuentras lo que buscas?</div>
-            <div className="text-xs text-ink-muted">Escríbenos y te ayudamos con tu caso.</div>
+            <div className="text-xs text-ink-muted">Envíanos tu pregunta y te ayudamos.</div>
           </div>
         </div>
-        <Button variant="secondary" size="sm" asChild>
-          <a href="mailto:soporte@nvcore.app">Contactar soporte</a>
+        <Button variant="secondary" size="sm" onClick={openFeedback}>
+          Enviar comentarios
         </Button>
       </div>
 

@@ -17,6 +17,7 @@ import type {
   CreateCampaignInput,
   CreateContactInput,
   CreateConversationInput,
+  CreateFeedbackInput,
   UpdateConversationInput,
   CreateGroupInput,
   CreatePostInput,
@@ -92,6 +93,16 @@ export function useMarkChangelogSeen() {
       qc.setQueryData(["changelog"], status);
     },
     // Silent: this fires automatically when the user opens Novedades.
+  });
+}
+
+export function useSubmitFeedback() {
+  const svc = useServices();
+  const ws = useWorkspace();
+  return useMutation({
+    mutationFn: (input: CreateFeedbackInput) => svc.feedback.submit(ws.id, input),
+    onSuccess: () => toast.success("¡Gracias por tu comentario!"),
+    onError: (err) => toast.error(errText(err)),
   });
 }
 

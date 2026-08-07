@@ -588,3 +588,20 @@ model ChangelogState {
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
 }
+
+/**
+ * In-app feedback submitted by workspace members (idea / bug / question…).
+ * Captured for the product team; not surfaced back to the workspace.
+ */
+model Feedback {
+  id            String   @id @default(cuid())
+  workspaceSlug String
+  userId        String
+  author        String
+  type          String
+  rating        Int?
+  message       String
+  createdAt     DateTime @default(now())
+
+  @@index([workspaceSlug, createdAt])
+}
