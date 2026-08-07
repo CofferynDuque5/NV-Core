@@ -347,9 +347,12 @@ export class TelegramWebhookController {
     @Body() body: unknown,
     @Headers("x-telegram-bot-api-secret-token") secret?: string,
   ): Promise<{ received: true }> {
+    // Fail-closed: reject unless a secret is configured AND matches. An
+    // unconfigured webhook must never accept spoofed inbound updates. Same
+    // generic 403 for both cases so it isn't an oracle for "is it configured".
     const expected = this.config.get("integrations", { infer: true }).telegram.webhookSecret;
-    if (expected && secret !== expected) {
-      throw new ForbiddenException("Secret de webhook inválido.");
+    if (!expected || secret !== expected) {
+      throw new ForbiddenException("Webhook de Telegram no configurado o secret inválido.");
     }
     const msg = parseTelegramInbound(body);
     if (msg) {
