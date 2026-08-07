@@ -27,6 +27,7 @@ import type { Response } from "express";
 
 import type { AppConfig } from "../../config/configuration";
 import { ListResultDto } from "../../common/dto/list-result.dto";
+import { LIST_CAP, THREAD_CAP } from "../../common/query-limits";
 import { WorkspaceId } from "../../common/tenant/workspace.decorator";
 import { WorkspaceGuard } from "../../common/tenant/workspace.guard";
 import { WorkspaceRegistry } from "../../common/workspace-registry.service";
@@ -148,7 +149,7 @@ export class InboxService {
     if (!this.prisma.enabled) return ListResultDto.empty<Conversation>();
     const where = { workspaceSlug: workspaceId };
     const [rows, total] = await Promise.all([
-      this.prisma.conversation.findMany({ where, orderBy: { createdAt: "desc" } }),
+      this.prisma.conversation.findMany({ where, orderBy: { createdAt: "desc" }, take: LIST_CAP }),
       this.prisma.conversation.count({ where }),
     ]);
     return new ListResultDto(rows.map(mapConversation), total);
@@ -156,11 +157,14 @@ export class InboxService {
 
   async messages(workspaceId: string, conversationId: string): Promise<Message[]> {
     if (!this.prisma.enabled) return [];
+    // Return the most recent THREAD_CAP messages (a busy thread can be huge),
+    // then restore chronological order for display.
     const rows = await this.prisma.message.findMany({
       where: { conversationId, conversation: { workspaceSlug: workspaceId } },
-      orderBy: { createdAt: "asc" },
+      orderBy: { createdAt: "desc" },
+      take: THREAD_CAP,
     });
-    return rows.map(mapMessage);
+    return rows.reverse().map(mapMessage);
   }
 
   async createConversation(

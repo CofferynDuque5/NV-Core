@@ -18,6 +18,7 @@ import { WorkspaceId } from "../../common/tenant/workspace.decorator";
 import { WorkspaceGuard } from "../../common/tenant/workspace.guard";
 import { PrismaService } from "../../prisma/prisma.service";
 import { mapNotification } from "../../prisma/mappers";
+import { LIST_CAP } from "../../common/query-limits";
 
 @Injectable()
 export class NotificationsService {
@@ -33,6 +34,7 @@ export class NotificationsService {
     const rows = await this.prisma.notification.findMany({
       where: { workspaceSlug: workspaceId },
       orderBy: { createdAt: "desc" },
+      take: LIST_CAP,
     });
     return rows.map(mapNotification);
   }

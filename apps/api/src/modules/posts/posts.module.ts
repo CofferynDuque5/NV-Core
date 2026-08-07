@@ -42,6 +42,7 @@ import { Roles } from "../../auth/decorators/roles.decorator";
 import { CurrentUser } from "../../auth/decorators/current-user.decorator";
 import type { AuthenticatedUser } from "../../auth/auth.types";
 import { PostScheduler } from "../scheduler/post-scheduler.service";
+import { LIST_CAP } from "../../common/query-limits";
 
 export class CreatePostDto {
   @IsIn(CHANNEL_IDS) channel!: ChannelId;
@@ -127,7 +128,7 @@ export class PostsService {
     if (!this.prisma.enabled) return ListResultDto.empty<Post>();
     const where = { workspaceSlug: workspaceId };
     const [rows, total] = await Promise.all([
-      this.prisma.post.findMany({ where, orderBy: { scheduledAt: "asc" }, ...WITH_CAMPAIGN }),
+      this.prisma.post.findMany({ where, orderBy: { scheduledAt: "asc" }, take: LIST_CAP, ...WITH_CAMPAIGN }),
       this.prisma.post.count({ where }),
     ]);
     return new ListResultDto(rows.map(mapPost), total);

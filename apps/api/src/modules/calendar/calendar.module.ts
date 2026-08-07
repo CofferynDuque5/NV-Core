@@ -6,6 +6,7 @@ import { WorkspaceId } from "../../common/tenant/workspace.decorator";
 import { WorkspaceGuard } from "../../common/tenant/workspace.guard";
 import { PrismaService } from "../../prisma/prisma.service";
 import { mapCalendarEvent } from "../../prisma/mappers";
+import { LIST_CAP } from "../../common/query-limits";
 
 @Injectable()
 export class CalendarService {
@@ -23,7 +24,7 @@ export class CalendarService {
       const lt = new Date(Date.UTC(y!, m!, 1));
       where.date = { gte, lt };
     }
-    const rows = await this.prisma.calendarEvent.findMany({ where, orderBy: { date: "asc" } });
+    const rows = await this.prisma.calendarEvent.findMany({ where, orderBy: { date: "asc" }, take: LIST_CAP });
     return rows.map(mapCalendarEvent);
   }
 }

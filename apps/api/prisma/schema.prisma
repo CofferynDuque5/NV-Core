@@ -120,6 +120,7 @@ model Contact {
   createdAt     DateTime  @default(now())
 
   @@index([workspaceSlug])
+  @@index([workspaceSlug, createdAt])
 }
 
 model Group {
@@ -143,6 +144,7 @@ model Group {
 
   @@unique([workspaceSlug, remoteJid])
   @@index([workspaceSlug])
+  @@index([workspaceSlug, createdAt])
 }
 
 /**
@@ -170,6 +172,7 @@ model Segment {
   createdAt     DateTime @default(now())
 
   @@index([workspaceSlug])
+  @@index([workspaceSlug, createdAt])
 }
 
 model Campaign {
@@ -205,6 +208,7 @@ model Campaign {
   sendLogs SendLog[]
 
   @@index([workspaceSlug])
+  @@index([workspaceSlug, createdAt])
 }
 
 /**
@@ -246,6 +250,7 @@ model SendLog {
 
   @@index([workspaceSlug])
   @@index([campaignId])
+  @@index([workspaceSlug, createdAt])
 }
 
 model Post {
@@ -262,6 +267,7 @@ model Post {
   createdAt     DateTime   @default(now())
 
   @@index([workspaceSlug])
+  @@index([workspaceSlug, scheduledAt])
 }
 
 model Connection {
@@ -301,6 +307,7 @@ model MediaAsset {
   createdAt     DateTime     @default(now())
 
   @@index([workspaceSlug])
+  @@index([workspaceSlug, createdAt])
 }
 
 model Template {
@@ -313,6 +320,7 @@ model Template {
   createdAt     DateTime @default(now())
 
   @@index([workspaceSlug])
+  @@index([workspaceSlug, createdAt])
 }
 
 model Automation {
@@ -341,6 +349,7 @@ model CalendarEvent {
   campaignId    String?
 
   @@index([workspaceSlug])
+  @@index([workspaceSlug, date])
 }
 
 model Conversation {
@@ -358,6 +367,7 @@ model Conversation {
   messages      Message[]
 
   @@index([workspaceSlug])
+  @@index([workspaceSlug, createdAt])
 }
 
 model Message {
@@ -369,6 +379,7 @@ model Message {
   createdAt      DateTime     @default(now())
 
   @@index([conversationId])
+  @@index([conversationId, createdAt])
 }
 
 model Notification {
@@ -381,6 +392,7 @@ model Notification {
   createdAt     DateTime @default(now())
 
   @@index([workspaceSlug])
+  @@index([workspaceSlug, createdAt])
 }
 
 model AuditLog {
@@ -392,6 +404,7 @@ model AuditLog {
   createdAt     DateTime @default(now())
 
   @@index([workspaceSlug])
+  @@index([workspaceSlug, createdAt])
 }
 
 /**
@@ -517,6 +530,7 @@ model Design {
   createdAt     DateTime @default(now())
 
   @@index([workspaceSlug])
+  @@index([workspaceSlug, updatedAt])
 }
 
 /**

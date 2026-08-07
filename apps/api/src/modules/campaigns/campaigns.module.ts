@@ -46,6 +46,7 @@ import { CurrentUser } from "../../auth/decorators/current-user.decorator";
 import type { AuthenticatedUser } from "../../auth/auth.types";
 import { ProvidersModule } from "../../providers/providers.module";
 import { CampaignRunner } from "./campaign-runner.service";
+import { LIST_CAP } from "../../common/query-limits";
 
 export class CreateCampaignDto {
   @IsString()
@@ -156,7 +157,7 @@ export class CampaignsService {
     if (!this.prisma.enabled) return ListResultDto.empty<Campaign>();
     const where = { workspaceSlug: workspaceId };
     const [rows, total] = await Promise.all([
-      this.prisma.campaign.findMany({ where, orderBy: { createdAt: "desc" }, ...WITH_COUNT }),
+      this.prisma.campaign.findMany({ where, orderBy: { createdAt: "desc" }, take: LIST_CAP, ...WITH_COUNT }),
       this.prisma.campaign.count({ where }),
     ]);
     return new ListResultDto(rows.map(mapCampaign), total);

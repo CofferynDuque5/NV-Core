@@ -28,6 +28,7 @@ import { RolesGuard } from "../../auth/guards/roles.guard";
 import { Roles } from "../../auth/decorators/roles.decorator";
 import { CurrentUser } from "../../auth/decorators/current-user.decorator";
 import type { AuthenticatedUser } from "../../auth/auth.types";
+import { LIST_CAP } from "../../common/query-limits";
 
 export class CreateGroupDto {
   @IsString()
@@ -81,7 +82,7 @@ export class GroupsService {
     if (!this.prisma.enabled) return ListResultDto.empty<Group>();
     const where = { workspaceSlug: workspaceId };
     const [rows, total] = await Promise.all([
-      this.prisma.group.findMany({ where, orderBy: { createdAt: "desc" } }),
+      this.prisma.group.findMany({ where, orderBy: { createdAt: "desc" }, take: LIST_CAP }),
       this.prisma.group.count({ where }),
     ]);
     return new ListResultDto(rows.map(mapGroup), total);

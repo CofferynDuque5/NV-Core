@@ -27,6 +27,7 @@ import { RolesGuard } from "../../auth/guards/roles.guard";
 import { Roles } from "../../auth/decorators/roles.decorator";
 import { CurrentUser } from "../../auth/decorators/current-user.decorator";
 import type { AuthenticatedUser } from "../../auth/auth.types";
+import { LIST_CAP } from "../../common/query-limits";
 
 export class CreateTemplateDto {
   @IsString() @MinLength(1) name!: string;
@@ -60,7 +61,7 @@ export class TemplatesService {
     if (!this.prisma.enabled) return ListResultDto.empty<Template>();
     const where = { workspaceSlug: workspaceId };
     const [rows, total] = await Promise.all([
-      this.prisma.template.findMany({ where, orderBy: { createdAt: "desc" } }),
+      this.prisma.template.findMany({ where, orderBy: { createdAt: "desc" }, take: LIST_CAP }),
       this.prisma.template.count({ where }),
     ]);
     return new ListResultDto(rows.map(mapTemplate), total);

@@ -272,7 +272,7 @@ Leyenda: **E**xiste · **F**unciona · **C**ompleto · **P**roducción-ready.
 | R1 | **WhatsApp vía Baileys (no oficial): baneo de número / ruptura por cambios de WhatsApp** | Alta | Crítico | 🔴 **Muy alto** | Migrar a WhatsApp Cloud API oficial como camino principal; Baileys solo opcional/aviso legal. |
 | R2 | **Meta Graph nunca probado contra API real**: fallos de token/rate/media en producción | Alta | Alto | 🔴 Alto | Cuenta de pruebas real + suite de integración antes de vender el canal. |
 | R3 | **Sin onboarding/ayuda**: activación y retención se desploman | Alta | Alto | 🔴 Alto | Onboarding guiado + KB antes del lanzamiento. |
-| R4 | **39 findMany sin límite**: degradación/OOM al crecer un tenant | Media | Alto | 🟠 Alto | Paginar; índices compuestos; virtualización. |
+| R4 | **findMany sin límite**: degradación/OOM al crecer un tenant | Media | Alto | 🟢 Mitigado (Sprint 2·A) | Listas acotadas con `take` + 14 índices compuestos. Falta virtualización/paginación UI. |
 | R5 | **Enumeración pública de workspaces** (`GET /workspaces`) | Alta | Medio | 🟠 Medio | Gatear tras auth o limitar al login. |
 | R6 | **Telegram webhook fail-open** sin secreto | Media | Medio | 🟠 Medio | Fail-closed en producción. |
 | R7 | **Cobertura de tests desigual**: caminos de valor con mocks o sin test | Media | Alto | 🟠 Alto | Tests de integración reales + gate de cobertura. |
@@ -313,6 +313,11 @@ Leyenda: **E**xiste · **F**unciona · **C**ompleto · **P**roducción-ready.
 - **Objetivo:** que el sistema no se degrade con tenants grandes.
 - **Módulos:** todos los `findMany` (paginación), índices compuestos, virtualización de listas, arreglar cap de 100 en Contactos.
 - **DoD:** ninguna consulta de request devuelve tablas completas; pruebas de carga con 100k filas por tenant dentro de SLA.
+
+- **Progreso (tranche A, verificado):**
+  - ✅ **10 endpoints de lista acotados** con `take` (LIST_CAP=500) + `inbox.messages` con THREAD_CAP (más recientes, orden cronológico restaurado). Ningún endpoint de request devuelve ya la tabla completa del tenant.
+  - ✅ **14 índices compuestos** `(workspaceSlug, createdAt/scheduledAt/date/updatedAt)` y `(conversationId, createdAt)` — migración aplicada y **verificada en vivo** (índices presentes, sin drift). +2 tests (cap+orden de mensajes).
+  - ⏳ **Tranche B (pendiente):** cap de 100 en Contactos del frontend → búsqueda/paginación server-side; virtualización de listas largas; Analytics con agregación SQL; prueba de carga real con 100k filas.
 
 ### Sprint 3 — Capa de adopción/negocio (2–3 semanas) · Riesgo: Medio · **Bloqueante comercial**
 - **Objetivo:** que un cliente pueda empezar y migrar solo.

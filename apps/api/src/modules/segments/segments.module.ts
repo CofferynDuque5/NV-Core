@@ -27,6 +27,7 @@ import { RolesGuard } from "../../auth/guards/roles.guard";
 import { Roles } from "../../auth/decorators/roles.decorator";
 import { CurrentUser } from "../../auth/decorators/current-user.decorator";
 import type { AuthenticatedUser } from "../../auth/auth.types";
+import { LIST_CAP } from "../../common/query-limits";
 
 export class CreateSegmentDto {
   @IsString()
@@ -66,7 +67,7 @@ export class SegmentsService {
     if (!this.prisma.enabled) return ListResultDto.empty<Segment>();
     const where = { workspaceSlug: workspaceId };
     const [rows, total] = await Promise.all([
-      this.prisma.segment.findMany({ where, orderBy: { createdAt: "desc" } }),
+      this.prisma.segment.findMany({ where, orderBy: { createdAt: "desc" }, take: LIST_CAP }),
       this.prisma.segment.count({ where }),
     ]);
     return new ListResultDto(rows.map(mapSegment), total);

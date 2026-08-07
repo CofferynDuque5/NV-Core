@@ -37,6 +37,7 @@ import { Roles } from "../../auth/decorators/roles.decorator";
 import { CurrentUser } from "../../auth/decorators/current-user.decorator";
 import type { AuthenticatedUser } from "../../auth/auth.types";
 import { buildUploadSignature, parseCloudinaryUrl } from "./cloudinary";
+import { LIST_CAP } from "../../common/query-limits";
 
 export class CreateFolderDto {
   @IsString() @MinLength(1) label!: string;
@@ -122,7 +123,7 @@ export class MediaService {
       ...(query.q ? { title: { contains: query.q, mode: "insensitive" as const } } : {}),
     };
     const [rows, total] = await Promise.all([
-      this.prisma.mediaAsset.findMany({ where, orderBy: { createdAt: "desc" } }),
+      this.prisma.mediaAsset.findMany({ where, orderBy: { createdAt: "desc" }, take: LIST_CAP }),
       this.prisma.mediaAsset.count({ where }),
     ]);
     return new ListResultDto(rows.map(mapMediaAsset), total);
