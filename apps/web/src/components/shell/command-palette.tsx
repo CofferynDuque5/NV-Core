@@ -20,8 +20,8 @@ export function CommandPalette() {
   useKeyboardShortcut("k", () => setOpen(true), { meta: true });
 
   const items = React.useMemo(
-    () =>
-      NAV_SECTIONS.flatMap((s) =>
+    () => [
+      ...NAV_SECTIONS.flatMap((s) =>
         s.items.map((it) => ({
           module: it.module,
           label: it.label,
@@ -30,6 +30,15 @@ export function CommandPalette() {
           description: MODULE_META[it.module].description,
         })),
       ),
+      // Web-only destinations without a domain module (see EXTRA_NAV_ITEMS).
+      {
+        module: "ayuda",
+        label: "Centro de ayuda",
+        section: "SISTEMA",
+        icon: "LifeBuoy",
+        description: "Guías y respuestas",
+      },
+    ],
     [],
   );
 

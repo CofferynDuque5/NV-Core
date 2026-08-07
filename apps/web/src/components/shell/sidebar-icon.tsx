@@ -9,6 +9,7 @@ import {
   Inbox,
   Layers,
   LayoutDashboard,
+  LifeBuoy,
   Megaphone,
   Plug,
   Settings,
@@ -37,6 +38,7 @@ const MAP: Record<string, LucideIcon> = {
   Store,
   Plug,
   Settings,
+  LifeBuoy,
 };
 
 export function getNavIcon(name: string): LucideIcon {
@@ -56,4 +58,5 @@ export interface NavRenderItem {
  */
 export const EXTRA_NAV_ITEMS: Record<string, NavRenderItem[]> = {
   PRINCIPAL: [{ module: "historial", label: "Historial", icon: "History" }],
+  SISTEMA: [{ module: "ayuda", label: "Centro de ayuda", icon: "LifeBuoy" }],
 };

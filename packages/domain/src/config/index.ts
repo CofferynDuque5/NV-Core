@@ -3,3 +3,4 @@ export * from "./workspaces";
 export * from "./navigation";
 export * from "./rbac";
 export * from "./marketplace";
+export * from "./help";
