@@ -26,6 +26,7 @@ import type {
   Segment,
   SendLogEntry,
   Template,
+  TemplateImportResult,
   TeamMember,
   AuditLogEntry,
   Workspace,
@@ -353,6 +354,10 @@ export interface TemplateService {
   list(workspaceId: string): Promise<ListResult<Template>>;
   create(workspaceId: string, input: CreateTemplateInput): Promise<Template>;
   remove(workspaceId: string, id: string): Promise<void>;
+  /** Export all templates as CSV (name, category, body). */
+  exportCsv(workspaceId: string): Promise<string>;
+  /** Import templates from CSV; dedupes by name. */
+  importCsv(workspaceId: string, csv: string): Promise<TemplateImportResult>;
 }
 
 export interface AutomationService {

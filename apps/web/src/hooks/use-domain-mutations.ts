@@ -188,6 +188,45 @@ export function useImportContacts() {
   });
 }
 
+export function useExportTemplates() {
+  const svc = useServices();
+  const ws = useWorkspace();
+  return useMutation({
+    mutationFn: async () => {
+      const csv = await svc.templates.exportCsv(ws.id);
+      const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `plantillas-${ws.slug}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+      return csv;
+    },
+    onSuccess: () => toast.success("Plantillas exportadas"),
+    onError: (err) => toast.error(errText(err)),
+  });
+}
+
+export function useImportTemplates() {
+  const svc = useServices();
+  const ws = useWorkspace();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (csv: string) => svc.templates.importCsv(ws.id, csv),
+    onSuccess: (res) => {
+      void qc.invalidateQueries({ queryKey: [ws.id, "templates"] });
+      const parts = [`${res.created} creadas`];
+      if (res.skipped) parts.push(`${res.skipped} omitidas`);
+      if (res.errors.length) parts.push(`${res.errors.length} con error`);
+      toast.success(`Importación: ${parts.join(", ")}`);
+    },
+    onError: (err) => toast.error(errText(err)),
+  });
+}
+
 /** Optimistic, silent stage change for the CRM pipeline (drag between columns). */
 export function useMoveContactStage() {
   const svc = useServices();

@@ -34,6 +34,7 @@ import type {
   SocialResult,
   SocialStatus,
   Template,
+  TemplateImportResult,
   TeamMember,
   AuditLogEntry,
   Workspace,
@@ -225,6 +226,8 @@ export function createHttpAdapters(opts: HttpAdapterOptions): Services {
       list: (id) => get<ListResult<Template>>(`${ws(id)}/templates`),
       create: (id, input) => post<Template>(`${ws(id)}/templates`, input),
       remove: (id, tid) => del<void>(`${ws(id)}/templates/${tid}`),
+      exportCsv: (id) => get<{ csv: string }>(`${ws(id)}/templates/export`).then((r) => r.csv),
+      importCsv: (id, csv) => post<TemplateImportResult>(`${ws(id)}/templates/import`, { csv }),
     },
     automations: {
       list: (id) => get<ListResult<Automation>>(`${ws(id)}/automations`),

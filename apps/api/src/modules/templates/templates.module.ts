@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Body,
   Controller,
   Delete,
@@ -14,9 +15,10 @@ import {
   UseGuards,
 } from "@nestjs/common";
 import { ApiBearerAuth, ApiPropertyOptional, ApiTags } from "@nestjs/swagger";
-import type { Template } from "@nv/domain";
-import { IsOptional, IsString, MinLength } from "class-validator";
+import type { Template, TemplateImportResult } from "@nv/domain";
+import { IsOptional, IsString, MaxLength, MinLength } from "class-validator";
 
+import { parseCsv, toCsv } from "../../common/csv";
 import { ListResultDto } from "../../common/dto/list-result.dto";
 import { WorkspaceId } from "../../common/tenant/workspace.decorator";
 import { WorkspaceGuard } from "../../common/tenant/workspace.guard";
@@ -37,6 +39,10 @@ export class CreateTemplateDto {
   @IsOptional()
   @IsString()
   category?: string;
+}
+
+export class ImportTemplatesDto {
+  @IsString() @MaxLength(5_000_000) csv!: string;
 }
 
 export class UpdateTemplateDto {
@@ -102,6 +108,90 @@ export class TemplatesService {
     if (count === 0) throw new NotFoundException("Plantilla no encontrada.");
     await this.audit.record(workspaceId, actor, "template.delete", id);
   }
+
+  private static readonly EXPORT_COLUMNS = ["name", "category", "body"];
+
+  async exportCsv(workspaceId: string): Promise<string> {
+    const cols = TemplatesService.EXPORT_COLUMNS;
+    if (!this.prisma.enabled) return toCsv([], cols);
+    const rows: Record<string, unknown>[] = [];
+    let cursor: string | undefined;
+    for (;;) {
+      const batch = await this.prisma.template.findMany({
+        where: { workspaceSlug: workspaceId },
+        orderBy: { id: "asc" },
+        take: 1000,
+        ...(cursor ? { skip: 1, cursor: { id: cursor } } : {}),
+      });
+      if (batch.length === 0) break;
+      for (const t of batch) {
+        rows.push({ name: t.name, category: t.category, body: t.body });
+      }
+      cursor = batch[batch.length - 1]!.id;
+      if (batch.length < 1000) break;
+    }
+    return toCsv(rows, cols);
+  }
+
+  async importCsv(workspaceId: string, actor: string, csv: string): Promise<TemplateImportResult> {
+    const db = this.db();
+    const records = parseCsv(csv);
+    const MAX = 2000;
+    if (records.length > MAX) {
+      throw new BadRequestException(`Máximo ${MAX} filas por importación (recibidas ${records.length}).`);
+    }
+
+    // Preload existing template names once for dedupe (case-insensitive).
+    const existingRows = await db.template.findMany({
+      where: { workspaceSlug: workspaceId },
+      select: { name: true },
+    });
+    const seen = new Set(existingRows.map((r) => r.name.toLowerCase()));
+
+    const pick = (r: Record<string, string>, ...keys: string[]) => {
+      for (const k of keys) {
+        const v = r[k];
+        if (v && v.trim()) return v.trim();
+      }
+      return "";
+    };
+
+    let created = 0;
+    let skipped = 0;
+    const errors: string[] = [];
+
+    for (let i = 0; i < records.length; i++) {
+      const r = records[i]!;
+      const line = i + 2; // +1 header, +1 to 1-index
+      const name = pick(r, "name", "nombre");
+      if (!name) {
+        errors.push(`Fila ${line}: falta el nombre.`);
+        continue;
+      }
+      const body = pick(r, "body", "cuerpo", "contenido", "mensaje");
+      if (!body) {
+        errors.push(`Fila ${line}: falta el cuerpo.`);
+        continue;
+      }
+      const nameKey = name.toLowerCase();
+      if (seen.has(nameKey)) {
+        skipped++;
+        continue;
+      }
+      const category = pick(r, "category", "categoria", "categoría") || "General";
+      try {
+        await db.template.create({
+          data: { workspaceSlug: workspaceId, name, body, category },
+        });
+        created++;
+        seen.add(nameKey);
+      } catch (err) {
+        errors.push(`Fila ${line}: ${(err as Error).message}`);
+      }
+    }
+    await this.audit.record(workspaceId, actor, "templates.import", `created=${created} skipped=${skipped}`);
+    return { created, skipped, errors: errors.slice(0, 50) };
+  }
 }
 
 @ApiTags("templates")
@@ -114,6 +204,22 @@ export class TemplatesController {
   @Get()
   list(@WorkspaceId() workspaceId: string) {
     return this.service.list(workspaceId);
+  }
+
+  @Get("export")
+  async export(@WorkspaceId() workspaceId: string): Promise<{ csv: string }> {
+    return { csv: await this.service.exportCsv(workspaceId) };
+  }
+
+  @Post("import")
+  @Roles("Owner", "Admin", "Editor")
+  @UseGuards(RolesGuard)
+  importCsv(
+    @WorkspaceId() workspaceId: string,
+    @CurrentUser() user: AuthenticatedUser,
+    @Body() dto: ImportTemplatesDto,
+  ) {
+    return this.service.importCsv(workspaceId, user.email, dto.csv);
   }
 
   @Post()

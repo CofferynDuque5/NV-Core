@@ -228,6 +228,13 @@ export interface Template {
   uses: number;
 }
 
+/** Summary of a CSV template import: created, skipped (duplicate name), errors. */
+export interface TemplateImportResult {
+  created: number;
+  skipped: number;
+  errors: string[];
+}
+
 export interface AutomationNode {
   id: string;
   type: AutomationNodeType;

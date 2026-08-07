@@ -1,14 +1,24 @@
 
 import * as React from "react";
-import { FileText, Plus } from "lucide-react";
+import { Download, FileText, Loader2, Plus, Upload } from "lucide-react";
 
 import { useTemplates } from "@/hooks/use-domain-data";
+import { useExportTemplates, useImportTemplates } from "@/hooks/use-domain-mutations";
 import { PageHeader } from "@/components/common/page-header";
 import { QueryBoundary } from "@/components/common/query-boundary";
 import { CardGridSkeleton } from "@/components/common/skeletons";
 import { Panel } from "@/components/common/panel";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/textarea";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { TemplateCreateDialog } from "@/components/entities/template-create-dialog";
 
 /** Highlight {{variables}} inside a template body preview. */
@@ -26,12 +36,36 @@ function renderBodyWithVars(body: string): React.ReactNode {
 
 export function PlantillasContent({ showHeader = true }: { showHeader?: boolean }) {
   const templates = useTemplates();
+  const exportTemplates = useExportTemplates();
+  const importTemplates = useImportTemplates();
   const [open, setOpen] = React.useState(false);
+  const [importOpen, setImportOpen] = React.useState(false);
+  const [importCsvText, setImportCsvText] = React.useState("");
+
+  const hasItems = (templates.data?.items.length ?? 0) > 0;
 
   const actions = (
-    <Button size="sm" onClick={() => setOpen(true)}>
-      <Plus className="size-4" /> Nueva plantilla
-    </Button>
+    <>
+      <Button
+        variant="secondary"
+        size="sm"
+        onClick={() => exportTemplates.mutate()}
+        disabled={!hasItems || exportTemplates.isPending}
+      >
+        {exportTemplates.isPending ? (
+          <Loader2 className="size-4 animate-spin" />
+        ) : (
+          <Download className="size-4" />
+        )}{" "}
+        Exportar
+      </Button>
+      <Button variant="secondary" size="sm" onClick={() => setImportOpen(true)}>
+        <Upload className="size-4" /> Importar
+      </Button>
+      <Button size="sm" onClick={() => setOpen(true)}>
+        <Plus className="size-4" /> Nueva plantilla
+      </Button>
+    </>
   );
 
   return (
@@ -79,6 +113,60 @@ export function PlantillasContent({ showHeader = true }: { showHeader?: boolean 
           </div>
         )}
       </QueryBoundary>
+
+      {/* Import dialog */}
+      <Dialog open={importOpen} onOpenChange={setImportOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Importar plantillas (CSV)</DialogTitle>
+            <DialogDescription>
+              Columnas: <code>name</code>, <code>category</code>, <code>body</code> (se aceptan
+              cabeceras en español). Se omiten las plantillas cuyo nombre ya existe.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            <input
+              type="file"
+              accept=".csv,text/csv"
+              className="block w-full text-sm text-ink-muted file:mr-3 file:rounded-lg file:border-0 file:bg-panel-high file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-ink hover:file:bg-panel-raised"
+              onChange={async (e) => {
+                const file = e.target.files?.[0];
+                if (file) setImportCsvText(await file.text());
+              }}
+            />
+            <Textarea
+              placeholder="…o pega aquí el contenido CSV"
+              rows={6}
+              value={importCsvText}
+              onChange={(e) => setImportCsvText(e.target.value)}
+            />
+          </div>
+          <DialogFooter>
+            <Button variant="secondary" size="sm" onClick={() => setImportOpen(false)}>
+              Cancelar
+            </Button>
+            <Button
+              size="sm"
+              disabled={!importCsvText.trim() || importTemplates.isPending}
+              onClick={() =>
+                importTemplates.mutate(importCsvText, {
+                  onSuccess: () => {
+                    setImportOpen(false);
+                    setImportCsvText("");
+                  },
+                })
+              }
+            >
+              {importTemplates.isPending ? (
+                <Loader2 className="size-4 animate-spin" />
+              ) : (
+                <Upload className="size-4" />
+              )}
+              Importar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <TemplateCreateDialog open={open} onOpenChange={setOpen} />
     </div>

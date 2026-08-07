@@ -140,6 +140,8 @@ export const emptyAdapters: Services = {
     list: () => emptyList(),
     create: () => notAvailable(),
     remove: () => notAvailable(),
+    exportCsv: () => delay(""),
+    importCsv: () => notAvailable(),
   },
   automations: {
     list: () => emptyList(),
