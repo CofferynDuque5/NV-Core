@@ -320,7 +320,10 @@ Leyenda: **E**xiste · **F**unciona · **C**ompleto · **P**roducción-ready.
   - 🟡 **Tranche B (en curso):**
     - ✅ **Cap de 100 en Contactos corregido**: búsqueda + filtro de etapa ahora **server-side** (autoritativo sobre toda la tabla del tenant), con paginación real en la tabla y búsqueda con debounce. Verificado en vivo: un contacto **fuera de la primera página de 100** ahora aparece al buscar (antes se perdía). +8 tests backend (where OR/stage/paginación).
     - ✅ **Analytics con agregación SQL**: KPIs vía `count()`, share de canal vía `groupBy`, y **series diarias + heatmap vía `$queryRaw`** (`date_trunc`/`EXTRACT` + `GROUP BY`) — ya no trae filas crudas (antes traía todos los `Message` de la ventana para contarlos en JS). Top-campañas ordenado/limitado en la DB. La verificación en vivo detectó y corrigió un off-by-one de la serie (excluía "hoy"). Verificado contra Postgres real: kpis/plataformas/serie/heatmap correctos.
-    - ⏳ **Pendiente:** virtualización de listas largas; prueba de carga real con 100k filas.
+    - ✅ **Prueba de carga a 100k filas/tenant** (`docs/LOAD-TEST.md`): sembrado 100k contactos / 105k mensajes / 20k posts; `EXPLAIN` confirma **index scan** en contactos/mensajes/posts (0.1–0.5 ms) y latencia HTTP end-to-end **13 ms** (contactos), **9 ms** (hilo de 5k → cap 500), **64/104 ms** (Analytics 30/90d) — todo <300 ms. Dos seguimientos honestos para escala de *millones*: índice GIN `pg_trgm` para la búsqueda por subcadena (hoy ~247 ms) y desnormalizar `workspaceSlug` en `Message` para el agregado de Analytics.
+    - ⏳ **Pendiente:** virtualización de listas largas (pulido de render en cliente).
+
+  **Sprint 2: DoD de escala cumplido.** Solo queda la virtualización (UX, no correctitud).
 
 ### Sprint 3 — Capa de adopción/negocio (2–3 semanas) · Riesgo: Medio · **Bloqueante comercial**
 - **Objetivo:** que un cliente pueda empezar y migrar solo.
