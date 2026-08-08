@@ -214,6 +214,40 @@ model Funnel {
   @@index([workspaceSlug, createdAt])
 }
 
+// A referral partner in the affiliate program.
+model Affiliate {
+  id            String   @id @default(cuid())
+  workspaceSlug String
+  name          String
+  email         String
+  code          String   @unique
+  commissionPct Int      @default(20)
+  destinationUrl String?
+  status        String   @default("active")
+  clicks        Int      @default(0)
+  conversions   Int      @default(0)
+  earnings      Float    @default(0)
+  createdAt     DateTime @default(now())
+
+  events        AffiliateEvent[]
+
+  @@index([workspaceSlug])
+  @@index([workspaceSlug, createdAt])
+}
+
+// A tracked referral event: a link click or a recorded conversion.
+model AffiliateEvent {
+  id          String    @id @default(cuid())
+  affiliate   Affiliate @relation(fields: [affiliateId], references: [id], onDelete: Cascade)
+  affiliateId String
+  type        String
+  amount      Float?
+  commission  Float?
+  createdAt   DateTime  @default(now())
+
+  @@index([affiliateId, createdAt])
+}
+
 // A drip sequence / autoresponder. Steps live as JSON.
 model Sequence {
   id            String   @id @default(cuid())

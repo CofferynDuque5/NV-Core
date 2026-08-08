@@ -263,6 +263,38 @@ export interface FormSubmitResult {
   redirectUrl?: string;
 }
 
+// ── Affiliate program ────────────────────────────────────────────────────────
+
+/** A referral partner with a unique code, commission rate and live stats. */
+export interface Affiliate {
+  id: string;
+  name: string;
+  email: string;
+  /** Unique referral code used in the /r/:code link. */
+  code: string;
+  /** Commission percentage (0–100) applied to each conversion amount. */
+  commissionPct: number;
+  /** Where the referral link redirects (defaults to the app when unset). */
+  destinationUrl?: string;
+  status: "active" | "paused";
+  clicks: number;
+  conversions: number;
+  /** Accrued commission (sum of amount × commissionPct). */
+  earnings: number;
+  createdAt: string;
+}
+
+/** One tracked referral event (a click on the link or a recorded conversion). */
+export interface AffiliateEvent {
+  id: string;
+  type: "click" | "conversion";
+  /** Sale amount, for conversion events. */
+  amount?: number;
+  /** Commission credited, for conversion events. */
+  commission?: number;
+  createdAt: string;
+}
+
 // ── Sequences / autoresponders (drip) ───────────────────────────────────────
 
 /** One step of a drip sequence: sent `delayDays` after the previous step. */

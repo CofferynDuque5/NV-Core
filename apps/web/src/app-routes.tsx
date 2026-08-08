@@ -27,6 +27,7 @@ const SegmentosPage = React.lazy(() => import("@/app/w/[workspace]/segmentos/pag
 const FormulariosPage = React.lazy(() => import("@/app/w/[workspace]/formularios/page"));
 const EmbudosPage = React.lazy(() => import("@/app/w/[workspace]/embudos/page"));
 const SecuenciasPage = React.lazy(() => import("@/app/w/[workspace]/secuencias/page"));
+const AfiliadosPage = React.lazy(() => import("@/app/w/[workspace]/afiliados/page"));
 const InboxPage = React.lazy(() => import("@/app/w/[workspace]/inbox/page"));
 const BuilderPage = React.lazy(() => import("@/app/w/[workspace]/builder/page"));
 const AiPage = React.lazy(() => import("@/app/w/[workspace]/ai/page"));
@@ -109,6 +110,7 @@ export function AppRoutes() {
       <Route path="/w/:workspace/formularios" element={<WorkspacePage><FormulariosPage /></WorkspacePage>} />
       <Route path="/w/:workspace/embudos" element={<WorkspacePage><EmbudosPage /></WorkspacePage>} />
       <Route path="/w/:workspace/secuencias" element={<WorkspacePage><SecuenciasPage /></WorkspacePage>} />
+      <Route path="/w/:workspace/afiliados" element={<WorkspacePage><AfiliadosPage /></WorkspacePage>} />
       <Route path="/w/:workspace/inbox" element={<WorkspacePage><InboxPage /></WorkspacePage>} />
       <Route path="/w/:workspace/builder" element={<WorkspacePage><BuilderPage /></WorkspacePage>} />
       <Route path="/w/:workspace/ai" element={<WorkspacePage><AiPage /></WorkspacePage>} />

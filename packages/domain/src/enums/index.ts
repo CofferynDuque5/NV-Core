@@ -107,6 +107,7 @@ export const MODULE_IDS = [
   "formularios",
   "embudos",
   "secuencias",
+  "afiliados",
   "inbox",
   "builder",
   "ai",

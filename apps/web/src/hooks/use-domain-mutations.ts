@@ -35,6 +35,8 @@ import type {
   UpdateFunnelInput,
   CreateSequenceInput,
   UpdateSequenceInput,
+  CreateAffiliateInput,
+  UpdateAffiliateInput,
   CreateTemplateInput,
   GenerateVariantsInput,
   SocialPublishInput,
@@ -601,6 +603,65 @@ export function useDeleteForm() {
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: [ws.id, "forms"] });
       toast.success("Formulario eliminado");
+    },
+    onError: (err) => toast.error(errText(err)),
+  });
+}
+
+// ── Affiliates ────────────────────────────────────────────────────────────────
+export function useCreateAffiliate() {
+  const svc = useServices();
+  const ws = useWorkspace();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: CreateAffiliateInput) => svc.affiliates.create(ws.id, input),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: [ws.id, "affiliates"] });
+      toast.success("Afiliado creado");
+    },
+    onError: (err) => toast.error(errText(err)),
+  });
+}
+
+export function useUpdateAffiliate() {
+  const svc = useServices();
+  const ws = useWorkspace();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, input }: { id: string; input: UpdateAffiliateInput }) =>
+      svc.affiliates.update(ws.id, id, input),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: [ws.id, "affiliates"] });
+      toast.success("Afiliado actualizado");
+    },
+    onError: (err) => toast.error(errText(err)),
+  });
+}
+
+export function useDeleteAffiliate() {
+  const svc = useServices();
+  const ws = useWorkspace();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => svc.affiliates.remove(ws.id, id),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: [ws.id, "affiliates"] });
+      toast.success("Afiliado eliminado");
+    },
+    onError: (err) => toast.error(errText(err)),
+  });
+}
+
+export function useConvertAffiliate() {
+  const svc = useServices();
+  const ws = useWorkspace();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, amount }: { id: string; amount: number }) =>
+      svc.affiliates.convert(ws.id, id, amount),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: [ws.id, "affiliates"] });
+      toast.success("Conversión registrada");
     },
     onError: (err) => toast.error(errText(err)),
   });

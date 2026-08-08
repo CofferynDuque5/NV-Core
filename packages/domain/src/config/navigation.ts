@@ -33,6 +33,7 @@ export const NAV_SECTIONS: NavSection[] = [
       { module: "formularios", label: "Formularios", icon: "ClipboardList" },
       { module: "embudos", label: "Embudos", icon: "Filter" },
       { module: "secuencias", label: "Secuencias", icon: "Send" },
+      { module: "afiliados", label: "Afiliados", icon: "Handshake" },
     ],
   },
   {
@@ -76,6 +77,7 @@ export const MODULE_META: Record<ModuleId, { label: string; description: string 
   formularios: { label: "Formularios", description: "Captura de leads (opt-in)" },
   embudos: { label: "Embudos", description: "Funnels multipaso" },
   secuencias: { label: "Secuencias", description: "Autoresponders (drip)" },
+  afiliados: { label: "Afiliados", description: "Programa de referidos" },
   inbox: { label: "Inbox", description: "Conversaciones unificadas" },
   builder: { label: "Campaign Builder", description: "Editor visual de contenido" },
   ai: { label: "AI Content Studio", description: "Generación de contenido con IA" },

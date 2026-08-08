@@ -25,6 +25,7 @@ import { SegmentsModule } from "./modules/segments/segments.module";
 import { FormsModule } from "./modules/forms/forms.module";
 import { FunnelsModule } from "./modules/funnels/funnels.module";
 import { SequencesModule } from "./modules/sequences/sequences.module";
+import { AffiliatesModule } from "./modules/affiliates/affiliates.module";
 import { CampaignsModule } from "./modules/campaigns/campaigns.module";
 import { PostsModule } from "./modules/posts/posts.module";
 import { CalendarModule } from "./modules/calendar/calendar.module";
@@ -77,6 +78,7 @@ import { ProvidersModule } from "./providers/providers.module";
     FormsModule,
     FunnelsModule,
     SequencesModule,
+    AffiliatesModule,
     CampaignsModule,
     PostsModule,
     CalendarModule,

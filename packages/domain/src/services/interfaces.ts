@@ -16,6 +16,8 @@ import type {
   Group,
   Integration,
   ChangelogStatus,
+  Affiliate,
+  AffiliateEvent,
   Feedback,
   Form,
   Funnel,
@@ -335,6 +337,27 @@ export interface CreateSequenceInput {
   steps?: Sequence["steps"];
 }
 export type UpdateSequenceInput = Partial<CreateSequenceInput>;
+
+export interface CreateAffiliateInput {
+  name: string;
+  email: string;
+  code?: string;
+  commissionPct?: number;
+  destinationUrl?: string;
+  status?: Affiliate["status"];
+}
+export type UpdateAffiliateInput = Partial<CreateAffiliateInput>;
+
+export interface AffiliateService {
+  list(workspaceId: string): Promise<ListResult<Affiliate>>;
+  create(workspaceId: string, input: CreateAffiliateInput): Promise<Affiliate>;
+  update(workspaceId: string, id: string, input: UpdateAffiliateInput): Promise<Affiliate>;
+  remove(workspaceId: string, id: string): Promise<void>;
+  /** Record a conversion (a referred sale) and credit the commission. */
+  convert(workspaceId: string, id: string, amount: number): Promise<Affiliate>;
+  /** Recent referral events (clicks + conversions) for the panel. */
+  events(workspaceId: string, id: string): Promise<AffiliateEvent[]>;
+}
 
 export interface SequenceService {
   list(workspaceId: string): Promise<ListResult<Sequence>>;
@@ -671,6 +694,7 @@ export interface Services {
   forms: FormService;
   funnels: FunnelService;
   sequences: SequenceService;
+  affiliates: AffiliateService;
   inbox: InboxService;
   media: MediaService;
   templates: TemplateService;

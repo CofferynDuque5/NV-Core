@@ -156,6 +156,12 @@ export function useSequences() {
   return useQuery({ queryKey: [ws.id, "sequences"], queryFn: () => svc.sequences.list(ws.id) });
 }
 
+export function useAffiliates() {
+  const svc = useServices();
+  const ws = useWorkspace();
+  return useQuery({ queryKey: [ws.id, "affiliates"], queryFn: () => svc.affiliates.list(ws.id) });
+}
+
 export function useSequenceEnrollments(sequenceId: string | null) {
   const svc = useServices();
   const ws = useWorkspace();

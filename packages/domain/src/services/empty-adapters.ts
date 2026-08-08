@@ -158,6 +158,14 @@ export const emptyAdapters: Services = {
     enrollments: () => delay([]),
     preview: () => delay([]),
   },
+  affiliates: {
+    list: () => emptyList(),
+    create: () => notAvailable(),
+    update: () => notAvailable(),
+    remove: () => notAvailable(),
+    convert: () => notAvailable(),
+    events: () => delay([]),
+  },
   inbox: {
     conversations: () => emptyList(),
     messages: () => delay([]),

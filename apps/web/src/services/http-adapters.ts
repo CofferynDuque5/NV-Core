@@ -7,6 +7,8 @@ import type {
   CampaignImportResult,
   ChangelogStatus,
   ContactNote,
+  Affiliate,
+  AffiliateEvent,
   Feedback,
   Form,
   Funnel,
@@ -211,6 +213,15 @@ export function createHttpAdapters(opts: HttpAdapterOptions): Services {
       create: (id, input) => post<Funnel>(`${ws(id)}/funnels`, input),
       update: (id, fid, input) => patch<Funnel>(`${ws(id)}/funnels/${fid}`, input),
       remove: (id, fid) => del<void>(`${ws(id)}/funnels/${fid}`),
+    },
+    affiliates: {
+      list: (id) => get<ListResult<Affiliate>>(`${ws(id)}/affiliates`),
+      create: (id, input) => post<Affiliate>(`${ws(id)}/affiliates`, input),
+      update: (id, aid, input) => patch<Affiliate>(`${ws(id)}/affiliates/${aid}`, input),
+      remove: (id, aid) => del<void>(`${ws(id)}/affiliates/${aid}`),
+      convert: (id, aid, amount) =>
+        post<Affiliate>(`${ws(id)}/affiliates/${aid}/convert`, { amount }),
+      events: (id, aid) => get<AffiliateEvent[]>(`${ws(id)}/affiliates/${aid}/events`),
     },
     sequences: {
       list: (id) => get<ListResult<Sequence>>(`${ws(id)}/sequences`),

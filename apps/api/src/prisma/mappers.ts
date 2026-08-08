@@ -19,6 +19,8 @@ import type {
   Funnel as PFunnel,
   Sequence as PSequence,
   SequenceEnrollment as PSequenceEnrollment,
+  Affiliate as PAffiliate,
+  AffiliateEvent as PAffiliateEvent,
   Template as PTemplate,
 } from "@prisma/client";
 import type {
@@ -50,6 +52,8 @@ import type {
   Sequence,
   SequenceStep,
   SequenceEnrollment,
+  Affiliate,
+  AffiliateEvent,
   Template,
 } from "@nv/domain";
 
@@ -130,6 +134,28 @@ export const mapSequenceEnrollment = (e: PSequenceEnrollment): SequenceEnrollmen
   stepIndex: e.stepIndex,
   status: e.status as SequenceEnrollment["status"],
   nextRunAt: iso(e.nextRunAt),
+  createdAt: e.createdAt.toISOString(),
+});
+
+export const mapAffiliate = (a: PAffiliate): Affiliate => ({
+  id: a.id,
+  name: a.name,
+  email: a.email,
+  code: a.code,
+  commissionPct: a.commissionPct,
+  destinationUrl: a.destinationUrl ?? undefined,
+  status: a.status === "paused" ? "paused" : "active",
+  clicks: a.clicks,
+  conversions: a.conversions,
+  earnings: a.earnings,
+  createdAt: a.createdAt.toISOString(),
+});
+
+export const mapAffiliateEvent = (e: PAffiliateEvent): AffiliateEvent => ({
+  id: e.id,
+  type: e.type === "conversion" ? "conversion" : "click",
+  amount: e.amount ?? undefined,
+  commission: e.commission ?? undefined,
   createdAt: e.createdAt.toISOString(),
 });
 
