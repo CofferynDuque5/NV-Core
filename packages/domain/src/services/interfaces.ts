@@ -26,6 +26,7 @@ import type {
   Post,
   RoleDefinition,
   Segment,
+  SegmentPreview,
   SendLogEntry,
   Template,
   TemplateImportResult,
@@ -98,8 +99,10 @@ export type UpdateCampaignInput = Partial<CreateCampaignInput>;
 export interface CreateSegmentInput {
   name: string;
   color?: string;
+  match?: Segment["match"];
   rules?: Segment["rules"];
 }
+export type UpdateSegmentInput = Partial<CreateSegmentInput>;
 
 export interface CreateGroupInput {
   name: string;
@@ -278,7 +281,10 @@ export interface SocialService {
 export interface SegmentService {
   list(workspaceId: string): Promise<ListResult<Segment>>;
   create(workspaceId: string, input: CreateSegmentInput): Promise<Segment>;
+  update(workspaceId: string, id: string, input: UpdateSegmentInput): Promise<Segment>;
   remove(workspaceId: string, id: string): Promise<void>;
+  /** Evaluate rules against the contact base without persisting a segment. */
+  preview(workspaceId: string, input: { match?: Segment["match"]; rules: Segment["rules"] }): Promise<SegmentPreview>;
 }
 
 export interface CreateConversationInput {

@@ -133,7 +133,9 @@ export const emptyAdapters: Services = {
   segments: {
     list: () => emptyList(),
     create: () => notAvailable(),
+    update: () => notAvailable(),
     remove: () => notAvailable(),
+    preview: () => delay({ count: 0, sample: [] }),
   },
   inbox: {
     conversations: () => emptyList(),

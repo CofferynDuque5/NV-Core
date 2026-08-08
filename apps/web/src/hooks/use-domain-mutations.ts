@@ -25,6 +25,9 @@ import type {
   DuplicatePostInput,
   UpdateAssetInput,
   CreateSegmentInput,
+  UpdateSegmentInput,
+  Segment,
+  SegmentPreview,
   CreateTemplateInput,
   GenerateVariantsInput,
   SocialPublishInput,
@@ -519,6 +522,45 @@ export function useCreateSegment() {
       void qc.invalidateQueries({ queryKey: [ws.id, "segments"] });
       toast.success("Segmento creado");
     },
+    onError: (err) => toast.error(errText(err)),
+  });
+}
+
+export function useUpdateSegment() {
+  const svc = useServices();
+  const ws = useWorkspace();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, input }: { id: string; input: UpdateSegmentInput }) =>
+      svc.segments.update(ws.id, id, input),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: [ws.id, "segments"] });
+      toast.success("Segmento actualizado");
+    },
+    onError: (err) => toast.error(errText(err)),
+  });
+}
+
+export function useDeleteSegment() {
+  const svc = useServices();
+  const ws = useWorkspace();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => svc.segments.remove(ws.id, id),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: [ws.id, "segments"] });
+      toast.success("Segmento eliminado");
+    },
+    onError: (err) => toast.error(errText(err)),
+  });
+}
+
+/** Live rule-builder preview: evaluate ad-hoc rules without persisting. */
+export function useSegmentPreview() {
+  const svc = useServices();
+  const ws = useWorkspace();
+  return useMutation<SegmentPreview, unknown, { match?: Segment["match"]; rules: Segment["rules"] }>({
+    mutationFn: (input) => svc.segments.preview(ws.id, input),
   });
 }
 

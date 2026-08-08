@@ -29,6 +29,7 @@ import type {
   Post,
   RoleDefinition,
   Segment,
+  SegmentPreview,
   SendLogEntry,
   Services,
   SocialInsights,
@@ -196,7 +197,9 @@ export function createHttpAdapters(opts: HttpAdapterOptions): Services {
     segments: {
       list: (id) => get<ListResult<Segment>>(`${ws(id)}/segments`),
       create: (id, input) => post<Segment>(`${ws(id)}/segments`, input),
+      update: (id, sid, input) => patch<Segment>(`${ws(id)}/segments/${sid}`, input),
       remove: (id, sid) => del<void>(`${ws(id)}/segments/${sid}`),
+      preview: (id, input) => post<SegmentPreview>(`${ws(id)}/segments/preview`, input),
     },
     inbox: {
       conversations: (id) => get<ListResult<Conversation>>(`${ws(id)}/inbox/conversations`),

@@ -8,6 +8,9 @@ import type {
   ModuleId,
   PostStatus,
   Role,
+  SegmentField,
+  SegmentMatch,
+  SegmentOperator,
   WorkspaceKind,
 } from "../enums";
 
@@ -191,17 +194,28 @@ export interface Group {
 }
 
 export interface SegmentRule {
-  field: string;
-  operator: string;
+  field: SegmentField;
+  operator: SegmentOperator;
+  /** Comparison value; ignored by valueless operators (is_set / is_empty). */
   value: string;
 }
 
 export interface Segment {
   id: string;
   name: string;
+  /** Live count of contacts matching this segment's rules. */
   count: number;
   color: string;
+  /** How the rules combine: match all (AND) or any (OR). Defaults to "all". */
+  match: SegmentMatch;
   rules: SegmentRule[];
+}
+
+/** Result of evaluating a segment's rules against the contact base. */
+export interface SegmentPreview {
+  count: number;
+  /** A capped sample of matching contacts, for the rule-builder preview. */
+  sample: Contact[];
 }
 
 export interface MediaAsset {

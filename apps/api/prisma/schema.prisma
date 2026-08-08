@@ -172,6 +172,8 @@ model Segment {
   workspaceSlug String
   name          String
   color         String   @default("#5B8DEF")
+  // How the rules combine: "all" (AND) or "any" (OR).
+  match         String   @default("all")
   rules         Json     @default("[]")
   createdAt     DateTime @default(now())
 

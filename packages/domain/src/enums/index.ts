@@ -28,6 +28,41 @@ export type ContactStage = (typeof CONTACT_STAGES)[number];
 export const ROLES = ["Owner", "Admin", "Editor", "Visor"] as const;
 export type Role = (typeof ROLES)[number];
 
+/** Contact fields a segment rule can filter on. */
+export const SEGMENT_FIELDS = [
+  "name",
+  "email",
+  "phone",
+  "company",
+  "tags",
+  "stage",
+  "createdAt",
+  "lastContactAt",
+] as const;
+export type SegmentField = (typeof SEGMENT_FIELDS)[number];
+
+/** Comparison operators available to segment rules. */
+export const SEGMENT_OPERATORS = [
+  "equals",
+  "not_equals",
+  "contains",
+  "not_contains",
+  "is_set",
+  "is_empty",
+  "in",
+  "has_tag",
+  "not_has_tag",
+  "before",
+  "after",
+  "in_last_days",
+  "not_in_last_days",
+] as const;
+export type SegmentOperator = (typeof SEGMENT_OPERATORS)[number];
+
+/** How a segment's rules combine: match all (AND) or any (OR). */
+export const SEGMENT_MATCH_MODES = ["all", "any"] as const;
+export type SegmentMatch = (typeof SEGMENT_MATCH_MODES)[number];
+
 /** Node types of an automation flow. */
 export const AUTOMATION_NODE_TYPES = ["trigger", "action", "wait", "cond"] as const;
 export type AutomationNodeType = (typeof AUTOMATION_NODE_TYPES)[number];

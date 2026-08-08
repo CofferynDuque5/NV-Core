@@ -87,11 +87,12 @@ export const mapGroup = (g: PGroup): Group => ({
   synced: g.synced,
 });
 
-export const mapSegment = (s: PSegment): Segment => ({
+export const mapSegment = (s: PSegment, count = 0): Segment => ({
   id: s.id,
   name: s.name,
-  count: 0,
+  count,
   color: s.color,
+  match: (s.match as Segment["match"]) ?? "all",
   rules: (s.rules as unknown as SegmentRule[]) ?? [],
 });
 
