@@ -18,6 +18,7 @@ import type {
   ChangelogStatus,
   Feedback,
   Form,
+  Funnel,
   MediaAsset,
   MediaFolder,
   Message,
@@ -308,6 +309,19 @@ export interface FormService {
   list(workspaceId: string): Promise<ListResult<Form>>;
   create(workspaceId: string, input: CreateFormInput): Promise<Form>;
   update(workspaceId: string, id: string, input: UpdateFormInput): Promise<Form>;
+  remove(workspaceId: string, id: string): Promise<void>;
+}
+
+export interface CreateFunnelInput {
+  name: string;
+  steps?: Funnel["steps"];
+}
+export type UpdateFunnelInput = Partial<CreateFunnelInput>;
+
+export interface FunnelService {
+  list(workspaceId: string): Promise<ListResult<Funnel>>;
+  create(workspaceId: string, input: CreateFunnelInput): Promise<Funnel>;
+  update(workspaceId: string, id: string, input: UpdateFunnelInput): Promise<Funnel>;
   remove(workspaceId: string, id: string): Promise<void>;
 }
 
@@ -631,6 +645,7 @@ export interface Services {
   social: SocialService;
   segments: SegmentService;
   forms: FormService;
+  funnels: FunnelService;
   inbox: InboxService;
   media: MediaService;
   templates: TemplateService;

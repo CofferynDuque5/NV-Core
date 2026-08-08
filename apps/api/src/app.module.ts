@@ -23,6 +23,7 @@ import { ContactsModule } from "./modules/contacts/contacts.module";
 import { GroupsModule } from "./modules/groups/groups.module";
 import { SegmentsModule } from "./modules/segments/segments.module";
 import { FormsModule } from "./modules/forms/forms.module";
+import { FunnelsModule } from "./modules/funnels/funnels.module";
 import { CampaignsModule } from "./modules/campaigns/campaigns.module";
 import { PostsModule } from "./modules/posts/posts.module";
 import { CalendarModule } from "./modules/calendar/calendar.module";
@@ -73,6 +74,7 @@ import { ProvidersModule } from "./providers/providers.module";
     GroupsModule,
     SegmentsModule,
     FormsModule,
+    FunnelsModule,
     CampaignsModule,
     PostsModule,
     CalendarModule,

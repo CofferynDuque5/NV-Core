@@ -9,6 +9,7 @@ import type {
   ContactNote,
   Feedback,
   Form,
+  Funnel,
   ContactImportResult,
   Design,
   BillingStatus,
@@ -200,6 +201,12 @@ export function createHttpAdapters(opts: HttpAdapterOptions): Services {
       create: (id, input) => post<Form>(`${ws(id)}/forms`, input),
       update: (id, fid, input) => patch<Form>(`${ws(id)}/forms/${fid}`, input),
       remove: (id, fid) => del<void>(`${ws(id)}/forms/${fid}`),
+    },
+    funnels: {
+      list: (id) => get<ListResult<Funnel>>(`${ws(id)}/funnels`),
+      create: (id, input) => post<Funnel>(`${ws(id)}/funnels`, input),
+      update: (id, fid, input) => patch<Funnel>(`${ws(id)}/funnels/${fid}`, input),
+      remove: (id, fid) => del<void>(`${ws(id)}/funnels/${fid}`),
     },
     segments: {
       list: (id) => get<ListResult<Segment>>(`${ws(id)}/segments`),

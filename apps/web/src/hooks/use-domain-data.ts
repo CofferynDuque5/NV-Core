@@ -144,6 +144,12 @@ export function useForms() {
   return useQuery({ queryKey: [ws.id, "forms"], queryFn: () => svc.forms.list(ws.id) });
 }
 
+export function useFunnels() {
+  const svc = useServices();
+  const ws = useWorkspace();
+  return useQuery({ queryKey: [ws.id, "funnels"], queryFn: () => svc.funnels.list(ws.id) });
+}
+
 export function useConversations() {
   const svc = useServices();
   const ws = useWorkspace();

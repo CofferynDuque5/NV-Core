@@ -31,6 +31,7 @@ export const NAV_SECTIONS: NavSection[] = [
       { module: "grupos", label: "Grupos", icon: "Users" },
       { module: "segmentos", label: "Segmentos", icon: "Filter" },
       { module: "formularios", label: "Formularios", icon: "ClipboardList" },
+      { module: "embudos", label: "Embudos", icon: "Filter" },
     ],
   },
   {
@@ -72,6 +73,7 @@ export const MODULE_META: Record<ModuleId, { label: string; description: string 
   grupos: { label: "Grupos", description: "Grupos de difusión" },
   segmentos: { label: "Segmentos", description: "Audiencias dinámicas" },
   formularios: { label: "Formularios", description: "Captura de leads (opt-in)" },
+  embudos: { label: "Embudos", description: "Funnels multipaso" },
   inbox: { label: "Inbox", description: "Conversaciones unificadas" },
   builder: { label: "Campaign Builder", description: "Editor visual de contenido" },
   ai: { label: "AI Content Studio", description: "Generación de contenido con IA" },

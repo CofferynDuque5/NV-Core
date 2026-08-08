@@ -143,6 +143,12 @@ export const emptyAdapters: Services = {
     update: () => notAvailable(),
     remove: () => notAvailable(),
   },
+  funnels: {
+    list: () => emptyList(),
+    create: () => notAvailable(),
+    update: () => notAvailable(),
+    remove: () => notAvailable(),
+  },
   inbox: {
     conversations: () => emptyList(),
     messages: () => delay([]),

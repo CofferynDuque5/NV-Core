@@ -14,6 +14,7 @@ import NotFound from "@/app/not-found";
 
 // Public embeddable lead-capture form (no auth, no shell).
 const PublicFormPage = React.lazy(() => import("@/app/f/[form]/page"));
+const PublicFunnelPage = React.lazy(() => import("@/app/fn/[funnel]/page"));
 
 // Workspace module pages — lazy-loaded so each becomes its own chunk and the
 // initial payload stays small (faster load, lower memory on the VPS).
@@ -24,6 +25,7 @@ const ContactosPage = React.lazy(() => import("@/app/w/[workspace]/contactos/pag
 const GruposPage = React.lazy(() => import("@/app/w/[workspace]/grupos/page"));
 const SegmentosPage = React.lazy(() => import("@/app/w/[workspace]/segmentos/page"));
 const FormulariosPage = React.lazy(() => import("@/app/w/[workspace]/formularios/page"));
+const EmbudosPage = React.lazy(() => import("@/app/w/[workspace]/embudos/page"));
 const InboxPage = React.lazy(() => import("@/app/w/[workspace]/inbox/page"));
 const BuilderPage = React.lazy(() => import("@/app/w/[workspace]/builder/page"));
 const AiPage = React.lazy(() => import("@/app/w/[workspace]/ai/page"));
@@ -86,6 +88,14 @@ export function AppRoutes() {
           </React.Suspense>
         }
       />
+      <Route
+        path="/fn/:funnel"
+        element={
+          <React.Suspense fallback={<RouteFallback />}>
+            <PublicFunnelPage />
+          </React.Suspense>
+        }
+      />
 
       {/* Workspace shell */}
       <Route path="/w/:workspace" element={<Navigate to="dashboard" replace />} />
@@ -96,6 +106,7 @@ export function AppRoutes() {
       <Route path="/w/:workspace/grupos" element={<WorkspacePage><GruposPage /></WorkspacePage>} />
       <Route path="/w/:workspace/segmentos" element={<WorkspacePage><SegmentosPage /></WorkspacePage>} />
       <Route path="/w/:workspace/formularios" element={<WorkspacePage><FormulariosPage /></WorkspacePage>} />
+      <Route path="/w/:workspace/embudos" element={<WorkspacePage><EmbudosPage /></WorkspacePage>} />
       <Route path="/w/:workspace/inbox" element={<WorkspacePage><InboxPage /></WorkspacePage>} />
       <Route path="/w/:workspace/builder" element={<WorkspacePage><BuilderPage /></WorkspacePage>} />
       <Route path="/w/:workspace/ai" element={<WorkspacePage><AiPage /></WorkspacePage>} />

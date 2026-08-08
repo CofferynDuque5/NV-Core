@@ -67,6 +67,10 @@ export type SegmentMatch = (typeof SEGMENT_MATCH_MODES)[number];
 export const FORM_FIELD_KEYS = ["name", "email", "phone", "company"] as const;
 export type FormFieldKey = (typeof FORM_FIELD_KEYS)[number];
 
+/** Kinds of funnel step (page). */
+export const FUNNEL_STEP_TYPES = ["optin", "sales", "thankyou"] as const;
+export type FunnelStepType = (typeof FUNNEL_STEP_TYPES)[number];
+
 /** Node types of an automation flow. */
 export const AUTOMATION_NODE_TYPES = ["trigger", "action", "wait", "cond"] as const;
 export type AutomationNodeType = (typeof AUTOMATION_NODE_TYPES)[number];
@@ -97,6 +101,7 @@ export const MODULE_IDS = [
   "grupos",
   "segmentos",
   "formularios",
+  "embudos",
   "inbox",
   "builder",
   "ai",

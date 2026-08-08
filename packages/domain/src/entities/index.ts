@@ -6,6 +6,7 @@ import type {
   ContactStage,
   MediaType,
   FormFieldKey,
+  FunnelStepType,
   ModuleId,
   PostStatus,
   Role,
@@ -259,6 +260,44 @@ export interface FormSubmitResult {
   ok: boolean;
   successMessage: string;
   redirectUrl?: string;
+}
+
+// ── Funnels (multi-step opt-in → sales → thank-you) ──────────────────────────
+
+/** One page/step of a funnel. Opt-in steps embed a form; others show content. */
+export interface FunnelPage {
+  id: string;
+  name: string;
+  type: FunnelStepType;
+  /** For opt-in steps: the form to embed (id). */
+  formId?: string;
+  headline?: string;
+  body?: string;
+  ctaLabel?: string;
+  /** Per-step visit counter (approximate; for the funnel report). */
+  views: number;
+}
+
+export interface Funnel {
+  id: string;
+  name: string;
+  steps: FunnelPage[];
+  createdAt: string;
+}
+
+/** Public render payload for a single funnel step (no analytics leaked). */
+export interface PublicFunnelStep {
+  funnelId: string;
+  index: number;
+  total: number;
+  name: string;
+  type: FunnelStepType;
+  formId?: string;
+  headline?: string;
+  body?: string;
+  ctaLabel?: string;
+  /** Next step index, or null when this is the last step. */
+  nextIndex: number | null;
 }
 
 export interface MediaAsset {

@@ -31,6 +31,8 @@ import type {
   SegmentPreview,
   CreateFormInput,
   UpdateFormInput,
+  CreateFunnelInput,
+  UpdateFunnelInput,
   CreateTemplateInput,
   GenerateVariantsInput,
   SocialPublishInput,
@@ -597,6 +599,50 @@ export function useDeleteForm() {
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: [ws.id, "forms"] });
       toast.success("Formulario eliminado");
+    },
+    onError: (err) => toast.error(errText(err)),
+  });
+}
+
+// ── Funnels ─────────────────────────────────────────────────────────────────
+export function useCreateFunnel() {
+  const svc = useServices();
+  const ws = useWorkspace();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: CreateFunnelInput) => svc.funnels.create(ws.id, input),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: [ws.id, "funnels"] });
+      toast.success("Embudo creado");
+    },
+    onError: (err) => toast.error(errText(err)),
+  });
+}
+
+export function useUpdateFunnel() {
+  const svc = useServices();
+  const ws = useWorkspace();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, input }: { id: string; input: UpdateFunnelInput }) =>
+      svc.funnels.update(ws.id, id, input),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: [ws.id, "funnels"] });
+      toast.success("Embudo actualizado");
+    },
+    onError: (err) => toast.error(errText(err)),
+  });
+}
+
+export function useDeleteFunnel() {
+  const svc = useServices();
+  const ws = useWorkspace();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => svc.funnels.remove(ws.id, id),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: [ws.id, "funnels"] });
+      toast.success("Embudo eliminado");
     },
     onError: (err) => toast.error(errText(err)),
   });

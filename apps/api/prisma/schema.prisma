@@ -202,6 +202,18 @@ model Form {
   @@index([workspaceSlug, createdAt])
 }
 
+// A multi-step funnel (opt-in → sales → thank-you). Steps live as JSON.
+model Funnel {
+  id            String   @id @default(cuid())
+  workspaceSlug String
+  name          String
+  steps         Json     @default("[]")
+  createdAt     DateTime @default(now())
+
+  @@index([workspaceSlug])
+  @@index([workspaceSlug, createdAt])
+}
+
 model Campaign {
   id            String         @id @default(cuid())
   workspaceSlug String

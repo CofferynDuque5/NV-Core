@@ -16,6 +16,7 @@ import type {
   Post as PPost,
   Segment as PSegment,
   Form as PForm,
+  Funnel as PFunnel,
   Template as PTemplate,
 } from "@prisma/client";
 import type {
@@ -42,6 +43,8 @@ import type {
   SegmentRule,
   Form,
   FormField,
+  Funnel,
+  FunnelPage,
   Template,
 } from "@nv/domain";
 
@@ -97,6 +100,13 @@ export const mapSegment = (s: PSegment, count = 0): Segment => ({
   color: s.color,
   match: (s.match as Segment["match"]) ?? "all",
   rules: (s.rules as unknown as SegmentRule[]) ?? [],
+});
+
+export const mapFunnel = (f: PFunnel): Funnel => ({
+  id: f.id,
+  name: f.name,
+  steps: (f.steps as unknown as FunnelPage[]) ?? [],
+  createdAt: f.createdAt.toISOString(),
 });
 
 export const mapForm = (f: PForm): Form => ({
