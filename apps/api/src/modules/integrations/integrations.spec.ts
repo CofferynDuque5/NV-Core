@@ -31,6 +31,13 @@ describe("buildCatalog", () => {
     expect(catalog.every((i) => i.connected === false)).toBe(true);
   });
 
+  it("carries a deep-link module + setup hint for every integration", () => {
+    const catalog = buildCatalog(integrations());
+    expect(catalog.every((i) => Boolean(i.module) && Boolean(i.setupHint))).toBe(true);
+    expect(catalog.find((i) => i.id === "n8n")?.module).toBe("automatizaciones");
+    expect(catalog.find((i) => i.id === "whatsapp")?.module).toBe("conexiones");
+  });
+
   it("marks a provider connected when its key is present", () => {
     const catalog = buildCatalog(
       integrations({

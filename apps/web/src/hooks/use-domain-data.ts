@@ -208,12 +208,6 @@ export function useConnections() {
   return useQuery({ queryKey: [ws.id, "connections"], queryFn: () => svc.connections.list(ws.id) });
 }
 
-export function useMarketplace() {
-  const svc = useServices();
-  const ws = useWorkspace();
-  return useQuery({ queryKey: [ws.id, "marketplace"], queryFn: () => svc.marketplace.catalog(ws.id) });
-}
-
 export function useIntegrations() {
   const svc = useServices();
   const ws = useWorkspace();

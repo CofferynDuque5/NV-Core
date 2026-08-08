@@ -1004,35 +1004,6 @@ export function useGenerateVariants() {
   });
 }
 
-// ── Marketplace ─────────────────────────────────────────────────────────────
-export function useInstallApp() {
-  const svc = useServices();
-  const ws = useWorkspace();
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: (appId: string) => svc.marketplace.install(ws.id, appId),
-    onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: [ws.id, "marketplace"] });
-      toast.success("App instalada");
-    },
-    onError: (err) => toast.error(errText(err)),
-  });
-}
-
-export function useUninstallApp() {
-  const svc = useServices();
-  const ws = useWorkspace();
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: (appId: string) => svc.marketplace.uninstall(ws.id, appId),
-    onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: [ws.id, "marketplace"] });
-      toast.success("App desinstalada");
-    },
-    onError: (err) => toast.error(errText(err)),
-  });
-}
-
 // ── Notifications ────────────────────────────────────────────────────────────
 export function useMarkNotificationsRead() {
   const svc = useServices();

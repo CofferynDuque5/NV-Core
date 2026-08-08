@@ -1,7 +1,7 @@
 import { Controller, Get, Injectable, Module, UseGuards } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { ApiBearerAuth, ApiTags } from "@nestjs/swagger";
-import type { Integration } from "@nv/domain";
+import type { Integration, ModuleId } from "@nv/domain";
 
 import type { AppConfig } from "../../config/configuration";
 import { WorkspaceId } from "../../common/tenant/workspace.decorator";
@@ -14,6 +14,10 @@ interface CatalogEntry {
   category: string;
   description: string;
   hue: number;
+  /** Where the user configures it in the app (deep-link target). */
+  module: ModuleId;
+  /** How to enable it (env var / OAuth), shown when not connected. */
+  setupHint: string;
   configured: (c: AppConfig["integrations"]) => boolean;
 }
 
@@ -24,6 +28,8 @@ const CATALOG: CatalogEntry[] = [
     category: "Inteligencia Artificial",
     description: "Genera captions y variantes A/B con GPT.",
     hue: 158,
+    module: "ai",
+    setupHint: "Define OPENAI_API_KEY en el servidor.",
     configured: (c) => Boolean(c.ai.openai),
   },
   {
@@ -32,6 +38,8 @@ const CATALOG: CatalogEntry[] = [
     category: "Inteligencia Artificial",
     description: "Contenido y asistencia con los modelos Claude.",
     hue: 25,
+    module: "ai",
+    setupHint: "Define ANTHROPIC_API_KEY en el servidor.",
     configured: (c) => Boolean(c.ai.anthropic),
   },
   {
@@ -40,6 +48,8 @@ const CATALOG: CatalogEntry[] = [
     category: "Inteligencia Artificial",
     description: "Generación multimodal con Gemini.",
     hue: 217,
+    module: "ai",
+    setupHint: "Define GEMINI_API_KEY en el servidor.",
     configured: (c) => Boolean(c.ai.gemini),
   },
   {
@@ -48,6 +58,8 @@ const CATALOG: CatalogEntry[] = [
     category: "Mensajería",
     description: "Envía y recibe mensajes por la API de WhatsApp.",
     hue: 142,
+    module: "conexiones",
+    setupHint: "Conecta WhatsApp Cloud API en Conexiones.",
     configured: (c) => Boolean(c.whatsapp.token && c.whatsapp.phoneNumberId),
   },
   {
@@ -56,6 +68,8 @@ const CATALOG: CatalogEntry[] = [
     category: "Mensajería",
     description: "Automatiza conversaciones con un bot de Telegram.",
     hue: 200,
+    module: "conexiones",
+    setupHint: "Define TELEGRAM_BOT_TOKEN y su webhook.",
     configured: (c) => Boolean(c.telegram.botToken),
   },
   {
@@ -64,6 +78,8 @@ const CATALOG: CatalogEntry[] = [
     category: "Mensajería",
     description: "Publica en Facebook e Instagram vía Graph API.",
     hue: 221,
+    module: "conexiones",
+    setupHint: "Conecta Facebook/Instagram en Conexiones.",
     configured: (c) => Boolean(c.meta.appId && c.meta.appSecret),
   },
   {
@@ -72,6 +88,8 @@ const CATALOG: CatalogEntry[] = [
     category: "Pagos",
     description: "Suscripciones, facturación y portal de cliente.",
     hue: 258,
+    module: "configuracion",
+    setupHint: "Define STRIPE_SECRET_KEY y el webhook.",
     configured: (c) => Boolean(c.stripe.secretKey),
   },
   {
@@ -80,6 +98,8 @@ const CATALOG: CatalogEntry[] = [
     category: "Media",
     description: "Almacenamiento y transformación de imágenes y video.",
     hue: 210,
+    module: "biblioteca",
+    setupHint: "Define CLOUDINARY_URL en el servidor.",
     configured: (c) => Boolean(c.cloudinary.url),
   },
   {
@@ -88,6 +108,8 @@ const CATALOG: CatalogEntry[] = [
     category: "Email",
     description: "Correos transaccionales y de marketing.",
     hue: 0,
+    module: "configuracion",
+    setupHint: "Define RESEND_API_KEY en el servidor.",
     configured: (c) => Boolean(c.resend.apiKey),
   },
   {
@@ -96,6 +118,8 @@ const CATALOG: CatalogEntry[] = [
     category: "Productividad",
     description: "Calendario y Drive con OAuth de Google.",
     hue: 4,
+    module: "conexiones",
+    setupHint: "Configura GOOGLE_CLIENT_ID/SECRET y conecta en Conexiones.",
     configured: (c) => Boolean(c.google.clientId && c.google.clientSecret),
   },
   {
@@ -104,6 +128,8 @@ const CATALOG: CatalogEntry[] = [
     category: "Automatización",
     description: "Orquesta workflows y disparadores.",
     hue: 330,
+    module: "automatizaciones",
+    setupHint: "Define N8N_BASE_URL para orquestar flujos.",
     configured: (c) => Boolean(c.n8n.baseUrl),
   },
 ];
@@ -116,6 +142,8 @@ export function buildCatalog(integrations: AppConfig["integrations"]): Integrati
     category: entry.category,
     description: entry.description,
     hue: entry.hue,
+    module: entry.module,
+    setupHint: entry.setupHint,
     connected: entry.configured(integrations),
   }));
 }

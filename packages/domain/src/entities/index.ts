@@ -322,6 +322,10 @@ export interface Integration {
   connected: boolean;
   description: string;
   hue?: number;
+  /** Module where this integration is configured (deep-link target). */
+  module?: ModuleId;
+  /** Short hint on how to enable it (e.g. which env var / OAuth flow). */
+  setupHint?: string;
 }
 
 export interface Conversation {
@@ -464,25 +468,6 @@ export interface ContactNote {
   body: string;
   author: string;
   createdAt: string;
-}
-
-// ── Marketplace (installable apps) ───────────────────────────────────────────
-
-/** A Marketplace app definition (from the curated catalog). */
-export interface MarketplaceApp {
-  id: string;
-  name: string;
-  category: string;
-  tagline: string;
-  description: string;
-  features: string[];
-  hue: number;
-}
-
-/** A catalog entry with this workspace's install state. */
-export interface MarketplaceEntry extends MarketplaceApp {
-  installed: boolean;
-  installedAt?: string;
 }
 
 // ── Onboarding (guided first-value checklist) ────────────────────────────────

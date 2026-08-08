@@ -10,7 +10,6 @@ import type {
   Feedback,
   ContactImportResult,
   Design,
-  MarketplaceEntry,
   BillingStatus,
   Campaign,
   CalendarEvent,
@@ -266,11 +265,6 @@ export function createHttpAdapters(opts: HttpAdapterOptions): Services {
       get: (id, cid) => get<Connection | null>(`${ws(id)}/connections/${cid}`),
       upsert: (id, input) => post<Connection>(`${ws(id)}/connections`, input),
       remove: (id, cid) => del<void>(`${ws(id)}/connections/${cid}`),
-    },
-    marketplace: {
-      catalog: (id) => get<MarketplaceEntry[]>(`${ws(id)}/marketplace`),
-      install: (id, appId) => post<MarketplaceEntry>(`${ws(id)}/marketplace/${appId}/install`, {}),
-      uninstall: (id, appId) => del<void>(`${ws(id)}/marketplace/${appId}/install`),
     },
     integrations: {
       catalog: (id) => get<Integration[]>(`${ws(id)}/integrations`),

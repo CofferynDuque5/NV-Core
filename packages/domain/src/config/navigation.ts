@@ -55,7 +55,7 @@ export const NAV_SECTIONS: NavSection[] = [
   {
     label: "SISTEMA",
     items: [
-      { module: "marketplace", label: "Marketplace", icon: "Store" },
+      { module: "marketplace", label: "Integraciones", icon: "Store" },
       { module: "conexiones", label: "Conexiones", icon: "Plug" },
       { module: "configuracion", label: "Configuración", icon: "Settings" },
     ],
@@ -77,7 +77,7 @@ export const MODULE_META: Record<ModuleId, { label: string; description: string 
   biblioteca: { label: "Biblioteca", description: "Gestor de medios" },
   automatizaciones: { label: "Automatizaciones", description: "Flujos sin código" },
   analytics: { label: "Analytics", description: "Business Intelligence" },
-  marketplace: { label: "Marketplace", description: "Integraciones" },
+  marketplace: { label: "Integraciones", description: "Conecta tus herramientas" },
   conexiones: { label: "Conexiones", description: "Proveedores & OAuth" },
   configuracion: { label: "Configuración", description: "Equipo, roles y sistema" },
 };

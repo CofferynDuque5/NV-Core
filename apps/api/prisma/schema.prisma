@@ -553,18 +553,6 @@ model ContactNote {
   @@index([workspaceSlug, contactId])
 }
 
-/**
- * Marketplace: which catalog apps a workspace has installed.
- */
-model AppInstallation {
-  id            String   @id @default(cuid())
-  workspaceSlug String
-  appId         String
-  createdAt     DateTime @default(now())
-
-  @@unique([workspaceSlug, appId])
-  @@index([workspaceSlug])
-}
 
 /**
  * Per-user onboarding state for a workspace. Step completion is derived from

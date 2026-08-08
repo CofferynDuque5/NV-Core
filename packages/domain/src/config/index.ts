@@ -2,7 +2,6 @@ export * from "./channels";
 export * from "./workspaces";
 export * from "./navigation";
 export * from "./rbac";
-export * from "./marketplace";
 export * from "./help";
 export * from "./changelog";
 export * from "./plans";
