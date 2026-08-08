@@ -4,6 +4,8 @@ import {
   addEdge,
   addNode,
   autoLayout,
+  branchForNewEdge,
+  branchLabel,
   connectError,
   nextId,
   reachableFromTriggers,
@@ -54,6 +56,49 @@ describe("updateNode", () => {
     const g = updateNode(triggerAction(), "n2", { label: "Enviar WA" });
     expect(g.nodes.find((n) => n.id === "n2")!.label).toBe("Enviar WA");
     expect(g.nodes.find((n) => n.id === "n1")!.label).not.toBe("Enviar WA");
+  });
+});
+
+describe("condition branches", () => {
+  /** trigger n1, cond n2, action n3, action n4. */
+  function condGraph(): Graph {
+    let g = addNode(empty, "trigger", 0, 0); // n1
+    g = addNode(g, "cond", 0, 0); // n2
+    g = addNode(g, "action", 0, 0); // n3
+    g = addNode(g, "action", 0, 0); // n4
+    g = addEdge(g, "n1", "n2");
+    return g;
+  }
+
+  it("assigns true to the first cond edge and false to the second", () => {
+    let g = condGraph();
+    expect(branchForNewEdge(g, "n2")).toBe("true");
+    g = addEdge(g, "n2", "n3");
+    expect(g.edges.find((e) => e.from === "n2" && e.to === "n3")!.branch).toBe("true");
+    expect(branchForNewEdge(g, "n2")).toBe("false");
+    g = addEdge(g, "n2", "n4");
+    expect(g.edges.find((e) => e.from === "n2" && e.to === "n4")!.branch).toBe("false");
+  });
+
+  it("caps a condition at two outgoing edges", () => {
+    let g = condGraph();
+    g = addEdge(g, "n2", "n3");
+    g = addEdge(g, "n2", "n4");
+    // a third node + connection is rejected
+    g = addNode(g, "action", 0, 0); // n5
+    expect(connectError(g, "n2", "n5")).toMatch(/2 salidas/);
+  });
+
+  it("non-cond nodes get no branch", () => {
+    const g = triggerAction();
+    expect(g.edges[0]!.branch).toBeUndefined();
+    expect(branchForNewEdge(g, "n1")).toBeUndefined();
+  });
+
+  it("branchLabel maps to Sí/No", () => {
+    expect(branchLabel("true")).toBe("Sí");
+    expect(branchLabel("false")).toBe("No");
+    expect(branchLabel(undefined)).toBe("");
   });
 });
 

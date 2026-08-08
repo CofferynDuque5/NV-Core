@@ -1,6 +1,7 @@
 import type {
   AnalyticsSnapshot,
   Automation,
+  AutomationTestResult,
   Campaign,
   CampaignImportResult,
   CalendarEvent,
@@ -150,6 +151,11 @@ export interface UpdateAutomationInput {
 export interface RunAutomationResult {
   triggered: boolean;
   runs: number;
+}
+
+/** Input for a workflow test-run: a sample context the conditions evaluate against. */
+export interface TestAutomationInput {
+  context?: Record<string, string>;
 }
 
 export interface CreateDesignInput {
@@ -380,6 +386,8 @@ export interface AutomationService {
   remove(workspaceId: string, id: string): Promise<void>;
   /** Trigger the automation's n8n webhook and increment its run count. */
   run(workspaceId: string, id: string): Promise<RunAutomationResult>;
+  /** Dry-run the flow graph against a sample context; returns the execution trace. */
+  test(workspaceId: string, id: string, input?: TestAutomationInput): Promise<AutomationTestResult>;
 }
 
 export interface AnalyticsService {

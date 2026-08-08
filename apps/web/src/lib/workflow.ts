@@ -180,17 +180,41 @@ export function wouldCycle(graph: Graph, from: string, to: string): boolean {
 /** Reason a connection is rejected, or null when it is valid. */
 export function connectError(graph: Graph, from: string, to: string): string | null {
   if (from === to) return "Un nodo no puede conectarse a sí mismo.";
+  const source = graph.nodes.find((n) => n.id === from);
   const target = graph.nodes.find((n) => n.id === to);
   if (target?.type === "trigger") return "Un disparador no puede recibir conexiones.";
   if (graph.edges.some((e) => e.from === from && e.to === to)) return "Esa conexión ya existe.";
+  // A condition branches exactly two ways (sí / no).
+  if (source?.type === "cond" && graph.edges.filter((e) => e.from === from).length >= 2)
+    return "Una condición solo tiene 2 salidas (sí / no).";
   if (wouldCycle(graph, from, to)) return "Crearía un ciclo.";
   return null;
+}
+
+/**
+ * Branch to assign a new edge leaving `from`. Condition nodes get "true" for
+ * their first outgoing edge and "false" for the second; other nodes get none.
+ */
+export function branchForNewEdge(graph: Graph, from: string): "true" | "false" | undefined {
+  const source = graph.nodes.find((n) => n.id === from);
+  if (source?.type !== "cond") return undefined;
+  const hasTrue = graph.edges.some((e) => e.from === from && e.branch === "true");
+  return hasTrue ? "false" : "true";
 }
 
 export function addEdge(graph: Graph, from: string, to: string): Graph {
   if (connectError(graph, from, to)) return graph;
   const id = nextId("e", graph.edges);
-  return { nodes: graph.nodes, edges: [...graph.edges, { id, from, to }] };
+  const branch = branchForNewEdge(graph, from);
+  const edge: AutomationEdge = branch ? { id, from, to, branch } : { id, from, to };
+  return { nodes: graph.nodes, edges: [...graph.edges, edge] };
+}
+
+/** Label for a condition's branch edge in the canvas ("Sí" / "No"). */
+export function branchLabel(branch?: "true" | "false"): string {
+  if (branch === "true") return "Sí";
+  if (branch === "false") return "No";
+  return "";
 }
 
 export function removeEdge(graph: Graph, edgeId: string): Graph {

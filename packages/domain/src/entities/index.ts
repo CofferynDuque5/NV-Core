@@ -272,6 +272,26 @@ export interface AutomationEdge {
   id: string;
   from: string; // source node id
   to: string; // target node id
+  /** For edges leaving a condition node: which branch this edge represents. */
+  branch?: "true" | "false";
+}
+
+/** One step of an automation execution/test trace. */
+export interface AutomationTraceStep {
+  nodeId: string;
+  type: AutomationNodeType;
+  label: string;
+  /** For condition nodes: which branch the evaluation took. */
+  decision?: "true" | "false";
+  /** Human-readable description of what happened (or would happen, in a test). */
+  note: string;
+}
+
+/** Result of a workflow test-run (dry-run): the ordered execution trace. */
+export interface AutomationTestResult {
+  steps: AutomationTraceStep[];
+  /** Set when the graph couldn't be executed (e.g. no trigger). */
+  error?: string;
 }
 
 export interface Automation {

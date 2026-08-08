@@ -1,6 +1,14 @@
 import * as React from "react";
 import { toast } from "sonner";
-import { ArrowLeft, CheckCircle2, Play, Plus, Save, AlertTriangle } from "lucide-react";
+import {
+  ArrowLeft,
+  CheckCircle2,
+  FlaskConical,
+  Play,
+  Plus,
+  Save,
+  AlertTriangle,
+} from "lucide-react";
 import type { Automation, AutomationNode } from "@nv/domain";
 
 import { cn } from "@/lib/utils";
@@ -9,6 +17,7 @@ import {
   addEdge,
   addNode,
   autoLayout,
+  branchLabel,
   connectError,
   moveNode,
   nodeKind,
@@ -18,8 +27,21 @@ import {
   validateGraph,
   type Graph,
 } from "@/lib/workflow";
-import { useRunAutomation, useUpdateAutomation } from "@/hooks/use-domain-mutations";
+import {
+  useRunAutomation,
+  useTestAutomation,
+  useUpdateAutomation,
+} from "@/hooks/use-domain-mutations";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { NodeInspector } from "./node-inspector";
 
 const NODE_W = 200;
@@ -45,6 +67,13 @@ export function WorkflowEditor({ automation, onExit }: { automation: Automation;
 
   const update = useUpdateAutomation();
   const run = useRunAutomation();
+  const test = useTestAutomation();
+  const [testOpen, setTestOpen] = React.useState(false);
+  const [ctx, setCtx] = React.useState<Record<string, string>>({
+    stage: "Cliente",
+    channel: "wa",
+    replied: "true",
+  });
   const drag = React.useRef<{ id: string; sx: number; sy: number; ox: number; oy: number } | null>(null);
 
   const selected = graph.nodes.find((n) => n.id === selectedId) ?? null;
@@ -110,6 +139,11 @@ export function WorkflowEditor({ automation, onExit }: { automation: Automation;
     setConnectFrom(null);
   };
 
+  function runTest() {
+    setTestOpen(true);
+    test.mutate({ id: automation.id, context: ctx });
+  }
+
   return (
     <div className="space-y-4">
       {/* Header */}
@@ -155,6 +189,15 @@ export function WorkflowEditor({ automation, onExit }: { automation: Automation;
           {status === "activo" ? "Activo" : "Pausado"}
         </button>
 
+        <Button
+          variant="secondary"
+          size="sm"
+          onClick={runTest}
+          disabled={dirty || test.isPending}
+          title={dirty ? "Guarda los cambios antes de probar" : "Simula el flujo sin enviar nada"}
+        >
+          <FlaskConical className="size-4" /> Probar
+        </Button>
         {automation.webhookUrl ? (
           <Button variant="secondary" size="sm" onClick={() => run.mutate(automation.id)} disabled={run.isPending}>
             <Play className="size-4" /> Ejecutar
@@ -226,6 +269,8 @@ export function WorkflowEditor({ automation, onExit }: { automation: Automation;
                   const x2 = b.x ?? 0;
                   const y2 = (b.y ?? 0) + NODE_H / 2;
                   const d = `M ${x1} ${y1} C ${x1 + 60} ${y1}, ${x2 - 60} ${y2}, ${x2} ${y2}`;
+                  const mx = (x1 + x2) / 2;
+                  const my = (y1 + y2) / 2;
                   return (
                     <g key={edge.id} className="pointer-events-auto cursor-pointer">
                       <path d={d} fill="none" stroke="transparent" strokeWidth={14} onClick={(e) => {
@@ -234,6 +279,18 @@ export function WorkflowEditor({ automation, onExit }: { automation: Automation;
                         toast.success("Conexión eliminada");
                       }} />
                       <path d={d} fill="none" stroke="hsl(var(--line-bright))" strokeWidth={2} />
+                      {edge.branch ? (
+                        <text
+                          x={mx}
+                          y={my - 6}
+                          textAnchor="middle"
+                          fontSize={11}
+                          fontWeight={600}
+                          fill={edge.branch === "true" ? "#3FB950" : "#E5484D"}
+                        >
+                          {branchLabel(edge.branch)}
+                        </text>
+                      ) : null}
                     </g>
                   );
                 })}
@@ -330,6 +387,88 @@ export function WorkflowEditor({ automation, onExit }: { automation: Automation;
           Conectando… haz clic en el nodo destino, o en el lienzo para cancelar.
         </p>
       ) : null}
+
+      <Dialog open={testOpen} onOpenChange={setTestOpen}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Probar flujo (simulación)</DialogTitle>
+            <DialogDescription>
+              Recorre el flujo con un contacto de ejemplo. No envía nada real.
+            </DialogDescription>
+          </DialogHeader>
+
+          {/* Sample context the conditions evaluate against */}
+          <div className="grid grid-cols-3 gap-2">
+            {(["stage", "channel", "replied"] as const).map((k) => (
+              <div key={k} className="space-y-1">
+                <Label htmlFor={`ctx-${k}`} className="text-[11px] capitalize">
+                  {k}
+                </Label>
+                <Input
+                  id={`ctx-${k}`}
+                  value={ctx[k] ?? ""}
+                  onChange={(e) => setCtx((c) => ({ ...c, [k]: e.target.value }))}
+                  className="h-8 text-xs"
+                />
+              </div>
+            ))}
+          </div>
+          <Button size="sm" onClick={runTest} disabled={test.isPending} className="w-full">
+            <FlaskConical className="size-4" /> {test.isPending ? "Simulando…" : "Volver a probar"}
+          </Button>
+
+          {/* Trace */}
+          <div className="max-h-[320px] overflow-y-auto">
+            {test.data?.error ? (
+              <p className="rounded-lg border border-state-warning/30 bg-state-warning/10 px-3 py-2 text-xs text-state-warning">
+                {test.data.error}
+              </p>
+            ) : test.data && test.data.steps.length > 0 ? (
+              <ol className="space-y-1.5">
+                {test.data.steps.map((s, i) => {
+                  const kind = nodeKind(s.type);
+                  return (
+                    <li
+                      key={`${s.nodeId}-${i}`}
+                      className="flex items-start gap-2.5 rounded-lg border border-line-soft bg-panel-raised px-2.5 py-2"
+                    >
+                      <span className="mt-0.5 text-[10px] font-semibold text-ink-faint">{i + 1}</span>
+                      <span
+                        className="grid size-6 shrink-0 place-items-center rounded-md text-xs"
+                        style={{ background: `${kind.accent}22`, color: kind.accent }}
+                      >
+                        {kind.glyph}
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2">
+                          <span className="truncate text-xs font-medium text-ink">{s.label}</span>
+                          {s.decision ? (
+                            <span
+                              className={cn(
+                                "rounded px-1.5 py-0.5 text-[10px] font-semibold",
+                                s.decision === "true"
+                                  ? "bg-state-success/15 text-state-success"
+                                  : "bg-state-danger/15 text-state-danger",
+                              )}
+                            >
+                              {s.decision === "true" ? "Sí" : "No"}
+                            </span>
+                          ) : null}
+                        </div>
+                        <p className="text-[11px] text-ink-muted">{s.note}</p>
+                      </div>
+                    </li>
+                  );
+                })}
+              </ol>
+            ) : test.isPending ? (
+              <p className="text-center text-xs text-ink-faint">Simulando…</p>
+            ) : (
+              <p className="text-center text-xs text-ink-faint">Sin pasos.</p>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

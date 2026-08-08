@@ -3,6 +3,7 @@ import type {
   AiUsage,
   AnalyticsSnapshot,
   Automation,
+  AutomationTestResult,
   CampaignImportResult,
   ChangelogStatus,
   ContactNote,
@@ -246,6 +247,8 @@ export function createHttpAdapters(opts: HttpAdapterOptions): Services {
       remove: (id, aid) => del<void>(`${ws(id)}/automations/${aid}`),
       run: (id, aid) =>
         post<{ triggered: boolean; runs: number }>(`${ws(id)}/automations/${aid}/run`, {}),
+      test: (id, aid, input) =>
+        post<AutomationTestResult>(`${ws(id)}/automations/${aid}/test`, input ?? {}),
     },
     designs: {
       list: (id) => get<ListResult<Design>>(`${ws(id)}/designs`),

@@ -12,6 +12,7 @@ import type {
   CreateWorkspaceInput,
   CreateAutomationInput,
   UpdateAutomationInput,
+  AutomationTestResult,
   CreateDesignInput,
   UpdateDesignInput,
   CreateCampaignInput,
@@ -701,6 +702,20 @@ export function useRunAutomation() {
       void qc.invalidateQueries({ queryKey: [ws.id, "automations"] });
       toast.success("Automatización ejecutada");
     },
+    onError: (err) => toast.error(errText(err)),
+  });
+}
+
+/** Dry-run a workflow against a sample context; returns the execution trace. */
+export function useTestAutomation() {
+  const svc = useServices();
+  const ws = useWorkspace();
+  return useMutation<
+    AutomationTestResult,
+    unknown,
+    { id: string; context?: Record<string, string> }
+  >({
+    mutationFn: ({ id, context }) => svc.automations.test(ws.id, id, { context }),
     onError: (err) => toast.error(errText(err)),
   });
 }

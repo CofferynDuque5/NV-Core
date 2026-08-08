@@ -16,7 +16,13 @@ import {
 import { ConfigService } from "@nestjs/config";
 import { ApiBearerAuth, ApiPropertyOptional, ApiTags } from "@nestjs/swagger";
 import { AUTOMATION_NODE_TYPES } from "@nv/domain";
-import type { Automation, AutomationNode, RunAutomationResult } from "@nv/domain";
+import type {
+  Automation,
+  AutomationEdge,
+  AutomationNode,
+  AutomationTestResult,
+  RunAutomationResult,
+} from "@nv/domain";
 import {
   IsArray,
   IsIn,
@@ -41,6 +47,7 @@ import { Roles } from "../../auth/decorators/roles.decorator";
 import { CurrentUser } from "../../auth/decorators/current-user.decorator";
 import type { AuthenticatedUser } from "../../auth/auth.types";
 import { triggerWebhook } from "./n8n.client";
+import { planExecution } from "./workflow-executor";
 import { ProvidersModule } from "../../providers/providers.module";
 import { AutomationBridgeController, N8nSecretGuard } from "./n8n.bridge";
 import { N8nEventForwarder } from "./n8n.forwarder";
@@ -67,6 +74,19 @@ export class AutomationEdgeDto {
   @IsString() id!: string;
   @IsString() from!: string;
   @IsString() to!: string;
+
+  @ApiPropertyOptional({ enum: ["true", "false"] })
+  @IsOptional()
+  @IsIn(["true", "false"])
+  branch?: "true" | "false";
+}
+
+/** Body for a workflow test-run: the sample context conditions evaluate against. */
+export class TestAutomationDto {
+  @ApiPropertyOptional({ type: "object", additionalProperties: { type: "string" } })
+  @IsOptional()
+  @IsObject()
+  context?: Record<string, string>;
 }
 
 export class CreateAutomationDto {
@@ -242,6 +262,31 @@ export class AutomationsService {
     return { triggered: true, runs: updated.runs };
   }
 
+  /**
+   * Dry-run the flow graph against a sample context and return the execution
+   * trace. Evaluates condition branches and describes each action WITHOUT
+   * dispatching anything — safe to run repeatedly while designing a flow.
+   */
+  async test(
+    workspaceId: string,
+    actor: string,
+    id: string,
+    context: Record<string, string> = {},
+  ): Promise<AutomationTestResult> {
+    const automation = await this.db().automation.findFirst({
+      where: { id, workspaceSlug: workspaceId },
+    });
+    if (!automation) throw new NotFoundException("Automatización no encontrada.");
+    const mapped = mapAutomation(automation);
+    const result = planExecution(
+      mapped.nodes,
+      (mapped.edges ?? []) as AutomationEdge[],
+      context,
+    );
+    await this.audit.record(workspaceId, actor, "automation.test", id);
+    return result;
+  }
+
   async remove(workspaceId: string, actor: string, id: string): Promise<void> {
     const { count } = await this.db().automation.deleteMany({
       where: { id, workspaceSlug: workspaceId },
@@ -295,6 +340,19 @@ export class AutomationsController {
     @Param("id") id: string,
   ) {
     return this.service.run(workspaceId, user.email, id);
+  }
+
+  @Post(":id/test")
+  @Roles("Owner", "Admin", "Editor")
+  @UseGuards(RolesGuard)
+  @HttpCode(200)
+  test(
+    @WorkspaceId() workspaceId: string,
+    @CurrentUser() user: AuthenticatedUser,
+    @Param("id") id: string,
+    @Body() dto: TestAutomationDto,
+  ) {
+    return this.service.test(workspaceId, user.email, id, dto.context ?? {});
   }
 
   @Delete(":id")
