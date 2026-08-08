@@ -32,6 +32,7 @@ import { PaginationQueryDto } from "../../common/dto/pagination.dto";
 import { WorkspaceId } from "../../common/tenant/workspace.decorator";
 import { WorkspaceGuard } from "../../common/tenant/workspace.guard";
 import { AuditLogger } from "../../common/audit-logger.service";
+import { PlanService } from "../../common/plan/plan.service";
 import { PrismaService } from "../../prisma/prisma.service";
 import { mapContact, mapContactNote } from "../../prisma/mappers";
 import { RolesGuard } from "../../auth/guards/roles.guard";
@@ -104,6 +105,7 @@ export class ContactsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly audit: AuditLogger,
+    private readonly plans: PlanService,
   ) {}
 
   private db() {
@@ -211,10 +213,13 @@ export class ContactsService {
       return "";
     };
 
-    let created = 0;
     let skipped = 0;
     const errors: string[] = [];
 
+    // Phase 1: validate + dedupe into a pending list. We enforce the plan limit
+    // on this list *before* writing anything, so a Free workspace that would go
+    // over its cap gets a clean 402 with no partial import left behind.
+    const toCreate: { line: number; data: Prisma.ContactUncheckedCreateInput }[] = [];
     for (let i = 0; i < records.length; i++) {
       const r = records[i]!;
       const line = i + 2; // +1 header, +1 to 1-index
@@ -237,20 +242,29 @@ export class ContactsService {
         .split(/[;,|]/)
         .map((t) => t.trim())
         .filter(Boolean);
+      toCreate.push({
+        line,
+        data: {
+          workspaceSlug: workspaceId,
+          name,
+          phone: pick(r, "phone", "telefono", "teléfono") || null,
+          email: email || null,
+          company: pick(r, "company", "empresa") || null,
+          tags,
+          stage,
+        },
+      });
+      if (emailKey) seen.add(emailKey); // dedupe within the file too
+    }
+
+    // Phase 2: gate on the plan limit (402 when it would overflow), then write.
+    await this.plans.assertWithinLimit(workspaceId, "contacts", toCreate.length);
+
+    let created = 0;
+    for (const { line, data } of toCreate) {
       try {
-        await db.contact.create({
-          data: {
-            workspaceSlug: workspaceId,
-            name,
-            phone: pick(r, "phone", "telefono", "teléfono") || null,
-            email: email || null,
-            company: pick(r, "company", "empresa") || null,
-            tags,
-            stage,
-          },
-        });
+        await db.contact.create({ data });
         created++;
-        if (emailKey) seen.add(emailKey);
       } catch (err) {
         errors.push(`Fila ${line}: ${(err as Error).message}`);
       }
@@ -260,6 +274,7 @@ export class ContactsService {
   }
 
   async create(workspaceId: string, actor: string, dto: CreateContactDto): Promise<Contact> {
+    await this.plans.assertWithinLimit(workspaceId, "contacts", 1);
     const row = await this.db().contact.create({
       data: {
         workspaceSlug: workspaceId,

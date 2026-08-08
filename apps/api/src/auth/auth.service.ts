@@ -13,6 +13,7 @@ import { getWorkspaceBySlug, type Role } from "@nv/domain";
 
 import type { AppConfig } from "../config/configuration";
 import { MailService } from "../common/mail.service";
+import { PlanService } from "../common/plan/plan.service";
 import { AuthStore } from "./auth.store";
 import { hashPassword, verifyPassword } from "./password.util";
 import { generateRefreshToken, hashToken } from "./token.util";
@@ -46,6 +47,7 @@ export class AuthService {
     private readonly jwt: JwtService,
     private readonly config: ConfigService<AppConfig, true>,
     private readonly mail: MailService,
+    private readonly plans: PlanService,
   ) {}
 
   async register(dto: RegisterDto): Promise<AuthResult> {
@@ -193,6 +195,12 @@ export class AuthService {
     const user = await this.store.findUserByEmail(email);
     if (!user) {
       throw new NotFoundException("No existe un usuario con ese email. Debe registrarse primero.");
+    }
+    // Only genuinely new members count against the plan seat limit; changing an
+    // existing member's role must never be blocked (net member count is unchanged).
+    const alreadyMember = await this.store.getMembership(user.id, workspaceSlug);
+    if (!alreadyMember) {
+      await this.plans.assertWithinLimit(workspaceSlug, "teamMembers", 1);
     }
     await this.store.upsertMembership(user.id, workspaceSlug, role);
 

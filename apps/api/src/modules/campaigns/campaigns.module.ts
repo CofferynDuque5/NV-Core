@@ -24,6 +24,7 @@ import {
   type CampaignStatus,
   type ChannelId,
 } from "@nv/domain";
+import { Prisma } from "@prisma/client";
 import {
   IsArray,
   IsDateString,
@@ -42,6 +43,7 @@ import { ListResultDto } from "../../common/dto/list-result.dto";
 import { WorkspaceId } from "../../common/tenant/workspace.decorator";
 import { WorkspaceGuard } from "../../common/tenant/workspace.guard";
 import { AuditLogger } from "../../common/audit-logger.service";
+import { PlanService } from "../../common/plan/plan.service";
 import { PrismaService } from "../../prisma/prisma.service";
 import { mapCampaign } from "../../prisma/mappers";
 import { RolesGuard } from "../../auth/guards/roles.guard";
@@ -154,6 +156,7 @@ export class CampaignsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly audit: AuditLogger,
+    private readonly plans: PlanService,
   ) {}
 
   private db() {
@@ -208,6 +211,7 @@ export class CampaignsService {
   }
 
   async create(workspaceId: string, actor: string, dto: CreateCampaignDto): Promise<Campaign> {
+    await this.plans.assertWithinLimit(workspaceId, "campaigns", 1);
     const created = await this.db().campaign.create({
       data: {
         workspaceSlug: workspaceId,
@@ -372,10 +376,19 @@ export class CampaignsService {
         .map((s) => s.trim())
         .filter(Boolean);
 
-    let created = 0;
     let skipped = 0;
     const errors: string[] = [];
     const schedules = ["once", "daily", "weekly"];
+
+    // Phase 1: validate + dedupe + resolve recipient groups into a pending list.
+    // Nothing is written yet, so the plan limit can reject the whole import
+    // (402) before any campaign lands.
+    const toCreate: {
+      line: number;
+      nameKey: string;
+      groupIds: string[];
+      data: Prisma.CampaignUncheckedCreateInput;
+    }[] = [];
 
     for (let i = 0; i < records.length; i++) {
       const r = records[i]!;
@@ -413,19 +426,31 @@ export class CampaignsService {
         errors.push(`Fila ${line} ("${name}"): grupos no encontrados: ${missing.join(", ")}.`);
       }
 
+      toCreate.push({
+        line,
+        nameKey,
+        groupIds,
+        data: {
+          workspaceSlug: workspaceId,
+          name,
+          status: "borrador", // never auto-launch an imported campaign
+          channels,
+          message: pick(r, "message", "mensaje"),
+          scheduleType,
+          scheduleAt: pick(r, "scheduleAt", "hora") || null,
+          scheduleDays,
+        },
+      });
+      seen.add(nameKey); // dedupe within the file too
+    }
+
+    // Phase 2: gate on the plan limit (402 when it would overflow), then write.
+    await this.plans.assertWithinLimit(workspaceId, "campaigns", toCreate.length);
+
+    let created = 0;
+    for (const { line, groupIds, data } of toCreate) {
       try {
-        const campaign = await db.campaign.create({
-          data: {
-            workspaceSlug: workspaceId,
-            name,
-            status: "borrador", // never auto-launch an imported campaign
-            channels,
-            message: pick(r, "message", "mensaje"),
-            scheduleType,
-            scheduleAt: pick(r, "scheduleAt", "hora") || null,
-            scheduleDays,
-          },
-        });
+        const campaign = await db.campaign.create({ data });
         if (groupIds.length) {
           await db.campaignTarget.createMany({
             data: groupIds.map((groupId) => ({ campaignId: campaign.id, groupId })),
@@ -433,7 +458,6 @@ export class CampaignsService {
           });
         }
         created++;
-        seen.add(nameKey);
       } catch (err) {
         errors.push(`Fila ${line}: ${(err as Error).message}`);
       }

@@ -50,6 +50,7 @@ function makeService(store: unknown) {
     {} as never,
     config as never,
     mail as never,
+    { assertWithinLimit: vi.fn() } as never,
   );
   return { svc, mail };
 }
@@ -116,7 +117,13 @@ describe("AuthService login lockout", () => {
     };
     const jwt = { signAsync: vi.fn(async () => "access-token") };
     const config = { get: vi.fn(() => ({ refreshTtlDays: 7 })) };
-    const svc = new AuthService(store as unknown as AuthStore, jwt as never, config as never, {} as never);
+    const svc = new AuthService(
+      store as unknown as AuthStore,
+      jwt as never,
+      config as never,
+      {} as never,
+      { assertWithinLimit: vi.fn() } as never,
+    );
     return { svc, store, calls };
   }
 

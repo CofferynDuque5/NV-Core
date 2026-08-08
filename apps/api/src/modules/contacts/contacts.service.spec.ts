@@ -1,3 +1,4 @@
+import { HttpException, HttpStatus } from "@nestjs/common";
 import { describe, expect, it, vi } from "vitest";
 
 import { ContactsService } from "./contacts.module";
@@ -40,7 +41,11 @@ function makeService(opts: { contactExists?: boolean; notes?: Note[] } = {}) {
     },
   };
   const audit = { record: vi.fn() };
-  const service = new ContactsService(prisma as unknown as PrismaService, audit as never);
+  const service = new ContactsService(
+    prisma as unknown as PrismaService,
+    audit as never,
+    { assertWithinLimit: vi.fn() } as never,
+  );
   return { service, notes };
 }
 
@@ -49,7 +54,11 @@ describe("ContactsService.list (server-side search + stage)", () => {
     const findMany = vi.fn(async (_args: Record<string, unknown>) => [] as unknown[]);
     const count = vi.fn(async (_args: Record<string, unknown>) => 0);
     const prisma = { enabled: true, contact: { findMany, count } };
-    const service = new ContactsService(prisma as unknown as PrismaService, { record: vi.fn() } as never);
+    const service = new ContactsService(
+      prisma as unknown as PrismaService,
+      { record: vi.fn() } as never,
+      { assertWithinLimit: vi.fn() } as never,
+    );
     return { service, findMany, count };
   }
 
@@ -85,7 +94,11 @@ describe("ContactsService.list (server-side search + stage)", () => {
 
   it("returns an empty list when the DB is disabled", async () => {
     const prisma = { enabled: false, contact: { findMany: vi.fn(), count: vi.fn() } };
-    const service = new ContactsService(prisma as unknown as PrismaService, { record: vi.fn() } as never);
+    const service = new ContactsService(
+      prisma as unknown as PrismaService,
+      { record: vi.fn() } as never,
+      { assertWithinLimit: vi.fn() } as never,
+    );
     const res = await service.list("w1", { page: 1, pageSize: 100 } as never);
     expect(res.items).toEqual([]);
     expect(prisma.contact.findMany).not.toHaveBeenCalled();
@@ -94,7 +107,11 @@ describe("ContactsService.list (server-side search + stage)", () => {
 
 describe("ContactsService import/export CSV", () => {
   type Row = { id: string; workspaceSlug: string; name: string; email: string | null; tags: string[]; stage: string; createdAt: Date; phone?: string | null; company?: string | null };
-  function makeIO(seed: { name: string; email?: string | null }[] = []) {
+  function makeIO(
+    seed: { name: string; email?: string | null }[] = [],
+    assertWithinLimit: (ws: string, resource: string, count: number) => Promise<void> = async () =>
+      undefined,
+  ) {
     const rows: Row[] = seed.map((c, i) => ({
       id: "c" + i, workspaceSlug: "w1", name: c.name, email: c.email ?? null, tags: [], stage: "Lead", createdAt: new Date(0),
     }));
@@ -116,8 +133,13 @@ describe("ContactsService import/export CSV", () => {
         }),
       },
     };
-    const service = new ContactsService(prisma as unknown as PrismaService, { record: vi.fn() } as never);
-    return { service, created };
+    const plans = { assertWithinLimit: vi.fn(assertWithinLimit) };
+    const service = new ContactsService(
+      prisma as unknown as PrismaService,
+      { record: vi.fn() } as never,
+      plans as never,
+    );
+    return { service, created, plans };
   }
 
   it("creates new contacts, skips duplicate emails, and reports name errors", async () => {
@@ -140,6 +162,23 @@ describe("ContactsService import/export CSV", () => {
     const { service, created } = makeIO();
     await service.importCsv("w1", "actor", "nombre,correo,etapa\nLuisa,luisa@x.com,Cliente");
     expect(created[0]).toMatchObject({ name: "Luisa", email: "luisa@x.com", stage: "Cliente" });
+  });
+
+  it("enforces the plan limit with the count of NEW contacts (dupes excluded)", async () => {
+    const { service, plans } = makeIO([{ name: "Existing", email: "dup@x.com" }]);
+    // 2 new + 1 duplicate email → gate should be asked to fit exactly 2.
+    await service.importCsv("w1", "actor", "name,email\nAna,ana@x.com\nBob,dup@x.com\nCleo,cleo@x.com");
+    expect(plans.assertWithinLimit).toHaveBeenCalledWith("w1", "contacts", 2);
+  });
+
+  it("rejects the whole import (402) before writing when it would overflow the plan", async () => {
+    const { service, created } = makeIO([], async () => {
+      throw new HttpException("Límite alcanzado", HttpStatus.PAYMENT_REQUIRED);
+    });
+    await expect(
+      service.importCsv("w1", "actor", "name,email\nAna,ana@x.com\nBob,bob@x.com"),
+    ).rejects.toBeInstanceOf(HttpException);
+    expect(created).toHaveLength(0); // gate runs before any write
   });
 
   it("exports contacts as CSV with a header", async () => {

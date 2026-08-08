@@ -1,3 +1,4 @@
+import { HttpException, HttpStatus } from "@nestjs/common";
 import { describe, expect, it, vi } from "vitest";
 
 import { CampaignsService } from "./campaigns.module";
@@ -20,6 +21,7 @@ interface Camp {
 function makeService(opts: {
   groups?: { id: string; name: string }[];
   campaigns?: Partial<Camp>[];
+  assertWithinLimit?: (ws: string, resource: string, count: number) => Promise<void>;
 } = {}) {
   const groups = opts.groups ?? [];
   const campaigns: Camp[] = (opts.campaigns ?? []).map((c, i) => ({
@@ -72,7 +74,14 @@ function makeService(opts: {
     },
   };
   const audit = { record: vi.fn() };
-  const service = new CampaignsService(prisma as unknown as PrismaService, audit as never);
+  const plans = {
+    assertWithinLimit: vi.fn(opts.assertWithinLimit ?? (async () => undefined)),
+  };
+  const service = new CampaignsService(
+    prisma as unknown as PrismaService,
+    audit as never,
+    plans as never,
+  );
   return { service, campaigns, targetLinks };
 }
 
@@ -142,5 +151,30 @@ describe("CampaignsService.importCsv", () => {
     const y = campaigns.find((c) => c.name === "Y")!;
     expect(y.channels).toEqual(["wa"]);
     expect(y.scheduleType).toBe("once");
+  });
+
+  it("enforces the plan limit with the count of NEW campaigns (dupes excluded)", async () => {
+    const assertWithinLimit = vi.fn(async () => undefined);
+    const { service } = makeService({
+      campaigns: [{ name: "Existente" }], // duplicate → must not count toward the limit
+      assertWithinLimit,
+    });
+    // 2 new + 1 duplicate → the gate should be asked to fit exactly 2.
+    await service.importCsv("w1", "actor", "name\nUna\nExistente\nDos");
+    expect(assertWithinLimit).toHaveBeenCalledWith("w1", "campaigns", 2);
+  });
+
+  it("rejects the whole import (402) before writing when it would overflow the plan", async () => {
+    const { service, campaigns } = makeService({
+      assertWithinLimit: async () => {
+        throw new HttpException("Límite alcanzado", HttpStatus.PAYMENT_REQUIRED);
+      },
+    });
+    const before = campaigns.length;
+    await expect(service.importCsv("w1", "actor", "name\nUna\nDos\nTres")).rejects.toBeInstanceOf(
+      HttpException,
+    );
+    // Nothing was created — the gate runs before any write.
+    expect(campaigns).toHaveLength(before);
   });
 });
