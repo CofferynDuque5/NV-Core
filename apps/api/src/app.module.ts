@@ -8,6 +8,7 @@ import { validateEnv } from "./config/env.validation";
 import { ConditionalThrottlerGuard } from "./common/guards/conditional-throttler.guard";
 import { CommonModule } from "./common/common.module";
 import { CoreModule } from "./core/core.module";
+import { MetricsModule } from "./common/metrics/metrics.module";
 import { PrismaModule } from "./prisma/prisma.module";
 import { SchedulerModule } from "./modules/scheduler/scheduler.module";
 import { PlanModule } from "./common/plan/plan.service";
@@ -60,6 +61,7 @@ import { ProvidersModule } from "./providers/providers.module";
     SchedulerModule,
     AuthModule,
     HealthModule,
+    MetricsModule,
 
     // Feature modules (one per @nv/domain service)
     WorkspacesModule,

@@ -373,6 +373,14 @@ Leyenda: **E**xiste · **F**unciona · **C**ompleto · **P**roducción-ready.
 - **Objetivo:** operar con confianza.
 - **Módulos:** observabilidad (métricas/tracing/alertas), HA mínima, backups programados verificados, cobertura de tests con gate.
 - **DoD:** dashboards de salud, alertas, restore probado, cobertura ≥ umbral acordado.
+- **Progreso (verificado):**
+  - ✅ **Métricas Prometheus (`GET /api/metrics`)** — registro **hand-rolled sin dependencias nuevas** (formato text-exposition v0.0.4). Series: `http_requests_total{method,route,status}` (la **ruta es el patrón** `/api/workspaces/:workspace/…`, nunca el id → sin explosión de cardinalidad), `http_request_duration_seconds` (histograma con buckets), `nv_domain_events_total{event,status}` (alimentado por el EventBus: mensajes/publicaciones/campañas/jobs), y gauges `nv_dependency_up{dependency}` (db/queue, medidos en cada scrape) + `nv_build_info`. Interceptor global mide cada request; endpoint `@Public` protegido por `METRICS_TOKEN` (Bearer) cuando está configurado. +4 tests. **Verificado en vivo**: sin token → **403**, con token → **200** con el texto Prometheus; tras generar tráfico, los contadores por ruta-patrón y el histograma aparecen; `nv_dependency_up{database}`=1.
+  - ✅ **Reglas de alerta + guía de HA** en `OPERATIONS.md §7`: `scrape_config` de Prometheus, 6 reglas de alerta PromQL (API down, DB/queue down, tasa de 5xx>5%, p95>1s, errores de eventos de dominio) y HA mínima (API sin estado ≥2 réplicas, Postgres con réplica, Redis gestionado). El wiring de Alertmanager/PagerDuty es config de despliegue (endpoints fuera del repo).
+  - ✅ **Restore de backup probado (DoD «restore probado»)** — simulacro end-to-end contra Postgres real: `backup-db.sh` generó un dump (custom/comprimido, integridad verificada con `pg_restore --list`), se restauró en una base limpia con `pg_restore` y los conteos `Contact/User/Segment` **coincidieron exactamente** (108/7/0) con el origen. Documentado en `OPERATIONS.md §7`.
+  - ✅ **Tracing/correlación**: request-id por request (Hard-2) para correlación de logs; tracing distribuido completo (OpenTelemetry) requiere un colector externo (config de despliegue) — se deja como recomendación operativa, no bloqueante.
+  - ⏳ **Gate de cobertura de tests — pendiente**: el provider `@vitest/coverage-v8` **entra en conflicto con el cliente Prisma generado** en este monorepo (falla la resolución de `.prisma/client/default` bajo instrumentación y no emite resumen), así que **no** se cableó un gate que no se puede verificar. Alternativa pendiente: usar `@vitest/coverage-istanbul` o aislar el cliente Prisma de la instrumentación, luego fijar el umbral. La suite en sí sigue creciendo (**API 326**, web 116).
+
+  **Sprint 6: mayormente cumplido.** Observabilidad (métricas + alertas + HA docs) y restore probado ✅. Pendiente no bloqueante: gate de cobertura (conflicto de tooling con Prisma) y tracing distribuido (colector externo).
 
 ---
 

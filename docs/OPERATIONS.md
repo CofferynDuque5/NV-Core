@@ -136,3 +136,80 @@ opción con riesgo (librería no oficial → posible baneo del número).
 - **request-id**: cada request lleva `x-request-id` (middleware) para correlación.
 - **Shutdown**: la API llama `enableShutdownHooks()`, así que en `SIGTERM` cierra
   Prisma y los workers/colas de BullMQ antes de salir (rollout sin cortar jobs).
+
+### Métricas (Prometheus)
+
+`GET /api/metrics` expone métricas en formato Prometheus (text exposition v0.0.4),
+sin dependencias externas. Protégelo con `METRICS_TOKEN` (se exige
+`Authorization: Bearer <token>`; sin la variable el endpoint es abierto — úsalo
+solo así en dev) **y** restríngelo a la red interna de scrape.
+
+Series expuestas:
+
+| Métrica | Tipo | Labels | Para qué |
+|---|---|---|---|
+| `http_requests_total` | counter | `method`, `route` (patrón, p.ej. `/api/workspaces/:workspace/contacts`), `status` | Tráfico y tasa de error por endpoint. La ruta es el **patrón**, nunca el id → sin explosión de cardinalidad. |
+| `http_request_duration_seconds` | histogram | `method`, `route` | Latencia (p50/p95/p99 vía `histogram_quantile`). |
+| `nv_domain_events_total` | counter | `event`, `status` (`ok`/`error`) | Salud del negocio (mensajes, publicaciones, campañas, jobs). |
+| `nv_dependency_up` | gauge | `dependency` (`database`/`queue`) | 1 si la dependencia respondió al scrape, 0 si no. |
+| `nv_build_info` | gauge | `env` | Metadatos de runtime (valor siempre 1). |
+
+Ejemplo de `scrape_config` de Prometheus:
+```yaml
+scrape_configs:
+  - job_name: nv-core-api
+    metrics_path: /api/metrics
+    authorization: { credentials: "<METRICS_TOKEN>" }
+    static_configs: [{ targets: ["api:3000"] }]
+```
+
+### Reglas de alerta (PromQL)
+
+Punto de partida para Alertmanager (ajusta umbrales a tu SLO):
+```yaml
+groups:
+  - name: nv-core
+    rules:
+      - alert: NvApiDown
+        expr: up{job="nv-core-api"} == 0
+        for: 2m
+      - alert: NvDatabaseDown
+        expr: nv_dependency_up{dependency="database"} == 0
+        for: 1m
+      - alert: NvQueueDown
+        expr: nv_dependency_up{dependency="queue"} == 0
+        for: 5m
+      - alert: NvHighErrorRate            # >5% de 5xx durante 10m
+        expr: |
+          sum(rate(http_requests_total{status=~"5.."}[5m]))
+            / sum(rate(http_requests_total[5m])) > 0.05
+        for: 10m
+      - alert: NvHighLatencyP95           # p95 > 1s durante 10m
+        expr: |
+          histogram_quantile(0.95,
+            sum(rate(http_request_duration_seconds_bucket[5m])) by (le)) > 1
+        for: 10m
+      - alert: NvDomainEventErrors        # fallos de envío/publicación
+        expr: sum(rate(nv_domain_events_total{status="error"}[15m])) > 0
+        for: 15m
+```
+> El **wiring de Alertmanager/PagerDuty es configuración de despliegue** (endpoints
+> y credenciales fuera del repo). NV Core provee las métricas y las reglas; el
+> operador conecta el receptor.
+
+### Alta disponibilidad (mínima)
+
+- **API sin estado**: escala horizontal a ≥2 réplicas detrás del balanceador;
+  enruta por `/api/health/ready` y reinicia por `/api/health`. El estado vive en
+  Postgres y Redis (compartidos), no en el proceso.
+- **Postgres**: usa una réplica gestionada (o streaming replication) para
+  failover; los backups (§4) cubren la recuperación ante desastres.
+- **Redis**: requerido en producción (la publicación programada lo necesita);
+  usa una instancia gestionada con persistencia.
+
+### Simulacro de restauración (verificado)
+
+El restore se probó de punta a punta contra Postgres real: `backup-db.sh` generó
+un dump, se restauró en una base limpia con `pg_restore` y los conteos de filas
+(`Contact`/`User`/`Segment`) **coincidieron exactamente** con el origen. Repite
+este simulacro periódicamente — un backup no restaurado no es un backup.

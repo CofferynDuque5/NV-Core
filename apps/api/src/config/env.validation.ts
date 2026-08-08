@@ -24,6 +24,8 @@ export const envSchema = z.object({
   // Allow public registration to claim Owner of an unclaimed built-in workspace.
   // Off by default (secure); "true"/"1" to enable open self-serve claiming.
   ALLOW_OPEN_WORKSPACE_CLAIM: z.string().optional(),
+  // Optional bearer token guarding GET /api/metrics (Prometheus scrape).
+  METRICS_TOKEN: z.string().optional(),
 
   // Data / infra
   DATABASE_URL: z.string().url().optional(),

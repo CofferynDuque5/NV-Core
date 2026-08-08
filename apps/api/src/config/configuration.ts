@@ -24,6 +24,8 @@ export interface AppConfig {
     allowOpenWorkspaceClaim: boolean;
   };
   security: { encryptionKey: string };
+  /** Optional bearer token protecting the Prometheus /metrics endpoint. */
+  metricsToken?: string;
   sentry: { dsn?: string };
   database: { url?: string };
   redis: { url?: string };
@@ -95,6 +97,7 @@ export function buildConfig(env: Env): AppConfig {
         env.ALLOW_OPEN_WORKSPACE_CLAIM === "true" || env.ALLOW_OPEN_WORKSPACE_CLAIM === "1",
     },
     security: { encryptionKey },
+    metricsToken: env.METRICS_TOKEN,
     sentry: { dsn: env.SENTRY_DSN },
     database: { url: env.DATABASE_URL },
     redis: { url: env.REDIS_URL },
