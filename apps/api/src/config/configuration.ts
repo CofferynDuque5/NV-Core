@@ -12,7 +12,17 @@ export interface AppConfig {
   apiUrl: string;
   /** Workspace slug that receives inbound WhatsApp/Telegram messages. */
   inboundWorkspace?: string;
-  auth: { secret: string; expiresIn: string; refreshTtlDays: number };
+  auth: {
+    secret: string;
+    expiresIn: string;
+    refreshTtlDays: number;
+    /**
+     * When true, a public registration may claim Owner of a built-in workspace
+     * that has no members yet. Off by default (secure): provisioning is via
+     * NV_ADMIN_* or invitation, so an attacker can't land-grab an unclaimed tenant.
+     */
+    allowOpenWorkspaceClaim: boolean;
+  };
   security: { encryptionKey: string };
   sentry: { dsn?: string };
   database: { url?: string };
@@ -77,7 +87,13 @@ export function buildConfig(env: Env): AppConfig {
     appUrl: env.APP_URL.replace(/\/$/, ""),
     apiUrl: env.API_URL.replace(/\/$/, ""),
     inboundWorkspace: env.INBOUND_WORKSPACE,
-    auth: { secret, expiresIn: env.JWT_EXPIRES_IN, refreshTtlDays: env.REFRESH_TOKEN_TTL_DAYS },
+    auth: {
+      secret,
+      expiresIn: env.JWT_EXPIRES_IN,
+      refreshTtlDays: env.REFRESH_TOKEN_TTL_DAYS,
+      allowOpenWorkspaceClaim:
+        env.ALLOW_OPEN_WORKSPACE_CLAIM === "true" || env.ALLOW_OPEN_WORKSPACE_CLAIM === "1",
+    },
     security: { encryptionKey },
     sentry: { dsn: env.SENTRY_DSN },
     database: { url: env.DATABASE_URL },

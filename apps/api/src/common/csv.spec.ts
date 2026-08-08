@@ -8,6 +8,21 @@ describe("toCsv", () => {
     expect(csv).toBe("name,stage\r\nAna,Lead");
   });
 
+  it("neutralizes CSV formula injection (leading = + - @) by prefixing a quote", () => {
+    const csv = toCsv(
+      [{ a: "=1+2", b: "+CMD", c: "-2", d: "@SUM(A1)", e: "safe" }],
+      ["a", "b", "c", "d", "e"],
+    );
+    // Each formula-leading field is prefixed with ' so a spreadsheet reads it as text.
+    // The '=1+2' has no special CSV chars so it's not quoted, just prefixed.
+    expect(csv).toBe("a,b,c,d,e\r\n'=1+2,'+CMD,'-2,'@SUM(A1),safe");
+  });
+
+  it("neutralized formula still round-trips (prefix is literal data)", () => {
+    const parsed = parseCsv(toCsv([{ name: "=1+2" }], ["name"]));
+    expect(parsed).toEqual([{ name: "'=1+2" }]);
+  });
+
   it("quotes fields with commas, quotes or newlines", () => {
     const csv = toCsv([{ a: "x,y", b: 'he said "hi"', c: "line1\nline2" }], ["a", "b", "c"]);
     expect(csv).toBe('a,b,c\r\n"x,y","he said ""hi""","line1\nline2"');

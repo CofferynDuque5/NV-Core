@@ -31,6 +31,7 @@ import { LIST_CAP, THREAD_CAP } from "../../common/query-limits";
 import { WorkspaceId } from "../../common/tenant/workspace.decorator";
 import { WorkspaceGuard } from "../../common/tenant/workspace.guard";
 import { WorkspaceRegistry } from "../../common/workspace-registry.service";
+import { safeEqual } from "../../common/crypto/crypto.util";
 import { PrismaService } from "../../prisma/prisma.service";
 import { mapConversation, mapMessage } from "../../prisma/mappers";
 import { RolesGuard } from "../../auth/guards/roles.guard";
@@ -294,7 +295,7 @@ export class WhatsAppWebhookController {
     @Res() res: Response,
   ): void {
     const expected = this.config.get("integrations", { infer: true }).whatsapp.verifyToken;
-    if (mode === "subscribe" && expected && token === expected) {
+    if (mode === "subscribe" && expected && safeEqual(token, expected)) {
       res.status(200).send(challenge ?? "");
     } else {
       res.status(403).send("forbidden");
@@ -351,7 +352,7 @@ export class TelegramWebhookController {
     // unconfigured webhook must never accept spoofed inbound updates. Same
     // generic 403 for both cases so it isn't an oracle for "is it configured".
     const expected = this.config.get("integrations", { infer: true }).telegram.webhookSecret;
-    if (!expected || secret !== expected) {
+    if (!expected || !safeEqual(secret, expected)) {
       throw new ForbiddenException("Webhook de Telegram no configurado o secret inválido.");
     }
     const msg = parseTelegramInbound(body);

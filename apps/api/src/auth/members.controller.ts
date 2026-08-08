@@ -8,6 +8,8 @@ import { AuthService } from "./auth.service";
 import { AuthStore } from "./auth.store";
 import { RolesGuard } from "./guards/roles.guard";
 import { Roles } from "./decorators/roles.decorator";
+import { CurrentUser } from "./decorators/current-user.decorator";
+import type { AuthenticatedUser } from "./auth.types";
 import { AddMemberDto } from "./dto/add-member.dto";
 import { toTeamMember } from "./member.mapper";
 
@@ -35,15 +37,23 @@ export class MembersController {
   @Roles("Owner", "Admin")
   @UseGuards(RolesGuard)
   @Post()
-  add(@WorkspaceId() workspaceId: string, @Body() dto: AddMemberDto) {
-    return this.auth.addMember(workspaceId, dto.email, dto.role);
+  add(
+    @WorkspaceId() workspaceId: string,
+    @CurrentUser() user: AuthenticatedUser,
+    @Body() dto: AddMemberDto,
+  ) {
+    return this.auth.addMember(workspaceId, user.userId, dto.email, dto.role);
   }
 
   @Roles("Owner", "Admin")
   @UseGuards(RolesGuard)
   @Delete(":userId")
   @HttpCode(204)
-  remove(@WorkspaceId() workspaceId: string, @Param("userId") userId: string) {
-    return this.auth.removeMember(workspaceId, userId);
+  remove(
+    @WorkspaceId() workspaceId: string,
+    @CurrentUser() user: AuthenticatedUser,
+    @Param("userId") userId: string,
+  ) {
+    return this.auth.removeMember(workspaceId, user.userId, userId);
   }
 }

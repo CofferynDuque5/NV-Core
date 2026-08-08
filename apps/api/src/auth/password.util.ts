@@ -5,6 +5,13 @@ const scrypt = promisify(scryptCb);
 const KEYLEN = 64;
 
 /**
+ * A well-formed hash that no password matches. Verify against this when the
+ * account doesn't exist so login runs the same scrypt work either way,
+ * removing the timing oracle that would otherwise reveal which emails exist.
+ */
+export const DUMMY_PASSWORD_HASH = `${"0".repeat(32)}:${"0".repeat(KEYLEN * 2)}`;
+
+/**
  * Password hashing with Node's built-in scrypt — no native/compiled deps.
  * Format stored: `<saltHex>:<hashHex>`.
  */

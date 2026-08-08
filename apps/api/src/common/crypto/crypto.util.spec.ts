@@ -1,6 +1,20 @@
 import { describe, expect, it } from "vitest";
 
-import { decryptString, deriveKey, encryptString, isEncrypted } from "./crypto.util";
+import { decryptString, deriveKey, encryptString, isEncrypted, safeEqual } from "./crypto.util";
+
+describe("safeEqual", () => {
+  it("is true only for identical strings", () => {
+    expect(safeEqual("s3cret-token", "s3cret-token")).toBe(true);
+    expect(safeEqual("s3cret-token", "s3cret-toke")).toBe(false);
+    expect(safeEqual("s3cret-token", "s3cret-tokeN")).toBe(false);
+  });
+  it("is false for length mismatch and nullish inputs", () => {
+    expect(safeEqual("abc", "abcd")).toBe(false);
+    expect(safeEqual(undefined, "abc")).toBe(false);
+    expect(safeEqual("abc", null)).toBe(false);
+    expect(safeEqual(undefined, undefined)).toBe(false);
+  });
+});
 
 const key = deriveKey("test-secret");
 

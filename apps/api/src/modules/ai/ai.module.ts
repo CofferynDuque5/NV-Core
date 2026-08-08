@@ -11,6 +11,7 @@ import {
   UseGuards,
 } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
+import { Throttle } from "@nestjs/throttler";
 import { ApiBearerAuth, ApiTags } from "@nestjs/swagger";
 import type { AiRecommendation, AiVariant, BestTimes, PlanId } from "@nv/domain";
 import { IsOptional, IsString, MinLength } from "class-validator";
@@ -328,6 +329,10 @@ export class AiService {
   }
 }
 
+// Each paid LLM call costs real money; cap generation routes tightly per IP
+// (on top of the per-plan monthly quota) so one client can't burn the budget.
+const AI_THROTTLE = { default: { limit: 15, ttl: 60_000 } };
+
 @ApiTags("ai")
 @ApiBearerAuth()
 @UseGuards(WorkspaceGuard, PlanGuard)
@@ -341,18 +346,21 @@ export class AiController {
   }
 
   @Post("variants")
+  @Throttle(AI_THROTTLE)
   @RequiresActivePlan()
   variants(@WorkspaceId() workspaceId: string, @Body() dto: GenerateVariantsDto) {
     return this.service.generateVariants(workspaceId, dto);
   }
 
   @Post("hashtags")
+  @Throttle(AI_THROTTLE)
   @RequiresActivePlan()
   async hashtags(@WorkspaceId() workspaceId: string, @Body() dto: SuggestHashtagsDto) {
     return { hashtags: await this.service.suggestHashtags(workspaceId, dto) };
   }
 
   @Post("improve")
+  @Throttle(AI_THROTTLE)
   @RequiresActivePlan()
   improve(@WorkspaceId() workspaceId: string, @Body() dto: ImproveMessageDto) {
     return this.service.improve(workspaceId, dto);

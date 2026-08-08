@@ -34,6 +34,7 @@ function makeStore() {
     setEmailVerified: vi.fn(async (userId: string) => {
       state.verified = userId;
     }),
+    clearFailedLogins: vi.fn(async () => undefined),
   };
   return { store, state, tokens };
 }
@@ -175,6 +176,64 @@ describe("AuthService login lockout", () => {
     );
     // Not short-circuited by the (expired) lock — the password was checked.
     expect(store.incrementFailedLogins).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("AuthService.addMember (privilege-escalation guard)", () => {
+  function makeMemberService(opts: {
+    actorRole?: "Owner" | "Admin";
+    targetRole?: "Owner" | "Admin" | "Editor" | "Visor" | null;
+  }) {
+    const target = { id: "target-user", email: "target@x.com", name: "Target" };
+    const memberships: Record<string, string | undefined> = {
+      "actor-user": opts.actorRole,
+      "target-user": opts.targetRole ?? undefined,
+    };
+    const upserts: { userId: string; role: string }[] = [];
+    const store = {
+      getMembership: vi.fn(async (userId: string) =>
+        memberships[userId] ? { role: memberships[userId] } : undefined,
+      ),
+      findUserByEmail: vi.fn(async () => target),
+      upsertMembership: vi.fn(async (userId: string, _ws: string, role: string) => {
+        upserts.push({ userId, role });
+      }),
+    };
+    const mail = { send: vi.fn(async () => ({ sent: true as const })) };
+    const plans = { assertWithinLimit: vi.fn(async () => undefined) };
+    const svc = new AuthService(
+      store as unknown as AuthStore,
+      {} as never,
+      {} as never,
+      mail as never,
+      plans as never,
+    );
+    return { svc, upserts };
+  }
+
+  it("blocks an Admin from granting the Owner role (self-escalation)", async () => {
+    const { svc, upserts } = makeMemberService({ actorRole: "Admin", targetRole: null });
+    await expect(svc.addMember("w1", "actor-user", "target@x.com", "Owner")).rejects.toThrow(
+      /Owner/,
+    );
+    expect(upserts).toHaveLength(0);
+  });
+
+  it("blocks an Admin from modifying an existing Owner (demotion)", async () => {
+    const { svc } = makeMemberService({ actorRole: "Admin", targetRole: "Owner" });
+    await expect(svc.addMember("w1", "actor-user", "target@x.com", "Visor")).rejects.toThrow(/Owner/);
+  });
+
+  it("lets an Admin manage a non-Owner member", async () => {
+    const { svc, upserts } = makeMemberService({ actorRole: "Admin", targetRole: "Editor" });
+    await svc.addMember("w1", "actor-user", "target@x.com", "Visor");
+    expect(upserts).toEqual([{ userId: "target-user", role: "Visor" }]);
+  });
+
+  it("lets an Owner grant the Owner role", async () => {
+    const { svc, upserts } = makeMemberService({ actorRole: "Owner", targetRole: null });
+    await svc.addMember("w1", "actor-user", "target@x.com", "Owner");
+    expect(upserts).toEqual([{ userId: "target-user", role: "Owner" }]);
   });
 });
 

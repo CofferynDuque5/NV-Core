@@ -4,8 +4,18 @@
  * Used by data import/export (contacts today).
  */
 
+/**
+ * Neutralize CSV formula injection: a field that begins with =, +, -, @, or a
+ * control char (tab/CR/LF) is treated as a formula by Excel/Sheets and can run
+ * on open. Prefixing a single quote forces it to be read as text. Applied to
+ * every exported field.
+ */
+function neutralizeFormula(s: string): string {
+  return /^[=+\-@\t\r]/.test(s) ? `'${s}` : s;
+}
+
 function escapeField(value: unknown): string {
-  const s = value == null ? "" : String(value);
+  const s = neutralizeFormula(value == null ? "" : String(value));
   return /[",\r\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
 }
 

@@ -17,6 +17,7 @@ import { IsArray, IsIn, IsOptional, IsString, MinLength } from "class-validator"
 
 import type { AppConfig } from "../../config/configuration";
 import { Public } from "../../auth/decorators/public.decorator";
+import { safeEqual } from "../../common/crypto/crypto.util";
 import { JobManager } from "../../core/jobs/job-manager.service";
 import { OutboundDispatcher } from "../../providers/outbound-dispatcher.service";
 import { PROVIDER_IDS, type ProviderId } from "../../providers/provider.types";
@@ -34,7 +35,7 @@ export class N8nSecretGuard implements CanActivate {
     if (!secret) throw new ForbiddenException("Bridge de n8n deshabilitado (sin N8N_INBOUND_SECRET).");
     const req = context.switchToHttp().getRequest<Request>();
     const provided = req.header("x-n8n-secret");
-    if (provided !== secret) throw new ForbiddenException("Secreto de n8n inválido.");
+    if (!safeEqual(provided, secret)) throw new ForbiddenException("Secreto de n8n inválido.");
     return true;
   }
 }

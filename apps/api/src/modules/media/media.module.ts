@@ -23,7 +23,7 @@ import {
   type MediaType,
   type MediaUploadSignature,
 } from "@nv/domain";
-import { IsIn, IsOptional, IsString, MinLength } from "class-validator";
+import { IsIn, IsOptional, IsString, IsUrl, MinLength } from "class-validator";
 
 import type { AppConfig } from "../../config/configuration";
 import { ListResultDto } from "../../common/dto/list-result.dto";
@@ -49,9 +49,9 @@ export class CreateAssetDto {
 
   @ApiPropertyOptional() @IsOptional() @IsString() folderId?: string;
   @ApiPropertyOptional() @IsOptional() @IsString() tag?: string;
-  @ApiPropertyOptional({ description: "URL (p.ej. de Cloudinary)" })
+  @ApiPropertyOptional({ description: "URL https (p.ej. de Cloudinary)" })
   @IsOptional()
-  @IsString()
+  @IsUrl({ require_protocol: true, protocols: ["https"] })
   url?: string;
 }
 
@@ -150,7 +150,19 @@ export class MediaService {
     return mapMediaFolder(row);
   }
 
+  /** Ensure a folderId (when given) belongs to this workspace — never trust a
+   * client-supplied id to point at a foreign tenant's folder. */
+  private async assertOwnedFolder(workspaceId: string, folderId?: string | null): Promise<void> {
+    if (!folderId) return;
+    const folder = await this.db().mediaFolder.findFirst({
+      where: { id: folderId, workspaceSlug: workspaceId },
+      select: { id: true },
+    });
+    if (!folder) throw new NotFoundException("Carpeta no encontrada.");
+  }
+
   async createAsset(workspaceId: string, actor: string, dto: CreateAssetDto): Promise<MediaAsset> {
+    await this.assertOwnedFolder(workspaceId, dto.folderId);
     const row = await this.db().mediaAsset.create({
       data: {
         workspaceSlug: workspaceId,
@@ -173,6 +185,7 @@ export class MediaService {
   ): Promise<MediaAsset> {
     const existing = await this.db().mediaAsset.findFirst({ where: { id, workspaceSlug: workspaceId } });
     if (!existing) throw new NotFoundException("Archivo no encontrado.");
+    if (dto.folderId) await this.assertOwnedFolder(workspaceId, dto.folderId);
     const data: Record<string, unknown> = {};
     if (dto.title !== undefined) data.title = dto.title;
     if (dto.tag !== undefined) data.tag = dto.tag || null;

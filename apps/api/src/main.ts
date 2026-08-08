@@ -51,22 +51,25 @@ async function bootstrap(): Promise<void> {
     credentials: true,
   });
 
-  // OpenAPI docs at /api/docs
-  const swaggerConfig = new DocumentBuilder()
-    .setTitle("NV Core API")
-    .setDescription("Backend multi-workspace de NV Core (Business OS).")
-    .setVersion("0.1.0")
-    .addBearerAuth()
-    .build();
-  const document = SwaggerModule.createDocument(app, swaggerConfig);
-  SwaggerModule.setup("api/docs", app, document);
+  // OpenAPI docs at /api/docs — never expose the full API surface in production.
+  const isProd = config.get("env", { infer: true }) === "production";
+  if (!isProd) {
+    const swaggerConfig = new DocumentBuilder()
+      .setTitle("NV Core API")
+      .setDescription("Backend multi-workspace de NV Core (Business OS).")
+      .setVersion("0.1.0")
+      .addBearerAuth()
+      .build();
+    const document = SwaggerModule.createDocument(app, swaggerConfig);
+    SwaggerModule.setup("api/docs", app, document);
+  }
 
   const port = config.get("port", { infer: true });
   await app.listen(port);
 
   const logger = new Logger("Bootstrap");
   logger.log(`NV Core API escuchando en http://localhost:${port}/api`);
-  logger.log(`Swagger en http://localhost:${port}/api/docs`);
+  if (!isProd) logger.log(`Swagger en http://localhost:${port}/api/docs`);
 }
 
 void bootstrap();

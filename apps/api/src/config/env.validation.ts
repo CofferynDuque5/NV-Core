@@ -13,13 +13,17 @@ export const envSchema = z.object({
   APP_URL: z.string().url().default("http://localhost:3000"),
   API_URL: z.string().url().default("http://localhost:4000"),
 
-  // Auth
-  JWT_SECRET: z.string().min(16).optional(),
+  // Auth. Key entropy == secret entropy (derived via SHA-256/JWT), so require
+  // at least 32 chars in every environment.
+  JWT_SECRET: z.string().min(32).optional(),
   // Symmetric key for encrypting secrets at rest (OAuth tokens, etc.).
-  ENCRYPTION_KEY: z.string().min(16).optional(),
+  ENCRYPTION_KEY: z.string().min(32).optional(),
   // Access token lifetime (short). Refresh tokens extend the session.
   JWT_EXPIRES_IN: z.string().default("15m"),
   REFRESH_TOKEN_TTL_DAYS: z.coerce.number().int().positive().default(7),
+  // Allow public registration to claim Owner of an unclaimed built-in workspace.
+  // Off by default (secure); "true"/"1" to enable open self-serve claiming.
+  ALLOW_OPEN_WORKSPACE_CLAIM: z.string().optional(),
 
   // Data / infra
   DATABASE_URL: z.string().url().optional(),

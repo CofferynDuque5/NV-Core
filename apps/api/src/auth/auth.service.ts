@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   ConflictException,
+  ForbiddenException,
   HttpException,
   HttpStatus,
   Injectable,
@@ -15,7 +16,7 @@ import type { AppConfig } from "../config/configuration";
 import { MailService } from "../common/mail.service";
 import { PlanService } from "../common/plan/plan.service";
 import { AuthStore } from "./auth.store";
-import { hashPassword, verifyPassword } from "./password.util";
+import { DUMMY_PASSWORD_HASH, hashPassword, verifyPassword } from "./password.util";
 import { generateRefreshToken, hashToken } from "./token.util";
 import type {
   JwtPayload,
@@ -61,8 +62,11 @@ export class AuthService {
       passwordHash,
     });
 
-    // Optional workspace bootstrap: first member of a workspace becomes Owner.
-    if (dto.workspaceSlug) {
+    // Optional workspace bootstrap: first member of an unclaimed workspace
+    // becomes Owner — but ONLY when open self-serve claiming is explicitly
+    // enabled. Off by default so an attacker can't land-grab Owner of an
+    // unclaimed built-in workspace (provisioning is via NV_ADMIN_* or invite).
+    if (dto.workspaceSlug && this.config.get("auth", { infer: true }).allowOpenWorkspaceClaim) {
       if (!getWorkspaceBySlug(dto.workspaceSlug)) {
         throw new NotFoundException(`Workspace "${dto.workspaceSlug}" no encontrado`);
       }
@@ -128,6 +132,9 @@ export class AuthService {
     await this.store.updatePassword(consumed.userId, await hashPassword(newPassword));
     // Invalidate existing sessions after a password change.
     await this.store.revokeAllRefreshTokens(consumed.userId);
+    // A password reset also clears any brute-force lock (the user proved control
+    // of their inbox), so a locked-out user isn't stuck after resetting.
+    await this.store.clearFailedLogins(consumed.userId);
   }
 
   /** Lock an account for this long after too many consecutive failed logins. */
@@ -146,7 +153,13 @@ export class AuthService {
       );
     }
 
-    if (!user || !(await verifyPassword(dto.password, user.passwordHash))) {
+    // Run scrypt in both branches (real hash or a dummy) so response time
+    // doesn't reveal whether the email exists.
+    const passwordValid = await verifyPassword(
+      dto.password,
+      user?.passwordHash ?? DUMMY_PASSWORD_HASH,
+    );
+    if (!user || !passwordValid) {
       // Count the failure and lock the account once the threshold is reached.
       if (user) {
         const attempts = await this.store.incrementFailedLogins(user.id);
@@ -190,16 +203,36 @@ export class AuthService {
     };
   }
 
-  /** Adds an existing user to a workspace with a role (Owner/Admin action). */
-  async addMember(workspaceSlug: string, email: string, role: Role): Promise<MembershipView> {
+  /**
+   * Adds/updates a member of a workspace (Owner/Admin action, enforced by
+   * RolesGuard). Privilege-escalation guard: only an Owner may grant the Owner
+   * role or modify an existing Owner — otherwise an Admin could upsert itself to
+   * Owner (or demote the real Owner) via this endpoint.
+   */
+  async addMember(
+    workspaceSlug: string,
+    actingUserId: string,
+    email: string,
+    role: Role,
+  ): Promise<MembershipView> {
+    const actorMembership = await this.store.getMembership(actingUserId, workspaceSlug);
+    const actorIsOwner = actorMembership?.role === "Owner";
+
     const user = await this.store.findUserByEmail(email);
     if (!user) {
       throw new NotFoundException("No existe un usuario con ese email. Debe registrarse primero.");
     }
+    const existing = await this.store.getMembership(user.id, workspaceSlug);
+
+    // Guard the Owner role: only an Owner can create an Owner or change an
+    // existing Owner's role. Blocks Admin self-escalation and Owner demotion.
+    if (!actorIsOwner && (role === "Owner" || existing?.role === "Owner")) {
+      throw new ForbiddenException("Solo un Owner puede asignar o modificar el rol Owner.");
+    }
+
     // Only genuinely new members count against the plan seat limit; changing an
     // existing member's role must never be blocked (net member count is unchanged).
-    const alreadyMember = await this.store.getMembership(user.id, workspaceSlug);
-    if (!alreadyMember) {
+    if (!existing) {
       await this.plans.assertWithinLimit(workspaceSlug, "teamMembers", 1);
     }
     await this.store.upsertMembership(user.id, workspaceSlug, role);
@@ -219,11 +252,16 @@ export class AuthService {
     return { workspaceSlug, role };
   }
 
-  /** Removes a member from a workspace. Protects the last Owner. */
-  async removeMember(workspaceSlug: string, userId: string): Promise<void> {
+  /** Removes a member from a workspace. Protects the last Owner, and only an
+   * Owner may remove another Owner (Admins can't oust Owners). */
+  async removeMember(workspaceSlug: string, actingUserId: string, userId: string): Promise<void> {
     const membership = await this.store.getMembership(userId, workspaceSlug);
     if (!membership) throw new NotFoundException("El usuario no es miembro de este workspace.");
     if (membership.role === "Owner") {
+      const actorMembership = await this.store.getMembership(actingUserId, workspaceSlug);
+      if (actorMembership?.role !== "Owner") {
+        throw new ForbiddenException("Solo un Owner puede quitar a otro Owner.");
+      }
       const owners = (await this.store.membershipsOfWorkspace(workspaceSlug)).filter(
         (m) => m.role === "Owner",
       );

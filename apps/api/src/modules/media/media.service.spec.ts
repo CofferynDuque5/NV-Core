@@ -13,10 +13,15 @@ interface Asset {
   url: string | null;
 }
 
-function makeService(seed: Asset[] = []) {
+function makeService(seed: Asset[] = [], folderIds: string[] = ["f1"]) {
   const rows = [...seed];
   const prisma = {
     enabled: true,
+    mediaFolder: {
+      findFirst: vi.fn(async ({ where }: { where: { id: string; workspaceSlug: string } }) =>
+        folderIds.includes(where.id) && where.workspaceSlug === "w1" ? { id: where.id } : null,
+      ),
+    },
     mediaAsset: {
       findFirst: vi.fn(async ({ where }: { where: Record<string, unknown> }) =>
         rows.find((r) => r.id === where.id && r.workspaceSlug === where.workspaceSlug) ?? null,
@@ -78,6 +83,22 @@ describe("MediaService.updateAsset", () => {
   it("throws when the asset does not exist", async () => {
     const { service } = makeService([]);
     await expect(service.updateAsset("w1", "actor@x", "nope", { title: "x" })).rejects.toThrow(/no encontrado/);
+  });
+
+  it("rejects moving into a folder that isn't in this workspace", async () => {
+    const { service } = makeService([baseAsset()], ["f1"]); // only f1 is owned
+    await expect(
+      service.updateAsset("w1", "actor@x", "a1", { folderId: "foreign-folder" }),
+    ).rejects.toThrow(/Carpeta no encontrada/);
+  });
+});
+
+describe("MediaService.createAsset (folder ownership)", () => {
+  it("rejects a foreign folderId", async () => {
+    const { service } = makeService([], ["f1"]);
+    await expect(
+      service.createAsset("w1", "actor@x", { type: "image", title: "X", folderId: "foreign" }),
+    ).rejects.toThrow(/Carpeta no encontrada/);
   });
 });
 

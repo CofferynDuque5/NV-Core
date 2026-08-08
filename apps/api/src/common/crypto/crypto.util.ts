@@ -1,6 +1,26 @@
-import { createCipheriv, createDecipheriv, createHash, randomBytes } from "node:crypto";
+import {
+  createCipheriv,
+  createDecipheriv,
+  createHash,
+  randomBytes,
+  timingSafeEqual,
+} from "node:crypto";
 
 const VERSION = "v1";
+
+/**
+ * Constant-time string comparison for secrets/tokens (webhook secrets, verify
+ * tokens). Avoids the byte-by-byte timing side-channel of `===`. Returns false
+ * for any nullish input. Pure — unit tested.
+ */
+export function safeEqual(a: string | undefined | null, b: string | undefined | null): boolean {
+  if (typeof a !== "string" || typeof b !== "string") return false;
+  const ab = Buffer.from(a, "utf8");
+  const bb = Buffer.from(b, "utf8");
+  // timingSafeEqual requires equal-length buffers; length itself isn't secret.
+  if (ab.length !== bb.length) return false;
+  return timingSafeEqual(ab, bb);
+}
 const ALGO = "aes-256-gcm";
 const IV_BYTES = 12;
 
