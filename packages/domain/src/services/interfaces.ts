@@ -457,7 +457,11 @@ export interface AiUsage {
   period: string;
   calls: number;
   tokens: number;
+  /** Effective monthly quota (plan limit, capped by any operator override). `null` = unlimited. */
   quota: number | null;
+  /** Effective plan for this workspace — lets the UI show a tier-aware upgrade prompt. */
+  planId: PlanId;
+  planName: string;
 }
 
 export interface AiRecommendation {

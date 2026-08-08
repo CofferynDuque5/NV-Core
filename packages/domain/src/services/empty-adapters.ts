@@ -210,7 +210,15 @@ export const emptyAdapters: Services = {
   ai: {
     generateVariants: () => delay([]),
     suggestHashtags: () => delay([]),
-    usage: () => delay({ period: "", calls: 0, tokens: 0, quota: null }),
+    usage: () =>
+      delay({
+        period: "",
+        calls: 0,
+        tokens: 0,
+        quota: PLANS.free.limits.aiCallsPerMonth,
+        planId: "free",
+        planName: PLANS.free.name,
+      }),
     improve: () => notAvailable(),
     recommendations: () =>
       delay({

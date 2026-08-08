@@ -1,11 +1,14 @@
 import * as React from "react";
-import { Copy, Hash, Loader2, Save, Sparkles, Wand2 } from "lucide-react";
+import { Link } from "react-router-dom";
+import { ArrowUpRight, Copy, Hash, Loader2, Save, Sparkles, Wand2, Zap } from "lucide-react";
 import { CHANNEL_LIST } from "@nv/domain";
 import type { AiVariant } from "@nv/domain";
 import { toast } from "sonner";
 
 import { cn } from "@/lib/utils";
 import { FORMATS, LENGTHS, TONES, mergeHashtags, wordCount } from "@/lib/ai-studio";
+import { aiQuotaState } from "@/lib/plan";
+import { useWorkspace } from "@/hooks/use-workspace";
 import { PageHeader } from "@/components/common/page-header";
 import { Panel, PanelHeader } from "@/components/common/panel";
 import { EmptyState } from "@/components/common/empty-state";
@@ -68,6 +71,9 @@ export default function AiStudioPage() {
   const hashtagsM = useSuggestHashtags();
   const createTemplate = useCreateTemplate();
   const usage = useAiUsage();
+  const ws = useWorkspace();
+  const quota = usage.data ? aiQuotaState(usage.data) : null;
+  const billingHref = `/w/${ws.slug}/configuracion?tab=facturacion`;
 
   const canGenerate = prompt.trim().length >= 3 && !generate.isPending;
 
@@ -127,12 +133,64 @@ export default function AiStudioPage() {
         actions={
           usage.data ? (
             <span className="rounded-full border border-line-soft bg-panel px-3 py-1 text-xs text-ink-muted">
+              <span className="font-medium text-ink">{usage.data.planName}</span> ·{" "}
               {usage.data.calls}
-              {usage.data.quota ? ` / ${usage.data.quota}` : ""} usos · {usage.data.period || "este mes"}
+              {usage.data.quota != null ? ` / ${usage.data.quota}` : ""} usos ·{" "}
+              {usage.data.period || "este mes"}
             </span>
           ) : undefined
         }
       />
+
+      {quota?.metered && (quota.nearLimit || quota.exhausted) ? (
+        <div
+          className={cn(
+            "flex flex-col gap-3 rounded-lg border p-4 sm:flex-row sm:items-center sm:justify-between",
+            quota.exhausted
+              ? "border-state-warning/40 bg-state-warning/10"
+              : "border-line-soft bg-panel-raised",
+          )}
+        >
+          <div className="flex items-start gap-3">
+            <span
+              className={cn(
+                "grid size-9 shrink-0 place-items-center rounded-lg",
+                quota.exhausted ? "bg-state-warning/15 text-state-warning" : "bg-brand/10 text-brand",
+              )}
+            >
+              <Zap className="size-4" />
+            </span>
+            <div className="min-w-0">
+              <div className="text-sm font-semibold text-ink-bright">
+                {quota.exhausted
+                  ? "Alcanzaste el límite mensual de IA"
+                  : "Te estás acercando al límite mensual de IA"}
+              </div>
+              <p className="mt-0.5 text-xs text-ink-muted">
+                Has usado {quota.used} de {quota.limit} llamadas este mes en el plan{" "}
+                {usage.data?.planName}.
+                {quota.canUpgrade ? " Amplía a Pro para uso ilimitado." : " Se renueva el próximo mes."}
+              </p>
+              <div className="mt-2 h-1.5 w-full max-w-xs overflow-hidden rounded-full bg-panel-high">
+                <div
+                  className={cn(
+                    "h-full rounded-full",
+                    quota.exhausted ? "bg-state-warning" : "bg-brand",
+                  )}
+                  style={{ width: `${quota.pct}%` }}
+                />
+              </div>
+            </div>
+          </div>
+          {quota.canUpgrade ? (
+            <Button asChild size="sm" className="shrink-0 self-start sm:self-center">
+              <Link to={billingHref}>
+                Amplía a Pro <ArrowUpRight className="size-4" />
+              </Link>
+            </Button>
+          ) : null}
+        </div>
+      ) : null}
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,380px)_1fr]">
         {/* Input */}

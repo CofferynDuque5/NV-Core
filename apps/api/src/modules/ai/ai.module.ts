@@ -12,7 +12,7 @@ import {
 } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { ApiBearerAuth, ApiTags } from "@nestjs/swagger";
-import type { AiRecommendation, AiVariant, BestTimes } from "@nv/domain";
+import type { AiRecommendation, AiVariant, BestTimes, PlanId } from "@nv/domain";
 import { IsOptional, IsString, MinLength } from "class-validator";
 
 import type { AppConfig } from "../../config/configuration";
@@ -20,9 +20,21 @@ import { WorkspaceId } from "../../common/tenant/workspace.decorator";
 import { WorkspaceGuard } from "../../common/tenant/workspace.guard";
 import { PlanGuard } from "../../common/guards/plan.guard";
 import { RequiresActivePlan } from "../../common/decorators/requires-plan.decorator";
+import { PlanService } from "../../common/plan/plan.service";
 import { PrismaService } from "../../prisma/prisma.service";
 import { createProvider, type AiProvider, type ChatMessage } from "./ai.providers";
 import { estimateTokens, usagePeriod } from "./ai.usage";
+
+/**
+ * The effective monthly AI quota = the plan limit, further capped by any
+ * operator override (`AI_MONTHLY_QUOTA`). `null` on either side means unlimited;
+ * the result is the smaller of the two finite limits (or `null` if both are).
+ * Pure — unit tested.
+ */
+export function effectiveAiQuota(planQuota: number | null, envQuota: number | null): number | null {
+  const finite = [planQuota, envQuota].filter((q): q is number => q != null && q > 0);
+  return finite.length ? Math.min(...finite) : null;
+}
 
 export class GenerateVariantsDto {
   @IsString() @MinLength(3) prompt!: string;
@@ -65,6 +77,8 @@ export interface AiUsageView {
   calls: number;
   tokens: number;
   quota: number | null;
+  planId: PlanId;
+  planName: string;
 }
 
 @Injectable()
@@ -75,10 +89,25 @@ export class AiService {
   constructor(
     config: ConfigService<AppConfig, true>,
     private readonly prisma: PrismaService,
+    private readonly plans: PlanService,
   ) {
     const ai = config.get("integrations", { infer: true }).ai;
     this.provider = createProvider(ai);
     this.monthlyQuota = ai.monthlyQuota && ai.monthlyQuota > 0 ? ai.monthlyQuota : undefined;
+  }
+
+  /** The workspace's effective AI plan + monthly quota (plan limit capped by env override). */
+  private async resolveQuota(workspaceId: string): Promise<{
+    planId: PlanId;
+    planName: string;
+    quota: number | null;
+  }> {
+    const plan = await this.plans.resolvePlan(workspaceId);
+    return {
+      planId: plan.id,
+      planName: plan.name,
+      quota: effectiveAiQuota(plan.limits.aiCallsPerMonth, this.monthlyQuota ?? null),
+    };
   }
 
   private require(): AiProvider {
@@ -90,15 +119,18 @@ export class AiService {
     return this.provider;
   }
 
-  /** Reject the call when the workspace has hit its monthly AI quota. */
+  /** Reject the call when the workspace has hit its plan's monthly AI quota. */
   private async assertWithinQuota(workspaceId: string): Promise<void> {
-    if (!this.monthlyQuota || !this.prisma.enabled) return;
+    if (!this.prisma.enabled) return;
+    const { planId, planName, quota } = await this.resolveQuota(workspaceId);
+    if (quota == null) return; // unlimited
     const row = await this.prisma.aiUsage.findUnique({
       where: { workspaceSlug_period: { workspaceSlug: workspaceId, period: usagePeriod(new Date()) } },
     });
-    if ((row?.calls ?? 0) >= this.monthlyQuota) {
+    if ((row?.calls ?? 0) >= quota) {
+      const upgrade = planId === "free" ? " Amplía a Pro para uso ilimitado." : " Vuelve el próximo mes.";
       throw new HttpException(
-        `Alcanzaste el límite mensual de IA (${this.monthlyQuota}). Vuelve el próximo mes o amplía tu plan.`,
+        `Alcanzaste el límite mensual de IA de tu plan ${planName} (${quota}).${upgrade}`,
         HttpStatus.TOO_MANY_REQUESTS,
       );
     }
@@ -117,16 +149,21 @@ export class AiService {
 
   async usage(workspaceId: string): Promise<AiUsageView> {
     const period = usagePeriod(new Date());
-    const row = this.prisma.enabled
-      ? await this.prisma.aiUsage.findUnique({
-          where: { workspaceSlug_period: { workspaceSlug: workspaceId, period } },
-        })
-      : null;
+    const [row, plan] = await Promise.all([
+      this.prisma.enabled
+        ? this.prisma.aiUsage.findUnique({
+            where: { workspaceSlug_period: { workspaceSlug: workspaceId, period } },
+          })
+        : null,
+      this.resolveQuota(workspaceId),
+    ]);
     return {
       period,
       calls: row?.calls ?? 0,
       tokens: row?.tokens ?? 0,
-      quota: this.monthlyQuota ?? null,
+      quota: plan.quota,
+      planId: plan.planId,
+      planName: plan.planName,
     };
   }
 

@@ -1,4 +1,5 @@
 
+import { useSearchParams } from "react-router-dom";
 import { PERMISSION_MATRIX, ROLE_DESCRIPTIONS, ROLE_ORDER } from "@nv/domain";
 import { Check, Minus, ScrollText } from "lucide-react";
 
@@ -11,11 +12,23 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { TeamTab } from "@/components/settings/team-tab";
 import { BillingTab } from "@/components/settings/billing-tab";
 
+const TABS = ["equipo", "roles", "permisos", "facturacion", "logs"] as const;
+
 export default function ConfiguracionPage() {
   const logs = useAuditLogs();
   const roles = useRoles();
   const roleCount = (name: string) =>
     (roles.data ?? []).find((r) => r.name === name)?.userCount ?? 0;
+
+  // Tab is URL-driven so links like `?tab=facturacion` (e.g. the AI upgrade CTA) land here.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const requested = searchParams.get("tab");
+  const activeTab = TABS.includes(requested as (typeof TABS)[number]) ? requested! : "equipo";
+  const onTabChange = (value: string) =>
+    setSearchParams((prev) => {
+      prev.set("tab", value);
+      return prev;
+    });
 
   return (
     <div className="space-y-6">
@@ -25,7 +38,7 @@ export default function ConfiguracionPage() {
         description="Equipo, roles, permisos y auditoría de tu workspace."
       />
 
-      <Tabs defaultValue="equipo">
+      <Tabs value={activeTab} onValueChange={onTabChange}>
         <TabsList>
           <TabsTrigger value="equipo">Equipo</TabsTrigger>
           <TabsTrigger value="roles">Roles</TabsTrigger>
