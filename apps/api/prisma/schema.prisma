@@ -214,6 +214,40 @@ model Funnel {
   @@index([workspaceSlug, createdAt])
 }
 
+// A drip sequence / autoresponder. Steps live as JSON.
+model Sequence {
+  id            String   @id @default(cuid())
+  workspaceSlug String
+  name          String
+  status        String   @default("active")
+  steps         Json     @default("[]")
+  createdAt     DateTime @default(now())
+
+  enrollments   SequenceEnrollment[]
+
+  @@index([workspaceSlug])
+  @@index([workspaceSlug, createdAt])
+}
+
+// A contact's progress through a sequence (the drip state machine).
+model SequenceEnrollment {
+  id            String    @id @default(cuid())
+  workspaceSlug String
+  sequence      Sequence  @relation(fields: [sequenceId], references: [id], onDelete: Cascade)
+  sequenceId    String
+  contactId     String
+  contactName   String
+  stepIndex     Int       @default(0)
+  status        String    @default("active")
+  nextRunAt     DateTime?
+  createdAt     DateTime  @default(now())
+
+  @@unique([sequenceId, contactId])
+  // The engine scans active enrollments whose next send is due.
+  @@index([status, nextRunAt])
+  @@index([sequenceId])
+}
+
 model Campaign {
   id            String         @id @default(cuid())
   workspaceSlug String

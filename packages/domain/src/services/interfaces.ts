@@ -19,6 +19,10 @@ import type {
   Feedback,
   Form,
   Funnel,
+  Sequence,
+  SequenceEnrollment,
+  SequenceEnrollResult,
+  SequencePreviewStep,
   MediaAsset,
   MediaFolder,
   Message,
@@ -323,6 +327,26 @@ export interface FunnelService {
   create(workspaceId: string, input: CreateFunnelInput): Promise<Funnel>;
   update(workspaceId: string, id: string, input: UpdateFunnelInput): Promise<Funnel>;
   remove(workspaceId: string, id: string): Promise<void>;
+}
+
+export interface CreateSequenceInput {
+  name: string;
+  status?: Sequence["status"];
+  steps?: Sequence["steps"];
+}
+export type UpdateSequenceInput = Partial<CreateSequenceInput>;
+
+export interface SequenceService {
+  list(workspaceId: string): Promise<ListResult<Sequence>>;
+  create(workspaceId: string, input: CreateSequenceInput): Promise<Sequence>;
+  update(workspaceId: string, id: string, input: UpdateSequenceInput): Promise<Sequence>;
+  remove(workspaceId: string, id: string): Promise<void>;
+  /** Enroll a single contact or everyone with a tag into the sequence. */
+  enroll(workspaceId: string, id: string, input: { contactId?: string; tag?: string }): Promise<SequenceEnrollResult>;
+  /** Active/finished enrollments for the sequence. */
+  enrollments(workspaceId: string, id: string): Promise<SequenceEnrollment[]>;
+  /** Computed send schedule (offsets from enrollment) — a dry-run preview. */
+  preview(workspaceId: string, id: string): Promise<SequencePreviewStep[]>;
 }
 
 export interface CreateConversationInput {
@@ -646,6 +670,7 @@ export interface Services {
   segments: SegmentService;
   forms: FormService;
   funnels: FunnelService;
+  sequences: SequenceService;
   inbox: InboxService;
   media: MediaService;
   templates: TemplateService;

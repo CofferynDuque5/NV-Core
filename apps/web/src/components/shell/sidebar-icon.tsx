@@ -14,6 +14,7 @@ import {
   LifeBuoy,
   Megaphone,
   Plug,
+  Send,
   Settings,
   Sparkles,
   Store,
@@ -41,6 +42,7 @@ const MAP: Record<string, LucideIcon> = {
   BarChart3,
   Store,
   Plug,
+  Send,
   Settings,
   LifeBuoy,
 };

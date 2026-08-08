@@ -71,6 +71,10 @@ export type FormFieldKey = (typeof FORM_FIELD_KEYS)[number];
 export const FUNNEL_STEP_TYPES = ["optin", "sales", "thankyou"] as const;
 export type FunnelStepType = (typeof FUNNEL_STEP_TYPES)[number];
 
+/** Channels a sequence step can send through. */
+export const SEQUENCE_CHANNELS = ["email", "wa", "tg"] as const;
+export type SequenceChannel = (typeof SEQUENCE_CHANNELS)[number];
+
 /** Node types of an automation flow. */
 export const AUTOMATION_NODE_TYPES = ["trigger", "action", "wait", "cond"] as const;
 export type AutomationNodeType = (typeof AUTOMATION_NODE_TYPES)[number];
@@ -102,6 +106,7 @@ export const MODULE_IDS = [
   "segmentos",
   "formularios",
   "embudos",
+  "secuencias",
   "inbox",
   "builder",
   "ai",

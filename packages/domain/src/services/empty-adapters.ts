@@ -149,6 +149,15 @@ export const emptyAdapters: Services = {
     update: () => notAvailable(),
     remove: () => notAvailable(),
   },
+  sequences: {
+    list: () => emptyList(),
+    create: () => notAvailable(),
+    update: () => notAvailable(),
+    remove: () => notAvailable(),
+    enroll: () => notAvailable(),
+    enrollments: () => delay([]),
+    preview: () => delay([]),
+  },
   inbox: {
     conversations: () => emptyList(),
     messages: () => delay([]),

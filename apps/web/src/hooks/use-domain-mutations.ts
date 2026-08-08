@@ -33,6 +33,8 @@ import type {
   UpdateFormInput,
   CreateFunnelInput,
   UpdateFunnelInput,
+  CreateSequenceInput,
+  UpdateSequenceInput,
   CreateTemplateInput,
   GenerateVariantsInput,
   SocialPublishInput,
@@ -599,6 +601,65 @@ export function useDeleteForm() {
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: [ws.id, "forms"] });
       toast.success("Formulario eliminado");
+    },
+    onError: (err) => toast.error(errText(err)),
+  });
+}
+
+// ── Sequences (autoresponders) ────────────────────────────────────────────────
+export function useCreateSequence() {
+  const svc = useServices();
+  const ws = useWorkspace();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: CreateSequenceInput) => svc.sequences.create(ws.id, input),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: [ws.id, "sequences"] });
+      toast.success("Secuencia creada");
+    },
+    onError: (err) => toast.error(errText(err)),
+  });
+}
+
+export function useUpdateSequence() {
+  const svc = useServices();
+  const ws = useWorkspace();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, input }: { id: string; input: UpdateSequenceInput }) =>
+      svc.sequences.update(ws.id, id, input),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: [ws.id, "sequences"] });
+      toast.success("Secuencia actualizada");
+    },
+    onError: (err) => toast.error(errText(err)),
+  });
+}
+
+export function useDeleteSequence() {
+  const svc = useServices();
+  const ws = useWorkspace();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => svc.sequences.remove(ws.id, id),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: [ws.id, "sequences"] });
+      toast.success("Secuencia eliminada");
+    },
+    onError: (err) => toast.error(errText(err)),
+  });
+}
+
+export function useEnrollSequence() {
+  const svc = useServices();
+  const ws = useWorkspace();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, input }: { id: string; input: { contactId?: string; tag?: string } }) =>
+      svc.sequences.enroll(ws.id, id, input),
+    onSuccess: (res) => {
+      void qc.invalidateQueries({ queryKey: [ws.id, "sequences"] });
+      toast.success(`${res.enrolled} inscrito(s), ${res.skipped} ya estaban`);
     },
     onError: (err) => toast.error(errText(err)),
   });

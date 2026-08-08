@@ -7,6 +7,7 @@ import type {
   MediaType,
   FormFieldKey,
   FunnelStepType,
+  SequenceChannel,
   ModuleId,
   PostStatus,
   Role,
@@ -260,6 +261,53 @@ export interface FormSubmitResult {
   ok: boolean;
   successMessage: string;
   redirectUrl?: string;
+}
+
+// ── Sequences / autoresponders (drip) ───────────────────────────────────────
+
+/** One step of a drip sequence: sent `delayDays` after the previous step. */
+export interface SequenceStep {
+  id: string;
+  /** Days to wait after the previous step (step 0 = after enrollment). */
+  delayDays: number;
+  channel: SequenceChannel;
+  subject?: string;
+  body: string;
+}
+
+export interface Sequence {
+  id: string;
+  name: string;
+  status: "active" | "paused";
+  steps: SequenceStep[];
+  /** Count of currently-active enrollments. */
+  enrolled: number;
+  createdAt: string;
+}
+
+/** A contact's progress through a sequence. */
+export interface SequenceEnrollment {
+  id: string;
+  contactId: string;
+  contactName: string;
+  stepIndex: number;
+  status: "active" | "completed" | "cancelled";
+  nextRunAt?: string;
+  createdAt: string;
+}
+
+/** A computed schedule row for the sequence preview (offset from enrollment). */
+export interface SequencePreviewStep {
+  index: number;
+  channel: SequenceChannel;
+  offsetDays: number;
+  body: string;
+}
+
+/** Result of enrolling contacts into a sequence. */
+export interface SequenceEnrollResult {
+  enrolled: number;
+  skipped: number;
 }
 
 // ── Funnels (multi-step opt-in → sales → thank-you) ──────────────────────────

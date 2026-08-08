@@ -10,6 +10,10 @@ import type {
   Feedback,
   Form,
   Funnel,
+  Sequence,
+  SequenceEnrollment,
+  SequenceEnrollResult,
+  SequencePreviewStep,
   ContactImportResult,
   Design,
   BillingStatus,
@@ -207,6 +211,17 @@ export function createHttpAdapters(opts: HttpAdapterOptions): Services {
       create: (id, input) => post<Funnel>(`${ws(id)}/funnels`, input),
       update: (id, fid, input) => patch<Funnel>(`${ws(id)}/funnels/${fid}`, input),
       remove: (id, fid) => del<void>(`${ws(id)}/funnels/${fid}`),
+    },
+    sequences: {
+      list: (id) => get<ListResult<Sequence>>(`${ws(id)}/sequences`),
+      create: (id, input) => post<Sequence>(`${ws(id)}/sequences`, input),
+      update: (id, sid, input) => patch<Sequence>(`${ws(id)}/sequences/${sid}`, input),
+      remove: (id, sid) => del<void>(`${ws(id)}/sequences/${sid}`),
+      enroll: (id, sid, input) =>
+        post<SequenceEnrollResult>(`${ws(id)}/sequences/${sid}/enroll`, input),
+      enrollments: (id, sid) =>
+        get<SequenceEnrollment[]>(`${ws(id)}/sequences/${sid}/enrollments`),
+      preview: (id, sid) => get<SequencePreviewStep[]>(`${ws(id)}/sequences/${sid}/preview`),
     },
     segments: {
       list: (id) => get<ListResult<Segment>>(`${ws(id)}/segments`),

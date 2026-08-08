@@ -17,6 +17,8 @@ import type {
   Segment as PSegment,
   Form as PForm,
   Funnel as PFunnel,
+  Sequence as PSequence,
+  SequenceEnrollment as PSequenceEnrollment,
   Template as PTemplate,
 } from "@prisma/client";
 import type {
@@ -45,6 +47,9 @@ import type {
   FormField,
   Funnel,
   FunnelPage,
+  Sequence,
+  SequenceStep,
+  SequenceEnrollment,
   Template,
 } from "@nv/domain";
 
@@ -107,6 +112,25 @@ export const mapFunnel = (f: PFunnel): Funnel => ({
   name: f.name,
   steps: (f.steps as unknown as FunnelPage[]) ?? [],
   createdAt: f.createdAt.toISOString(),
+});
+
+export const mapSequence = (s: PSequence, enrolled = 0): Sequence => ({
+  id: s.id,
+  name: s.name,
+  status: s.status === "paused" ? "paused" : "active",
+  steps: (s.steps as unknown as SequenceStep[]) ?? [],
+  enrolled,
+  createdAt: s.createdAt.toISOString(),
+});
+
+export const mapSequenceEnrollment = (e: PSequenceEnrollment): SequenceEnrollment => ({
+  id: e.id,
+  contactId: e.contactId,
+  contactName: e.contactName,
+  stepIndex: e.stepIndex,
+  status: e.status as SequenceEnrollment["status"],
+  nextRunAt: iso(e.nextRunAt),
+  createdAt: e.createdAt.toISOString(),
 });
 
 export const mapForm = (f: PForm): Form => ({

@@ -150,6 +150,22 @@ export function useFunnels() {
   return useQuery({ queryKey: [ws.id, "funnels"], queryFn: () => svc.funnels.list(ws.id) });
 }
 
+export function useSequences() {
+  const svc = useServices();
+  const ws = useWorkspace();
+  return useQuery({ queryKey: [ws.id, "sequences"], queryFn: () => svc.sequences.list(ws.id) });
+}
+
+export function useSequenceEnrollments(sequenceId: string | null) {
+  const svc = useServices();
+  const ws = useWorkspace();
+  return useQuery({
+    queryKey: [ws.id, "sequences", sequenceId, "enrollments"],
+    queryFn: () => svc.sequences.enrollments(ws.id, sequenceId!),
+    enabled: !!sequenceId,
+  });
+}
+
 export function useConversations() {
   const svc = useServices();
   const ws = useWorkspace();
