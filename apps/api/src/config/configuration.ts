@@ -18,6 +18,8 @@ export interface AppConfig {
   database: { url?: string };
   redis: { url?: string };
   mail: { from: string };
+  /** Plan applied when Stripe isn't configured (self-host / dev). */
+  billing: { defaultPlan: "free" | "pro" };
   integrations: {
     n8n: { baseUrl?: string; apiKey?: string; eventsWebhook?: string; inboundSecret?: string };
     ai: {
@@ -81,6 +83,7 @@ export function buildConfig(env: Env): AppConfig {
     database: { url: env.DATABASE_URL },
     redis: { url: env.REDIS_URL },
     mail: { from: env.MAIL_FROM },
+    billing: { defaultPlan: env.DEFAULT_PLAN === "free" ? "free" : "pro" },
     integrations: {
       n8n: {
         baseUrl: env.N8N_BASE_URL,

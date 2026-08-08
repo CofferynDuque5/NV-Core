@@ -10,6 +10,7 @@ import { CommonModule } from "./common/common.module";
 import { CoreModule } from "./core/core.module";
 import { PrismaModule } from "./prisma/prisma.module";
 import { SchedulerModule } from "./modules/scheduler/scheduler.module";
+import { PlanModule } from "./common/plan/plan.service";
 import { HealthModule } from "./health/health.module";
 import { AuthModule } from "./auth/auth.module";
 
@@ -56,6 +57,7 @@ import { ProvidersModule } from "./providers/providers.module";
     CommonModule,
     CoreModule,
     PrismaModule,
+    PlanModule,
     SchedulerModule,
     AuthModule,
     HealthModule,

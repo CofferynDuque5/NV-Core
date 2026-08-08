@@ -34,6 +34,7 @@ import type {
   Workspace,
 } from "../entities";
 import type { ContactStage, Role, WorkspaceKind } from "../enums";
+import type { PlanId, PlanLimits } from "../config/plans";
 
 /** Server-side query for the contacts list (search + stage + pagination). */
 export interface ContactListQuery {
@@ -494,6 +495,13 @@ export interface MessagingService {
   send(workspaceId: string, input: SendMessageExternalInput): Promise<{ id: string }>;
 }
 
+export interface PlanUsage {
+  contacts: number;
+  campaigns: number;
+  teamMembers: number;
+  aiCalls: number;
+}
+
 export interface BillingStatus {
   /** Stripe secret key is present on the server. */
   configured: boolean;
@@ -501,6 +509,13 @@ export interface BillingStatus {
   customer: boolean;
   subscriptionStatus: string | null;
   priceId: string | null;
+  /** Effective plan for this workspace ("free" | "pro"). */
+  planId: PlanId;
+  planName: string;
+  /** The plan's limits (null value = unlimited). */
+  limits: PlanLimits;
+  /** Current usage counts for the limited resources. */
+  usage: PlanUsage;
 }
 
 export interface CheckoutInput {

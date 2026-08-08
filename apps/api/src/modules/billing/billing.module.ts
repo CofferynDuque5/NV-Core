@@ -26,6 +26,7 @@ import { RolesGuard } from "../../auth/guards/roles.guard";
 import { Roles } from "../../auth/decorators/roles.decorator";
 import { Public } from "../../auth/decorators/public.decorator";
 import { PrismaService } from "../../prisma/prisma.service";
+import { PlanService } from "../../common/plan/plan.service";
 import { StripeClient } from "./stripe.client";
 import {
   extractSubscriptionUpdate,
@@ -53,6 +54,7 @@ export class BillingService {
   constructor(
     config: ConfigService<AppConfig, true>,
     private readonly prisma: PrismaService,
+    private readonly plans: PlanService,
   ) {
     const stripeCfg = config.get("integrations", { infer: true }).stripe;
     this.stripe = stripeCfg.secretKey ? new StripeClient(stripeCfg.secretKey) : null;
@@ -75,14 +77,22 @@ export class BillingService {
   }
 
   async status(workspaceId: string): Promise<BillingStatus> {
-    const account = this.prisma.enabled
-      ? await this.prisma.billingAccount.findUnique({ where: { workspaceSlug: workspaceId } })
-      : null;
+    const [account, plan, usage] = await Promise.all([
+      this.prisma.enabled
+        ? this.prisma.billingAccount.findUnique({ where: { workspaceSlug: workspaceId } })
+        : null,
+      this.plans.resolvePlan(workspaceId),
+      this.plans.usage(workspaceId),
+    ]);
     return {
       configured: Boolean(this.stripe),
       customer: Boolean(account?.stripeCustomerId),
       subscriptionStatus: account?.subscriptionStatus ?? null,
       priceId: account?.priceId ?? null,
+      planId: plan.id,
+      planName: plan.name,
+      limits: plan.limits,
+      usage,
     };
   }
 

@@ -70,6 +70,8 @@ export const envSchema = z.object({
   STRIPE_WEBHOOK_SECRET: z.string().optional(),
   // Default subscription price used at checkout when the client sends none.
   STRIPE_PRICE_ID: z.string().optional(),
+  /** Plan used when Stripe isn't configured (self-host / dev). Default "pro". */
+  DEFAULT_PLAN: z.enum(["free", "pro"]).optional(),
   CLOUDINARY_URL: z.string().optional(),
   RESEND_API_KEY: z.string().optional(),
   MAIL_FROM: z.string().default("NV Core <onboarding@resend.dev>"),

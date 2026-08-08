@@ -5,3 +5,4 @@ export * from "./rbac";
 export * from "./marketplace";
 export * from "./help";
 export * from "./changelog";
+export * from "./plans";

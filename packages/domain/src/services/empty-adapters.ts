@@ -1,5 +1,6 @@
 import { WORKSPACES } from "../config/workspaces";
 import { CHANGELOG_ENTRIES } from "../config/changelog";
+import { PLANS } from "../config/plans";
 import type { ListResult, Services } from "./interfaces";
 
 /**
@@ -223,7 +224,16 @@ export const emptyAdapters: Services = {
   },
   billing: {
     status: () =>
-      delay({ configured: false, customer: false, subscriptionStatus: null, priceId: null }),
+      delay({
+        configured: false,
+        customer: false,
+        subscriptionStatus: null,
+        priceId: null,
+        planId: "free",
+        planName: PLANS.free.name,
+        limits: PLANS.free.limits,
+        usage: { contacts: 0, campaigns: 0, teamMembers: 0, aiCalls: 0 },
+      }),
     checkout: () => notAvailable(),
     portalUrl: () => delay(null),
   },
