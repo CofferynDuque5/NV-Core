@@ -138,6 +138,12 @@ export function useSegments() {
   return useQuery({ queryKey: [ws.id, "segments"], queryFn: () => svc.segments.list(ws.id) });
 }
 
+export function useForms() {
+  const svc = useServices();
+  const ws = useWorkspace();
+  return useQuery({ queryKey: [ws.id, "forms"], queryFn: () => svc.forms.list(ws.id) });
+}
+
 export function useConversations() {
   const svc = useServices();
   const ws = useWorkspace();

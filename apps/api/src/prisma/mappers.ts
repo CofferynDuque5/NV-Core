@@ -15,6 +15,7 @@ import type {
   Notification as PNotification,
   Post as PPost,
   Segment as PSegment,
+  Form as PForm,
   Template as PTemplate,
 } from "@prisma/client";
 import type {
@@ -39,6 +40,8 @@ import type {
   Post,
   Segment,
   SegmentRule,
+  Form,
+  FormField,
   Template,
 } from "@nv/domain";
 
@@ -94,6 +97,20 @@ export const mapSegment = (s: PSegment, count = 0): Segment => ({
   color: s.color,
   match: (s.match as Segment["match"]) ?? "all",
   rules: (s.rules as unknown as SegmentRule[]) ?? [],
+});
+
+export const mapForm = (f: PForm): Form => ({
+  id: f.id,
+  name: f.name,
+  fields: (f.fields as unknown as FormField[]) ?? [],
+  tags: f.tags ?? [],
+  stage: f.stage as Form["stage"],
+  submitLabel: f.submitLabel,
+  successMessage: f.successMessage,
+  redirectUrl: f.redirectUrl ?? undefined,
+  views: f.views,
+  submissions: f.submissions,
+  createdAt: f.createdAt.toISOString(),
 });
 
 export const mapCampaign = (

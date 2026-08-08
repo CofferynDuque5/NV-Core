@@ -8,6 +8,7 @@ import type {
   ChangelogStatus,
   ContactNote,
   Feedback,
+  Form,
   ContactImportResult,
   Design,
   BillingStatus,
@@ -193,6 +194,12 @@ export function createHttpAdapters(opts: HttpAdapterOptions): Services {
       publish: (id, input) => post<{ results: SocialResult[] }>(`${ws(id)}/social/publish`, input),
       insights: (id, target, mediaId) =>
         get<SocialInsights>(`${ws(id)}/social/insights?target=${target}&id=${encodeURIComponent(mediaId)}`),
+    },
+    forms: {
+      list: (id) => get<ListResult<Form>>(`${ws(id)}/forms`),
+      create: (id, input) => post<Form>(`${ws(id)}/forms`, input),
+      update: (id, fid, input) => patch<Form>(`${ws(id)}/forms/${fid}`, input),
+      remove: (id, fid) => del<void>(`${ws(id)}/forms/${fid}`),
     },
     segments: {
       list: (id) => get<ListResult<Segment>>(`${ws(id)}/segments`),

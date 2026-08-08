@@ -5,6 +5,7 @@ import type {
   ConnectionStatus,
   ContactStage,
   MediaType,
+  FormFieldKey,
   ModuleId,
   PostStatus,
   Role,
@@ -216,6 +217,48 @@ export interface SegmentPreview {
   count: number;
   /** A capped sample of matching contacts, for the rule-builder preview. */
   sample: Contact[];
+}
+
+// ── Lead-capture forms (opt-in) ──────────────────────────────────────────────
+
+/** A field a capture form collects, mapped to a Contact attribute. */
+export interface FormField {
+  key: FormFieldKey;
+  label: string;
+  required: boolean;
+}
+
+/** A public lead-capture form that turns a submission into a Contact. */
+export interface Form {
+  id: string;
+  name: string;
+  fields: FormField[];
+  /** Tags applied to contacts created via this form. */
+  tags: string[];
+  /** CRM stage assigned to new contacts. */
+  stage: ContactStage;
+  submitLabel: string;
+  successMessage: string;
+  redirectUrl?: string;
+  /** Lifetime view + submission counters (for the conversion rate). */
+  views: number;
+  submissions: number;
+  createdAt: string;
+}
+
+/** The public-safe subset used to render an embeddable form (no tags/stage). */
+export interface PublicForm {
+  id: string;
+  name: string;
+  fields: FormField[];
+  submitLabel: string;
+}
+
+/** Outcome of a public form submission. */
+export interface FormSubmitResult {
+  ok: boolean;
+  successMessage: string;
+  redirectUrl?: string;
 }
 
 export interface MediaAsset {

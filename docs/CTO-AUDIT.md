@@ -384,6 +384,15 @@ Leyenda: **E**xiste · **F**unciona · **C**ompleto · **P**roducción-ready.
 
 ---
 
+## FASE 11 — Ampliación estilo systeme.io (aditiva)
+
+> Nuevas funciones tipo systeme.io elegidas por el propietario: **Embudos + Formularios**, **Secuencias/Autoresponders** y **Afiliados**. Todo **aditivo** (módulos nuevos, migraciones additivas, cero cambios a lo existente) y verificado en vivo.
+
+- ✅ **Módulo 1a — Formularios de captura (opt-in)**: nuevo modelo `Form` (campos configurables, tags, etapa, mensaje/redirect, contadores) + módulo backend con **superficie pública sin auth**: `GET /public/forms/:id` (render + cuenta vista) y `POST /public/forms/:id/submit` (crea/**dedupe por email** el contacto, aplica tags+etapa, **honeypot** anti-bot, **throttle 10/min**, respeta el **cap de contactos del plan** para altas nuevas). CRUD workspace-scoped (roles) + stats (vistas/envíos/conversión). Domain (`Form`/`FormField`/`PublicForm`/`FormService`), enum `formularios` + nav, `mapForm`, migración `Form`. Web: `lib/forms.ts` (conversión, URL pública, snippet embed) +3 tests, página Formularios (stats, copiar enlace/embed, editar/eliminar), diálogo crear/editar, y **página pública `/f/:id`** (fuera del shell/auth, con honeypot). +5 tests API. **Verificado en vivo** (Postgres real): submit público crea contacto con tag; reenvío mismo email → dedupe (2 envíos, 1 contacto, tags fusionadas); requerido faltante → 400; honeypot lleno → aceptado sin escribir; **smoke en Chromium** contra el build servido: `/f/:id` renderiza, envía y muestra éxito sin errores de página, y el contacto «Smoke Browser [webinar] Lead» se creó (stats views=3/subs=3). API 331 tests, web 119, lint limpio.
+  - ⏳ **1b Embudos**, **2 Secuencias/Autoresponders**, **3 Afiliados**: pendientes (siguientes commits).
+
+---
+
 ## FASE 10 — Release Readiness
 
 # ¿Publicarías este software hoy para clientes reales? **NO.**

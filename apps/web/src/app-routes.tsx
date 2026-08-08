@@ -12,6 +12,9 @@ import ResetPasswordPage from "@/app/reset-password/page";
 import VerifyEmailPage from "@/app/verify-email/page";
 import NotFound from "@/app/not-found";
 
+// Public embeddable lead-capture form (no auth, no shell).
+const PublicFormPage = React.lazy(() => import("@/app/f/[form]/page"));
+
 // Workspace module pages — lazy-loaded so each becomes its own chunk and the
 // initial payload stays small (faster load, lower memory on the VPS).
 const DashboardPage = React.lazy(() => import("@/app/w/[workspace]/dashboard/page"));
@@ -20,6 +23,7 @@ const CampanasPage = React.lazy(() => import("@/app/w/[workspace]/campanas/page"
 const ContactosPage = React.lazy(() => import("@/app/w/[workspace]/contactos/page"));
 const GruposPage = React.lazy(() => import("@/app/w/[workspace]/grupos/page"));
 const SegmentosPage = React.lazy(() => import("@/app/w/[workspace]/segmentos/page"));
+const FormulariosPage = React.lazy(() => import("@/app/w/[workspace]/formularios/page"));
 const InboxPage = React.lazy(() => import("@/app/w/[workspace]/inbox/page"));
 const BuilderPage = React.lazy(() => import("@/app/w/[workspace]/builder/page"));
 const AiPage = React.lazy(() => import("@/app/w/[workspace]/ai/page"));
@@ -73,6 +77,16 @@ export function AppRoutes() {
       <Route path="/reset-password" element={<ResetPasswordPage />} />
       <Route path="/verify-email" element={<VerifyEmailPage />} />
 
+      {/* Public embeddable form (no auth) */}
+      <Route
+        path="/f/:form"
+        element={
+          <React.Suspense fallback={<RouteFallback />}>
+            <PublicFormPage />
+          </React.Suspense>
+        }
+      />
+
       {/* Workspace shell */}
       <Route path="/w/:workspace" element={<Navigate to="dashboard" replace />} />
       <Route path="/w/:workspace/dashboard" element={<WorkspacePage><DashboardPage /></WorkspacePage>} />
@@ -81,6 +95,7 @@ export function AppRoutes() {
       <Route path="/w/:workspace/contactos" element={<WorkspacePage><ContactosPage /></WorkspacePage>} />
       <Route path="/w/:workspace/grupos" element={<WorkspacePage><GruposPage /></WorkspacePage>} />
       <Route path="/w/:workspace/segmentos" element={<WorkspacePage><SegmentosPage /></WorkspacePage>} />
+      <Route path="/w/:workspace/formularios" element={<WorkspacePage><FormulariosPage /></WorkspacePage>} />
       <Route path="/w/:workspace/inbox" element={<WorkspacePage><InboxPage /></WorkspacePage>} />
       <Route path="/w/:workspace/builder" element={<WorkspacePage><BuilderPage /></WorkspacePage>} />
       <Route path="/w/:workspace/ai" element={<WorkspacePage><AiPage /></WorkspacePage>} />

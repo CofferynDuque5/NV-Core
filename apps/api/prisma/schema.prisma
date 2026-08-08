@@ -181,6 +181,27 @@ model Segment {
   @@index([workspaceSlug, createdAt])
 }
 
+// Public lead-capture form (opt-in): a submission becomes a Contact.
+model Form {
+  id             String   @id @default(cuid())
+  workspaceSlug  String
+  name           String
+  // Collected fields: [{ key, label, required }].
+  fields         Json     @default("[]")
+  // Tags applied to contacts created via this form.
+  tags           String[] @default([])
+  stage          String   @default("Lead")
+  submitLabel    String   @default("Enviar")
+  successMessage String   @default("¡Gracias! Te contactaremos pronto.")
+  redirectUrl    String?
+  views          Int      @default(0)
+  submissions    Int      @default(0)
+  createdAt      DateTime @default(now())
+
+  @@index([workspaceSlug])
+  @@index([workspaceSlug, createdAt])
+}
+
 model Campaign {
   id            String         @id @default(cuid())
   workspaceSlug String

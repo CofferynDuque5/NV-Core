@@ -137,6 +137,12 @@ export const emptyAdapters: Services = {
     remove: () => notAvailable(),
     preview: () => delay({ count: 0, sample: [] }),
   },
+  forms: {
+    list: () => emptyList(),
+    create: () => notAvailable(),
+    update: () => notAvailable(),
+    remove: () => notAvailable(),
+  },
   inbox: {
     conversations: () => emptyList(),
     messages: () => delay([]),

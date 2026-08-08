@@ -29,6 +29,8 @@ import type {
   UpdateSegmentInput,
   Segment,
   SegmentPreview,
+  CreateFormInput,
+  UpdateFormInput,
   CreateTemplateInput,
   GenerateVariantsInput,
   SocialPublishInput,
@@ -551,6 +553,50 @@ export function useDeleteSegment() {
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: [ws.id, "segments"] });
       toast.success("Segmento eliminado");
+    },
+    onError: (err) => toast.error(errText(err)),
+  });
+}
+
+// ── Forms (lead capture) ──────────────────────────────────────────────────────
+export function useCreateForm() {
+  const svc = useServices();
+  const ws = useWorkspace();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: CreateFormInput) => svc.forms.create(ws.id, input),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: [ws.id, "forms"] });
+      toast.success("Formulario creado");
+    },
+    onError: (err) => toast.error(errText(err)),
+  });
+}
+
+export function useUpdateForm() {
+  const svc = useServices();
+  const ws = useWorkspace();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, input }: { id: string; input: UpdateFormInput }) =>
+      svc.forms.update(ws.id, id, input),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: [ws.id, "forms"] });
+      toast.success("Formulario actualizado");
+    },
+    onError: (err) => toast.error(errText(err)),
+  });
+}
+
+export function useDeleteForm() {
+  const svc = useServices();
+  const ws = useWorkspace();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => svc.forms.remove(ws.id, id),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: [ws.id, "forms"] });
+      toast.success("Formulario eliminado");
     },
     onError: (err) => toast.error(errText(err)),
   });

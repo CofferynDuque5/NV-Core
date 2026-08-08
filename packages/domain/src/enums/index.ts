@@ -63,6 +63,10 @@ export type SegmentOperator = (typeof SEGMENT_OPERATORS)[number];
 export const SEGMENT_MATCH_MODES = ["all", "any"] as const;
 export type SegmentMatch = (typeof SEGMENT_MATCH_MODES)[number];
 
+/** Contact attributes a capture form can collect. */
+export const FORM_FIELD_KEYS = ["name", "email", "phone", "company"] as const;
+export type FormFieldKey = (typeof FORM_FIELD_KEYS)[number];
+
 /** Node types of an automation flow. */
 export const AUTOMATION_NODE_TYPES = ["trigger", "action", "wait", "cond"] as const;
 export type AutomationNodeType = (typeof AUTOMATION_NODE_TYPES)[number];
@@ -92,6 +96,7 @@ export const MODULE_IDS = [
   "contactos",
   "grupos",
   "segmentos",
+  "formularios",
   "inbox",
   "builder",
   "ai",

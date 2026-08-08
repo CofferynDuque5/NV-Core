@@ -17,6 +17,7 @@ import type {
   Integration,
   ChangelogStatus,
   Feedback,
+  Form,
   MediaAsset,
   MediaFolder,
   Message,
@@ -290,6 +291,24 @@ export interface SegmentService {
   remove(workspaceId: string, id: string): Promise<void>;
   /** Evaluate rules against the contact base without persisting a segment. */
   preview(workspaceId: string, input: { match?: Segment["match"]; rules: Segment["rules"] }): Promise<SegmentPreview>;
+}
+
+export interface CreateFormInput {
+  name: string;
+  fields?: Form["fields"];
+  tags?: string[];
+  stage?: Form["stage"];
+  submitLabel?: string;
+  successMessage?: string;
+  redirectUrl?: string;
+}
+export type UpdateFormInput = Partial<CreateFormInput>;
+
+export interface FormService {
+  list(workspaceId: string): Promise<ListResult<Form>>;
+  create(workspaceId: string, input: CreateFormInput): Promise<Form>;
+  update(workspaceId: string, id: string, input: UpdateFormInput): Promise<Form>;
+  remove(workspaceId: string, id: string): Promise<void>;
 }
 
 export interface CreateConversationInput {
@@ -611,6 +630,7 @@ export interface Services {
   groups: GroupService;
   social: SocialService;
   segments: SegmentService;
+  forms: FormService;
   inbox: InboxService;
   media: MediaService;
   templates: TemplateService;
