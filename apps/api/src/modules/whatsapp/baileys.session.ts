@@ -58,15 +58,32 @@ export class BaileysSession {
     try {
       const baileys = await loadBaileys();
       const makeWASocket = (baileys.default ?? (baileys as any).makeWASocket) as any;
-      const { useMultiFileAuthState } = baileys as any;
+      const { useMultiFileAuthState, fetchLatestBaileysVersion } = baileys as any;
 
       const dir = this.sessions.dirFor(this.workspaceSlug);
       const { state, saveCreds } = await useMultiFileAuthState(dir);
+
+      // Fetch the current WhatsApp Web protocol version before opening the
+      // socket. Without this Baileys uses the version bundled at build time,
+      // which WhatsApp rejects once it drifts — the connection closes instantly
+      // in a reconnect loop and the QR is never emitted. Falls back to the
+      // bundled version if the lookup fails (offline / blocked).
+      let version: number[] | undefined;
+      try {
+        const res = await fetchLatestBaileysVersion?.();
+        version = res?.version;
+        if (version) this.logger.log(`WhatsApp Web v${version.join(".")}`);
+      } catch (err) {
+        this.logger.warn(
+          `No se pudo obtener la versión de WhatsApp Web; uso la incluida: ${(err as Error).message}`,
+        );
+      }
 
       if (this.status === "disconnected") this.setStatus("connecting");
 
       this.sock = makeWASocket({
         auth: state,
+        version,
         printQRInTerminal: false,
         logger: silentLogger(),
         markOnlineOnConnect: false,
