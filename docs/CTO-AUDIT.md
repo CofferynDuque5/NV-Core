@@ -9,11 +9,13 @@
 
 ## 0. Resumen ejecutivo
 
-NV Core es un **monorepo bien construido en lo técnico pero inmaduro como producto comercial**. La higiene de código es genuinamente alta (TypeScript estricto sin `any` significativo, 0 TODO, 0 `console.log`, arquitectura de contratos coherente, guards de seguridad consistentes, 250 tests que pasan). Eso es real y poco común.
+NV Core es un **monorepo bien construido en lo técnico pero inmaduro como producto comercial** (evaluación original de FASE 10; ver el veredicto actualizado abajo). La higiene de código es genuinamente alta (TypeScript estricto sin `any` significativo, 0 TODO, 0 `console.log`, arquitectura de contratos coherente, guards de seguridad consistentes, **470 tests que pasan** — API 342 + web 128 — con gate de cobertura en CI). Eso es real y poco común.
 
 Pero **"limpio" no es "terminado"**. La promesa central del producto —marketing omnicanal (WhatsApp, Meta, Telegram, TikTok)— descansa sobre **integraciones frágiles o no probadas contra servicios reales**: WhatsApp usa Baileys (librería no oficial, riesgo de baneo y de ToS), el publicador de Meta jamás se ha ejercitado contra la Graph API real (solo mocks), y TikTok/otros son stubs honestos que reportan "no configurado". La plataforma **no tiene ninguna capa de adopción** (onboarding, ayuda, changelog, estado), y varios módulos "completos" son en realidad **cascarones pulidos** (el Marketplace instala apps que no hacen nada; el editor de workflows no ejecuta ramas condicionales).
 
-**Veredicto de release (Fase 10): 🔴 NO.** No por bugs bloqueantes visibles —los que se detectaron se corrigieron— sino porque **el producto no está probado de extremo a extremo en sus caminos de dinero, no tiene experiencia de adopción, y su base de integraciones es un riesgo estratégico sin mitigar.**
+**Veredicto de release (Fase 10, original): 🔴 NO.** No por bugs bloqueantes visibles —los que se detectaron se corrigieron— sino porque **el producto no está probado de extremo a extremo en sus caminos de dinero, no tiene experiencia de adopción, y su base de integraciones es un riesgo estratégico sin mitigar.**
+
+> **🟢 Veredicto actualizado (v1.0.0, ago-2026): SÍ para lanzamiento acotado (beta cerrada), con una salvedad.** El trabajo posterior cerró la adopción (onboarding, ayuda, changelog, estado, import/export), la escala (paginación + cap de Contactos), la seguridad (pentest interno, invite-only, `GET /workspaces` gateado), los cascarones (Workflows y Segmentos con ejecución real; Marketplace = directorio de integraciones), la operabilidad (observabilidad + restore probado + **gate de cobertura en CI**) y sumó 4 módulos estilo systeme.io. **La única dependencia dura restante es verificar en vivo WhatsApp Cloud API + Meta Graph con las credenciales del propietario** (todo construido; ver `docs/CREDENTIALS-HANDOFF.md` y el detalle en la §FASE 10 más abajo).
 
 | Dimensión | Nota (0–10) | Una frase |
 |---|---:|---|
@@ -21,16 +23,18 @@ Pero **"limpio" no es "terminado"**. La promesa central del producto —marketin
 | Arquitectura | **7.5** | Patrón claro y desacoplado; deuda en escalabilidad de datos. |
 | Completitud funcional (shell) | **8.0** | Casi todo está *presente* en la UI. |
 | Completitud funcional (real, producción) | **5.5** | Poco está *probado punta a punta*. |
-| Integraciones / providers | **4.0** | El mayor riesgo. Frágiles o no verificadas. |
-| Seguridad | **7.0** | Buen núcleo; 2 decisiones de política abiertas. |
+| Integraciones / providers | **5.0** ⬆ | Catálogo real y adapters construidos; **WhatsApp Cloud/Meta aún sin verificar en vivo** (pendiente de credenciales) — sigue siendo el mayor riesgo. |
+| Seguridad | **8.0** ⬆ | Pentest interno pasado (2 HIGH + 3 MEDIUM corregidos), invite-only por defecto, cifrado en reposo, lockout. |
 | Testing / QA | **7.0** | 470 tests (API 342 + web 128) + **gate de cobertura en CI** sobre la lógica pura crítica (api 95.6% / web 97.2%). Cobertura de integración sigue vía smoke en vivo + E2E. |
-| UX | **7.0** | Consistente y pulida; sin guía para el usuario nuevo. |
-| Preparación de producto | **5.0** | Faltan diferenciadores y profundidad. |
-| Preparación de negocio | **3.5** | Sin onboarding, ayuda, import/export, licenciamiento. |
-| Operabilidad / DevOps | **6.0** | Docker+CI+backups+health; sin HA ni observabilidad profunda. |
-| **Global ponderado** | **≈ 5.8 / 10** | **Prototipo comercial avanzado, no producto vendible.** |
+| UX | **7.5** ⬆ | Consistente y pulida; ya con onboarding, ayuda y changelog para el usuario nuevo. |
+| Preparación de producto | **6.5** ⬆ | Workflows/Segmentos reales + 4 módulos systeme.io (formularios, embudos, secuencias, afiliados). |
+| Preparación de negocio | **6.0** ⬆ | Onboarding, ayuda, import/export, changelog, estado + gating por plan y facturación Stripe. |
+| Operabilidad / DevOps | **7.0** ⬆ | Docker+CI+health + observabilidad (métricas/alertas) + **restore probado** + gate de cobertura. HA (réplica) sigue pendiente. |
+| **Global ponderado** | **≈ 6.8 / 10** ⬆ | **Producto de nicho comercializable en beta cerrada; salvedad: verificar mensajería/publicación en vivo.** |
 
-**Estimación honesta de completitud:** *funcionalidad presente* ~85%; *listo para vender a un cliente de pago* **~55%**.
+> ⬆ = revisado al alza tras el trabajo posterior a FASE 10 (v1.0.0). Los valores sin flecha se mantienen.
+
+**Estimación honesta de completitud:** *funcionalidad presente* ~95%; *listo para vender a un cliente de pago* **~75%** (100% salvo la verificación en vivo de WhatsApp/Meta con credenciales).
 
 ---
 
@@ -399,6 +403,32 @@ Leyenda: **E**xiste · **F**unciona · **C**ompleto · **P**roducción-ready.
 ---
 
 ## FASE 10 — Release Readiness
+
+> ### 🟢 Actualización — v1.0.0 (ago-2026)
+>
+> **La evaluación original de esta fase (conservada más abajo como registro histórico) daba `NO` al lanzamiento.** Desde entonces se ejecutó el trabajo que la cerraba: endurecimiento de seguridad (invite-only por defecto, `GET /workspaces` gateado, lockout de cuenta, Telegram fail-closed, cifrado en reposo), **Sprint 5** (segmentos y workflows con ejecución real, Marketplace reconvertido en directorio de integraciones), **Sprint 6** (observabilidad con métricas/alertas + **restore de backup probado**), **gate de cobertura en CI**, y los **3 módulos estilo systeme.io** (Formularios, Embudos, Secuencias, Afiliados). El veredicto vigente es el siguiente.
+>
+> #### ¿Publicarías v1.0.0 hoy? **SÍ — en lanzamiento acotado (beta cerrada), con una salvedad.**
+>
+> **La única dependencia dura restante** es la verificación **en vivo** de los canales de mensajería y publicación (**WhatsApp Cloud API + Meta Graph**): el código está construido y listo, pero su prueba end-to-end requiere las credenciales del propietario (ver [`docs/CREDENTIALS-HANDOFF.md`](CREDENTIALS-HANDOFF.md)). Hasta completarla, no conviene depender de esos canales con clientes; **el resto del producto es utilizable y está verificado**.
+>
+> **Estado de la checklist original (🔴 crítico):**
+> - [~] WhatsApp Cloud API oficial E2E (R1) — **construido; pendiente de verificación en vivo con credenciales**.
+> - [~] Publicación Meta (FB/IG) contra Graph real (R2) — **construido; pendiente de verificación en vivo con credenciales**.
+> - [x] Onboarding guiado + primer valor (R3).
+> - [x] Import/Export de datos (contactos, campañas, plantillas).
+> - [x] Paginación real + **cap de 100 en Contactos corregido** (R4, R11).
+> - [x] `GET /workspaces` gateado tras auth (R5).
+> - [~] Caminos de dinero en CI — Stripe con tests unitarios + webhook + E2E en CI y **gate de cobertura** sobre la lógica pura; la integración de pago end-to-end real queda pendiente de credenciales.
+> - [x] Redis: worker de colas + `health/ready` reporta su estado; documentado como obligatorio en prod (`OPERATIONS.md`).
+>
+> **🟠 Importante:** [x] Telegram fail-closed (R6) · [x] gating por plan + límites (Prod-4) · [x] lockout + roles reales en controladores · [x] ayuda + changelog + página de estado · [x] observabilidad (métricas + alertas; tracing distribuido = recomendación operativa) · [x] backups + **restore probado** · [~] índices compuestos añadidos donde importa (virtualización de listas: pendiente, no bloqueante) · [~] tests de `team` ✅, `audit`/`workspaces` CRUD parciales.
+>
+> **🟢 Deseable:** [x] Workflows con ejecución real · [x] evaluación real de reglas de Segmentos · [x] versionado/tags/releases (v1.0.0 + rama `main`) · [x] Marketplace = directorio de integraciones real · [ ] imágenes con IA (pendiente de key con capacidad de imagen) · [ ] cohortes/exportación en Analytics · [ ] accesibilidad formal (WCAG) del editor de Workflows.
+
+---
+
+### Evaluación original (histórica, FASE 10)
 
 # ¿Publicarías este software hoy para clientes reales? **NO.**
 
