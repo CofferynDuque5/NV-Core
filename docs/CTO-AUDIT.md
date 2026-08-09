@@ -23,7 +23,7 @@ Pero **"limpio" no es "terminado"**. La promesa central del producto —marketin
 | Completitud funcional (real, producción) | **5.5** | Poco está *probado punta a punta*. |
 | Integraciones / providers | **4.0** | El mayor riesgo. Frágiles o no verificadas. |
 | Seguridad | **7.0** | Buen núcleo; 2 decisiones de política abiertas. |
-| Testing / QA | **5.5** | 250 tests, pero cobertura desigual y sin gate. |
+| Testing / QA | **7.0** | 470 tests (API 342 + web 128) + **gate de cobertura en CI** sobre la lógica pura crítica (api 95.6% / web 97.2%). Cobertura de integración sigue vía smoke en vivo + E2E. |
 | UX | **7.0** | Consistente y pulida; sin guía para el usuario nuevo. |
 | Preparación de producto | **5.0** | Faltan diferenciadores y profundidad. |
 | Preparación de negocio | **3.5** | Sin onboarding, ayuda, import/export, licenciamiento. |
@@ -378,9 +378,12 @@ Leyenda: **E**xiste · **F**unciona · **C**ompleto · **P**roducción-ready.
   - ✅ **Reglas de alerta + guía de HA** en `OPERATIONS.md §7`: `scrape_config` de Prometheus, 6 reglas de alerta PromQL (API down, DB/queue down, tasa de 5xx>5%, p95>1s, errores de eventos de dominio) y HA mínima (API sin estado ≥2 réplicas, Postgres con réplica, Redis gestionado). El wiring de Alertmanager/PagerDuty es config de despliegue (endpoints fuera del repo).
   - ✅ **Restore de backup probado (DoD «restore probado»)** — simulacro end-to-end contra Postgres real: `backup-db.sh` generó un dump (custom/comprimido, integridad verificada con `pg_restore --list`), se restauró en una base limpia con `pg_restore` y los conteos `Contact/User/Segment` **coincidieron exactamente** (108/7/0) con el origen. Documentado en `OPERATIONS.md §7`.
   - ✅ **Tracing/correlación**: request-id por request (Hard-2) para correlación de logs; tracing distribuido completo (OpenTelemetry) requiere un colector externo (config de despliegue) — se deja como recomendación operativa, no bloqueante.
-  - ⏳ **Gate de cobertura de tests — pendiente**: el provider `@vitest/coverage-v8` **entra en conflicto con el cliente Prisma generado** en este monorepo (falla la resolución de `.prisma/client/default` bajo instrumentación y no emite resumen), así que **no** se cableó un gate que no se puede verificar. Alternativa pendiente: usar `@vitest/coverage-istanbul` o aislar el cliente Prisma de la instrumentación, luego fijar el umbral. La suite en sí sigue creciendo (**API 326**, web 116).
+  - ✅ **Gate de cobertura de tests — resuelto y cableado en CI**: el conflicto anterior de `@vitest/coverage-v8` con el cliente Prisma se debía a que la instrumentación corría con un cliente Prisma desincronizado; **regenerando el cliente (`prisma generate`) tras instalar la dependencia de cobertura, el provider v8 emite el resumen sin problemas**. Se añadió `@vitest/coverage-v8` (devDep) y un script `test:coverage` en **api** y **web**, con umbrales por paquete en cada `vitest.config.ts`:
+    - **web** — cobertura sobre la **lógica pura** `src/lib/**` (se excluyen módulos con efectos de navegador/`import.meta.env`: cloudinary, env, utils, connection-status). Logrado **97.23% stmts / 87.03% branch / 91.59% funcs**; umbral 90/80/85/90.
+    - **api** — el backend es en su mayoría módulos NestJS/adapters cuya cobertura real proviene del smoke en vivo + E2E (necesitan DB/proveedores), así que el gate se acota a la **lógica pura crítica**: `password.util`, `token.util`, `crypto.util` (cifrado en reposo), `render` (plantillas), `segment-eval` (segmentos), `sequence-engine` (drip). Logrado **95.58% stmts / 89.01% branch / 100% funcs**; umbral 90/80/90/90.
+    - **CI** ahora ejecuta `test:coverage` (en vez de `test`) en el job *quality*, de modo que una regresión bajo umbral **rompe el build**. `coverage/` ya está en `.gitignore`.
 
-  **Sprint 6: mayormente cumplido.** Observabilidad (métricas + alertas + HA docs) y restore probado ✅. Pendiente no bloqueante: gate de cobertura (conflicto de tooling con Prisma) y tracing distribuido (colector externo).
+  **Sprint 6: cumplido.** Observabilidad (métricas + alertas + HA docs), restore probado y **gate de cobertura en CI** ✅. Pendiente no bloqueante: tracing distribuido (colector externo).
 
 ---
 
