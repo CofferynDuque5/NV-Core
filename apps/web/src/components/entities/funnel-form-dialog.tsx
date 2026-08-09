@@ -6,6 +6,7 @@ import { useCreateFunnel, useUpdateFunnel } from "@/hooks/use-domain-mutations";
 import { useForms } from "@/hooks/use-domain-data";
 import { STEP_TYPE_LABEL } from "@/lib/funnels";
 import { FormDialog, errorMessage } from "./form-dialog";
+import { AiTextButton } from "./ai-text-button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
@@ -146,16 +147,36 @@ export function FunnelFormDialog({
               </select>
             ) : (
               <div className="space-y-1.5">
-                <Input
-                  value={st.headline ?? ""}
-                  onChange={(e) => patchStep(i, { headline: e.target.value })}
-                  placeholder="Titular"
-                />
-                <Input
-                  value={st.body ?? ""}
-                  onChange={(e) => patchStep(i, { body: e.target.value })}
-                  placeholder="Texto"
-                />
+                <div className="flex items-center gap-2">
+                  <Input
+                    value={st.headline ?? ""}
+                    onChange={(e) => patchStep(i, { headline: e.target.value })}
+                    placeholder="Titular"
+                    className="flex-1"
+                  />
+                  <AiTextButton
+                    text={st.headline ?? ""}
+                    topic={`titular del paso "${st.name}" del embudo "${name}"`}
+                    onResult={(t) => patchStep(i, { headline: t })}
+                    onError={setError}
+                    label="IA"
+                  />
+                </div>
+                <div className="flex items-center gap-2">
+                  <Input
+                    value={st.body ?? ""}
+                    onChange={(e) => patchStep(i, { body: e.target.value })}
+                    placeholder="Texto"
+                    className="flex-1"
+                  />
+                  <AiTextButton
+                    text={st.body ?? ""}
+                    topic={`texto del paso "${st.name}" del embudo "${name}"`}
+                    onResult={(t) => patchStep(i, { body: t })}
+                    onError={setError}
+                    label="IA"
+                  />
+                </div>
                 <Input
                   value={st.ctaLabel ?? ""}
                   onChange={(e) => patchStep(i, { ctaLabel: e.target.value })}

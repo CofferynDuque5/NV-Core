@@ -10,6 +10,7 @@ import {
 
 import { useCreateForm, useUpdateForm } from "@/hooks/use-domain-mutations";
 import { FormDialog, errorMessage } from "./form-dialog";
+import { AiTextButton } from "./ai-text-button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
@@ -162,7 +163,15 @@ export function FormFormDialog({
       </div>
 
       <div className="space-y-1.5">
-        <Label htmlFor="fm-success">Mensaje de éxito</Label>
+        <div className="flex items-center justify-between gap-2">
+          <Label htmlFor="fm-success">Mensaje de éxito</Label>
+          <AiTextButton
+            text={successMessage}
+            topic={`mensaje de agradecimiento para el formulario "${name}"`}
+            onResult={setSuccessMessage}
+            onError={setError}
+          />
+        </div>
         <Input
           id="fm-success"
           value={successMessage}

@@ -10,6 +10,7 @@ import {
 import { useCreateSequence, useUpdateSequence } from "@/hooks/use-domain-mutations";
 import { CHANNEL_LABEL, stepOffsets, stepWhen } from "@/lib/sequences";
 import { FormDialog, errorMessage } from "./form-dialog";
+import { AiTextButton } from "./ai-text-button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
@@ -160,11 +161,21 @@ export function SequenceFormDialog({
                 placeholder="Asunto (email)"
               />
             ) : null}
-            <Input
-              value={st.body}
-              onChange={(e) => patch(i, { body: e.target.value })}
-              placeholder="Mensaje… (usa {{nombre}})"
-            />
+            <div className="flex items-center gap-2">
+              <Input
+                value={st.body}
+                onChange={(e) => patch(i, { body: e.target.value })}
+                placeholder="Mensaje… (usa {{nombre}})"
+                className="flex-1"
+              />
+              <AiTextButton
+                text={st.body}
+                topic={`paso ${i + 1} de la secuencia "${name}"`}
+                onResult={(t) => patch(i, { body: t })}
+                onError={setError}
+                label="IA"
+              />
+            </div>
           </div>
         ))}
         <button

@@ -2,8 +2,12 @@ import { Trash2 } from "lucide-react";
 import type { AutomationNode } from "@nv/domain";
 
 import { nodeKind } from "@/lib/workflow";
+import { AiTextButton } from "@/components/entities/ai-text-button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+
+/** Field keys that hold free message text and get an AI assist button. */
+const AI_TEXT_FIELDS = new Set(["body", "message"]);
 import { EmptyState } from "@/components/common/empty-state";
 import { Sliders } from "lucide-react";
 
@@ -81,12 +85,30 @@ export function NodeInspector({
           {option.fields.map((f) => (
             <div key={f.key} className="space-y-1.5">
               <Label htmlFor={`nd-${f.key}`}>{f.label}</Label>
-              <Input
-                id={`nd-${f.key}`}
-                value={String(config[f.key] ?? "")}
-                placeholder={f.placeholder}
-                onChange={(e) => setConfig(f.key, e.target.value)}
-              />
+              {AI_TEXT_FIELDS.has(f.key) ? (
+                <div className="flex items-center gap-2">
+                  <Input
+                    id={`nd-${f.key}`}
+                    value={String(config[f.key] ?? "")}
+                    placeholder={f.placeholder}
+                    onChange={(e) => setConfig(f.key, e.target.value)}
+                    className="flex-1"
+                  />
+                  <AiTextButton
+                    text={String(config[f.key] ?? "")}
+                    topic={`mensaje de la acción "${node.label}"`}
+                    onResult={(t) => setConfig(f.key, t)}
+                    label="IA"
+                  />
+                </div>
+              ) : (
+                <Input
+                  id={`nd-${f.key}`}
+                  value={String(config[f.key] ?? "")}
+                  placeholder={f.placeholder}
+                  onChange={(e) => setConfig(f.key, e.target.value)}
+                />
+              )}
             </div>
           ))}
         </div>
