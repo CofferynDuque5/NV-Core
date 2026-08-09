@@ -10,6 +10,7 @@ import {
 } from "@nv/domain";
 
 import { cn } from "@/lib/utils";
+import { filterGroups, groupCategories } from "@/lib/groups";
 import {
   useCreateCampaign,
   useGenerateVariants,
@@ -79,6 +80,8 @@ export function CampaignFormDialog({
   const [time, setTime] = React.useState(""); // daily/weekly → HH:MM
   const [scheduleDays, setScheduleDays] = React.useState<number[]>([]);
   const [targetGroups, setTargetGroups] = React.useState<string[]>([]);
+  const [groupQuery, setGroupQuery] = React.useState("");
+  const [groupCategory, setGroupCategory] = React.useState("");
   const [fb, setFb] = React.useState(false);
   const [ig, setIg] = React.useState(false);
   const [socialFormat, setSocialFormat] = React.useState("feed");
@@ -185,6 +188,17 @@ export function CampaignFormDialog({
   }
 
   const groupItems = groups.data?.items ?? [];
+  const groupCats = groupCategories(groupItems);
+  const visibleGroups = filterGroups(groupItems, { q: groupQuery, category: groupCategory });
+
+  function setAllVisible(selected: boolean) {
+    const visibleIds = visibleGroups.map((g) => g.id);
+    setTargetGroups((prev) =>
+      selected
+        ? Array.from(new Set([...prev, ...visibleIds]))
+        : prev.filter((id) => !visibleIds.includes(id)),
+    );
+  }
 
   return (
     <FormDialog
@@ -195,6 +209,7 @@ export function CampaignFormDialog({
       onSubmit={submit}
       pending={pending}
       error={error}
+      size="xl"
       submitLabel={isEdit ? "Guardar cambios" : "Crear campaña"}
     >
       <div className="space-y-1.5">
@@ -388,28 +403,84 @@ export function CampaignFormDialog({
       </div>
 
       <div className="space-y-1.5">
-        <Label>Grupos de WhatsApp</Label>
+        <div className="flex items-center justify-between gap-2">
+          <Label>Grupos de WhatsApp</Label>
+          <span className="text-[11px] text-ink-faint">{targetGroups.length} seleccionado(s)</span>
+        </div>
         {groupItems.length === 0 ? (
           <p className="rounded-lg border border-line-soft bg-panel-raised px-3 py-2 text-xs text-ink-faint">
             No hay grupos. Conecta WhatsApp y sincroniza para difundir a tus grupos.
           </p>
         ) : (
-          <div className="max-h-40 space-y-0.5 overflow-y-auto rounded-lg border border-line-soft bg-panel-raised p-1">
-            {groupItems.map((g) => (
-              <label
-                key={g.id}
-                className="flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-sm hover:bg-panel-high"
+          <div className="space-y-2 rounded-lg border border-line-soft bg-panel-raised p-2">
+            <div className="flex flex-wrap items-center gap-2">
+              <Input
+                value={groupQuery}
+                onChange={(e) => setGroupQuery(e.target.value)}
+                placeholder="Buscar grupo…"
+                className="h-8 flex-1 min-w-[8rem]"
+              />
+              {groupCats.length > 0 ? (
+                <select
+                  aria-label="Filtrar por categoría"
+                  value={groupCategory}
+                  onChange={(e) => setGroupCategory(e.target.value)}
+                  className="h-8 rounded-lg border border-line-soft bg-panel-high px-2 text-xs text-ink"
+                >
+                  <option value="">Todas las categorías</option>
+                  {groupCats.map((c) => (
+                    <option key={c} value={c}>
+                      {c}
+                    </option>
+                  ))}
+                </select>
+              ) : null}
+            </div>
+            <div className="flex items-center gap-2 text-[11px]">
+              <button
+                type="button"
+                onClick={() => setAllVisible(true)}
+                className="rounded-md border border-line-soft px-2 py-0.5 text-ink-muted transition-colors hover:border-brand/60 hover:text-ink"
               >
-                <input
-                  type="checkbox"
-                  checked={targetGroups.includes(g.id)}
-                  onChange={() => toggleGroup(g.id)}
-                  className="size-4 rounded border-line-strong accent-brand"
-                />
-                <span className="min-w-0 flex-1 truncate text-ink">{g.name}</span>
-                <span className="shrink-0 text-[11px] text-ink-faint">{g.members} miembros</span>
-              </label>
-            ))}
+                Seleccionar todos ({visibleGroups.length})
+              </button>
+              <button
+                type="button"
+                onClick={() => setAllVisible(false)}
+                className="rounded-md border border-line-soft px-2 py-0.5 text-ink-muted transition-colors hover:border-brand/60 hover:text-ink"
+              >
+                Ninguno
+              </button>
+            </div>
+            <div className="max-h-64 space-y-0.5 overflow-y-auto rounded-md border border-line-soft bg-panel p-1">
+              {visibleGroups.length === 0 ? (
+                <p className="px-2 py-3 text-center text-xs text-ink-faint">Sin resultados.</p>
+              ) : (
+                visibleGroups.map((g) => (
+                  <label
+                    key={g.id}
+                    className="flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-sm hover:bg-panel-high"
+                  >
+                    <input
+                      type="checkbox"
+                      checked={targetGroups.includes(g.id)}
+                      onChange={() => toggleGroup(g.id)}
+                      className="size-4 rounded border-line-strong accent-brand"
+                    />
+                    <span className="min-w-0 flex-1 truncate text-ink">{g.name}</span>
+                    {(g.tags ?? []).slice(0, 2).map((t) => (
+                      <span
+                        key={t}
+                        className="shrink-0 rounded bg-panel-high px-1.5 py-0.5 text-[10px] text-ink-faint"
+                      >
+                        {t}
+                      </span>
+                    ))}
+                    <span className="shrink-0 text-[11px] text-ink-faint">{g.members}</span>
+                  </label>
+                ))
+              )}
+            </div>
           </div>
         )}
       </div>

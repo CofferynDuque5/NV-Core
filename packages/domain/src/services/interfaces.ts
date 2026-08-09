@@ -120,11 +120,15 @@ export interface CreateGroupInput {
   members?: number;
 }
 
+export type UpdateGroupInput = Partial<Pick<CreateGroupInput, "name" | "tags">>;
+
 export interface CreateTemplateInput {
   name: string;
   body: string;
   category?: string;
 }
+
+export type UpdateTemplateInput = Partial<CreateTemplateInput>;
 
 export interface UpsertConnectionInput {
   channel: Connection["channel"];
@@ -258,6 +262,7 @@ export interface ContactService {
 export interface GroupService {
   list(workspaceId: string): Promise<ListResult<Group>>;
   create(workspaceId: string, input: CreateGroupInput): Promise<Group>;
+  update(workspaceId: string, id: string, input: UpdateGroupInput): Promise<Group>;
   remove(workspaceId: string, id: string): Promise<void>;
   getVars(workspaceId: string, id: string): Promise<Record<string, string>>;
   setVars(workspaceId: string, id: string, vars: Record<string, string>): Promise<Record<string, string>>;
@@ -451,6 +456,7 @@ export interface MediaService {
 export interface TemplateService {
   list(workspaceId: string): Promise<ListResult<Template>>;
   create(workspaceId: string, input: CreateTemplateInput): Promise<Template>;
+  update(workspaceId: string, id: string, input: UpdateTemplateInput): Promise<Template>;
   remove(workspaceId: string, id: string): Promise<void>;
   /** Export all templates as CSV (name, category, body). */
   exportCsv(workspaceId: string): Promise<string>;

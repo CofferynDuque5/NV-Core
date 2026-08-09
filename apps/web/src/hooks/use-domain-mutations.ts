@@ -21,6 +21,8 @@ import type {
   CreateFeedbackInput,
   UpdateConversationInput,
   CreateGroupInput,
+  UpdateGroupInput,
+  UpdateTemplateInput,
   CreatePostInput,
   UpdatePostInput,
   DuplicatePostInput,
@@ -792,6 +794,21 @@ export function useCreateGroup() {
   });
 }
 
+export function useUpdateGroup() {
+  const svc = useServices();
+  const ws = useWorkspace();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, input }: { id: string; input: UpdateGroupInput }) =>
+      svc.groups.update(ws.id, id, input),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: [ws.id, "groups"] });
+      toast.success("Grupo actualizado");
+    },
+    onError: (err) => toast.error(errText(err)),
+  });
+}
+
 export function useSetGroupVars(groupId: string) {
   const svc = useServices();
   const ws = useWorkspace();
@@ -832,6 +849,35 @@ export function useCreateTemplate() {
       void qc.invalidateQueries({ queryKey: [ws.id, "templates"] });
       toast.success("Plantilla creada");
     },
+  });
+}
+
+export function useUpdateTemplate() {
+  const svc = useServices();
+  const ws = useWorkspace();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, input }: { id: string; input: UpdateTemplateInput }) =>
+      svc.templates.update(ws.id, id, input),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: [ws.id, "templates"] });
+      toast.success("Plantilla actualizada");
+    },
+    onError: (err) => toast.error(errText(err)),
+  });
+}
+
+export function useDeleteTemplate() {
+  const svc = useServices();
+  const ws = useWorkspace();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => svc.templates.remove(ws.id, id),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: [ws.id, "templates"] });
+      toast.success("Plantilla eliminada");
+    },
+    onError: (err) => toast.error(errText(err)),
   });
 }
 

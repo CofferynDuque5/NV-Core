@@ -121,6 +121,7 @@ export const emptyAdapters: Services = {
   groups: {
     list: () => emptyList(),
     create: () => notAvailable(),
+    update: () => notAvailable(),
     remove: () => notAvailable(),
     getVars: () => delay({}),
     setVars: () => notAvailable(),
@@ -186,6 +187,7 @@ export const emptyAdapters: Services = {
   templates: {
     list: () => emptyList(),
     create: () => notAvailable(),
+    update: () => notAvailable(),
     remove: () => notAvailable(),
     exportCsv: () => delay(""),
     importCsv: () => notAvailable(),

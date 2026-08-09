@@ -192,6 +192,7 @@ export function createHttpAdapters(opts: HttpAdapterOptions): Services {
     groups: {
       list: (id) => get<ListResult<Group>>(`${ws(id)}/groups`),
       create: (id, input) => post<Group>(`${ws(id)}/groups`, input),
+      update: (id, gid, input) => patch<Group>(`${ws(id)}/groups/${gid}`, input),
       remove: (id, gid) => del<void>(`${ws(id)}/groups/${gid}`),
       getVars: (id, gid) => get<Record<string, string>>(`${ws(id)}/groups/${gid}/vars`),
       setVars: (id, gid, vars) => put<Record<string, string>>(`${ws(id)}/groups/${gid}/vars`, vars),
@@ -275,6 +276,7 @@ export function createHttpAdapters(opts: HttpAdapterOptions): Services {
     templates: {
       list: (id) => get<ListResult<Template>>(`${ws(id)}/templates`),
       create: (id, input) => post<Template>(`${ws(id)}/templates`, input),
+      update: (id, tid, input) => patch<Template>(`${ws(id)}/templates/${tid}`, input),
       remove: (id, tid) => del<void>(`${ws(id)}/templates/${tid}`),
       exportCsv: (id) => get<{ csv: string }>(`${ws(id)}/templates/export`).then((r) => r.csv),
       importCsv: (id, csv) => post<TemplateImportResult>(`${ws(id)}/templates/import`, { csv }),

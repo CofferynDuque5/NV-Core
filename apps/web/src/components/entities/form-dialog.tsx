@@ -17,6 +17,12 @@ import { Button } from "@/components/ui/button";
  * Presentational wrapper for create/edit forms: handles submit state, error
  * display and demo-mode gating. The caller owns field state and the mutation.
  */
+const SIZE_CLASS: Record<"md" | "lg" | "xl", string> = {
+  md: "max-w-lg",
+  lg: "max-w-2xl",
+  xl: "max-w-3xl",
+};
+
 export function FormDialog({
   open,
   onOpenChange,
@@ -26,6 +32,7 @@ export function FormDialog({
   pending,
   error,
   submitLabel = "Guardar",
+  size = "md",
   children,
 }: {
   open: boolean;
@@ -36,13 +43,15 @@ export function FormDialog({
   pending: boolean;
   error?: string | null;
   submitLabel?: string;
+  /** Modal width. Use "lg"/"xl" for forms with many fields or list pickers. */
+  size?: "md" | "lg" | "xl";
   children: React.ReactNode;
 }) {
   const backend = isBackendConfigured();
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
+      <DialogContent className={SIZE_CLASS[size]}>
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
           {description ? <DialogDescription>{description}</DialogDescription> : null}
