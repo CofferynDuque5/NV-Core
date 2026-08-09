@@ -7,7 +7,13 @@ import { useQuery } from "@tanstack/react-query";
 import { useCampaignLogs } from "@/hooks/use-domain-data";
 import { useServices } from "@/hooks/use-services";
 import { useWorkspace } from "@/hooks/use-workspace";
-import { formatDateTime } from "@/lib/utils";
+import { formatDateTime, cn } from "@/lib/utils";
+import {
+  channelCounts,
+  filterHistorial,
+  summarize,
+  type HistorialFilter,
+} from "@/lib/historial";
 import { PageHeader } from "@/components/common/page-header";
 import { QueryBoundary } from "@/components/common/query-boundary";
 import { TableSkeleton } from "@/components/common/skeletons";
@@ -58,9 +64,17 @@ function downloadCsv(rows: SendLogEntry[]): void {
   URL.revokeObjectURL(url);
 }
 
+const CHANNEL_TABS: { id: HistorialFilter; label: string }[] = [
+  { id: "all", label: "Todos" },
+  { id: "whatsapp", label: "WhatsApp" },
+  { id: "facebook", label: "Facebook" },
+  { id: "instagram", label: "Instagram" },
+];
+
 export function HistorialContent({ showHeader = true }: { showHeader?: boolean }) {
   const logs = useCampaignLogs();
   const [insights, setInsights] = React.useState<{ target: string; id: string } | null>(null);
+  const [channel, setChannel] = React.useState<HistorialFilter>("all");
   const rows = logs.data ?? [];
 
   const actions = (
@@ -98,8 +112,38 @@ export function HistorialContent({ showHeader = true }: { showHeader?: boolean }
             "Cuando ejecutes una campaña o publiques en redes, cada intento aparecerá aquí con su resultado.",
         }}
       >
-        {(data) => (
-          <Panel className="overflow-hidden">
+        {(data) => {
+          const counts = channelCounts(data);
+          const filtered = filterHistorial(data, channel);
+          const sum = summarize(filtered);
+          return (
+            <div className="space-y-3">
+              <div className="flex flex-wrap items-center gap-2">
+                <div className="flex flex-wrap items-center gap-1.5">
+                  {CHANNEL_TABS.map((tab) => (
+                    <button
+                      key={tab.id}
+                      type="button"
+                      onClick={() => setChannel(tab.id)}
+                      className={cn(
+                        "rounded-full border px-3 py-1 text-xs transition-colors",
+                        channel === tab.id
+                          ? "border-brand/60 bg-brand/10 text-ink"
+                          : "border-line-soft text-ink-muted hover:border-line-bright",
+                      )}
+                    >
+                      {tab.label} ({counts[tab.id]})
+                    </button>
+                  ))}
+                </div>
+                <div className="ml-auto flex items-center gap-2 text-xs text-ink-muted">
+                  <Badge variant="success">{sum.ok} OK</Badge>
+                  {sum.error > 0 ? <Badge variant="danger">{sum.error} error</Badge> : null}
+                  <span>· {sum.total} en total</span>
+                </div>
+              </div>
+
+              <Panel className="overflow-hidden">
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-line text-left text-xs text-ink-faint">
@@ -111,7 +155,14 @@ export function HistorialContent({ showHeader = true }: { showHeader?: boolean }
                 </tr>
               </thead>
               <tbody>
-                {data.map((entry) => {
+                {filtered.length === 0 ? (
+                  <tr>
+                    <td colSpan={COLUMNS.length} className="px-4 py-8 text-center text-ink-faint">
+                      Sin envíos en este canal.
+                    </td>
+                  </tr>
+                ) : null}
+                {filtered.map((entry) => {
                   const target = entry.target ?? "";
                   const showMetrics = SOCIAL_TARGETS.has(target) && Boolean(entry.postId);
                   return (
@@ -154,8 +205,10 @@ export function HistorialContent({ showHeader = true }: { showHeader?: boolean }
                 })}
               </tbody>
             </table>
-          </Panel>
-        )}
+              </Panel>
+            </div>
+          );
+        }}
       </QueryBoundary>
 
       <InsightsDialog insights={insights} onClose={() => setInsights(null)} />

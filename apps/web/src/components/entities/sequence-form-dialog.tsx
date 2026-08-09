@@ -155,11 +155,21 @@ export function SequenceFormDialog({
               </div>
             </div>
             {st.channel === "email" ? (
-              <Input
-                value={st.subject ?? ""}
-                onChange={(e) => patch(i, { subject: e.target.value })}
-                placeholder="Asunto (email)"
-              />
+              <div className="flex items-center gap-2">
+                <Input
+                  value={st.subject ?? ""}
+                  onChange={(e) => patch(i, { subject: e.target.value })}
+                  placeholder="Asunto (email)"
+                  className="flex-1"
+                />
+                <AiTextButton
+                  text={st.subject ?? ""}
+                  topic={`asunto de email del paso ${i + 1} de la secuencia "${name}"`}
+                  onResult={(t) => patch(i, { subject: t })}
+                  onError={setError}
+                  label="IA"
+                />
+              </div>
             ) : null}
             <div className="flex items-center gap-2">
               <Input
