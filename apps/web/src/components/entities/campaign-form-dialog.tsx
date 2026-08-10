@@ -11,6 +11,7 @@ import {
 
 import { cn } from "@/lib/utils";
 import { filterGroups, groupCategories } from "@/lib/groups";
+import { formatTime12h } from "@/lib/schedule";
 import {
   useCreateCampaign,
   useGenerateVariants,
@@ -371,11 +372,16 @@ export function CampaignFormDialog({
         </div>
 
         {scheduleType === "once" ? (
-          <Input
-            type="datetime-local"
-            value={dateTime}
-            onChange={(e) => setDateTime(e.target.value)}
-          />
+          <>
+            <Input
+              type="datetime-local"
+              value={dateTime}
+              onChange={(e) => setDateTime(e.target.value)}
+            />
+            {dateTime ? (
+              <p className="text-[11px] text-ink-faint">Se enviará a las {formatTime12h(dateTime)}.</p>
+            ) : null}
+          </>
         ) : (
           <div className="space-y-2">
             {scheduleType === "weekly" ? (
@@ -398,6 +404,11 @@ export function CampaignFormDialog({
               </div>
             ) : null}
             <Input type="time" value={time} onChange={(e) => setTime(e.target.value)} />
+            {time ? (
+              <p className="text-[11px] text-ink-faint">
+                Hora seleccionada: {formatTime12h(time)} ({scheduleType === "daily" ? "cada día" : "días elegidos"}).
+              </p>
+            ) : null}
           </div>
         )}
       </div>

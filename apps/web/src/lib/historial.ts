@@ -19,6 +19,35 @@ export function filterHistorial(rows: SendLogEntry[], channel: HistorialFilter):
   return rows.filter((r) => channelOf(r) === channel);
 }
 
+/**
+ * Full Historial query: channel + free text (campaign/group/target/message) +
+ * date range. `from`/`to` are "yyyy-mm-dd" (inclusive); empty means unbounded.
+ */
+export function searchHistorial(
+  rows: SendLogEntry[],
+  opts: { channel?: HistorialFilter; q?: string; from?: string; to?: string } = {},
+): SendLogEntry[] {
+  const channel = opts.channel ?? "all";
+  const q = (opts.q ?? "").trim().toLowerCase();
+  const fromT = opts.from ? new Date(`${opts.from}T00:00:00`).getTime() : null;
+  const toT = opts.to ? new Date(`${opts.to}T23:59:59.999`).getTime() : null;
+
+  return rows.filter((r) => {
+    if (channel !== "all" && channelOf(r) !== channel) return false;
+    if (fromT !== null || toT !== null) {
+      const t = new Date(r.createdAt).getTime();
+      if (Number.isNaN(t)) return false;
+      if (fromT !== null && t < fromT) return false;
+      if (toT !== null && t > toT) return false;
+    }
+    if (q) {
+      const hay = `${r.campaignName ?? ""} ${r.groupName ?? ""} ${r.target ?? ""} ${r.preview ?? ""} ${r.error ?? ""}`.toLowerCase();
+      if (!hay.includes(q)) return false;
+    }
+    return true;
+  });
+}
+
 /** Counts of ok / error / total for a set of rows. */
 export function summarize(rows: SendLogEntry[]): { total: number; ok: number; error: number } {
   let ok = 0;

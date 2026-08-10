@@ -6,6 +6,7 @@ import {
   Loader2,
   Megaphone,
   Pause,
+  Clock,
   Pencil,
   Play,
   Plus,
@@ -15,6 +16,7 @@ import {
 } from "lucide-react";
 
 import { EMPTY_METRIC } from "@/lib/utils";
+import { isScheduled, scheduleLabel } from "@/lib/schedule";
 import { useCampaigns } from "@/hooks/use-domain-data";
 import {
   useDeleteCampaign,
@@ -141,8 +143,47 @@ export function CampanasContent({ showHeader = true }: { showHeader?: boolean })
           ),
         }}
       >
-        {(data) => (
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
+        {(data) => {
+          const scheduled = data.items.filter(isScheduled);
+          return (
+          <div className="space-y-4">
+            {scheduled.length > 0 ? (
+              <Panel className="p-4">
+                <div className="mb-3 flex items-center gap-2">
+                  <Clock className="size-4 text-brand" />
+                  <h3 className="text-sm font-semibold text-ink-bright">Programados</h3>
+                  <span className="text-xs text-ink-faint">({scheduled.length})</span>
+                </div>
+                <div className="space-y-1.5">
+                  {scheduled.map((c) => (
+                    <div
+                      key={c.id}
+                      className="flex items-center gap-3 rounded-lg border border-line-soft bg-panel-raised px-3 py-2"
+                    >
+                      <div className="min-w-0 flex-1">
+                        <div className="truncate text-sm font-medium text-ink">{c.name}</div>
+                        <div className="text-[11px] text-ink-faint">{scheduleLabel(c)}</div>
+                      </div>
+                      <Button
+                        size="sm"
+                        variant="secondary"
+                        disabled={run.isPending && run.variables === c.id}
+                        onClick={() => run.mutate(c.id)}
+                      >
+                        {run.isPending && run.variables === c.id ? (
+                          <Loader2 className="size-3.5 animate-spin" />
+                        ) : (
+                          <Send className="size-3.5" />
+                        )}
+                        Enviar ahora
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              </Panel>
+            ) : null}
+
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
             {data.items.map((c) => (
               <Panel key={c.id} className="flex flex-col gap-3 p-4">
                 <div className="flex items-start justify-between gap-2">
@@ -226,8 +267,10 @@ export function CampanasContent({ showHeader = true }: { showHeader?: boolean })
                 </div>
               </Panel>
             ))}
+            </div>
           </div>
-        )}
+          );
+        }}
       </QueryBoundary>
 
       {/* Import dialog */}

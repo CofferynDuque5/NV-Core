@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { SendLogEntry } from "@nv/domain";
 
-import { channelCounts, channelOf, filterHistorial, summarize } from "./historial";
+import { channelCounts, channelOf, filterHistorial, searchHistorial, summarize } from "./historial";
 
 function e(partial: Partial<SendLogEntry>): SendLogEntry {
   return { id: Math.random().toString(36).slice(2), ok: true, createdAt: "2026-01-01T00:00:00Z", ...partial };
@@ -40,5 +40,17 @@ describe("historial helpers", () => {
     expect(c.whatsapp).toBe(2);
     expect(c.facebook).toBe(1);
     expect(c.instagram).toBe(1);
+  });
+
+  it("searchHistorial combines channel + text + date range", () => {
+    const dated = [
+      e({ campaignName: "Promo enero", groupName: "Universidad", target: "wa", createdAt: "2026-01-10T10:00:00Z" }),
+      e({ campaignName: "Promo marzo", target: "facebook", createdAt: "2026-03-10T10:00:00Z" }),
+    ];
+    expect(searchHistorial(dated, { q: "enero" })).toHaveLength(1);
+    expect(searchHistorial(dated, { channel: "facebook" })).toHaveLength(1);
+    expect(searchHistorial(dated, { from: "2026-02-01" })).toHaveLength(1);
+    expect(searchHistorial(dated, { from: "2026-01-01", to: "2026-01-31" })).toHaveLength(1);
+    expect(searchHistorial(dated, {})).toHaveLength(2);
   });
 });

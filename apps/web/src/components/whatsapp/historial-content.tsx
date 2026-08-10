@@ -10,10 +10,11 @@ import { useWorkspace } from "@/hooks/use-workspace";
 import { formatDateTime, cn } from "@/lib/utils";
 import {
   channelCounts,
-  filterHistorial,
+  searchHistorial,
   summarize,
   type HistorialFilter,
 } from "@/lib/historial";
+import { Input } from "@/components/ui/input";
 import { PageHeader } from "@/components/common/page-header";
 import { QueryBoundary } from "@/components/common/query-boundary";
 import { TableSkeleton } from "@/components/common/skeletons";
@@ -75,6 +76,9 @@ export function HistorialContent({ showHeader = true }: { showHeader?: boolean }
   const logs = useCampaignLogs();
   const [insights, setInsights] = React.useState<{ target: string; id: string } | null>(null);
   const [channel, setChannel] = React.useState<HistorialFilter>("all");
+  const [q, setQ] = React.useState("");
+  const [from, setFrom] = React.useState("");
+  const [to, setTo] = React.useState("");
   const rows = logs.data ?? [];
 
   const actions = (
@@ -114,10 +118,39 @@ export function HistorialContent({ showHeader = true }: { showHeader?: boolean }
       >
         {(data) => {
           const counts = channelCounts(data);
-          const filtered = filterHistorial(data, channel);
+          const filtered = searchHistorial(data, { channel, q, from, to });
           const sum = summarize(filtered);
           return (
             <div className="space-y-3">
+              <div className="flex flex-wrap items-center gap-2">
+                <Input
+                  value={q}
+                  onChange={(e) => setQ(e.target.value)}
+                  placeholder="Buscar campaña, grupo o mensaje…"
+                  className="h-9 w-full max-w-xs"
+                />
+                <label className="flex items-center gap-1.5 text-xs text-ink-muted">
+                  Desde
+                  <Input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className="h-9" />
+                </label>
+                <label className="flex items-center gap-1.5 text-xs text-ink-muted">
+                  Hasta
+                  <Input type="date" value={to} onChange={(e) => setTo(e.target.value)} className="h-9" />
+                </label>
+                {(q || from || to) ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setQ("");
+                      setFrom("");
+                      setTo("");
+                    }}
+                    className="text-xs text-ink-muted underline-offset-2 hover:text-ink hover:underline"
+                  >
+                    Limpiar
+                  </button>
+                ) : null}
+              </div>
               <div className="flex flex-wrap items-center gap-2">
                 <div className="flex flex-wrap items-center gap-1.5">
                   {CHANNEL_TABS.map((tab) => (
