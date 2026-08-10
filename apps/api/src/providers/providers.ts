@@ -29,15 +29,16 @@ abstract class BaseProvider implements Provider {
 export class WhatsappProvider extends BaseProvider {
   readonly id: ProviderId = "whatsapp";
   readonly label = "WhatsApp";
-  // Official Cloud API is the primary/default channel (stable, ToS-compliant).
-  // Baileys stays available as an opt-in for users who accept its risks
-  // (unofficial library → possible number ban). Workspaces that already chose an
-  // adapter keep their stored ProviderSelection; only the fallback default moves.
-  readonly defaultAdapterId = "cloud-api";
+  // Baileys (WhatsApp Web / QR) is the default channel: it works with just the
+  // scanned session, with no dependency on Meta's Cloud API credentials. The
+  // official Cloud API stays available as an opt-in for whoever provides a token.
+  // Workspaces that already chose an adapter keep their stored ProviderSelection.
+  readonly defaultAdapterId = "baileys";
   readonly adapters: ChannelAdapter[];
   constructor(cloud: WhatsappCloudApiAdapter, baileys: WhatsappBaileysAdapter) {
     super();
-    this.adapters = [cloud, baileys];
+    // Baileys first so it's the primary option in the Conexiones adapter list.
+    this.adapters = [baileys, cloud];
   }
 }
 
