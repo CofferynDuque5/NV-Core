@@ -239,6 +239,7 @@ export const emptyAdapters: Services = {
   ai: {
     generateVariants: () => delay([]),
     suggestHashtags: () => delay([]),
+    generateImage: () => notAvailable(),
     usage: () =>
       delay({
         period: "",

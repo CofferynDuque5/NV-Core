@@ -1,6 +1,17 @@
 import * as React from "react";
 import { Link } from "react-router-dom";
-import { ArrowUpRight, Copy, Hash, Loader2, Save, Sparkles, Wand2, Zap } from "lucide-react";
+import {
+  ArrowUpRight,
+  Copy,
+  Download,
+  Hash,
+  Image as ImageIcon,
+  Loader2,
+  Save,
+  Sparkles,
+  Wand2,
+  Zap,
+} from "lucide-react";
 import { CHANNEL_LIST } from "@nv/domain";
 import type { AiVariant } from "@nv/domain";
 import { toast } from "sonner";
@@ -17,10 +28,17 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import {
   useCreateTemplate,
+  useGenerateFlyer,
   useGenerateVariants,
   useImproveMessage,
   useSuggestHashtags,
 } from "@/hooks/use-domain-mutations";
+
+const FLYER_SIZES: { id: string; label: string }[] = [
+  { id: "1024x1024", label: "Cuadrado" },
+  { id: "1024x1536", label: "Vertical (story)" },
+  { id: "1536x1024", label: "Horizontal" },
+];
 import { useAiUsage } from "@/hooks/use-domain-data";
 
 function Chips<T extends string>({
@@ -66,7 +84,12 @@ export default function AiStudioPage() {
   const [hashtags, setHashtags] = React.useState<string[]>([]);
   const [improvingIdx, setImprovingIdx] = React.useState<number | null>(null);
 
+  const [flyerPrompt, setFlyerPrompt] = React.useState("");
+  const [flyerSize, setFlyerSize] = React.useState(FLYER_SIZES[1]!.id);
+  const [flyerUrl, setFlyerUrl] = React.useState<string | null>(null);
+
   const generate = useGenerateVariants();
+  const flyer = useGenerateFlyer();
   const improve = useImproveMessage();
   const hashtagsM = useSuggestHashtags();
   const createTemplate = useCreateTemplate();
@@ -122,6 +145,17 @@ export default function AiStudioPage() {
   function saveAsTemplate(v: AiVariant) {
     const name = `${v.tag} · ${prompt.trim().slice(0, 32) || "Generado con IA"}`;
     createTemplate.mutate({ name, body: v.text, category: "IA" });
+  }
+
+  function onGenerateFlyer() {
+    if (flyerPrompt.trim().length < 3) {
+      toast.error("Describe el flyer que quieres (producto, oferta, estilo).");
+      return;
+    }
+    flyer.mutate(
+      { prompt: flyerPrompt.trim(), size: flyerSize },
+      { onSuccess: (res) => setFlyerUrl(res.url) },
+    );
   }
 
   return (
@@ -315,6 +349,65 @@ export default function AiStudioPage() {
                 icon={Sparkles}
                 title="Sin variantes todavía"
                 description="Describe tu campaña, elige tipo y tono, y pulsa «Generar variantes». Requiere un proveedor de IA configurado (OpenAI, Anthropic o Gemini)."
+                compact
+              />
+            )}
+          </div>
+        </Panel>
+      </div>
+
+      {/* Flyer con IA */}
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,380px)_1fr]">
+        <Panel className="h-fit">
+          <PanelHeader title="Flyer con IA" description="Genera una imagen para tu campaña" />
+          <div className="space-y-4 p-4">
+            <Textarea
+              rows={4}
+              value={flyerPrompt}
+              onChange={(e) => setFlyerPrompt(e.target.value)}
+              placeholder="Ej: flyer promocional de suscripciones de streaming, colores neón, 50% de descuento, estilo moderno…"
+              className="min-h-[96px]"
+            />
+            <div className="space-y-1.5">
+              <Label>Formato</Label>
+              <Chips options={FLYER_SIZES} value={flyerSize} onChange={setFlyerSize} accent="brand-violet" />
+            </div>
+            <Button size="sm" onClick={onGenerateFlyer} disabled={flyer.isPending}>
+              {flyer.isPending ? <Loader2 className="size-4 animate-spin" /> : <ImageIcon className="size-4" />}
+              Generar flyer
+            </Button>
+            <p className="text-[11px] text-ink-faint">
+              La generación de imágenes usa la API de OpenAI. Configura{" "}
+              <code className="text-ink-muted">OPENAI_API_KEY</code> en el backend para activarla.
+            </p>
+          </div>
+        </Panel>
+
+        <Panel>
+          <PanelHeader title="Vista previa" />
+          <div className="p-4">
+            {flyer.isPending ? (
+              <div className="aspect-square w-full max-w-md animate-pulse rounded-lg bg-panel-raised" />
+            ) : flyerUrl ? (
+              <div className="space-y-3">
+                <img
+                  src={flyerUrl}
+                  alt="Flyer generado"
+                  className="w-full max-w-md rounded-lg border border-line-soft"
+                />
+                <a
+                  href={flyerUrl}
+                  download="flyer-nv-core.png"
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-line-soft px-3 py-1.5 text-xs text-ink-muted transition-colors hover:border-brand/60 hover:text-ink"
+                >
+                  <Download className="size-3.5" /> Descargar
+                </a>
+              </div>
+            ) : (
+              <EmptyState
+                icon={ImageIcon}
+                title="Sin flyer todavía"
+                description="Describe el flyer y pulsa «Generar flyer». Requiere OPENAI_API_KEY en el backend."
                 compact
               />
             )}

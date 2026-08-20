@@ -14,7 +14,7 @@ import { ConfigService } from "@nestjs/config";
 import { Throttle } from "@nestjs/throttler";
 import { ApiBearerAuth, ApiTags } from "@nestjs/swagger";
 import type { AiRecommendation, AiVariant, BestTimes, PlanId } from "@nv/domain";
-import { IsOptional, IsString, MinLength } from "class-validator";
+import { IsIn, IsOptional, IsString, MaxLength, MinLength } from "class-validator";
 
 import type { AppConfig } from "../../config/configuration";
 import { WorkspaceId } from "../../common/tenant/workspace.decorator";
@@ -23,7 +23,13 @@ import { PlanGuard } from "../../common/guards/plan.guard";
 import { RequiresActivePlan } from "../../common/decorators/requires-plan.decorator";
 import { PlanService } from "../../common/plan/plan.service";
 import { PrismaService } from "../../prisma/prisma.service";
-import { createProvider, type AiProvider, type ChatMessage } from "./ai.providers";
+import {
+  createImageProvider,
+  createProvider,
+  type AiProvider,
+  type ChatMessage,
+  type ImageProvider,
+} from "./ai.providers";
 import { estimateTokens, usagePeriod } from "./ai.usage";
 
 /**
@@ -56,6 +62,13 @@ export class ImproveMessageDto {
   @IsString() @MinLength(2) message!: string;
 }
 
+const IMAGE_SIZES = ["1024x1024", "1024x1536", "1536x1024"] as const;
+
+export class GenerateImageDto {
+  @IsString() @MinLength(3) @MaxLength(1000) prompt!: string;
+  @IsOptional() @IsIn(IMAGE_SIZES) size?: (typeof IMAGE_SIZES)[number];
+}
+
 /** Extracts the first JSON array/object from a model response (tolerates prose/fences). */
 export function extractJson<T>(raw: string): T | null {
   const fenced = raw.match(/```(?:json)?\s*([\s\S]*?)```/i);
@@ -85,6 +98,7 @@ export interface AiUsageView {
 @Injectable()
 export class AiService {
   private readonly provider: AiProvider | null;
+  private readonly imageProvider: ImageProvider | null;
   private readonly monthlyQuota?: number;
 
   constructor(
@@ -94,6 +108,7 @@ export class AiService {
   ) {
     const ai = config.get("integrations", { infer: true }).ai;
     this.provider = createProvider(ai);
+    this.imageProvider = createImageProvider(ai);
     this.monthlyQuota = ai.monthlyQuota && ai.monthlyQuota > 0 ? ai.monthlyQuota : undefined;
   }
 
@@ -118,6 +133,25 @@ export class AiService {
       );
     }
     return this.provider;
+  }
+
+  private requireImage(): ImageProvider {
+    if (!this.imageProvider) {
+      throw new ServiceUnavailableException(
+        "Generación de imágenes no configurada. Define OPENAI_API_KEY (los flyers usan la API de imágenes de OpenAI).",
+      );
+    }
+    return this.imageProvider;
+  }
+
+  /** Generate a flyer image from a prompt. Returns a URL (data: base64 PNG). */
+  async generateImage(workspaceId: string, dto: GenerateImageDto): Promise<{ url: string }> {
+    const provider = this.requireImage();
+    await this.assertWithinQuota(workspaceId);
+    const url = await provider.generateImage(dto.prompt.trim(), dto.size ?? "1024x1024");
+    // Images cost more than a text call; record a nominal token weight.
+    await this.record(workspaceId, 1000);
+    return { url };
   }
 
   /** Reject the call when the workspace has hit its plan's monthly AI quota. */
@@ -364,6 +398,13 @@ export class AiController {
   @RequiresActivePlan()
   improve(@WorkspaceId() workspaceId: string, @Body() dto: ImproveMessageDto) {
     return this.service.improve(workspaceId, dto);
+  }
+
+  @Post("image")
+  @Throttle(AI_THROTTLE)
+  @RequiresActivePlan()
+  generateImage(@WorkspaceId() workspaceId: string, @Body() dto: GenerateImageDto) {
+    return this.service.generateImage(workspaceId, dto);
   }
 
   /** Recomendaciones + mejores horarios. No exige plan (degrada sin IA). */

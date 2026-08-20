@@ -153,3 +153,45 @@ export function createProvider(ai: AppConfig["integrations"]["ai"]): AiProvider 
       return null;
   }
 }
+
+// ── Image generation (flyers) ─────────────────────────────────────────────────
+
+/** Minimal image-generation contract. Returns a `data:` URL (base64 PNG). */
+export interface ImageProvider {
+  readonly model: string;
+  generateImage(prompt: string, size: string): Promise<string>;
+}
+
+class OpenAiImageProvider implements ImageProvider {
+  constructor(
+    private readonly apiKey: string,
+    readonly model: string,
+  ) {}
+
+  async generateImage(prompt: string, size: string): Promise<string> {
+    const res = await fetch("https://api.openai.com/v1/images/generations", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        authorization: `Bearer ${this.apiKey}`,
+      },
+      body: JSON.stringify({ model: this.model, prompt, size, n: 1 }),
+    });
+    if (!res.ok) throw new Error(`OpenAI Images: ${await readError(res)}`);
+    const data = (await res.json()) as { data?: { b64_json?: string; url?: string }[] };
+    const first = data.data?.[0];
+    if (first?.b64_json) return `data:image/png;base64,${first.b64_json}`;
+    if (first?.url) return first.url;
+    throw new Error("OpenAI Images: respuesta vacía.");
+  }
+}
+
+/**
+ * Image generation for flyers. Uses OpenAI's images API (gpt-image-1), so it
+ * needs OPENAI_API_KEY specifically — the text providers (Anthropic/Gemini) are
+ * not used here. Returns null when no OpenAI key is configured.
+ */
+export function createImageProvider(ai: AppConfig["integrations"]["ai"]): ImageProvider | null {
+  if (!ai.openai) return null;
+  return new OpenAiImageProvider(ai.openai, "gpt-image-1");
+}

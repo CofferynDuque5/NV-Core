@@ -578,6 +578,11 @@ export interface AiRecommendationsResult {
 export interface AiService {
   generateVariants(workspaceId: string, input: GenerateVariantsInput): Promise<AiVariant[]>;
   suggestHashtags(workspaceId: string, input: { prompt: string }): Promise<string[]>;
+  /** Generate a flyer image from a prompt. Returns a URL (data: or hosted). */
+  generateImage(
+    workspaceId: string,
+    input: { prompt: string; size?: string },
+  ): Promise<{ url: string }>;
   usage(workspaceId: string): Promise<AiUsage>;
   improve(workspaceId: string, input: { message: string }): Promise<{ text: string }>;
   recommendations(workspaceId: string): Promise<AiRecommendationsResult>;

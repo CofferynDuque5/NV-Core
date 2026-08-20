@@ -336,6 +336,7 @@ export function createHttpAdapters(opts: HttpAdapterOptions): Services {
         post<{ hashtags: string[] }>(`${ws(id)}/ai/hashtags`, input).then((r) => r.hashtags),
       usage: (id) => get<AiUsage>(`${ws(id)}/ai/usage`),
       improve: (id, input) => post<{ text: string }>(`${ws(id)}/ai/improve`, input),
+      generateImage: (id, input) => post<{ url: string }>(`${ws(id)}/ai/image`, input),
       recommendations: (id) => get<AiRecommendationsResult>(`${ws(id)}/ai/recommendations`),
     },
     messaging: {

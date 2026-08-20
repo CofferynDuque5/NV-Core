@@ -1279,6 +1279,17 @@ export function useMarkNotificationsRead() {
   });
 }
 
+export function useGenerateFlyer() {
+  const svc = useServices();
+  const ws = useWorkspace();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { prompt: string; size?: string }) => svc.ai.generateImage(ws.id, input),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: [ws.id, "ai", "usage"] }),
+    onError: (err) => toast.error(errText(err)),
+  });
+}
+
 export function useSuggestHashtags() {
   const svc = useServices();
   const ws = useWorkspace();
