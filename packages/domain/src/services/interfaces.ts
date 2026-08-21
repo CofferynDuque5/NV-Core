@@ -97,6 +97,7 @@ export interface CreateCampaignInput {
   message?: string;
   scheduleType?: "once" | "daily" | "weekly";
   scheduleAt?: string;
+  scheduleTimes?: string[];
   scheduleDays?: number[];
   attachments?: Campaign["attachments"];
   socialFormat?: string;

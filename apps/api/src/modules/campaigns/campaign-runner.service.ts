@@ -106,19 +106,29 @@ export class CampaignRunner implements OnModuleInit, OnModuleDestroy {
     if (this.timer) clearInterval(this.timer);
   }
 
-  private isDue(c: PCampaign, now: Date): boolean {
-    if (c.status === "pausada" || c.status === "completada") return false;
+  /**
+   * The due time-slot for a campaign at `now`, or null if it shouldn't run.
+   * - "once": sentinel "once" when its datetime has passed and it's still scheduled.
+   * - "daily"/"weekly": matches ANY of `scheduleTimes` (or `scheduleAt` when empty),
+   *   deduped per slot ("YYYY-MM-DDTHH:MM") so it can run several times a day.
+   */
+  private dueSlot(c: PCampaign, now: Date): string | null {
+    if (c.status === "pausada" || c.status === "completada") return null;
     const at = c.scheduleAt ?? "";
     if (c.scheduleType === "once") {
-      return c.status === "programada" && Boolean(at) && new Date(at).getTime() <= now.getTime();
+      return c.status === "programada" && Boolean(at) && new Date(at).getTime() <= now.getTime()
+        ? "once"
+        : null;
     }
-    const [h, m] = String(at).split(":").map(Number);
-    if (Number.isNaN(h) || Number.isNaN(m)) return false;
-    const timeMatches = now.getHours() === h && now.getMinutes() === m;
-    if (!timeMatches || c.lastRunDay === todayKey()) return false;
-    if (c.scheduleType === "daily") return true;
-    if (c.scheduleType === "weekly") return (c.scheduleDays ?? []).includes(now.getDay());
-    return false;
+    if (c.scheduleType === "weekly" && !(c.scheduleDays ?? []).includes(now.getDay())) return null;
+    const times = c.scheduleTimes?.length ? c.scheduleTimes : at ? [at] : [];
+    const matched = times.find((t) => {
+      const [h, m] = String(t).split(":").map(Number);
+      return !Number.isNaN(h) && now.getHours() === h && now.getMinutes() === m;
+    });
+    if (!matched) return null;
+    const slot = `${todayKey()}T${matched}`;
+    return c.lastRunSlot === slot ? null : slot;
   }
 
   private async tick(): Promise<void> {
@@ -127,17 +137,16 @@ export class CampaignRunner implements OnModuleInit, OnModuleDestroy {
       where: { status: { in: ["programada", "activa"] } },
     });
     for (const c of candidates) {
-      if (this.isDue(c, now)) {
-        this.logger.log(`Encolando campaña "${c.name}" (${c.workspaceSlug}).`);
-        // Mark the run day now so the next tick doesn't re-enqueue it.
-        await this.prisma.campaign
-          .update({ where: { id: c.id }, data: { lastRunDay: todayKey() } })
-          .catch(() => undefined);
-        await this.jobs.dispatch("campaign.run", c.workspaceSlug, {
-          workspaceSlug: c.workspaceSlug,
-          campaignId: c.id,
-        });
-      }
+      const slot = this.dueSlot(c, now);
+      if (!slot) continue;
+      this.logger.log(`Encolando campaña "${c.name}" (${c.workspaceSlug}) — franja ${slot}.`);
+      // Mark the slot now so the next tick doesn't re-enqueue the same run.
+      const dedupe = slot === "once" ? { lastRunDay: todayKey() } : { lastRunSlot: slot };
+      await this.prisma.campaign.update({ where: { id: c.id }, data: dedupe }).catch(() => undefined);
+      await this.jobs.dispatch("campaign.run", c.workspaceSlug, {
+        workspaceSlug: c.workspaceSlug,
+        campaignId: c.id,
+      });
     }
   }
 

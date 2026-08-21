@@ -41,4 +41,14 @@ describe("schedule helpers", () => {
     ).toBe("Semanal · Lun, Mié · 8:00 PM");
     expect(scheduleLabel(c({ scheduleAt: null }))).toBe("Sin programar");
   });
+
+  it("scheduleLabel lists multiple daily times", () => {
+    expect(
+      scheduleLabel(c({ scheduleType: "daily", scheduleTimes: ["08:00", "20:30"] })),
+    ).toBe("Diario · 8:00 AM, 8:30 PM");
+  });
+
+  it("isScheduled is true with scheduleTimes even without scheduleAt", () => {
+    expect(isScheduled(c({ scheduleAt: null, scheduleTimes: ["09:00"] }))).toBe(true);
+  });
 });

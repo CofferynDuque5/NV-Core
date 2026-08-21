@@ -69,8 +69,10 @@ const campaign = (over: AnyRec = {}): AnyRec => ({
   socialFormat: null,
   scheduleType: "once",
   scheduleAt: "",
+  scheduleTimes: [],
   scheduleDays: [],
   lastRunDay: null,
+  lastRunSlot: null,
   targets: [],
   ...over,
 });
@@ -78,7 +80,8 @@ const campaign = (over: AnyRec = {}): AnyRec => ({
 describe("CampaignRunner.isDue", () => {
   const { runner } = makeRunner();
   const isDue = (c: AnyRec, now: Date) =>
-    (runner as unknown as { isDue: (c: AnyRec, n: Date) => boolean }).isDue(c, now);
+    (runner as unknown as { dueSlot: (c: AnyRec, n: Date) => string | null }).dueSlot(c, now) !==
+    null;
 
   it("never runs paused or completed campaigns", () => {
     const now = new Date("2026-01-01T10:00:00Z");
@@ -98,9 +101,27 @@ describe("CampaignRunner.isDue", () => {
     const mm = String(at.getMinutes()).padStart(2, "0");
     const c = campaign({ scheduleType: "daily", status: "activa", scheduleAt: `${hh}:${mm}` });
     expect(isDue(c, at)).toBe(true);
-    // Already ran today → skip.
-    const today = new Date().toISOString().slice(0, 10);
-    expect(isDue({ ...c, lastRunDay: today }, at)).toBe(false);
+    // Already ran this slot → skip (dedupe per "YYYY-MM-DDTHH:MM").
+    const slot = `${new Date().toISOString().slice(0, 10)}T${hh}:${mm}`;
+    expect(isDue({ ...c, lastRunSlot: slot }, at)).toBe(false);
+  });
+
+  it("runs a daily campaign at EACH of scheduleTimes (varias veces al día)", () => {
+    const at = new Date();
+    const hh = String(at.getHours()).padStart(2, "0");
+    const mm = String(at.getMinutes()).padStart(2, "0");
+    // A different time that is NOT now, plus the current time → only "now" is due.
+    const other = `${String((at.getHours() + 3) % 24).padStart(2, "0")}:${mm}`;
+    const c = campaign({
+      scheduleType: "daily",
+      status: "activa",
+      scheduleAt: "",
+      scheduleTimes: [other, `${hh}:${mm}`],
+    });
+    expect(isDue(c, at)).toBe(true);
+    // After running this slot, still due later for the OTHER time (different slot).
+    const slot = `${new Date().toISOString().slice(0, 10)}T${hh}:${mm}`;
+    expect(isDue({ ...c, lastRunSlot: slot }, at)).toBe(false);
   });
 
   it("runs a weekly campaign only on the configured weekday", () => {

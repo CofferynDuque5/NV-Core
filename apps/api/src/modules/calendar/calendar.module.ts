@@ -7,6 +7,7 @@ import { WorkspaceGuard } from "../../common/tenant/workspace.guard";
 import { PrismaService } from "../../prisma/prisma.service";
 import { mapCalendarEvent } from "../../prisma/mappers";
 import { LIST_CAP } from "../../common/query-limits";
+import { campaignOccurrences } from "./campaign-occurrences";
 
 @Injectable()
 export class CalendarService {
@@ -17,15 +18,40 @@ export class CalendarService {
     const where: { workspaceSlug: string; date?: { gte: Date; lt: Date } } = {
       workspaceSlug: workspaceId,
     };
+    let range: { gte: Date; lt: Date } | null = null;
     // Optional month filter: "YYYY-MM".
     if (month && /^\d{4}-\d{2}$/.test(month)) {
       const [y, m] = month.split("-").map(Number);
-      const gte = new Date(Date.UTC(y!, m! - 1, 1));
-      const lt = new Date(Date.UTC(y!, m!, 1));
-      where.date = { gte, lt };
+      range = { gte: new Date(Date.UTC(y!, m! - 1, 1)), lt: new Date(Date.UTC(y!, m!, 1)) };
+      where.date = range;
     }
     const rows = await this.prisma.calendarEvent.findMany({ where, orderBy: { date: "asc" }, take: LIST_CAP });
-    return rows.map(mapCalendarEvent);
+    const stored = rows.map(mapCalendarEvent);
+
+    // Overlay scheduled campaigns so they appear on the calendar automatically.
+    // Only when a month is given (avoids unbounded expansion).
+    if (!range) return stored;
+    const campaigns = await this.prisma.campaign.findMany({
+      where: { workspaceSlug: workspaceId, status: { in: ["programada", "activa"] } },
+      take: LIST_CAP,
+    });
+    const occurrences = campaigns.flatMap((c) =>
+      campaignOccurrences(
+        {
+          id: c.id,
+          name: c.name,
+          status: c.status,
+          channels: c.channels as string[],
+          scheduleType: c.scheduleType,
+          scheduleAt: c.scheduleAt,
+          scheduleTimes: c.scheduleTimes ?? [],
+          scheduleDays: c.scheduleDays ?? [],
+        },
+        range!.gte,
+        range!.lt,
+      ),
+    );
+    return [...stored, ...occurrences];
   }
 }
 

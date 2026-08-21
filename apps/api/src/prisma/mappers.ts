@@ -189,6 +189,7 @@ export const mapCampaign = (
   message: c.message ?? "",
   scheduleType: (c.scheduleType as Campaign["scheduleType"]) ?? "once",
   scheduleAt: c.scheduleAt ?? null,
+  scheduleTimes: c.scheduleTimes ?? [],
   scheduleDays: c.scheduleDays ?? [],
   attachments: (c.attachments as Campaign["attachments"]) ?? [],
   socialFormat: c.socialFormat ?? null,

@@ -78,7 +78,8 @@ export function CampaignFormDialog({
   const [message, setMessage] = React.useState("");
   const [scheduleType, setScheduleType] = React.useState<ScheduleType>("once");
   const [dateTime, setDateTime] = React.useState(""); // once → datetime-local
-  const [time, setTime] = React.useState(""); // daily/weekly → HH:MM
+  const [time, setTime] = React.useState(""); // daily/weekly → the time being added
+  const [scheduleTimes, setScheduleTimes] = React.useState<string[]>([]); // daily/weekly → HH:MM[]
   const [scheduleDays, setScheduleDays] = React.useState<number[]>([]);
   const [targetGroups, setTargetGroups] = React.useState<string[]>([]);
   const [groupQuery, setGroupQuery] = React.useState("");
@@ -98,7 +99,16 @@ export function CampaignFormDialog({
     setMessage(campaign?.message ?? "");
     setScheduleType(type);
     setDateTime(type === "once" ? isoToLocalInput(campaign?.scheduleAt) : "");
-    setTime(type === "once" ? "" : (campaign?.scheduleAt ?? ""));
+    setTime("");
+    setScheduleTimes(
+      type === "once"
+        ? []
+        : campaign?.scheduleTimes?.length
+          ? campaign.scheduleTimes
+          : campaign?.scheduleAt
+            ? [campaign.scheduleAt]
+            : [],
+    );
     setScheduleDays(campaign?.scheduleDays ?? []);
     setTargetGroups(campaign?.targetGroups ?? []);
     setFb(campaign?.channels?.includes("fb") ?? false);
@@ -150,6 +160,16 @@ export function CampaignFormDialog({
     setTargetGroups((prev) => (prev.includes(id) ? prev.filter((g) => g !== id) : [...prev, id]));
   }
 
+  function addTime() {
+    const t = time.trim();
+    if (!t) return;
+    setScheduleTimes((prev) => (prev.includes(t) ? prev : [...prev, t].sort()));
+    setTime("");
+  }
+  function removeTime(t: string) {
+    setScheduleTimes((prev) => prev.filter((x) => x !== t));
+  }
+
   function submit() {
     setError(null);
 
@@ -158,12 +178,20 @@ export function CampaignFormDialog({
     if (fb) channels.push("fb");
     if (ig) channels.push("ig");
 
+    // Include any time still typed in the box but not yet "added".
+    const times =
+      scheduleType === "once"
+        ? []
+        : Array.from(
+            new Set([...scheduleTimes, ...(time.trim() ? [time.trim()] : [])]),
+          ).sort();
+
     const scheduleAt =
       scheduleType === "once"
         ? dateTime
           ? new Date(dateTime).toISOString()
           : undefined
-        : time || undefined;
+        : times[0] || undefined;
 
     const input = {
       name: name.trim(),
@@ -173,6 +201,7 @@ export function CampaignFormDialog({
       message: message.trim() || undefined,
       scheduleType,
       scheduleAt,
+      scheduleTimes: scheduleType === "once" ? undefined : times,
       scheduleDays: scheduleType === "weekly" ? scheduleDays : undefined,
       targetGroups,
       attachments,
@@ -403,12 +432,49 @@ export function CampaignFormDialog({
                 ))}
               </div>
             ) : null}
-            <Input type="time" value={time} onChange={(e) => setTime(e.target.value)} />
-            {time ? (
-              <p className="text-[11px] text-ink-faint">
-                Hora seleccionada: {formatTime12h(time)} ({scheduleType === "daily" ? "cada día" : "días elegidos"}).
-              </p>
-            ) : null}
+            <div className="space-y-1.5">
+              <Label className="text-xs text-ink-muted">Horas de envío (puedes agregar varias)</Label>
+              <div className="flex items-center gap-2">
+                <Input
+                  type="time"
+                  value={time}
+                  onChange={(e) => setTime(e.target.value)}
+                  className="flex-1"
+                />
+                <button
+                  type="button"
+                  onClick={addTime}
+                  disabled={!time}
+                  className="rounded-lg border border-line-soft px-3 py-1.5 text-xs text-ink-muted transition-colors hover:border-brand/60 hover:text-ink disabled:opacity-50"
+                >
+                  Agregar hora
+                </button>
+              </div>
+              {scheduleTimes.length > 0 ? (
+                <div className="flex flex-wrap gap-1.5 pt-1">
+                  {scheduleTimes.map((t) => (
+                    <span
+                      key={t}
+                      className="inline-flex items-center gap-1 rounded-full border border-brand/40 bg-brand/10 px-2 py-0.5 text-xs text-ink"
+                    >
+                      {formatTime12h(t)}
+                      <button
+                        type="button"
+                        onClick={() => removeTime(t)}
+                        className="text-ink-faint hover:text-state-danger"
+                        aria-label={`Quitar ${t}`}
+                      >
+                        <X className="size-3" />
+                      </button>
+                    </span>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-[11px] text-ink-faint">
+                  Agrega una o varias horas ({scheduleType === "daily" ? "se enviará cada día" : "en los días elegidos"}).
+                </p>
+              )}
+            </div>
           </div>
         )}
       </div>

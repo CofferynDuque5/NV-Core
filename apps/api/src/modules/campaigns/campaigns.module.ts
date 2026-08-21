@@ -110,6 +110,12 @@ export class CreateCampaignDto {
   @Max(6, { each: true })
   scheduleDays?: number[];
 
+  @ApiPropertyOptional({ isArray: true, type: String, description: "daily/weekly → varias horas HH:MM" })
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  scheduleTimes?: string[];
+
   @ApiPropertyOptional({ isArray: true, type: Object })
   @IsOptional()
   @IsArray()
@@ -142,6 +148,7 @@ export class UpdateCampaignDto {
   @IsOptional() @IsIn(["once", "daily", "weekly"]) scheduleType?: "once" | "daily" | "weekly";
   @IsOptional() @IsString() scheduleAt?: string;
   @IsOptional() @IsArray() @IsInt({ each: true }) @Min(0, { each: true }) @Max(6, { each: true }) scheduleDays?: number[];
+  @IsOptional() @IsArray() @IsString({ each: true }) scheduleTimes?: string[];
   @IsOptional() @IsArray() attachments?: CampaignAttachment[];
   @IsOptional() @IsIn(["feed", "reel", "story", "carousel"]) socialFormat?: string;
   @IsOptional() @IsArray() @IsString({ each: true }) targetGroups?: string[];
@@ -204,6 +211,7 @@ export class CampaignsService {
       message: dto.message,
       scheduleType: dto.scheduleType,
       scheduleAt: dto.scheduleAt,
+      scheduleTimes: dto.scheduleTimes,
       scheduleDays: dto.scheduleDays,
       attachments: dto.attachments as object | undefined,
       socialFormat: dto.socialFormat,
@@ -224,6 +232,7 @@ export class CampaignsService {
         message: dto.message ?? "",
         scheduleType: dto.scheduleType ?? "once",
         scheduleAt: dto.scheduleAt,
+        scheduleTimes: dto.scheduleTimes ?? [],
         scheduleDays: dto.scheduleDays ?? [],
         attachments: (dto.attachments as object) ?? [],
         socialFormat: dto.socialFormat,

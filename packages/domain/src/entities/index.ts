@@ -120,6 +120,8 @@ export interface Campaign {
   scheduleType?: "once" | "daily" | "weekly";
   /** once → ISO datetime; daily/weekly → "HH:MM". */
   scheduleAt?: string | null;
+  /** daily/weekly → multiple send times per day ["HH:MM", …]. */
+  scheduleTimes?: string[];
   /** weekly → days of week (0=Sun … 6=Sat). */
   scheduleDays?: number[];
   attachments?: CampaignAttachment[];

@@ -298,6 +298,9 @@ model Campaign {
   scheduleType  String         @default("once")
   /// once → ISO datetime; daily/weekly → "HH:MM".
   scheduleAt    String?
+  /// daily/weekly → multiple send times per day ["HH:MM", …]. Falls back to
+  /// [scheduleAt] when empty (backward compatible).
+  scheduleTimes String[]       @default([])
   /// weekly → days of week (0=Sun … 6=Sat).
   scheduleDays  Int[]
   /// Uploaded media descriptors [{ path, filename, mime, kind, url }]. First is
@@ -308,6 +311,8 @@ model Campaign {
   lastRunAt     DateTime?
   /// Last execution day (YYYY-MM-DD) to dedupe daily/weekly runs.
   lastRunDay    String?
+  /// Last executed time-slot ("YYYY-MM-DDTHH:MM") to dedupe multi-time runs.
+  lastRunSlot   String?
   createdAt     DateTime       @default(now())
 
   posts    Post[]
