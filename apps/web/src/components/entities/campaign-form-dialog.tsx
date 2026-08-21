@@ -174,7 +174,9 @@ export function CampaignFormDialog({
     setError(null);
 
     const channels: ChannelId[] = [];
-    if (targetGroups.length > 0) channels.push("wa");
+    const selected = (groups.data?.items ?? []).filter((g) => targetGroups.includes(g.id));
+    if (selected.some((g) => g.channel === "wa")) channels.push("wa");
+    if (selected.some((g) => g.channel === "tg")) channels.push("tg");
     if (fb) channels.push("fb");
     if (ig) channels.push("ig");
 
@@ -481,7 +483,7 @@ export function CampaignFormDialog({
 
       <div className="space-y-1.5">
         <div className="flex items-center justify-between gap-2">
-          <Label>Grupos de WhatsApp</Label>
+          <Label>Grupos (WhatsApp / Telegram)</Label>
           <span className="text-[11px] text-ink-faint">{targetGroups.length} seleccionado(s)</span>
         </div>
         {groupItems.length === 0 ? (
@@ -545,6 +547,15 @@ export function CampaignFormDialog({
                       className="size-4 rounded border-line-strong accent-brand"
                     />
                     <span className="min-w-0 flex-1 truncate text-ink">{g.name}</span>
+                    <span
+                      className={
+                        g.channel === "tg"
+                          ? "shrink-0 rounded bg-sky-500/15 px-1.5 py-0.5 text-[10px] font-medium text-sky-400"
+                          : "shrink-0 rounded bg-emerald-500/15 px-1.5 py-0.5 text-[10px] font-medium text-emerald-400"
+                      }
+                    >
+                      {g.channel === "tg" ? "TG" : "WA"}
+                    </span>
                     {(g.tags ?? []).slice(0, 2).map((t) => (
                       <span
                         key={t}

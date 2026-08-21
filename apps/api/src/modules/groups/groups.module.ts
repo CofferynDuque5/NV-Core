@@ -56,6 +56,11 @@ export class CreateGroupDto {
   @IsInt()
   @Min(0)
   members?: number;
+
+  @ApiPropertyOptional({ description: "Telegram chat_id o JID de WhatsApp" })
+  @IsOptional()
+  @IsString()
+  remoteJid?: string;
 }
 
 export class UpdateGroupDto {
@@ -97,6 +102,7 @@ export class GroupsService {
         description: dto.description,
         tags: dto.tags ?? [],
         members: dto.members ?? 0,
+        remoteJid: dto.remoteJid?.trim() || null,
       },
     });
     await this.audit.record(workspaceId, actor, "group.create", row.id);

@@ -119,6 +119,8 @@ export interface CreateGroupInput {
   description?: string;
   tags?: string[];
   members?: number;
+  /** Destination id: WhatsApp JID or Telegram chat_id (e.g. "-1001234567890"). */
+  remoteJid?: string;
 }
 
 export type UpdateGroupInput = Partial<Pick<CreateGroupInput, "name" | "tags">>;

@@ -1,12 +1,13 @@
 import type { SendLogEntry } from "@nv/domain";
 
 /** Channels shown in the Historial filter. */
-export type HistorialChannel = "whatsapp" | "facebook" | "instagram" | "otro";
+export type HistorialChannel = "whatsapp" | "telegram" | "facebook" | "instagram" | "otro";
 export type HistorialFilter = "all" | HistorialChannel;
 
-/** Classify a send-log entry into a channel (WhatsApp group send vs FB/IG post). */
+/** Classify a send-log entry into a channel (WhatsApp/Telegram group send vs FB/IG post). */
 export function channelOf(entry: SendLogEntry): HistorialChannel {
   const t = (entry.target ?? "").toLowerCase();
+  if (t === "tg" || t === "telegram") return "telegram";
   if (t === "facebook") return "facebook";
   if (t === "instagram") return "instagram";
   if (t === "wa" || t === "whatsapp" || entry.groupId || entry.groupName) return "whatsapp";
@@ -60,6 +61,7 @@ export function channelCounts(rows: SendLogEntry[]): Record<HistorialFilter, num
   const counts: Record<HistorialFilter, number> = {
     all: rows.length,
     whatsapp: 0,
+    telegram: 0,
     facebook: 0,
     instagram: 0,
     otro: 0,

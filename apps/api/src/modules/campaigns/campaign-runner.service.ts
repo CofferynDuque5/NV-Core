@@ -164,24 +164,27 @@ export class CampaignRunner implements OnModuleInit, OnModuleDestroy {
     const channels = campaign.channels as string[];
     const results: { ok: boolean }[] = [];
 
-    if (channels.includes("wa")) {
-      for (const target of campaign.targets) {
-        const group = target.group;
-        const vars = { ...builtinVars(group.name), ...(await this.groupVars(group.id)) };
-        const text = renderTemplate(campaign.message, vars);
-        const to = group.remoteJid ?? group.id;
-        try {
-          const res = await this.withRetry(() =>
-            waAttachment
-              ? this.providers.sendMedia(workspaceSlug, "whatsapp", { to, body: text, attachment: waAttachment })
-              : this.providers.sendMessage(workspaceSlug, "whatsapp", { to, body: text }),
-          );
-          results.push(await this.log(workspaceSlug, campaign, group, "wa", text, true, null, res.id));
-        } catch (err) {
-          results.push(await this.log(workspaceSlug, campaign, group, "wa", text, false, (err as Error).message));
-        }
-        await sleep(this.groupDelayMs);
+    // Deliver to every target group via the provider matching its channel:
+    // WhatsApp (Baileys/Cloud) or Telegram (bot). Social (fb/ig) is separate.
+    for (const target of campaign.targets) {
+      const group = target.group;
+      // Group.channel defaults to "wa"; only Telegram routes elsewhere.
+      const ch = group.channel === "tg" ? "tg" : "wa";
+      const provider = ch === "tg" ? "telegram" : "whatsapp";
+      const vars = { ...builtinVars(group.name), ...(await this.groupVars(group.id)) };
+      const text = renderTemplate(campaign.message, vars);
+      const to = group.remoteJid ?? group.id;
+      try {
+        const res = await this.withRetry(() =>
+          ch === "wa" && waAttachment
+            ? this.providers.sendMedia(workspaceSlug, provider, { to, body: text, attachment: waAttachment })
+            : this.providers.sendMessage(workspaceSlug, provider, { to, body: text }),
+        );
+        results.push(await this.log(workspaceSlug, campaign, group, ch, text, true, null, res.id));
+      } catch (err) {
+        results.push(await this.log(workspaceSlug, campaign, group, ch, text, false, (err as Error).message));
       }
+      await sleep(this.groupDelayMs);
     }
 
     await this.publishSocial(workspaceSlug, campaign, channels, attachments, results);

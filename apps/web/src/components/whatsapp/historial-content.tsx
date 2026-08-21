@@ -68,6 +68,7 @@ function downloadCsv(rows: SendLogEntry[]): void {
 const CHANNEL_TABS: { id: HistorialFilter; label: string }[] = [
   { id: "all", label: "Todos" },
   { id: "whatsapp", label: "WhatsApp" },
+  { id: "telegram", label: "Telegram" },
   { id: "facebook", label: "Facebook" },
   { id: "instagram", label: "Instagram" },
 ];
