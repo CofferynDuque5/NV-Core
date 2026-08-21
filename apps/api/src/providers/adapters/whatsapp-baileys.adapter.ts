@@ -8,6 +8,8 @@ import type {
   AdapterStatus,
   HealthResult,
   ProviderId,
+  PublishInput,
+  PublishResult,
   SendMediaInput,
   SendMessageInput,
   SendResult,
@@ -58,6 +60,24 @@ export class WhatsappBaileysAdapter extends BaseAdapter {
 
   override async sendMedia(ctx: AdapterContext, input: SendMediaInput): Promise<SendResult> {
     return this.whatsapp.sendMedia(ctx.workspaceSlug, input.to, input.body ?? "", input.attachment);
+  }
+
+  /**
+   * "Publish" on WhatsApp = post to the account's Status (Estados). The first
+   * attachment (image/video) becomes the status media with the message as its
+   * caption; with no media it's a text status card.
+   */
+  override async publish(ctx: AdapterContext, input: PublishInput): Promise<PublishResult> {
+    try {
+      const media = input.attachments?.find((a) => a.url) ?? null;
+      const res = await this.whatsapp.postStatus(ctx.workspaceSlug, input.message ?? "", media);
+      return { ok: true, id: res.id, format: "status" };
+    } catch (err) {
+      const message = (err as Error).message;
+      // A dropped socket / not-yet-connected session is worth retrying.
+      const retriable = /no está conectado|timed out|timeout|rate/i.test(message);
+      return { ok: false, error: message, format: "status", retriable };
+    }
   }
 
   override async getStatus(ctx: AdapterContext): Promise<AdapterStatus> {

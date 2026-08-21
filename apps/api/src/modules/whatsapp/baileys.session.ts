@@ -217,6 +217,39 @@ export class BaileysSession {
     return this.sendToGroup(toJid(to), text, attachment);
   }
 
+  /** Contact JIDs (`…@s.whatsapp.net`) tracked for this session. */
+  contactJids(): string[] {
+    return [...this.contacts].filter((jid) => jid.endsWith("@s.whatsapp.net"));
+  }
+
+  /**
+   * Publish to the account's WhatsApp Status (Estados). Sends to the special
+   * `status@broadcast` JID with the tracked contacts as the audience — WhatsApp
+   * only delivers a status to the JIDs passed in `statusJidList`. Text-only
+   * statuses render on a colored card; an image/video status uses the text as
+   * its caption.
+   */
+  async postStatus(text: string, attachment?: WhatsappAttachment | null): Promise<{ id: string }> {
+    if (!this.isConnected || !this.sock) {
+      throw new Error("WhatsApp no está conectado en este workspace.");
+    }
+    const statusJidList = this.contactJids();
+    let content: any;
+    if (attachment?.url) {
+      const caption = text || undefined;
+      if (attachment.kind === "video") content = { video: { url: attachment.url }, caption };
+      else content = { image: { url: attachment.url }, caption };
+    } else {
+      // Colored text status card (font 3 = a neutral, readable default).
+      content = { text, backgroundColor: "#0B3D2E", font: 3 };
+    }
+    const result = await this.sock.sendMessage("status@broadcast", content, {
+      statusJidList,
+      broadcast: true,
+    });
+    return { id: result?.key?.id ?? "" };
+  }
+
   /** Log out: closes the socket and clears stored credentials. */
   async logout(): Promise<void> {
     this.manualStop = true;

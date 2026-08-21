@@ -193,6 +193,7 @@ export const mapCampaign = (
   scheduleDays: c.scheduleDays ?? [],
   attachments: (c.attachments as Campaign["attachments"]) ?? [],
   socialFormat: c.socialFormat ?? null,
+  postToWaStatus: c.postToWaStatus ?? false,
   lastRunAt: iso(c.lastRunAt) ?? null,
   targetGroups: c.targets?.map((t) => t.groupId) ?? [],
 });

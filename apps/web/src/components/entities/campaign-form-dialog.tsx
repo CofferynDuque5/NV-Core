@@ -86,6 +86,7 @@ export function CampaignFormDialog({
   const [groupCategory, setGroupCategory] = React.useState("");
   const [fb, setFb] = React.useState(false);
   const [ig, setIg] = React.useState(false);
+  const [postToWaStatus, setPostToWaStatus] = React.useState(false);
   const [socialFormat, setSocialFormat] = React.useState("feed");
   const [attachments, setAttachments] = React.useState<CampaignAttachment[]>([]);
   const [error, setError] = React.useState<string | null>(null);
@@ -113,6 +114,7 @@ export function CampaignFormDialog({
     setTargetGroups(campaign?.targetGroups ?? []);
     setFb(campaign?.channels?.includes("fb") ?? false);
     setIg(campaign?.channels?.includes("ig") ?? false);
+    setPostToWaStatus(campaign?.postToWaStatus ?? false);
     setSocialFormat(campaign?.socialFormat ?? "feed");
     setAttachments(campaign?.attachments ?? []);
     setError(null);
@@ -208,6 +210,7 @@ export function CampaignFormDialog({
       targetGroups,
       attachments,
       socialFormat: ig ? socialFormat : undefined,
+      postToWaStatus,
       ...(campaign?.accent ? { accent: campaign.accent } : {}),
     };
 
@@ -571,6 +574,25 @@ export function CampaignFormDialog({
             </div>
           </div>
         )}
+      </div>
+
+      <div className="space-y-1.5">
+        <Label>Estado de WhatsApp</Label>
+        <label className="flex cursor-pointer items-start gap-2.5 rounded-lg border border-line-soft bg-panel-raised px-3 py-2.5">
+          <input
+            type="checkbox"
+            checked={postToWaStatus}
+            onChange={(e) => setPostToWaStatus(e.target.checked)}
+            className="mt-0.5 size-4 rounded border-line-strong accent-emerald-500"
+          />
+          <span className="min-w-0 flex-1">
+            <span className="block text-sm text-ink">Publicar también en mi Estado de WhatsApp</span>
+            <span className="block text-[11px] text-ink-faint">
+              Usa el mensaje y la primera imagen/video como Estado (Baileys). Se programa en el
+              calendario junto con la campaña.
+            </span>
+          </span>
+        </label>
       </div>
 
       <div className="space-y-1.5">

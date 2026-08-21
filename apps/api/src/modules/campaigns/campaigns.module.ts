@@ -27,6 +27,7 @@ import {
 import { Prisma } from "@prisma/client";
 import {
   IsArray,
+  IsBoolean,
   IsDateString,
   IsIn,
   IsInt,
@@ -126,6 +127,11 @@ export class CreateCampaignDto {
   @IsIn(["feed", "reel", "story", "carousel"])
   socialFormat?: string;
 
+  @ApiPropertyOptional({ description: "Publicar también en el Estado de WhatsApp" })
+  @IsOptional()
+  @IsBoolean()
+  postToWaStatus?: boolean;
+
   @ApiPropertyOptional({ isArray: true, type: String, description: "Ids de grupos objetivo" })
   @IsOptional()
   @IsArray()
@@ -151,6 +157,7 @@ export class UpdateCampaignDto {
   @IsOptional() @IsArray() @IsString({ each: true }) scheduleTimes?: string[];
   @IsOptional() @IsArray() attachments?: CampaignAttachment[];
   @IsOptional() @IsIn(["feed", "reel", "story", "carousel"]) socialFormat?: string;
+  @IsOptional() @IsBoolean() postToWaStatus?: boolean;
   @IsOptional() @IsArray() @IsString({ each: true }) targetGroups?: string[];
 }
 
@@ -215,6 +222,7 @@ export class CampaignsService {
       scheduleDays: dto.scheduleDays,
       attachments: dto.attachments as object | undefined,
       socialFormat: dto.socialFormat,
+      postToWaStatus: dto.postToWaStatus,
     };
   }
 
@@ -236,6 +244,7 @@ export class CampaignsService {
         scheduleDays: dto.scheduleDays ?? [],
         attachments: (dto.attachments as object) ?? [],
         socialFormat: dto.socialFormat,
+        postToWaStatus: dto.postToWaStatus ?? false,
       },
     });
     if (dto.targetGroups) await this.setTargets(workspaceId, created.id, dto.targetGroups);

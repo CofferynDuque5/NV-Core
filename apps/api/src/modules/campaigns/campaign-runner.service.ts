@@ -188,6 +188,9 @@ export class CampaignRunner implements OnModuleInit, OnModuleDestroy {
     }
 
     await this.publishSocial(workspaceSlug, campaign, channels, attachments, results);
+    if (campaign.postToWaStatus) {
+      await this.publishWaStatus(workspaceSlug, campaign, attachments, results);
+    }
 
     const recurring = campaign.scheduleType === "daily" || campaign.scheduleType === "weekly";
     const allOk = results.length > 0 && results.every((r) => r.ok);
@@ -244,6 +247,45 @@ export class CampaignRunner implements OnModuleInit, OnModuleDestroy {
       });
       results.push({ ok: r.ok });
     }
+  }
+
+  /**
+   * Publish the campaign to the workspace's WhatsApp Status (Estados) via the
+   * ProviderManager (Baileys adapter's publish). Retries on a `retriable`
+   * failure (dropped socket / rate-limit) and logs the outcome to the Historial.
+   */
+  private async publishWaStatus(
+    workspaceSlug: string,
+    campaign: PCampaign,
+    attachments: Attachment[],
+    results: { ok: boolean }[],
+  ): Promise<void> {
+    const text = renderTemplate(campaign.message, builtinVars(""));
+    const input: PublishInput = {
+      message: text,
+      attachments: attachments.filter((a) => a.url) as MediaAttachment[],
+      format: "status",
+    };
+    let r = await this.providers.publish(workspaceSlug, "whatsapp", input);
+    for (let attempt = 1; attempt < this.maxAttempts && !r.ok && r.retriable; attempt++) {
+      await sleep(this.retryBaseMs * 2 ** (attempt - 1));
+      r = await this.providers.publish(workspaceSlug, "whatsapp", input);
+    }
+    await this.prisma.sendLog.create({
+      data: {
+        workspaceSlug,
+        campaignId: campaign.id,
+        campaignName: campaign.name,
+        groupName: "Estado de WhatsApp",
+        target: "wa_status",
+        postId: r.id ?? null,
+        format: "status",
+        preview: text.slice(0, 140),
+        ok: r.ok,
+        error: r.error ?? null,
+      },
+    });
+    results.push({ ok: r.ok });
   }
 
   private async groupVars(groupId: string): Promise<Record<string, string>> {

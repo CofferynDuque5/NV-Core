@@ -274,6 +274,36 @@ describe("CampaignRunner.run", () => {
     expect(sendLogs.map((l) => l.target).sort()).toEqual(["facebook", "instagram"]);
   });
 
+  it("publishes to the WhatsApp Status when postToWaStatus is set", async () => {
+    const c = campaign({ channels: ["wa"], targets: [], postToWaStatus: true });
+    const publish = vi.fn(async () => ({ ok: true, id: "status.1", format: "status" }));
+    const { runner, sendLogs } = makeRunner({ campaign: c, publish });
+
+    await runner.run("w1", "c1");
+
+    expect(publish).toHaveBeenCalledTimes(1);
+    expect((publish.mock.calls[0] as unknown[])[1]).toBe("whatsapp"); // provider id
+    expect(sendLogs.map((l) => l.target)).toEqual(["wa_status"]);
+    expect(sendLogs[0]!.ok).toBe(true);
+  });
+
+  it("retries a retriable WhatsApp Status publish, then succeeds", async () => {
+    const c = campaign({ channels: ["wa"], targets: [], postToWaStatus: true });
+    let calls = 0;
+    const publish = vi.fn(async () => {
+      calls += 1;
+      return calls < 2
+        ? { ok: false, retriable: true, error: "no está conectado", format: "status" }
+        : { ok: true, id: "status.ok", format: "status" };
+    });
+    const { runner, sendLogs } = makeRunner({ campaign: c, publish });
+
+    await runner.run("w1", "c1");
+
+    expect(publish).toHaveBeenCalledTimes(2);
+    expect(sendLogs[0]!.ok).toBe(true);
+  });
+
   it("throws when the campaign does not belong to the workspace", async () => {
     const { runner } = makeRunner({ campaign: null });
     await expect(runner.run("w1", "missing")).rejects.toThrow(/no encontrada/);

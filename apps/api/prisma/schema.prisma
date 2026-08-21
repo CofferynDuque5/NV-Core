@@ -308,6 +308,9 @@ model Campaign {
   attachments   Json           @default("[]")
   /// IG publish format: "feed" | "reel" | "story" | "carousel".
   socialFormat  String?
+  /// When true, the campaign also publishes to the connected WhatsApp Status
+  /// (Estados) via Baileys, in addition to any target groups / social posts.
+  postToWaStatus Boolean       @default(false)
   lastRunAt     DateTime?
   /// Last execution day (YYYY-MM-DD) to dedupe daily/weekly runs.
   lastRunDay    String?

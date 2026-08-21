@@ -127,6 +127,8 @@ export interface Campaign {
   attachments?: CampaignAttachment[];
   /** IG format: "feed" | "reel" | "story" | "carousel". */
   socialFormat?: string | null;
+  /** When true, also publish to the connected WhatsApp Status (Estados). */
+  postToWaStatus?: boolean;
   /** Ids of the WhatsApp groups this campaign targets. */
   targetGroups?: string[];
   lastRunAt?: string | null;

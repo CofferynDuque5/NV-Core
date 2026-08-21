@@ -101,6 +101,7 @@ export interface CreateCampaignInput {
   scheduleDays?: number[];
   attachments?: Campaign["attachments"];
   socialFormat?: string;
+  postToWaStatus?: boolean;
   targetGroups?: string[];
 }
 export type UpdateCampaignInput = Partial<CreateCampaignInput>;

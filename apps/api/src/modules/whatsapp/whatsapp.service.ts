@@ -200,4 +200,17 @@ export class WhatsappService implements SessionEvents, OnModuleInit {
     }
     return session.sendMedia(to, text, attachment);
   }
+
+  /** Publish to the account's WhatsApp Status (Estados). */
+  postStatus(
+    workspaceSlug: string,
+    text: string,
+    attachment?: WhatsappAttachment | null,
+  ): Promise<{ id: string }> {
+    const session = this.live.get(workspaceSlug);
+    if (!session?.isConnected) {
+      throw new Error("WhatsApp (Baileys) no está conectado en este workspace.");
+    }
+    return session.postStatus(text, attachment);
+  }
 }

@@ -10,7 +10,8 @@ export function channelOf(entry: SendLogEntry): HistorialChannel {
   if (t === "tg" || t === "telegram") return "telegram";
   if (t === "facebook") return "facebook";
   if (t === "instagram") return "instagram";
-  if (t === "wa" || t === "whatsapp" || entry.groupId || entry.groupName) return "whatsapp";
+  if (t === "wa" || t === "whatsapp" || t === "wa_status" || entry.groupId || entry.groupName)
+    return "whatsapp";
   return "otro";
 }
 
