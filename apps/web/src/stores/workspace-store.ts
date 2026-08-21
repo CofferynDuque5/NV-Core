@@ -14,5 +14,10 @@ interface WorkspaceState {
 
 export const useWorkspaceStore = create<WorkspaceState>((set) => ({
   workspaces: WORKSPACES,
-  setWorkspaces: (workspaces) => set({ workspaces: workspaces.length ? workspaces : WORKSPACES }),
+  // Use the list the backend returns *as-is* — including an empty list, which
+  // means "this user isn't a member of any workspace". Falling back to the
+  // built-in config here would show workspaces the user can't actually open
+  // (every API call 403s), which reads as "everything is broken". The demo
+  // adapter returns the built-in list, so demo mode still shows them.
+  setWorkspaces: (workspaces) => set({ workspaces }),
 }));
