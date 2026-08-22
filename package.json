@@ -8,6 +8,8 @@
     "node": ">=20"
   },
   "scripts": {
+    "arrancar": "node scripts/arrancar.mjs",
+    "start:all": "node scripts/arrancar.mjs",
     "dev": "turbo run dev",
     "build": "turbo run build",
     "lint": "turbo run lint",

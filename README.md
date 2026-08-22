@@ -33,17 +33,33 @@ sin datos ficticios); con `VITE_API_URL` usa los adaptadores HTTP contra la API.
 
 ## Primeros pasos (desarrollo)
 
-Con un PostgreSQL accesible, un solo comando hace todo (instalar, preparar la
-base de datos y levantar API + Web):
+**Un solo comando levanta todo** — base de datos, backend y frontend — en
+Windows, macOS o Linux:
 
 ```bash
-./arrancar.sh
+pnpm install      # solo la primera vez, para tener pnpm y el script disponibles
+pnpm arrancar
 ```
 
-Crea los `.env` que falten con valores de desarrollo (secretos aleatorios;
-`apps/api/.env` y `apps/web/.env` están en `.gitignore`), aplica migraciones y
-arranca. Variantes: `./arrancar.sh --prepare-only` (solo instala + migra, no
-levanta) y `./arrancar.sh --skip-install`. Ver `./arrancar.sh --help`.
+`pnpm arrancar` hace de un tirón: crea los `.env` que falten (con secretos
+aleatorios; `apps/api/.env` y `apps/web/.env` están en `.gitignore`), **levanta
+PostgreSQL en Docker** con puerto al host si no tienes uno, instala
+dependencias, aplica migraciones y arranca **API (:4000) + Web (:3000)** con
+recarga en caliente.
+
+> Requisito: Docker Desktop en marcha (para que el script te levante Postgres),
+> **o** un PostgreSQL propio — en ese caso pon tu `DATABASE_URL` en
+> `apps/api/.env` y usa `pnpm arrancar --no-db`.
+
+Equivalentes por sistema (todos llaman al mismo script):
+
+```text
+Windows:  pnpm arrancar   ·  .\arrancar.cmd   ·  .\arrancar.ps1
+Mac/Linux: pnpm arrancar  ·  ./arrancar.sh
+```
+
+Variantes: `pnpm arrancar --prepare-only` (prepara sin levantar),
+`--skip-install`, `--no-db`, `--help`.
 
 O paso a paso:
 
