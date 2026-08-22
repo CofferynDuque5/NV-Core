@@ -20,6 +20,7 @@ import {
 } from "@/hooks/use-domain-mutations";
 import { useGroups, useTemplates } from "@/hooks/use-domain-data";
 import { FormDialog, errorMessage } from "./form-dialog";
+import { ContentPreview } from "./content-preview";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -225,6 +226,9 @@ export function CampaignFormDialog({
   const groupItems = groups.data?.items ?? [];
   const groupCats = groupCategories(groupItems);
   const visibleGroups = filterGroups(groupItems, { q: groupQuery, category: groupCategory });
+  const selectedGroups = groupItems.filter((g) => targetGroups.includes(g.id));
+  const hasWaGroup = selectedGroups.some((g) => g.channel === "wa");
+  const hasTgGroup = selectedGroups.some((g) => g.channel === "tg");
 
   function setAllVisible(selected: boolean) {
     const visibleIds = visibleGroups.map((g) => g.id);
@@ -382,6 +386,24 @@ export function CampaignFormDialog({
         ) : null}
         <p className="text-[11px] text-ink-faint">
           El primero se envía por WhatsApp; para carrusel de Instagram sube varios.
+        </p>
+      </div>
+
+      <div className="space-y-1.5">
+        <Label>Vista previa</Label>
+        <ContentPreview
+          message={message}
+          attachments={attachments}
+          groupName={selectedGroups[0]?.name}
+          hasWaGroup={hasWaGroup}
+          hasTgGroup={hasTgGroup}
+          waStatus={postToWaStatus}
+          fb={fb}
+          ig={ig}
+          igFormat={socialFormat}
+        />
+        <p className="text-[11px] text-ink-faint">
+          Así se verá tu contenido en cada canal antes de programar o publicar.
         </p>
       </div>
 
