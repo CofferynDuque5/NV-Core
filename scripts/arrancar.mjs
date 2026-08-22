@@ -74,6 +74,15 @@ function ensureVar(file, key, value) {
   ok(`Definido ${key} en ${file.replace(ROOT + "/", "").replace(ROOT + "\\", "")}`);
 }
 
+/** Set an .env key (replace the line if present, else append). */
+function setEnvVar(file, key, value) {
+  let body = existsSync(file) ? readFileSync(file, "utf8") : "";
+  const re = new RegExp("^" + key + "=.*$", "m");
+  if (re.test(body)) body = body.replace(re, `${key}=${value}`);
+  else body += (body.endsWith("\n") || body === "" ? "" : "\n") + `${key}=${value}\n`;
+  writeFileSync(file, body);
+}
+
 /** Resolve a TCP connect within `ms`. */
 function tcpOpen(host, port, ms = 1500) {
   return new Promise((resolve) => {
@@ -132,53 +141,87 @@ const isLocalDb = dbHost === "localhost" || dbHost === "127.0.0.1";
 
 // ── Paso 2: PostgreSQL de desarrollo ─────────────────────────────────────────
 step("Paso 2 · Base de datos PostgreSQL");
-let dbReady = await tcpOpen(dbHost, dbPort);
 
-if (dbReady) {
-  ok(`PostgreSQL responde en ${dbHost}:${dbPort}`);
-} else if (NO_DB) {
-  warn(`--no-db: no gestiono Postgres y no responde en ${dbHost}:${dbPort}. La migración puede fallar.`);
+const NAME = "nvcore-dev-db"; // contenedor gestionado por este script
+
+/** pg_isready dentro del contenedor gestionado (auth-capable, no solo TCP). */
+function containerReady() {
+  return capture(`docker exec ${NAME} pg_isready -U ${dbUser} -d ${dbName}`).includes("accepting");
+}
+
+if (NO_DB) {
+  // El usuario gestiona su propia BD; solo comprobamos que responda.
+  const up = await tcpOpen(dbHost, dbPort);
+  up
+    ? ok(`Usando tu PostgreSQL en ${dbHost}:${dbPort} (--no-db)`)
+    : warn(`--no-db: nadie responde en ${dbHost}:${dbPort}. Ajusta DATABASE_URL en apps/api/.env.`);
 } else if (!isLocalDb) {
-  warn(`No respondo por un Postgres remoto (${dbHost}). Asegúrate de que sea accesible.`);
+  // BD remota declarada por el usuario: no la gestionamos.
+  const up = await tcpOpen(dbHost, dbPort);
+  up ? ok(`PostgreSQL remoto accesible (${dbHost}:${dbPort})`) : warn(`No respondo por ${dbHost}:${dbPort}.`);
 } else {
-  // Levantar Postgres en Docker con puerto al host, con las credenciales del URL.
+  // Modo automático: gestionamos NUESTRO propio contenedor Docker. No asumimos
+  // que "el puerto está abierto" signifique credenciales válidas — por eso no
+  // reutilizamos un Postgres ajeno que ya escuche en el 5432.
   const dockerOk = Boolean(capture("docker --version")) && Boolean(capture("docker info"));
   if (!dockerOk) {
     die(
-      `No hay PostgreSQL en ${dbHost}:${dbPort} y Docker no está disponible.\n` +
+      `Necesito Docker para levantar PostgreSQL automáticamente, y no está disponible.\n` +
         `  Opciones:\n` +
-        `   • Inicia Docker Desktop y reintenta (levanto Postgres yo), o\n` +
-        `   • Instala PostgreSQL y crea la BD '${dbName}' (usuario '${dbUser}'), o\n` +
-        `   • Edita apps/api/.env con tu DATABASE_URL y reintenta.`,
+        `   • Abre Docker Desktop y reintenta (levanto Postgres yo), o\n` +
+        `   • Usa tu propio PostgreSQL: pon su DATABASE_URL en apps/api/.env y ejecuta 'pnpm arrancar --no-db'.`,
     );
   }
-  const NAME = "nvcore-dev-db";
-  const existing = capture(`docker ps -a --filter "name=^/${NAME}$" --format "{{.Names}}"`);
+
   const running = capture(`docker ps --filter "name=^/${NAME}$" --format "{{.Names}}"`);
-  if (running) {
-    ok(`Contenedor ${NAME} ya está corriendo`);
-  } else if (existing) {
+  const exists = capture(`docker ps -a --filter "name=^/${NAME}$" --format "{{.Names}}"`);
+
+  if (!running && exists) {
     run(`docker start ${NAME}`);
     ok(`Contenedor ${NAME} iniciado`);
-  } else {
-    warn(`Levantando PostgreSQL en Docker (${NAME})…`);
+  } else if (!exists) {
+    // Elegir un puerto de host libre (evita chocar con un Postgres ya instalado).
+    let port = null;
+    for (const p of [dbPort, 5433, 5434, 5435, 5544]) {
+      if (!(await tcpOpen("127.0.0.1", p, 700))) {
+        port = p;
+        break;
+      }
+    }
+    if (!port) die("No encontré un puerto libre para PostgreSQL (probé 5432-5435, 5544).");
+    if (port !== dbPort) warn(`El puerto ${dbPort} está ocupado; usaré ${port} para el Postgres de NV Core.`);
+    warn(`Levantando PostgreSQL en Docker (${NAME}, puerto ${port})…`);
     const created = run(
       `docker run -d --name ${NAME} ` +
         `-e POSTGRES_USER=${dbUser} -e POSTGRES_PASSWORD=${dbPass} -e POSTGRES_DB=${dbName} ` +
-        `-p ${dbPort}:5432 postgres:16`,
+        `-p ${port}:5432 postgres:16`,
     );
-    if (!created) die(`No se pudo crear el contenedor ${NAME}. ¿Está el puerto ${dbPort} libre?`);
+    if (!created) die(`No se pudo crear el contenedor ${NAME}.`);
     ok(`Contenedor ${NAME} creado`);
+  } else {
+    ok(`Contenedor ${NAME} ya está corriendo`);
   }
-  // Esperar a que acepte conexiones.
-  process.stdout.write("  Esperando a que Postgres acepte conexiones");
-  for (let i = 0; i < 30 && !dbReady; i++) {
+
+  // Puerto real publicado por el contenedor → alinear DATABASE_URL a él.
+  const mapped = capture(`docker port ${NAME} 5432/tcp`); // ej. "0.0.0.0:5433"
+  const realPort = Number((mapped.match(/:(\d+)\s*$/m) || mapped.match(/:(\d+)/) || [])[1] || dbPort);
+  if (realPort !== dbPort) {
+    const url = `postgresql://${dbUser}:${dbPass}@localhost:${realPort}/${dbName}?schema=public`;
+    setEnvVar(apiEnv, "DATABASE_URL", url);
+    process.env.DATABASE_URL = url;
+    ok(`DATABASE_URL apuntando a localhost:${realPort} (contenedor gestionado)`);
+  }
+
+  // Esperar a que Postgres acepte conexiones AUTENTICADAS (pg_isready).
+  process.stdout.write("  Esperando a que PostgreSQL esté listo");
+  let ready = false;
+  for (let i = 0; i < 40 && !ready; i++) {
     await sleep(1000);
     process.stdout.write(".");
-    dbReady = await tcpOpen(dbHost, dbPort, 1000);
+    ready = containerReady();
   }
   process.stdout.write("\n");
-  dbReady ? ok("PostgreSQL listo") : warn("Postgres tardó en responder; intentaré migrar de todos modos.");
+  ready ? ok("PostgreSQL listo") : warn("Postgres tardó en responder; intentaré migrar de todos modos.");
 }
 
 // ── Paso 3: dependencias ─────────────────────────────────────────────────────

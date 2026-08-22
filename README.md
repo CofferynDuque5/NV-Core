@@ -43,7 +43,8 @@ pnpm arrancar
 
 `pnpm arrancar` hace de un tirón: crea los `.env` que falten (con secretos
 aleatorios; `apps/api/.env` y `apps/web/.env` están en `.gitignore`), **levanta
-PostgreSQL en Docker** con puerto al host si no tienes uno, instala
+su propio PostgreSQL en Docker** (contenedor `nvcore-dev-db`; elige un puerto de
+host libre si el 5432 ya está ocupado y alinea `DATABASE_URL` a él), instala
 dependencias, aplica migraciones y arranca **API (:4000) + Web (:3000)** con
 recarga en caliente.
 
