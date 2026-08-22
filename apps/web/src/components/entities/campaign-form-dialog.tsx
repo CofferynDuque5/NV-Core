@@ -21,6 +21,7 @@ import {
 import { useGroups, useTemplates } from "@/hooks/use-domain-data";
 import { FormDialog, errorMessage } from "./form-dialog";
 import { ContentPreview } from "./content-preview";
+import { AiFlyerButton } from "./ai-flyer-button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -361,6 +362,10 @@ export function CampaignFormDialog({
           )}
           {upload.isPending ? "Subiendo…" : "Subir imagen o video (Cloudinary)"}
         </button>
+        <AiFlyerButton
+          defaultPrompt={message.trim() || name.trim()}
+          onGenerated={(att) => setAttachments((prev) => [...prev, att])}
+        />
         {attachments.length > 0 ? (
           <div className="space-y-0.5">
             {attachments.map((att, i) => (
