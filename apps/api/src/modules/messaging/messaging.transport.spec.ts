@@ -4,6 +4,7 @@ import {
   WhatsAppApiError,
   classifyWhatsAppError,
   sendTelegram,
+  sendTelegramMedia,
   sendWhatsApp,
   sendWhatsAppMedia,
   sendWhatsAppTemplate,
@@ -170,6 +171,47 @@ describe("sendTelegram (Bot API transport)", () => {
     mockFetch(200, { ok: false });
     await expect(
       sendTelegram({ botToken: "b" }, { channel: "tg", to: "999", body: "hi" }),
+    ).rejects.toThrow(/Telegram/);
+  });
+});
+
+describe("sendTelegramMedia (Bot API transport)", () => {
+  it("uses sendPhoto with a caption for images (channels/groups)", async () => {
+    const spy = mockFetch(200, { ok: true, result: { message_id: 7 } });
+    const res = await sendTelegramMedia(
+      { botToken: "b" },
+      { to: "@mi_canal", body: "Promo", attachment: { url: "https://x/a.jpg", kind: "image" } },
+    );
+    expect(res.id).toBe("7");
+    const [url] = spy.mock.calls[0]! as [string];
+    expect(url).toContain("/sendPhoto");
+    const body = firstBody(spy);
+    expect(body.chat_id).toBe("@mi_canal");
+    expect(body.photo).toBe("https://x/a.jpg");
+    expect(body.caption).toBe("Promo");
+  });
+
+  it("uses sendVideo for videos and sendDocument otherwise", async () => {
+    const v = mockFetch(200, { ok: true, result: { message_id: 1 } });
+    await sendTelegramMedia(
+      { botToken: "b" },
+      { to: "-100", attachment: { url: "https://x/v.mp4", kind: "video" } },
+    );
+    expect((v.mock.calls[0]! as [string])[0]).toContain("/sendVideo");
+    v.mockRestore();
+
+    const d = mockFetch(200, { ok: true, result: { message_id: 2 } });
+    await sendTelegramMedia(
+      { botToken: "b" },
+      { to: "-100", attachment: { url: "https://x/f.pdf", kind: "document" } },
+    );
+    expect((d.mock.calls[0]! as [string])[0]).toContain("/sendDocument");
+  });
+
+  it("throws when Telegram responds not-ok", async () => {
+    mockFetch(200, { ok: false });
+    await expect(
+      sendTelegramMedia({ botToken: "b" }, { to: "1", attachment: { url: "u", kind: "image" } }),
     ).rejects.toThrow(/Telegram/);
   });
 });

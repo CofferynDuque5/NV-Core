@@ -2,13 +2,14 @@ import { Injectable } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 
 import type { AppConfig } from "../../config/configuration";
-import { sendTelegram } from "../../modules/messaging/messaging.transport";
+import { sendTelegram, sendTelegramMedia } from "../../modules/messaging/messaging.transport";
 import { BaseAdapter } from "./base.adapter";
 import type {
   AdapterContext,
   AdapterStatus,
   HealthResult,
   ProviderId,
+  SendMediaInput,
   SendMessageInput,
   SendResult,
 } from "../provider.types";
@@ -38,6 +39,15 @@ export class TelegramBotApiAdapter extends BaseAdapter {
   override async sendMessage(_ctx: AdapterContext, input: SendMessageInput): Promise<SendResult> {
     if (!this.configured) throw new Error("Telegram sin TELEGRAM_BOT_TOKEN.");
     return sendTelegram(this.telegram, { channel: "tg", to: input.to, body: input.body });
+  }
+
+  override async sendMedia(_ctx: AdapterContext, input: SendMediaInput): Promise<SendResult> {
+    if (!this.configured) throw new Error("Telegram sin TELEGRAM_BOT_TOKEN.");
+    return sendTelegramMedia(this.telegram, {
+      to: input.to,
+      body: input.body,
+      attachment: input.attachment,
+    });
   }
 
   override async getStatus(_ctx: AdapterContext): Promise<AdapterStatus> {

@@ -176,7 +176,7 @@ export class CampaignRunner implements OnModuleInit, OnModuleDestroy {
       const to = group.remoteJid ?? group.id;
       try {
         const res = await this.withRetry(() =>
-          ch === "wa" && waAttachment
+          waAttachment
             ? this.providers.sendMedia(workspaceSlug, provider, { to, body: text, attachment: waAttachment })
             : this.providers.sendMessage(workspaceSlug, provider, { to, body: text }),
         );

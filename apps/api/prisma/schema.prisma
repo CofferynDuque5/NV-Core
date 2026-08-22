@@ -132,6 +132,9 @@ model Group {
   workspaceSlug String
   name          String
   channel       ChannelId @default(wa)
+  /// Destination kind: "group" (chat) or "channel" (broadcast, e.g. a Telegram
+  /// channel where the bot is an admin). Delivery is the same; this drives UI.
+  kind          String    @default("group")
   members       Int       @default(0)
   admins        Int       @default(0)
   description   String?

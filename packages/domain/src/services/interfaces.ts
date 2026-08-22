@@ -117,10 +117,11 @@ export type UpdateSegmentInput = Partial<CreateSegmentInput>;
 export interface CreateGroupInput {
   name: string;
   channel?: Group["channel"];
+  kind?: Group["kind"];
   description?: string;
   tags?: string[];
   members?: number;
-  /** Destination id: WhatsApp JID or Telegram chat_id (e.g. "-1001234567890"). */
+  /** Destination id: WhatsApp JID or Telegram chat_id/@channel (e.g. "-1001234567890"). */
   remoteJid?: string;
 }
 

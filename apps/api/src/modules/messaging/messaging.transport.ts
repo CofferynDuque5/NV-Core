@@ -169,3 +169,33 @@ export async function sendTelegram(
   if (!data.ok) throw new Error("Telegram: respuesta no OK");
   return { id: String(data.result?.message_id ?? "") };
 }
+
+/** The Telegram Bot API method + payload field for a media kind. */
+function telegramMedia(kind?: string): { method: string; field: string } {
+  if (kind === "video") return { method: "sendVideo", field: "video" };
+  if (kind === "image") return { method: "sendPhoto", field: "photo" };
+  return { method: "sendDocument", field: "document" };
+}
+
+/**
+ * Send media (image / video / document) to a Telegram chat, group, or channel
+ * by public URL. The bot must be a member (or admin, for channels). Caption is
+ * supported by all three types.
+ */
+export async function sendTelegramMedia(
+  tg: AppConfig["integrations"]["telegram"],
+  input: { to: string; body?: string; attachment: MediaAttachment },
+): Promise<{ id: string }> {
+  const { method, field } = telegramMedia(input.attachment.kind);
+  const payload: Record<string, unknown> = { chat_id: input.to, [field]: input.attachment.url };
+  if (input.body) payload.caption = input.body;
+  const res = await fetch(`https://api.telegram.org/bot${tg.botToken}/${method}`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) throw new Error(`Telegram: ${await readError(res)}`);
+  const data = (await res.json()) as { ok?: boolean; result?: { message_id?: number } };
+  if (!data.ok) throw new Error("Telegram: respuesta no OK");
+  return { id: String(data.result?.message_id ?? "") };
+}

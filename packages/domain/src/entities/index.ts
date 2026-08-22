@@ -190,6 +190,8 @@ export interface Group {
   id: string;
   name: string;
   channel: ChannelId;
+  /** "group" (chat) or "channel" (broadcast, e.g. a Telegram channel). */
+  kind?: "group" | "channel";
   members: number;
   admins: number;
   description?: string;

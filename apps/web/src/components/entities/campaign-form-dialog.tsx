@@ -584,7 +584,7 @@ export function CampaignFormDialog({
                           : "shrink-0 rounded bg-emerald-500/15 px-1.5 py-0.5 text-[10px] font-medium text-emerald-400"
                       }
                     >
-                      {g.channel === "tg" ? "TG" : "WA"}
+                      {g.channel === "tg" ? (g.kind === "channel" ? "Canal TG" : "TG") : "WA"}
                     </span>
                     {(g.tags ?? []).slice(0, 2).map((t) => (
                       <span

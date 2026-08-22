@@ -40,6 +40,11 @@ export class CreateGroupDto {
   @IsIn(CHANNEL_IDS)
   channel?: ChannelId;
 
+  @ApiPropertyOptional({ enum: ["group", "channel"] })
+  @IsOptional()
+  @IsIn(["group", "channel"])
+  kind?: "group" | "channel";
+
   @ApiPropertyOptional()
   @IsOptional()
   @IsString()
@@ -66,6 +71,7 @@ export class CreateGroupDto {
 export class UpdateGroupDto {
   @IsOptional() @IsString() @MinLength(1) name?: string;
   @IsOptional() @IsIn(CHANNEL_IDS) channel?: ChannelId;
+  @IsOptional() @IsIn(["group", "channel"]) kind?: "group" | "channel";
   @IsOptional() @IsString() description?: string;
   @IsOptional() @IsArray() @IsString({ each: true }) tags?: string[];
   @IsOptional() @IsInt() @Min(0) members?: number;
@@ -99,6 +105,7 @@ export class GroupsService {
         workspaceSlug: workspaceId,
         name: dto.name,
         channel: dto.channel ?? "wa",
+        kind: dto.kind ?? "group",
         description: dto.description,
         tags: dto.tags ?? [],
         members: dto.members ?? 0,

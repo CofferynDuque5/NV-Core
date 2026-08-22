@@ -20,14 +20,18 @@ export function GroupCreateDialog({
   const mutation = useCreateGroup();
   const [name, setName] = React.useState("");
   const [channel, setChannel] = React.useState<ChannelId>("wa");
+  const [kind, setKind] = React.useState<"group" | "channel">("group");
   const [remoteJid, setRemoteJid] = React.useState("");
   const [description, setDescription] = React.useState("");
   const [tags, setTags] = React.useState("");
   const [error, setError] = React.useState<string | null>(null);
 
+  const isTgChannel = channel === "tg" && kind === "channel";
+
   function reset() {
     setName("");
     setChannel("wa");
+    setKind("group");
     setRemoteJid("");
     setDescription("");
     setTags("");
@@ -37,12 +41,17 @@ export function GroupCreateDialog({
   function submit() {
     setError(null);
     if (channel === "tg" && !remoteJid.trim()) {
-      return setError("Para Telegram, indica el Chat ID del grupo.");
+      return setError(
+        isTgChannel
+          ? "Para un canal de Telegram, indica su @usuario o Chat ID (-100…)."
+          : "Para Telegram, indica el Chat ID del grupo.",
+      );
     }
     mutation.mutate(
       {
         name: name.trim(),
         channel,
+        kind: channel === "tg" ? kind : "group",
         remoteJid: remoteJid.trim() || undefined,
         description: description.trim() || undefined,
         tags: tags
@@ -67,8 +76,8 @@ export function GroupCreateDialog({
         if (!v) reset();
         onOpenChange(v);
       }}
-      title="Nuevo grupo"
-      description="Crea un grupo de difusión de WhatsApp o Telegram."
+      title="Nuevo grupo o canal"
+      description="Crea un destino de difusión: grupo de WhatsApp/Telegram o canal de Telegram."
       onSubmit={submit}
       pending={mutation.isPending}
       error={error}
@@ -95,19 +104,44 @@ export function GroupCreateDialog({
       </div>
 
       {channel === "tg" ? (
-        <div className="space-y-1.5">
-          <Label htmlFor="g-chatid">Chat ID de Telegram</Label>
-          <Input
-            id="g-chatid"
-            value={remoteJid}
-            onChange={(e) => setRemoteJid(e.target.value)}
-            placeholder="-1001234567890"
-          />
-          <p className="text-[11px] text-ink-faint">
-            Agrega tu bot al grupo de Telegram y usa su <code>chat_id</code> (empieza con{" "}
-            <code>-100…</code>). Puedes obtenerlo con @RawDataBot o el getUpdates del bot.
-          </p>
-        </div>
+        <>
+          <div className="space-y-1.5">
+            <Label htmlFor="g-kind">Tipo</Label>
+            <select
+              id="g-kind"
+              value={kind}
+              onChange={(e) => setKind(e.target.value as "group" | "channel")}
+              className="flex h-9 w-full rounded-lg border border-line-soft bg-panel-raised px-3 text-sm text-ink focus-visible:border-brand/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/25"
+            >
+              <option value="group">Grupo</option>
+              <option value="channel">Canal (difusión)</option>
+            </select>
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="g-chatid">
+              {isTgChannel ? "@usuario o Chat ID del canal" : "Chat ID de Telegram"}
+            </Label>
+            <Input
+              id="g-chatid"
+              value={remoteJid}
+              onChange={(e) => setRemoteJid(e.target.value)}
+              placeholder={isTgChannel ? "@mi_canal  o  -1001234567890" : "-1001234567890"}
+            />
+            <p className="text-[11px] text-ink-faint">
+              {isTgChannel ? (
+                <>
+                  Agrega tu bot al canal como <b>administrador</b> y usa su <code>@usuario</code>{" "}
+                  público o su <code>chat_id</code> (<code>-100…</code>).
+                </>
+              ) : (
+                <>
+                  Agrega tu bot al grupo de Telegram y usa su <code>chat_id</code> (empieza con{" "}
+                  <code>-100…</code>). Puedes obtenerlo con @RawDataBot o el getUpdates del bot.
+                </>
+              )}
+            </p>
+          </div>
+        </>
       ) : (
         <div className="space-y-1.5">
           <Label htmlFor="g-jid">JID de WhatsApp (opcional)</Label>

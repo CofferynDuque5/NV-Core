@@ -93,6 +93,7 @@ export const mapGroup = (g: PGroup): Group => ({
   id: g.id,
   name: g.name,
   channel: g.channel as ChannelId,
+  kind: (g.kind as Group["kind"]) ?? "group",
   members: g.members,
   admins: g.admins,
   description: g.description ?? undefined,
