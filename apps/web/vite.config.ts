@@ -21,11 +21,14 @@ export default defineConfig({
     },
   },
   server: {
-    port: 3000,
+    // WEB_PORT lets the launcher (scripts/arrancar.mjs) pick a free port and
+    // fail loudly (strictPort) instead of silently sliding to another one.
+    port: Number(process.env.WEB_PORT) || 3000,
+    strictPort: true,
     host: true,
   },
   preview: {
-    port: 3000,
+    port: Number(process.env.WEB_PORT) || 3000,
     host: true,
   },
   build: {

@@ -254,14 +254,36 @@ if (!migrated) {
 }
 ok("Migraciones aplicadas");
 
+// ── Puertos de los servidores (evitar choques con servicios ya abiertos) ──────
+const apiPort = Number((readFileSync(apiEnv, "utf8").match(/^PORT=(\d+)/m) || [])[1] || 4000);
+let webPort = 3000;
+for (const p of [3000, 3001, 3002, 3003, 3004]) {
+  if (!(await tcpOpen("127.0.0.1", p, 600))) {
+    webPort = p;
+    break;
+  }
+}
+if (webPort !== 3000) {
+  warn(`El puerto 3000 está ocupado por otro programa; la Web usará el ${webPort}.`);
+  // Mantener CORS y los enlaces alineados con el puerto real de la Web.
+  setEnvVar(apiEnv, "CORS_ORIGINS", `http://localhost:${webPort}`);
+  setEnvVar(apiEnv, "APP_URL", `http://localhost:${webPort}`);
+}
+process.env.WEB_PORT = String(webPort);
+// La Web habla con la API por su URL (no por el puerto de la Web).
+setEnvVar(join(ROOT, "apps", "web", ".env"), "VITE_API_URL", `http://localhost:${apiPort}`);
+
+const webUrl = `http://localhost:${webPort}`;
+const apiUrl = `http://localhost:${apiPort}/api`;
+
 // ── Paso 5: arrancar ─────────────────────────────────────────────────────────
 if (PREPARE_ONLY) {
   step("Listo (preparación completa)");
   console.log("  Levanta los servidores con: " + c("1", "pnpm dev"));
-  console.log(`  Web: ${c("36", "http://localhost:3000")}   API: ${c("36", "http://localhost:4000/api")}`);
+  console.log(`  Web: ${c("36", webUrl)}   API: ${c("36", apiUrl)}`);
   process.exit(0);
 }
-step("Paso 5 · Levantar API (:4000) + Web (:3000)");
-console.log(`  Web: ${c("36", "http://localhost:3000")}   API: ${c("36", "http://localhost:4000/api")}`);
-console.log("  (Ctrl+C para detener)\n");
+step(`Paso 5 · Levantar API (:${apiPort}) + Web (:${webPort})`);
+console.log(`  ${c("1", "Abre en el navegador:")} ${c("36", webUrl)}`);
+console.log(`  API: ${c("36", apiUrl)}    (Ctrl+C para detener)\n`);
 process.exit(run("pnpm dev") ? 0 : 1);
