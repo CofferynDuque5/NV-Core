@@ -33,6 +33,20 @@ sin datos ficticios); con `VITE_API_URL` usa los adaptadores HTTP contra la API.
 
 ## Primeros pasos (desarrollo)
 
+Con un PostgreSQL accesible, un solo comando hace todo (instalar, preparar la
+base de datos y levantar API + Web):
+
+```bash
+./arrancar.sh
+```
+
+Crea los `.env` que falten con valores de desarrollo (secretos aleatorios;
+`apps/api/.env` y `apps/web/.env` están en `.gitignore`), aplica migraciones y
+arranca. Variantes: `./arrancar.sh --prepare-only` (solo instala + migra, no
+levanta) y `./arrancar.sh --skip-install`. Ver `./arrancar.sh --help`.
+
+O paso a paso:
+
 ```bash
 pnpm install
 pnpm dev            # web en :3000, api en :4000 (necesita Postgres; Redis opcional)
@@ -43,7 +57,9 @@ pnpm test           # unit tests (API + web + dominio)
 
 La API necesita `DATABASE_URL`, `JWT_SECRET` y `ENCRYPTION_KEY` (ver
 `apps/api/.env.example`). Aplica migraciones con
-`pnpm --filter @nv/api exec prisma migrate deploy`.
+`pnpm --filter @nv/api exec prisma migrate deploy`. Para que la web hable con la
+API, define `VITE_API_URL=http://localhost:4000` en `apps/web/.env` (sin él,
+arranca en modo demo con pantallas vacías).
 
 ## Todo en Docker (una orden)
 
