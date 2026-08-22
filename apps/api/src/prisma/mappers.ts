@@ -208,6 +208,7 @@ export const mapPost = (p: PPost & { campaign?: { name: string } | null }): Post
   campaignId: p.campaignId ?? undefined,
   campaignName: p.campaign?.name,
   hashtags: p.hashtags,
+  attachments: (p.attachments as Post["attachments"]) ?? [],
 });
 
 export const mapConnection = (c: PConnection): Connection => ({

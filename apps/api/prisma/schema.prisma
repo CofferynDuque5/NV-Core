@@ -377,6 +377,9 @@ model Post {
   title         String
   copy          String?
   hashtags      String[]
+  /// Uploaded media descriptors [{ path, filename, mime, kind, url }], shared
+  /// with the unified content editor's preview. First is the primary visual.
+  attachments   Json       @default("[]")
   status        PostStatus @default(draft)
   scheduledAt   DateTime?
   createdAt     DateTime   @default(now())

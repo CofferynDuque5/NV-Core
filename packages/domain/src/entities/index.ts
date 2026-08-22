@@ -144,6 +144,8 @@ export interface Post {
   campaignId?: string;
   campaignName?: string;
   hashtags?: string[];
+  /** Media descriptors (shared with the content editor preview). */
+  attachments?: CampaignAttachment[];
   stats?: Record<string, string>;
 }
 

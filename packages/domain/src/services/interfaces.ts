@@ -214,6 +214,7 @@ export interface CreatePostInput {
   title: string;
   copy?: string;
   hashtags?: string[];
+  attachments?: Post["attachments"];
   status?: Post["status"];
   scheduledAt?: string;
   campaignId?: string;

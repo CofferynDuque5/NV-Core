@@ -25,6 +25,7 @@ export function ContentPreview({
   fb,
   ig,
   igFormat,
+  surfaces: surfacesProp,
 }: {
   message: string;
   attachments?: CampaignAttachment[];
@@ -35,8 +36,11 @@ export function ContentPreview({
   fb?: boolean;
   ig?: boolean;
   igFormat?: string;
+  /** Explicit surface list (e.g. the calendar composer's single channel). */
+  surfaces?: PreviewSurface[];
 }) {
-  const surfaces = previewSurfaces({ hasWaGroup, hasTgGroup, waStatus, fb, ig, igFormat });
+  const surfaces =
+    surfacesProp ?? previewSurfaces({ hasWaGroup, hasTgGroup, waStatus, fb, ig, igFormat });
   const [active, setActive] = React.useState<string>(surfaces[0]?.id ?? "wa");
 
   // Keep the active tab valid as surfaces are toggled on/off.
@@ -189,6 +193,22 @@ function SurfacePreview({
         )}
         <p className="mt-1.5 text-center text-[10px] text-ink-faint">
           Se publica en tu Estado de WhatsApp
+        </p>
+      </div>
+    );
+  }
+
+  // ── Generic channel (TikTok / X / Threads / Email …) ───────────────────────
+  if (surface.id === "generic") {
+    return (
+      <div className="mx-auto w-full max-w-[300px] overflow-hidden rounded-lg border border-line-soft bg-panel-raised">
+        <div className="flex items-center gap-2 border-b border-line-soft p-2.5">
+          <div className="size-7 rounded-full bg-panel-high" />
+          <p className="truncate text-xs font-semibold text-ink">{surface.label}</p>
+        </div>
+        {visual ? <Media visual={visual} rounded="rounded-none" className="aspect-video" /> : null}
+        <p className="whitespace-pre-wrap p-2.5 text-sm text-ink">
+          {text || <EmptyText>Escribe el contenido…</EmptyText>}
         </p>
       </div>
     );

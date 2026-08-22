@@ -1,4 +1,4 @@
-import type { CampaignAttachment } from "@nv/domain";
+import { getChannel, type CampaignAttachment, type ChannelId } from "@nv/domain";
 
 /**
  * Pure helpers behind the unified content editor's live preview: render the
@@ -9,7 +9,7 @@ import type { CampaignAttachment } from "@nv/domain";
  */
 
 /** A channel surface the content will appear on. */
-export type PreviewSurfaceId = "wa" | "wa_status" | "tg" | "fb" | "ig";
+export type PreviewSurfaceId = "wa" | "wa_status" | "tg" | "fb" | "ig" | "generic";
 
 export interface PreviewSurface {
   id: PreviewSurfaceId;
@@ -68,6 +68,30 @@ export function previewSurfaces(opts: {
   if (opts.ig) surfaces.push({ id: "ig", label: "Instagram", format: opts.igFormat || "feed" });
   if (surfaces.length === 0) surfaces.push({ id: "wa", label: "WhatsApp" });
   return surfaces;
+}
+
+/**
+ * The preview surface for a single channel (used by the calendar post composer,
+ * which schedules one post to one channel). WhatsApp/Telegram/Facebook/Instagram
+ * get their dedicated mockups; every other channel gets a generic post card
+ * labeled with the channel's name.
+ */
+export function surfaceForChannel(
+  channel: ChannelId,
+  opts: { igFormat?: string } = {},
+): PreviewSurface {
+  switch (channel) {
+    case "wa":
+      return { id: "wa", label: "WhatsApp" };
+    case "tg":
+      return { id: "tg", label: "Telegram" };
+    case "fb":
+      return { id: "fb", label: "Facebook" };
+    case "ig":
+      return { id: "ig", label: "Instagram", format: opts.igFormat || "feed" };
+    default:
+      return { id: "generic", label: getChannel(channel).name };
+  }
 }
 
 /** Build the rendered preview content (text + visual) for a campaign draft. */

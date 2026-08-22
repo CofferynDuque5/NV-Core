@@ -6,6 +6,7 @@ import {
   previewSurfaces,
   previewVars,
   renderPreview,
+  surfaceForChannel,
 } from "./content-preview";
 
 const FIXED = new Date("2026-08-22T15:30:00");
@@ -77,6 +78,28 @@ describe("previewSurfaces", () => {
 
   it("falls back to a WhatsApp chat mock when nothing is enabled", () => {
     expect(previewSurfaces({}).map((x) => x.id)).toEqual(["wa"]);
+  });
+});
+
+describe("surfaceForChannel", () => {
+  it("maps the dedicated channels to their mockups", () => {
+    expect(surfaceForChannel("wa").id).toBe("wa");
+    expect(surfaceForChannel("tg").id).toBe("tg");
+    expect(surfaceForChannel("fb").id).toBe("fb");
+    const ig = surfaceForChannel("ig", { igFormat: "story" });
+    expect(ig.id).toBe("ig");
+    expect(ig.format).toBe("story");
+  });
+
+  it("defaults IG format to feed", () => {
+    expect(surfaceForChannel("ig").format).toBe("feed");
+  });
+
+  it("falls back to a generic card labeled by channel name", () => {
+    const s = surfaceForChannel("email");
+    expect(s.id).toBe("generic");
+    expect(s.label).toBe("Email");
+    expect(surfaceForChannel("tk").label).toBe("TikTok");
   });
 });
 

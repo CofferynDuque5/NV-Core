@@ -18,6 +18,7 @@ import { ApiBearerAuth, ApiPropertyOptional, ApiTags } from "@nestjs/swagger";
 import {
   CHANNEL_IDS,
   POST_STATUSES,
+  type CampaignAttachment,
   type ChannelId,
   type Post,
   type PostStatus,
@@ -56,6 +57,11 @@ export class CreatePostDto {
   @IsString({ each: true })
   hashtags?: string[];
 
+  @ApiPropertyOptional({ isArray: true, type: Object })
+  @IsOptional()
+  @IsArray()
+  attachments?: CampaignAttachment[];
+
   @ApiPropertyOptional({ enum: POST_STATUSES })
   @IsOptional()
   @IsIn(POST_STATUSES)
@@ -87,6 +93,11 @@ export class UpdatePostDto {
   @IsArray()
   @IsString({ each: true })
   hashtags?: string[];
+
+  @ApiPropertyOptional({ isArray: true, type: Object })
+  @IsOptional()
+  @IsArray()
+  attachments?: CampaignAttachment[];
 
   @ApiPropertyOptional({ enum: POST_STATUSES })
   @IsOptional()
@@ -156,6 +167,7 @@ export class PostsService {
         title: dto.title,
         copy: dto.copy,
         hashtags: dto.hashtags ?? [],
+        attachments: (dto.attachments as object) ?? [],
         status: dto.status ?? "draft",
         scheduledAt: dto.scheduledAt ? new Date(dto.scheduledAt) : null,
         campaignId: dto.campaignId,
@@ -189,6 +201,7 @@ export class PostsService {
     if (dto.title !== undefined) data.title = dto.title;
     if (dto.copy !== undefined) data.copy = dto.copy;
     if (dto.hashtags !== undefined) data.hashtags = dto.hashtags;
+    if (dto.attachments !== undefined) data.attachments = dto.attachments as object;
     if (dto.status !== undefined) data.status = dto.status;
     if (dto.campaignId !== undefined) data.campaignId = dto.campaignId;
     // scheduledAt: undefined = leave as-is; null = unschedule; string = move.
@@ -226,6 +239,7 @@ export class PostsService {
         title: `${src.title} (copia)`,
         copy: src.copy,
         hashtags: src.hashtags,
+        attachments: src.attachments as object,
         status,
         scheduledAt,
         campaignId: src.campaignId,
