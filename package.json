@@ -10,6 +10,8 @@
   "scripts": {
     "arrancar": "node scripts/arrancar.mjs",
     "start:all": "node scripts/arrancar.mjs",
+    "admin": "node scripts/hazme-admin.mjs",
+    "studio": "pnpm --filter @nv/api exec prisma studio",
     "dev": "turbo run dev",
     "build": "turbo run build",
     "lint": "turbo run lint",

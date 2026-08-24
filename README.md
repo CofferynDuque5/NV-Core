@@ -64,6 +64,20 @@ Es Owner de todos los workspaces. Cámbialo editando `NV_ADMIN_EMAIL` /
 `NV_ADMIN_PASSWORD` en `apps/api/.env` (para que tome el nuevo, borra el usuario
 anterior o usa otro email).
 
+**¿Ya te registraste con tu propio correo y no tienes acceso?** Hazte admin con
+tu cuenta y reinicia:
+
+```bash
+pnpm admin tu-correo@ejemplo.com   # si el usuario no existe: añade la contraseña
+pnpm arrancar                       # al arrancar te vuelve Owner de todo
+```
+
+**Ver la base de datos** (GUI en http://localhost:5555):
+
+```bash
+pnpm studio
+```
+
 Equivalentes por sistema (todos llaman al mismo script):
 
 ```text
