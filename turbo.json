@@ -9,7 +9,8 @@
     "dev": {
       "dependsOn": ["^build"],
       "cache": false,
-      "persistent": true
+      "persistent": true,
+      "passThroughEnv": ["WEB_PORT", "PORT", "VITE_API_URL", "DATABASE_URL", "NODE_ENV"]
     },
     "lint": {},
     "typecheck": {

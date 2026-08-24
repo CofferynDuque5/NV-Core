@@ -5,10 +5,10 @@
   "type": "module",
   "scripts": {
     "predev": "pnpm --filter @nv/domain build",
-    "dev": "vite --port 3000",
+    "dev": "vite",
     "prebuild": "pnpm --filter @nv/domain build",
     "build": "vite build",
-    "preview": "vite preview --port 3000",
+    "preview": "vite preview",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
