@@ -50,6 +50,7 @@ import type {
   AuditLogEntry,
   Workspace,
   WhatsappStatus,
+  TelegramStatus,
 } from "@nv/domain";
 
 /**
@@ -146,6 +147,13 @@ export function createHttpAdapters(opts: HttpAdapterOptions): Services {
       reconnect: (id) => post<WhatsappStatus>(`${ws(id)}/whatsapp/reconnect`, {}),
       disconnect: (id) => post<WhatsappStatus>(`${ws(id)}/whatsapp/disconnect`, {}),
       sync: (id) => post<WhatsappStatus>(`${ws(id)}/whatsapp/sync`, {}),
+    },
+    telegram: {
+      status: (id) => get<TelegramStatus>(`${ws(id)}/telegram/status`),
+      connect: (id) => post<TelegramStatus>(`${ws(id)}/telegram/connect`, {}),
+      reconnect: (id) => post<TelegramStatus>(`${ws(id)}/telegram/reconnect`, {}),
+      disconnect: (id) => post<TelegramStatus>(`${ws(id)}/telegram/disconnect`, {}),
+      sync: (id) => post<TelegramStatus>(`${ws(id)}/telegram/sync`, {}),
     },
     campaigns: {
       list: (id) => get<ListResult<Campaign>>(`${ws(id)}/campaigns`),

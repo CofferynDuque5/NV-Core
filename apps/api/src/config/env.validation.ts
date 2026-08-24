@@ -62,6 +62,12 @@ export const envSchema = z.object({
   META_APP_SECRET: z.string().optional(),
   TELEGRAM_BOT_TOKEN: z.string().optional(),
   TELEGRAM_WEBHOOK_SECRET: z.string().optional(),
+  // Telegram MTProto (cuenta de usuario, login por QR). API_ID/API_HASH se
+  // obtienen gratis en https://my.telegram.org (necesarios para GramJS).
+  TELEGRAM_API_ID: z.string().optional(),
+  TELEGRAM_API_HASH: z.string().optional(),
+  // Directory where GramJS stores the Telegram user session (per workspace).
+  TELEGRAM_SESSION_DIR: z.string().default("data/telegram"),
   // Directory where Baileys stores WhatsApp session credentials (per workspace).
   WHATSAPP_SESSION_DIR: z.string().default("data/whatsapp"),
   // Workspace that receives inbound messages (WhatsApp/Telegram webhooks).

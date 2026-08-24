@@ -14,6 +14,7 @@ import {
 import { ResendAdapter } from "./adapters/resend.adapter";
 import { TiktokOfficialApiAdapter } from "./adapters/tiktok-official-api.adapter";
 import { TelegramBotApiAdapter } from "./adapters/telegram-bot-api.adapter";
+import { TelegramUserAdapter } from "./adapters/telegram-user.adapter";
 
 abstract class BaseProvider implements Provider {
   abstract readonly id: ProviderId;
@@ -46,11 +47,14 @@ export class WhatsappProvider extends BaseProvider {
 export class TelegramProvider extends BaseProvider {
   readonly id: ProviderId = "telegram";
   readonly label = "Telegram";
-  readonly defaultAdapterId = "bot-api";
+  // User account via QR (MTProto) is the default: it reaches every group and
+  // channel the account belongs to, auto-imported on sync. The official Bot API
+  // stays available for whoever prefers a bot + manual chat_id.
+  readonly defaultAdapterId = "user-mtproto";
   readonly adapters: ChannelAdapter[];
-  constructor(bot: TelegramBotApiAdapter) {
+  constructor(user: TelegramUserAdapter, bot: TelegramBotApiAdapter) {
     super();
-    this.adapters = [bot];
+    this.adapters = [user, bot];
   }
 }
 

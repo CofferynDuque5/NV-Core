@@ -7,6 +7,7 @@ import { WorkspaceGuard } from "../common/tenant/workspace.guard";
 import { RolesGuard } from "../auth/guards/roles.guard";
 import { Roles } from "../auth/decorators/roles.decorator";
 import { WhatsappModule } from "../modules/whatsapp/whatsapp.module";
+import { TelegramUserModule } from "../modules/telegram/telegram-user.module";
 import { MetaModule } from "../modules/social/meta.module";
 
 import { ProviderManager } from "./provider-manager.service";
@@ -23,6 +24,7 @@ import {
 import { WhatsappBaileysAdapter } from "./adapters/whatsapp-baileys.adapter";
 import { WhatsappCloudApiAdapter } from "./adapters/whatsapp-cloud-api.adapter";
 import { TelegramBotApiAdapter } from "./adapters/telegram-bot-api.adapter";
+import { TelegramUserAdapter } from "./adapters/telegram-user.adapter";
 import {
   FacebookMetaGraphAdapter,
   InstagramMetaGraphAdapter,
@@ -81,7 +83,7 @@ export class ProvidersController {
 }
 
 @Module({
-  imports: [WhatsappModule, MetaModule],
+  imports: [WhatsappModule, TelegramUserModule, MetaModule],
   controllers: [ProvidersController],
   providers: [
     ProviderManager,
@@ -97,6 +99,7 @@ export class ProvidersController {
     WhatsappBaileysAdapter,
     WhatsappCloudApiAdapter,
     TelegramBotApiAdapter,
+    TelegramUserAdapter,
     FacebookMetaGraphAdapter,
     InstagramMetaGraphAdapter,
     FacebookBrowserAutomationAdapter,

@@ -572,6 +572,19 @@ model WhatsappSession {
   updatedAt        DateTime  @updatedAt
 }
 
+/// Telegram user (MTProto/GramJS) session state per workspace. The auth string
+/// itself lives on disk (TELEGRAM_SESSION_DIR), not here.
+model TelegramSession {
+  id               String    @id @default(cuid())
+  workspaceSlug    String    @unique
+  status           String    @default("disconnected")
+  username         String?
+  phone            String?
+  lastConnectionAt DateTime?
+  groupsCount      Int       @default(0)
+  updatedAt        DateTime  @updatedAt
+}
+
 /**
  * Async job managed by the Job Manager: state, attempts, retries and failures
  * for work processed through the Queue Manager (BullMQ/Redis, or inline).

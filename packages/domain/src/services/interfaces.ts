@@ -657,6 +657,23 @@ export interface WhatsappService {
   sync(workspaceId: string): Promise<WhatsappStatus>;
 }
 
+export interface TelegramStatus {
+  status: "disconnected" | "connecting" | "qr" | "connected";
+  provider: "mtproto";
+  username: string | null;
+  phone: string | null;
+  lastConnectionAt: string | null;
+  groupsCount: number;
+}
+
+export interface TelegramService {
+  status(workspaceId: string): Promise<TelegramStatus>;
+  connect(workspaceId: string): Promise<TelegramStatus>;
+  reconnect(workspaceId: string): Promise<TelegramStatus>;
+  disconnect(workspaceId: string): Promise<TelegramStatus>;
+  sync(workspaceId: string): Promise<TelegramStatus>;
+}
+
 export interface WorkspaceService {
   /** All workspaces (built-in config + user-created). */
   list(): Promise<Workspace[]>;
@@ -701,6 +718,7 @@ export interface Services {
   feedback: FeedbackService;
   system: SystemService;
   whatsapp: WhatsappService;
+  telegram: TelegramService;
   campaigns: CampaignService;
   posts: PostService;
   calendar: CalendarService;

@@ -83,6 +83,21 @@ export const emptyAdapters: Services = {
     disconnect: () => notAvailable(),
     sync: () => notAvailable(),
   },
+  telegram: {
+    status: () =>
+      delay({
+        status: "disconnected",
+        provider: "mtproto",
+        username: null,
+        phone: null,
+        lastConnectionAt: null,
+        groupsCount: 0,
+      }),
+    connect: () => notAvailable(),
+    reconnect: () => notAvailable(),
+    disconnect: () => notAvailable(),
+    sync: () => notAvailable(),
+  },
   campaigns: {
     list: () => emptyList(),
     get: () => delay(null),

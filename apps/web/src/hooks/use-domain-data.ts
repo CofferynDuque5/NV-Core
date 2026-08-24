@@ -260,6 +260,15 @@ export function useWhatsappStatus() {
   });
 }
 
+export function useTelegramStatus() {
+  const svc = useServices();
+  const ws = useWorkspace();
+  return useQuery({
+    queryKey: [ws.id, "telegram", "status"],
+    queryFn: () => svc.telegram.status(ws.id),
+  });
+}
+
 export function useAiUsage() {
   const svc = useServices();
   const ws = useWorkspace();

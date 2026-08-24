@@ -1101,6 +1101,24 @@ export const useWhatsappReconnect = () => useWhatsappAction("reconnect");
 export const useWhatsappDisconnect = () => useWhatsappAction("disconnect");
 export const useWhatsappSync = () => useWhatsappAction("sync");
 
+function useTelegramAction(action: "connect" | "reconnect" | "disconnect" | "sync") {
+  const svc = useServices();
+  const ws = useWorkspace();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () => svc.telegram[action](ws.id),
+    onSuccess: (status) => {
+      qc.setQueryData([ws.id, "telegram", "status"], status);
+      void qc.invalidateQueries({ queryKey: [ws.id, "telegram", "status"] });
+    },
+    onError: (err) => toast.error(errText(err)),
+  });
+}
+export const useTelegramConnect = () => useTelegramAction("connect");
+export const useTelegramReconnect = () => useTelegramAction("reconnect");
+export const useTelegramDisconnect = () => useTelegramAction("disconnect");
+export const useTelegramSync = () => useTelegramAction("sync");
+
 // ── Google OAuth ──────────────────────────────────────────────────────────────
 export function useGoogleConnect() {
   const svc = useServices();

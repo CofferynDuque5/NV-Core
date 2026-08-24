@@ -15,6 +15,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ConnectionDialog } from "@/components/entities/connection-dialog";
 import { GoogleConnectCard } from "@/components/entities/google-connect-card";
 import { WhatsAppPanel } from "@/components/entities/whatsapp-panel";
+import { TelegramPanel } from "@/components/entities/telegram-panel";
 import { ProvidersAdapters } from "@/components/entities/providers-adapters";
 import { SocialPublishForm } from "@/components/entities/social-publish";
 import { GruposContent } from "@/components/whatsapp/grupos-content";
@@ -120,6 +121,8 @@ function ConexionTab() {
   return (
     <div className="space-y-6">
       <WhatsAppPanel />
+
+      <TelegramPanel />
 
       <ProvidersAdapters />
 
