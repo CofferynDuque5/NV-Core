@@ -52,6 +52,18 @@ recarga en caliente.
 > **o** un PostgreSQL propio — en ese caso pon tu `DATABASE_URL` en
 > `apps/api/.env` y usa `pnpm arrancar --no-db`.
 
+**Acceso admin (desarrollo):** el script siembra un administrador y te lo
+imprime al arrancar. Por defecto:
+
+```text
+Usuario:  admin@nvcore.local
+Password: Admin1234
+```
+
+Es Owner de todos los workspaces. Cámbialo editando `NV_ADMIN_EMAIL` /
+`NV_ADMIN_PASSWORD` en `apps/api/.env` (para que tome el nuevo, borra el usuario
+anterior o usa otro email).
+
 Equivalentes por sistema (todos llaman al mismo script):
 
 ```text

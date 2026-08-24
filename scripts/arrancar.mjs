@@ -121,6 +121,11 @@ if (!existsSync(apiEnv)) {
 ensureVar(apiEnv, "DATABASE_URL", "postgresql://postgres:postgres@localhost:5432/nvcore?schema=public");
 ensureVar(apiEnv, "JWT_SECRET", genSecret());
 ensureVar(apiEnv, "ENCRYPTION_KEY", genSecret());
+// Admin de desarrollo: la API lo crea al arrancar (Owner de todos los
+// workspaces) para que puedas iniciar sesión de una. Cámbialos en apps/api/.env.
+ensureVar(apiEnv, "NV_ADMIN_EMAIL", "admin@nvcore.local");
+ensureVar(apiEnv, "NV_ADMIN_PASSWORD", "Admin1234");
+ensureVar(apiEnv, "NV_ADMIN_NAME", "Admin");
 ensureVar(join(ROOT, "apps", "web", ".env"), "VITE_API_URL", "http://localhost:4000");
 
 // Read the effective DATABASE_URL back.
@@ -276,14 +281,25 @@ setEnvVar(join(ROOT, "apps", "web", ".env"), "VITE_API_URL", `http://localhost:$
 const webUrl = `http://localhost:${webPort}`;
 const apiUrl = `http://localhost:${apiPort}/api`;
 
+// Credenciales del admin (para mostrarlas; el usuario pudo cambiarlas).
+const envNow = readFileSync(apiEnv, "utf8");
+const adminEmail = (envNow.match(/^NV_ADMIN_EMAIL=(.*)$/m) || [])[1] || "";
+const adminPass = (envNow.match(/^NV_ADMIN_PASSWORD=(.*)$/m) || [])[1] || "";
+const printLogin = () => {
+  if (!adminEmail || !adminPass) return;
+  console.log(`  ${c("1", "Inicia sesión con:")}  ${c("32", adminEmail)}  /  ${c("32", adminPass)}`);
+};
+
 // ── Paso 5: arrancar ─────────────────────────────────────────────────────────
 if (PREPARE_ONLY) {
   step("Listo (preparación completa)");
   console.log("  Levanta los servidores con: " + c("1", "pnpm dev"));
   console.log(`  Web: ${c("36", webUrl)}   API: ${c("36", apiUrl)}`);
+  printLogin();
   process.exit(0);
 }
 step(`Paso 5 · Levantar API (:${apiPort}) + Web (:${webPort})`);
 console.log(`  ${c("1", "Abre en el navegador:")} ${c("36", webUrl)}`);
+printLogin();
 console.log(`  API: ${c("36", apiUrl)}    (Ctrl+C para detener)\n`);
 process.exit(run("pnpm dev") ? 0 : 1);
