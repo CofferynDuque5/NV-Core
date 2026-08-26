@@ -199,6 +199,8 @@ if (NO_DB) {
     const created = run(
       `docker run -d --name ${NAME} ` +
         `-e POSTGRES_USER=${dbUser} -e POSTGRES_PASSWORD=${dbPass} -e POSTGRES_DB=${dbName} ` +
+        // Volumen con nombre: los datos sobreviven aunque se borre el contenedor.
+        `-v nvcore-dev-db-data:/var/lib/postgresql/data ` +
         `-p ${port}:5432 postgres:16`,
     );
     if (!created) die(`No se pudo crear el contenedor ${NAME}.`);

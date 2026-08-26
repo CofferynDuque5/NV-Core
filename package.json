@@ -12,6 +12,7 @@
     "start:all": "node scripts/arrancar.mjs",
     "admin": "node scripts/hazme-admin.mjs",
     "studio": "pnpm --filter @nv/api exec prisma studio",
+    "seed": "pnpm --filter @nv/api exec node prisma/seed-examples.cjs",
     "dev": "turbo run dev",
     "build": "turbo run build",
     "lint": "turbo run lint",
