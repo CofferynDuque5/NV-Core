@@ -108,6 +108,7 @@ export const emptyAdapters: Services = {
     pause: () => notAvailable(),
     resume: () => notAvailable(),
     logs: () => delay([]),
+    clearLogs: () => delay({ deleted: 0 }),
     exportCsv: () => delay(""),
     importCsv: () => notAvailable(),
   },

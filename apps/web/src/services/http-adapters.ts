@@ -165,6 +165,7 @@ export function createHttpAdapters(opts: HttpAdapterOptions): Services {
       pause: (id, cid) => post<Campaign>(`${ws(id)}/campaigns/${cid}/pause`, {}),
       resume: (id, cid) => post<Campaign>(`${ws(id)}/campaigns/${cid}/resume`, {}),
       logs: (id) => get<SendLogEntry[]>(`${ws(id)}/campaigns/logs`),
+      clearLogs: (id) => del<{ deleted: number }>(`${ws(id)}/campaigns/logs`),
       exportCsv: (id) => get<{ csv: string }>(`${ws(id)}/campaigns/export`).then((r) => r.csv),
       importCsv: (id, csv) => post<CampaignImportResult>(`${ws(id)}/campaigns/import`, { csv }),
     },

@@ -120,6 +120,9 @@ export function useCampaignLogs() {
   return useQuery({
     queryKey: [ws.id, "campaigns", "logs"],
     queryFn: () => svc.campaigns.logs(ws.id),
+    // Historial en vivo: refresca solo cada 10s y al volver a la pestaña.
+    refetchInterval: 10_000,
+    refetchOnWindowFocus: true,
   });
 }
 

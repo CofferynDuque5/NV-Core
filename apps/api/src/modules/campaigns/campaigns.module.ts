@@ -306,6 +306,14 @@ export class CampaignsService {
     });
   }
 
+  /** Delete all send-log entries for a workspace. Returns how many were removed. */
+  async clearLogs(workspaceId: string, actor: string): Promise<{ deleted: number }> {
+    if (!this.prisma.enabled) return { deleted: 0 };
+    const { count } = await this.prisma.sendLog.deleteMany({ where: { workspaceSlug: workspaceId } });
+    await this.audit.record(workspaceId, actor, "campaigns.logs.clear", `deleted=${count}`);
+    return { deleted: count };
+  }
+
   private static readonly EXPORT_COLUMNS = [
     "name",
     "status",
@@ -503,6 +511,14 @@ export class CampaignsController {
   @Get("logs")
   logs(@WorkspaceId() workspaceId: string) {
     return this.service.logs(workspaceId);
+  }
+
+  @Delete("logs")
+  @Roles("Owner", "Admin")
+  @UseGuards(RolesGuard)
+  @HttpCode(200)
+  clearLogs(@WorkspaceId() workspaceId: string, @CurrentUser() user: AuthenticatedUser) {
+    return this.service.clearLogs(workspaceId, user.email);
   }
 
   @Get("export")

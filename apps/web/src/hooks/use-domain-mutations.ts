@@ -344,6 +344,20 @@ export function useCreateCampaign() {
   });
 }
 
+export function useClearCampaignLogs() {
+  const svc = useServices();
+  const ws = useWorkspace();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () => svc.campaigns.clearLogs(ws.id),
+    onSuccess: (r) => {
+      void qc.invalidateQueries({ queryKey: [ws.id, "campaigns", "logs"] });
+      toast.success(r.deleted ? `Historial borrado (${r.deleted})` : "Historial vacío");
+    },
+    onError: (err) => toast.error(errText(err)),
+  });
+}
+
 export function useUpdateCampaign() {
   const svc = useServices();
   const ws = useWorkspace();
@@ -1193,37 +1207,42 @@ export function useUploadCampaignAttachment() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (file: File): Promise<CampaignAttachment> => {
-      const sig = await svc.media.uploadSignature(ws.id);
+      const isImage = file.type.startsWith("image/");
 
-      // Preferred path: Cloudinary (handles image, video and documents).
-      if (sig) {
-        const uploaded = await uploadToCloudinary(sig, file);
-        const kind =
-          uploaded.resourceType === "video"
-            ? "video"
-            : uploaded.resourceType === "image"
-              ? "image"
-              : "document";
-        await svc.media
-          .createAsset(ws.id, { type: kind === "video" ? "video" : "image", title: file.name, url: uploaded.secureUrl })
-          .catch(() => undefined);
-        void qc.invalidateQueries({ queryKey: [ws.id, "media"] });
-        return { url: uploaded.secureUrl, kind, mime: file.type || null, filename: file.name };
+      // Imágenes → ImgBB (preferido). Si no está configurado, cae a Cloudinary.
+      if (isImage) {
+        try {
+          const base64 = await fileToBase64(file);
+          const { url } = await svc.media.uploadImage(ws.id, base64);
+          await svc.media.createAsset(ws.id, { type: "image", title: file.name, url }).catch(() => undefined);
+          void qc.invalidateQueries({ queryKey: [ws.id, "media"] });
+          return { url, kind: "image", mime: file.type || "image/png", filename: file.name };
+        } catch {
+          /* ImgBB no configurado → intentar Cloudinary abajo */
+        }
       }
 
-      // Fallback: ImgBB (backend) — images only.
-      if (!file.type.startsWith("image/")) {
+      // Video/documentos (o imagen sin ImgBB) → Cloudinary.
+      const sig = await svc.media.uploadSignature(ws.id);
+      if (!sig) {
         throw new Error(
-          "Sin Cloudinary, solo se pueden subir imágenes (ImgBB). Para video define CLOUDINARY_URL.",
+          isImage
+            ? "Sube imágenes con ImgBB (IMGBB_API_KEY) o Cloudinary (CLOUDINARY_URL)."
+            : "Para video/documentos define CLOUDINARY_URL en el backend.",
         );
       }
-      const base64 = await fileToBase64(file);
-      const { url } = await svc.media.uploadImage(ws.id, base64);
+      const uploaded = await uploadToCloudinary(sig, file);
+      const kind =
+        uploaded.resourceType === "video"
+          ? "video"
+          : uploaded.resourceType === "image"
+            ? "image"
+            : "document";
       await svc.media
-        .createAsset(ws.id, { type: "image", title: file.name, url })
+        .createAsset(ws.id, { type: kind === "video" ? "video" : "image", title: file.name, url: uploaded.secureUrl })
         .catch(() => undefined);
       void qc.invalidateQueries({ queryKey: [ws.id, "media"] });
-      return { url, kind: "image", mime: file.type || "image/png", filename: file.name };
+      return { url: uploaded.secureUrl, kind, mime: file.type || null, filename: file.name };
     },
     onError: (err) => toast.error(errText(err)),
   });

@@ -204,6 +204,7 @@ export interface CampaignService {
   pause(workspaceId: string, id: string): Promise<Campaign>;
   resume(workspaceId: string, id: string): Promise<Campaign>;
   logs(workspaceId: string): Promise<SendLogEntry[]>;
+  clearLogs(workspaceId: string): Promise<{ deleted: number }>;
   /** Export all campaigns as CSV, incl. recipient groups by name. */
   exportCsv(workspaceId: string): Promise<string>;
   /** Import campaigns from CSV; dedupes by name, resolves recipient groups. */

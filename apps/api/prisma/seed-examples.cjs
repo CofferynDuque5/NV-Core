@@ -174,24 +174,45 @@ async function main() {
 
   // ── Contactos de ejemplo ─────────────────────────────────────────────────────
   const contacts = [
-    { name: "María López", phone: "+521555000001", email: "maria@example.com", company: "Café Aurora", stage: "Cliente", tags: ["VIP", "mensual"] },
-    { name: "Juan Pérez", phone: "+521555000002", email: "juan@example.com", company: "Tech Nova", stage: "Lead", tags: ["webinar"] },
-    { name: "Ana Torres", phone: "+521555000003", email: "ana@example.com", company: "Studio 7", stage: "Cliente", tags: ["anual"] },
-    { name: "Carlos Ruiz", phone: "+521555000004", email: "carlos@example.com", company: "Delta SA", stage: "En riesgo", tags: ["soporte"] },
-    { name: "Lucía Gómez", phone: "+521555000005", email: "lucia@example.com", company: "Freelance", stage: "Lead", tags: ["instagram"] },
-    { name: "Pedro Díaz", phone: "+521555000006", email: "pedro@example.com", company: "Inactivo Corp", stage: "Inactivo", tags: [] },
+    { name: "María López", phone: "+521555000001", email: "maria@example.com", company: "Café Aurora", stage: "Cliente", tags: ["VIP", "mensual"], bought: "Netflix Premium — plan mensual ($9)" },
+    { name: "Juan Pérez", phone: "+521555000002", email: "juan@example.com", company: "Tech Nova", stage: "Lead", tags: ["webinar"], bought: null },
+    { name: "Ana Torres", phone: "+521555000003", email: "ana@example.com", company: "Studio 7", stage: "Cliente", tags: ["anual"], bought: "Combo Streaming anual ($80)" },
+    { name: "Carlos Ruiz", phone: "+521555000004", email: "carlos@example.com", company: "Delta SA", stage: "En riesgo", tags: ["soporte"], bought: "Disney+ mensual ($7) — pago vencido" },
+    { name: "Lucía Gómez", phone: "+521555000005", email: "lucia@example.com", company: "Freelance", stage: "Lead", tags: ["instagram"], bought: null },
+    { name: "Pedro Díaz", phone: "+521555000006", email: "pedro@example.com", company: "Inactivo Corp", stage: "Inactivo", tags: [], bought: "Spotify (cancelado)" },
   ];
   let contactsCreated = 0;
-  for (const c of contacts) {
-    const exists = await prisma.contact.findFirst({
+  for (const { bought, ...c } of contacts) {
+    let contact = await prisma.contact.findFirst({
       where: { workspaceSlug: slug, name: c.name, email: c.email },
     });
-    if (!exists) {
-      await prisma.contact.create({ data: { workspaceSlug: slug, ...c, lastContactAt: new Date() } });
+    if (!contact) {
+      contact = await prisma.contact.create({ data: { workspaceSlug: slug, ...c, lastContactAt: new Date() } });
       contactsCreated++;
+      if (bought) {
+        await prisma.contactNote.create({
+          data: { workspaceSlug: slug, contactId: contact.id, author: "seed", body: `Compra: ${bought}` },
+        });
+      }
     }
   }
-  console.log(contactsCreated ? `  ✓ ${contactsCreated} contacto(s) creado(s)` : "  = Contactos ya existían");
+  console.log(contactsCreated ? `  ✓ ${contactsCreated} contacto(s) creado(s) (con notas de compra)` : "  = Contactos ya existían");
+
+  // ── Afiliados ────────────────────────────────────────────────────────────────
+  const affiliates = [
+    { name: "Influencer Ana", email: "ana.aff@example.com", code: "NVANA20", commissionPct: 20, clicks: 340, conversions: 28, earnings: 168 },
+    { name: "Blog StreamingYA", email: "blog@example.com", code: "NVSTREAM15", commissionPct: 15, clicks: 120, conversions: 9, earnings: 54 },
+    { name: "Referido Carlos", email: "carlos.aff@example.com", code: "NVCARLOS25", commissionPct: 25, clicks: 60, conversions: 4, earnings: 30 },
+  ];
+  let affCreated = 0;
+  for (const a of affiliates) {
+    const exists = await prisma.affiliate.findFirst({ where: { workspaceSlug: slug, code: a.code } });
+    if (!exists) {
+      await prisma.affiliate.create({ data: { workspaceSlug: slug, status: "active", destinationUrl: "https://tu-tienda.com", ...a } });
+      affCreated++;
+    }
+  }
+  console.log(affCreated ? `  ✓ ${affCreated} afiliado(s) creado(s)` : "  = Afiliados ya existían");
 
   // ── Segmentos de ejemplo ─────────────────────────────────────────────────────
   const segments = [
@@ -233,25 +254,33 @@ async function main() {
   }
   console.log(tplCreated ? `  ✓ ${tplCreated} plantilla(s) creada(s)` : "  = Plantillas ya existían");
 
-  // ── Campaña de ejemplo (borrador — no se envía sola) ─────────────────────────
-  const campName = "Campaña de ejemplo — Promo de bienvenida";
-  const existingCamp = await prisma.campaign.findFirst({ where: { workspaceSlug: slug, name: campName } });
-  if (!existingCamp) {
-    await prisma.campaign.create({
-      data: {
-        workspaceSlug: slug,
-        name: campName,
-        status: "borrador",
-        channels: ["wa"],
-        message: "¡Hola {{grupo}}! 🎉 Promo de bienvenida: 30% de descuento esta semana.",
-        scheduleType: "once",
-        scheduleDays: [],
-      },
-    });
-    console.log("  ✓ Campaña de ejemplo creada (borrador)");
-  } else {
-    console.log("  = Campaña de ejemplo ya existía");
+  // ── Campañas de ejemplo (borradores por servicio — no se envían solas) ───────
+  const campaigns = [
+    { name: "Netflix Premium — Promo", message: "🍿 {{grupo}}: Netflix Premium 4K por $9/mes. ¡Cupos limitados! Responde para activar." },
+    { name: "Disney+ — Lanzamiento", message: "✨ {{grupo}}: Disney+ desde $7/mes. Marvel, Star Wars y más. Escríbenos y te activamos hoy." },
+    { name: "HBO Max — Estrenos", message: "🎬 {{grupo}}: HBO Max con los estrenos del momento por $8/mes. ¿Lo activamos?" },
+    { name: "Spotify — Música sin límites", message: "🎧 {{grupo}}: Spotify Premium por $5/mes, sin anuncios. Responde 'QUIERO'." },
+    { name: "Combo Streaming — Ahorra", message: "🔥 {{grupo}}: Combo (Netflix + Disney+ + Spotify) por $20/mes. Ahorra 40%." },
+  ];
+  let campCreated = 0;
+  for (const c of campaigns) {
+    const exists = await prisma.campaign.findFirst({ where: { workspaceSlug: slug, name: c.name } });
+    if (!exists) {
+      await prisma.campaign.create({
+        data: {
+          workspaceSlug: slug,
+          name: c.name,
+          status: "borrador",
+          channels: ["wa"],
+          message: c.message,
+          scheduleType: "once",
+          scheduleDays: [],
+        },
+      });
+      campCreated++;
+    }
   }
+  console.log(campCreated ? `  ✓ ${campCreated} campaña(s) creada(s) (borrador)` : "  = Campañas de ejemplo ya existían");
 
   console.log("Seed de ejemplos completado.");
 }

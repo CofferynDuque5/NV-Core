@@ -1,10 +1,12 @@
 
 import * as React from "react";
 import type { SendLogEntry } from "@nv/domain";
-import { BarChart2, Download, History, Loader2 } from "lucide-react";
+import { BarChart2, Download, History, Loader2, Trash2 } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 
 import { useCampaignLogs } from "@/hooks/use-domain-data";
+import { useClearCampaignLogs } from "@/hooks/use-domain-mutations";
+import { useConfirm } from "@/providers/confirm-provider";
 import { useServices } from "@/hooks/use-services";
 import { useWorkspace } from "@/hooks/use-workspace";
 import { formatDateTime, cn } from "@/lib/utils";
@@ -75,6 +77,8 @@ const CHANNEL_TABS: { id: HistorialFilter; label: string }[] = [
 
 export function HistorialContent({ showHeader = true }: { showHeader?: boolean }) {
   const logs = useCampaignLogs();
+  const clear = useClearCampaignLogs();
+  const confirm = useConfirm();
   const [insights, setInsights] = React.useState<{ target: string; id: string } | null>(null);
   const [channel, setChannel] = React.useState<HistorialFilter>("all");
   const [q, setQ] = React.useState("");
@@ -82,15 +86,32 @@ export function HistorialContent({ showHeader = true }: { showHeader?: boolean }
   const [to, setTo] = React.useState("");
   const rows = logs.data ?? [];
 
+  async function onClear() {
+    const ok = await confirm({
+      title: "Borrar historial",
+      description: `Se eliminarán ${rows.length} registro(s) de envíos. Esta acción no se puede deshacer.`,
+      confirmLabel: "Borrar todo",
+      destructive: true,
+    });
+    if (ok) clear.mutate();
+  }
+
   const actions = (
-    <Button
-      size="sm"
-      variant="secondary"
-      onClick={() => downloadCsv(rows)}
-      disabled={rows.length === 0}
-    >
-      <Download className="size-4" /> Exportar CSV
-    </Button>
+    <div className="flex items-center gap-2">
+      <Button size="sm" variant="secondary" onClick={() => downloadCsv(rows)} disabled={rows.length === 0}>
+        <Download className="size-4" /> Exportar CSV
+      </Button>
+      <Button
+        size="sm"
+        variant="ghost"
+        onClick={onClear}
+        disabled={rows.length === 0 || clear.isPending}
+        className="text-state-danger hover:bg-state-danger/10"
+      >
+        {clear.isPending ? <Loader2 className="size-4 animate-spin" /> : <Trash2 className="size-4" />}
+        Borrar historial
+      </Button>
+    </div>
   );
 
   return (
