@@ -50,6 +50,7 @@ export interface AppConfig {
     google: { clientId?: string; clientSecret?: string };
     stripe: { secretKey?: string; webhookSecret?: string; priceId?: string };
     cloudinary: { url?: string };
+    imgbb: { apiKey?: string };
     resend: { apiKey?: string };
   };
 }
@@ -144,6 +145,7 @@ export function buildConfig(env: Env): AppConfig {
         priceId: env.STRIPE_PRICE_ID,
       },
       cloudinary: { url: env.CLOUDINARY_URL },
+      imgbb: { apiKey: env.IMGBB_API_KEY },
       resend: { apiKey: env.RESEND_API_KEY },
     },
   };

@@ -1177,6 +1177,16 @@ export function useUploadMedia() {
  * ({ url, kind, mime, filename }) for use in campaigns / social publishing.
  * Also registers it in the media library so it shows up in Biblioteca.
  */
+/** Read a File as a base64 data URL (for the ImgBB fallback upload). */
+function fileToBase64(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result));
+    reader.onerror = () => reject(reader.error ?? new Error("No se pudo leer el archivo."));
+    reader.readAsDataURL(file);
+  });
+}
+
 export function useUploadCampaignAttachment() {
   const svc = useServices();
   const ws = useWorkspace();
@@ -1184,22 +1194,36 @@ export function useUploadCampaignAttachment() {
   return useMutation({
     mutationFn: async (file: File): Promise<CampaignAttachment> => {
       const sig = await svc.media.uploadSignature(ws.id);
-      if (!sig) {
-        throw new Error("Cloudinary no está configurado. Define CLOUDINARY_URL en el backend.");
+
+      // Preferred path: Cloudinary (handles image, video and documents).
+      if (sig) {
+        const uploaded = await uploadToCloudinary(sig, file);
+        const kind =
+          uploaded.resourceType === "video"
+            ? "video"
+            : uploaded.resourceType === "image"
+              ? "image"
+              : "document";
+        await svc.media
+          .createAsset(ws.id, { type: kind === "video" ? "video" : "image", title: file.name, url: uploaded.secureUrl })
+          .catch(() => undefined);
+        void qc.invalidateQueries({ queryKey: [ws.id, "media"] });
+        return { url: uploaded.secureUrl, kind, mime: file.type || null, filename: file.name };
       }
-      const uploaded = await uploadToCloudinary(sig, file);
-      const kind =
-        uploaded.resourceType === "video"
-          ? "video"
-          : uploaded.resourceType === "image"
-            ? "image"
-            : "document";
-      // Keep it in the library too (best-effort; ignore failures).
+
+      // Fallback: ImgBB (backend) — images only.
+      if (!file.type.startsWith("image/")) {
+        throw new Error(
+          "Sin Cloudinary, solo se pueden subir imágenes (ImgBB). Para video define CLOUDINARY_URL.",
+        );
+      }
+      const base64 = await fileToBase64(file);
+      const { url } = await svc.media.uploadImage(ws.id, base64);
       await svc.media
-        .createAsset(ws.id, { type: kind === "video" ? "video" : "image", title: file.name, url: uploaded.secureUrl })
+        .createAsset(ws.id, { type: "image", title: file.name, url })
         .catch(() => undefined);
       void qc.invalidateQueries({ queryKey: [ws.id, "media"] });
-      return { url: uploaded.secureUrl, kind, mime: file.type || null, filename: file.name };
+      return { url, kind: "image", mime: file.type || "image/png", filename: file.name };
     },
     onError: (err) => toast.error(errText(err)),
   });

@@ -89,6 +89,9 @@ export interface SocialResult {
 export class MetaService {
   constructor(private readonly prisma: PrismaService) {}
 
+  /** Cache of resolved { pageId, pageToken } keyed by the seed token. */
+  private readonly pageCache = new Map<string, { id: string; token: string }>();
+
   /** Resolve FB/IG credentials for a workspace (Connection rows → env fallback). */
   async creds(workspaceSlug: string): Promise<MetaCreds> {
     let fb: { handle: string; token: string | null } | null = null;
@@ -102,13 +105,56 @@ export class MetaService {
         if (r.channel === "ig") ig = { handle: r.handle, token: r.token };
       }
     }
-    const fbPageToken = fb?.token || process.env.FB_PAGE_TOKEN || null;
+    let fbPageId = fb?.handle || process.env.FB_PAGE_ID || null;
+    let fbPageToken = fb?.token || process.env.FB_PAGE_TOKEN || null;
+
+    // Convenience: if a token is provided without a Page ID, resolve the Page
+    // (and its Page token) from the Graph API — so pasting just a token works,
+    // whether it's a user token (→ /me/accounts) or a page token (→ /me).
+    if (fbPageToken && !fbPageId) {
+      const resolved = await this.resolvePage(fbPageToken);
+      if (resolved) {
+        fbPageId = resolved.id;
+        fbPageToken = resolved.token;
+      }
+    }
+
     return {
-      fbPageId: fb?.handle || process.env.FB_PAGE_ID || null,
+      fbPageId,
       fbPageToken,
       igBusinessId: ig?.handle || process.env.IG_BUSINESS_ID || null,
       igToken: ig?.token || process.env.IG_ACCESS_TOKEN || fbPageToken,
     };
+  }
+
+  /** Resolve a Page id + Page token from a user/page token (cached in memory). */
+  private async resolvePage(token: string): Promise<{ id: string; token: string } | null> {
+    const cached = this.pageCache.get(token);
+    if (cached) return cached;
+    // A user token lists its pages (each with its own page access_token).
+    try {
+      const data = await this.graphGet("me/accounts", token, { fields: "id,name,access_token" });
+      const page = data?.data?.[0];
+      if (page?.id) {
+        const r = { id: String(page.id), token: page.access_token || token };
+        this.pageCache.set(token, r);
+        return r;
+      }
+    } catch {
+      /* fall through to /me */
+    }
+    // A page token: /me is the page itself.
+    try {
+      const me = await this.graphGet("me", token, { fields: "id,name" });
+      if (me?.id) {
+        const r = { id: String(me.id), token };
+        this.pageCache.set(token, r);
+        return r;
+      }
+    } catch {
+      /* give up */
+    }
+    return null;
   }
 
   fbConfigured(c: MetaCreds): boolean {

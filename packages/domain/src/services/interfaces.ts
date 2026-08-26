@@ -454,6 +454,8 @@ export interface MediaService {
   tags(workspaceId: string): Promise<string[]>;
   /** Signed params for a direct browser→Cloudinary upload; null when unconfigured. */
   uploadSignature(workspaceId: string, folder?: string): Promise<MediaUploadSignature | null>;
+  /** Upload a base64 image via the backend (ImgBB) and get its public URL. */
+  uploadImage(workspaceId: string, image: string): Promise<{ url: string }>;
   createAsset(workspaceId: string, input: CreateAssetInput): Promise<MediaAsset>;
   updateAsset(workspaceId: string, id: string, input: UpdateAssetInput): Promise<MediaAsset>;
   removeAsset(workspaceId: string, id: string): Promise<void>;

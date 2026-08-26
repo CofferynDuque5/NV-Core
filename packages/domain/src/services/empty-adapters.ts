@@ -195,6 +195,7 @@ export const emptyAdapters: Services = {
     assets: () => emptyList(),
     tags: () => delay([]),
     uploadSignature: () => delay(null),
+    uploadImage: () => notAvailable(),
     createAsset: () => notAvailable(),
     updateAsset: () => notAvailable(),
     removeAsset: () => notAvailable(),

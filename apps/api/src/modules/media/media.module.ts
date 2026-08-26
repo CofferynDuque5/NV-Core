@@ -23,7 +23,7 @@ import {
   type MediaType,
   type MediaUploadSignature,
 } from "@nv/domain";
-import { IsIn, IsOptional, IsString, IsUrl, MinLength } from "class-validator";
+import { IsIn, IsOptional, IsString, IsUrl, MaxLength, MinLength } from "class-validator";
 
 import type { AppConfig } from "../../config/configuration";
 import { ListResultDto } from "../../common/dto/list-result.dto";
@@ -41,6 +41,11 @@ import { LIST_CAP } from "../../common/query-limits";
 
 export class CreateFolderDto {
   @IsString() @MinLength(1) label!: string;
+}
+
+export class UploadImageDto {
+  /** Base64 image (data: URL or raw base64). */
+  @IsString() @MinLength(16) @MaxLength(15_000_000) image!: string;
 }
 
 export class CreateAssetDto {
@@ -99,6 +104,44 @@ export class MediaService {
       signature,
       folder: targetFolder,
     };
+  }
+
+  /** Whether server-side ImgBB image hosting is configured. */
+  imgbbConfigured(): boolean {
+    return Boolean(this.config.get("integrations", { infer: true }).imgbb.apiKey);
+  }
+
+  /**
+   * Upload a base64 image to ImgBB (server-side, key never leaves the backend)
+   * and return its public URL. Images only — ImgBB does not host video.
+   */
+  async uploadImage(base64: string): Promise<{ url: string }> {
+    const apiKey = this.config.get("integrations", { infer: true }).imgbb.apiKey;
+    if (!apiKey) {
+      throw new ServiceUnavailableException(
+        "Hosting de imágenes no configurado. Define IMGBB_API_KEY (o CLOUDINARY_URL).",
+      );
+    }
+    // Accept a data: URL or a raw base64 payload.
+    const payload = base64.includes(",") ? base64.slice(base64.indexOf(",") + 1) : base64;
+    let res: Response;
+    try {
+      res = await fetch(`https://api.imgbb.com/1/upload?key=${encodeURIComponent(apiKey)}`, {
+        method: "POST",
+        headers: { "content-type": "application/x-www-form-urlencoded" },
+        body: new URLSearchParams({ image: payload }).toString(),
+      });
+    } catch (e) {
+      throw new ServiceUnavailableException(`ImgBB: red no disponible (${(e as Error).message}).`);
+    }
+    const data = (await res.json().catch(() => ({}))) as {
+      data?: { url?: string; display_url?: string };
+      error?: { message?: string };
+    };
+    if (!res.ok || !data.data?.url) {
+      throw new ServiceUnavailableException(`ImgBB: ${data.error?.message ?? `HTTP ${res.status}`}`);
+    }
+    return { url: data.data.display_url || data.data.url };
   }
 
   async folders(workspaceId: string): Promise<MediaFolder[]> {
@@ -236,6 +279,14 @@ export class MediaController {
   @UseGuards(RolesGuard)
   uploadSignature(@WorkspaceId() workspaceId: string, @Query("folder") folder?: string) {
     return this.service.uploadSignature(workspaceId, folder);
+  }
+
+  @Post("upload-image")
+  @Roles("Owner", "Admin", "Editor")
+  @UseGuards(RolesGuard)
+  @HttpCode(200)
+  uploadImage(@WorkspaceId() _workspaceId: string, @Body() dto: UploadImageDto) {
+    return this.service.uploadImage(dto.image);
   }
 
   @Post("folders")

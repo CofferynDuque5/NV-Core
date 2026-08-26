@@ -277,6 +277,7 @@ export function createHttpAdapters(opts: HttpAdapterOptions): Services {
         get<MediaUploadSignature | null>(
           `${ws(id)}/media/upload-signature${folder ? `?folder=${encodeURIComponent(folder)}` : ""}`,
         ),
+      uploadImage: (id, image) => post<{ url: string }>(`${ws(id)}/media/upload-image`, { image }),
       createAsset: (id, input) => post<MediaAsset>(`${ws(id)}/media/assets`, input),
       updateAsset: (id, assetId, input) => patch<MediaAsset>(`${ws(id)}/media/assets/${assetId}`, input),
       removeAsset: (id, assetId) => del<void>(`${ws(id)}/media/assets/${assetId}`),

@@ -85,6 +85,8 @@ export const envSchema = z.object({
   /** Plan used when Stripe isn't configured (self-host / dev). Default "pro". */
   DEFAULT_PLAN: z.enum(["free", "pro"]).optional(),
   CLOUDINARY_URL: z.string().optional(),
+  // Alternativa de hosting de imágenes (https://api.imgbb.com). Solo imágenes.
+  IMGBB_API_KEY: z.string().optional(),
   RESEND_API_KEY: z.string().optional(),
   MAIL_FROM: z.string().default("NV Core <onboarding@resend.dev>"),
 });
