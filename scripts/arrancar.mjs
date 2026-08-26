@@ -270,10 +270,13 @@ for (const p of [3000, 3001, 3002, 3003, 3004]) {
 }
 if (webPort !== 3000) {
   warn(`El puerto 3000 está ocupado por otro programa; la Web usará el ${webPort}.`);
-  // Mantener CORS y los enlaces alineados con el puerto real de la Web.
-  setEnvVar(apiEnv, "CORS_ORIGINS", `http://localhost:${webPort}`);
-  setEnvVar(apiEnv, "APP_URL", `http://localhost:${webPort}`);
 }
+// Permitir CORS desde cualquier puerto de desarrollo (evita "NetworkError" al
+// hacer login si la Web cae en 3001/3002…). Se reescribe en cada arranque para
+// que no quede un origen viejo. APP_URL (enlaces de email) apunta al real.
+const devOrigins = [3000, 3001, 3002, 3003, 3004].map((p) => `http://localhost:${p}`).join(",");
+setEnvVar(apiEnv, "CORS_ORIGINS", devOrigins);
+setEnvVar(apiEnv, "APP_URL", `http://localhost:${webPort}`);
 process.env.WEB_PORT = String(webPort);
 // La Web habla con la API por su URL (no por el puerto de la Web).
 setEnvVar(join(ROOT, "apps", "web", ".env"), "VITE_API_URL", `http://localhost:${apiPort}`);
