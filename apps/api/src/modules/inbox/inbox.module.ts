@@ -9,6 +9,7 @@ import {
   Logger,
   Module,
   NotFoundException,
+  type OnModuleInit,
   Param,
   Patch,
   Post,
@@ -80,7 +81,7 @@ export class UpdateConversationDto {
 }
 
 @Injectable()
-export class InboxService {
+export class InboxService implements OnModuleInit {
   private readonly logger = new Logger(InboxService.name);
 
   constructor(
@@ -102,10 +103,21 @@ export class InboxService {
     return conv;
   }
 
+  /** Subscribe to live-session inbound (WhatsApp Baileys / Telegram user). */
+  onModuleInit(): void {
+    this.events.on("session.inbound", (p) => {
+      void this.recordInboundFor(p.workspaceSlug, {
+        channel: p.channel,
+        contactHandle: p.contactHandle,
+        contactName: p.contactName,
+        text: p.text,
+      });
+    });
+  }
+
   /**
-   * Persist an inbound message: find (by channel + handle) or create its
-   * conversation in the configured inbound workspace, then append it.
-   * Best-effort — drops silently (with a log) when misconfigured.
+   * Persist an inbound message from a webhook: routes to the configured
+   * INBOUND_WORKSPACE. Best-effort — drops silently (with a log) when misconfigured.
    */
   async recordInbound(msg: InboundMessage): Promise<void> {
     const slug = this.config.get("inboundWorkspace", { infer: true });
@@ -113,6 +125,15 @@ export class InboxService {
       this.logger.warn("Mensaje entrante ignorado: define INBOUND_WORKSPACE.");
       return;
     }
+    await this.recordInboundFor(slug, msg);
+  }
+
+  /**
+   * Persist an inbound message into an EXPLICIT workspace: find (by channel +
+   * handle) or create its conversation, then append it. Used by live sessions
+   * (Baileys/Telegram) which already know their workspace.
+   */
+  async recordInboundFor(slug: string, msg: InboundMessage): Promise<void> {
     if (!this.prisma.enabled) return;
     if (!(await this.registry.exists(slug))) {
       this.logger.warn(`Mensaje entrante ignorado: workspace "${slug}" no existe.`);

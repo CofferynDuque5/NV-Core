@@ -178,7 +178,13 @@ export function useSequenceEnrollments(sequenceId: string | null) {
 export function useConversations() {
   const svc = useServices();
   const ws = useWorkspace();
-  return useQuery({ queryKey: [ws.id, "inbox"], queryFn: () => svc.inbox.conversations(ws.id) });
+  return useQuery({
+    queryKey: [ws.id, "inbox"],
+    queryFn: () => svc.inbox.conversations(ws.id),
+    // Inbox en vivo: nuevos chats entrantes aparecen solos.
+    refetchInterval: 10_000,
+    refetchOnWindowFocus: true,
+  });
 }
 
 export function useMessages(conversationId: string | null) {
@@ -188,6 +194,8 @@ export function useMessages(conversationId: string | null) {
     queryKey: [ws.id, "inbox", conversationId, "messages"],
     queryFn: () => svc.inbox.messages(ws.id, conversationId as string),
     enabled: Boolean(conversationId),
+    refetchInterval: 8_000,
+    refetchOnWindowFocus: true,
   });
 }
 

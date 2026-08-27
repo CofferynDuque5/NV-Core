@@ -93,6 +93,7 @@ export class BaileysSession {
       this.sock.ev.on("contacts.upsert", (rows: any[]) => this.trackContacts(rows));
       this.sock.ev.on("contacts.update", (rows: any[]) => this.trackContacts(rows));
       this.sock.ev.on("messaging-history.set", (h: any) => this.trackContacts(h?.contacts ?? []));
+      this.sock.ev.on("messages.upsert", (u: any) => this.onIncomingMessages(u));
       this.sock.ev.on("connection.update", (u: any) => this.onConnectionUpdate(baileys, u));
     } catch (err) {
       this.logger.error(`No se pudo iniciar Baileys: ${(err as Error).message}`);
@@ -134,6 +135,34 @@ export class BaileysSession {
         this.setStatus("connecting");
         this.logger.warn("Conexión caída; reconectando…");
         setTimeout(() => void this.start(), 2000);
+      }
+    }
+  }
+
+  /**
+   * Forward incoming DIRECT (1:1) text messages to the Inbox via onInbound.
+   * Groups (`@g.us`) and status broadcasts are skipped so the inbox isn't
+   * flooded with broadcast traffic; only real conversations land there.
+   */
+  private onIncomingMessages(u: any): void {
+    if (u?.type !== "notify" || !Array.isArray(u.messages)) return;
+    for (const m of u.messages) {
+      try {
+        if (m?.key?.fromMe) continue;
+        const jid: string = m?.key?.remoteJid ?? "";
+        if (!jid.endsWith("@s.whatsapp.net")) continue; // 1:1 chats only
+        const text: string =
+          m?.message?.conversation ??
+          m?.message?.extendedTextMessage?.text ??
+          m?.message?.imageMessage?.caption ??
+          m?.message?.videoMessage?.caption ??
+          "";
+        if (!text.trim()) continue;
+        const handle = numberFromJid(jid) ?? jid.split("@")[0];
+        const name = String(m?.pushName || handle);
+        this.events.onInbound(this.workspaceSlug, { contactHandle: handle, contactName: name, text });
+      } catch (err) {
+        this.logger.warn(`Mensaje entrante ignorado: ${(err as Error).message}`);
       }
     }
   }

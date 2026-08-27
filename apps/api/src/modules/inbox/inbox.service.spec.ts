@@ -149,3 +149,29 @@ describe("InboxService.updateConversation", () => {
     await expect(service.updateConversation("w1", "nope", { resolved: true })).rejects.toThrow(/no encontrada/);
   });
 });
+
+describe("InboxService.recordInboundFor (live sessions)", () => {
+  it("persists an inbound message into the explicit workspace", async () => {
+    const { service, conversations, messages } = makeDeps();
+    await service.recordInboundFor("mi-ws", {
+      channel: "wa",
+      contactHandle: "5215500000000",
+      contactName: "Ana",
+      text: "hola, ¿precio?",
+    });
+    expect(conversations).toHaveLength(1);
+    expect(conversations[0]!.workspaceSlug).toBe("mi-ws");
+    expect(conversations[0]!.channel).toBe("wa");
+    expect(messages[0]!.direction).toBe("in");
+    expect(messages[0]!.text).toBe("hola, ¿precio?");
+  });
+
+  it("reuses the same conversation for the same contact", async () => {
+    const { service, conversations, messages } = makeDeps();
+    const msg = { channel: "wa" as const, contactHandle: "521550", contactName: "Ana", text: "1" };
+    await service.recordInboundFor("mi-ws", msg);
+    await service.recordInboundFor("mi-ws", { ...msg, text: "2" });
+    expect(conversations).toHaveLength(1);
+    expect(messages).toHaveLength(2);
+  });
+});

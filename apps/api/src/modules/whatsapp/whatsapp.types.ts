@@ -34,6 +34,11 @@ export interface SessionEvents {
   ): void;
   /** Full group list after a sync, so the service can persist it. */
   onGroups(workspaceSlug: string, groups: WhatsappGroup[]): void;
+  /** A direct (1:1) inbound message, for the Inbox. */
+  onInbound(
+    workspaceSlug: string,
+    msg: { contactHandle: string; contactName: string; text: string },
+  ): void;
 }
 
 /** Load the ESM-only Baileys package from CommonJS without TS turning it into require(). */

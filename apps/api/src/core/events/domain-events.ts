@@ -13,6 +13,18 @@ export interface DomainEventMap {
     contactName: string;
     text: string;
   };
+  /**
+   * A raw inbound message captured by a live session (WhatsApp Baileys /
+   * Telegram user), routed to the SAME workspace as the session. The Inbox
+   * subscribes to persist it (decoupled — no cross-module import).
+   */
+  "session.inbound": {
+    workspaceSlug: string;
+    channel: "wa" | "tg";
+    contactHandle: string;
+    contactName: string;
+    text: string;
+  };
   "message.sent": {
     workspaceSlug: string;
     provider: string;

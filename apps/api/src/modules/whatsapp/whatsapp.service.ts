@@ -3,6 +3,7 @@ import { ConfigService } from "@nestjs/config";
 
 import type { AppConfig } from "../../config/configuration";
 import { PrismaService } from "../../prisma/prisma.service";
+import { EventBus } from "../../core/events/event-bus.service";
 import { BaileysSession } from "./baileys.session";
 import { SessionManager } from "./session-manager";
 import { WhatsappGateway } from "./whatsapp.gateway";
@@ -23,6 +24,7 @@ export class WhatsappService implements SessionEvents, OnModuleInit {
     config: ConfigService<AppConfig, true>,
     private readonly prisma: PrismaService,
     private readonly gateway: WhatsappGateway,
+    private readonly events: EventBus,
   ) {
     this.sessions = new SessionManager(config.get("integrations", { infer: true }).whatsappSessionDir);
   }
@@ -67,6 +69,14 @@ export class WhatsappService implements SessionEvents, OnModuleInit {
   /** Persist the synced groups so campaigns can target them. */
   onGroups(workspaceSlug: string, groups: WhatsappGroup[]): void {
     void this.persistGroups(workspaceSlug, groups);
+  }
+
+  /** A direct inbound message → publish for the Inbox to persist (decoupled). */
+  onInbound(
+    workspaceSlug: string,
+    msg: { contactHandle: string; contactName: string; text: string },
+  ): void {
+    this.events.emit("session.inbound", { workspaceSlug, channel: "wa", ...msg });
   }
 
   private async persistGroups(workspaceSlug: string, groups: WhatsappGroup[]): Promise<void> {
