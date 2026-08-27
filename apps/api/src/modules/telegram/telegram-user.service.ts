@@ -3,6 +3,7 @@ import { ConfigService } from "@nestjs/config";
 
 import type { AppConfig } from "../../config/configuration";
 import { PrismaService } from "../../prisma/prisma.service";
+import { EventBus } from "../../core/events/event-bus.service";
 import { TelegramGateway } from "./telegram.gateway";
 import { TelegramSessionStore } from "./telegram-session.store";
 import { TelegramUserSession } from "./telegram-user.session";
@@ -31,6 +32,7 @@ export class TelegramUserService implements TelegramSessionEvents, OnModuleInit 
     config: ConfigService<AppConfig, true>,
     private readonly prisma: PrismaService,
     private readonly gateway: TelegramGateway,
+    private readonly events: EventBus,
   ) {
     const integrations = config.get("integrations", { infer: true });
     this.apiId = integrations.telegram.apiId;
@@ -81,6 +83,14 @@ export class TelegramUserService implements TelegramSessionEvents, OnModuleInit 
 
   onDialogs(workspaceSlug: string, dialogs: TelegramDialog[]): void {
     void this.persistDialogs(workspaceSlug, dialogs);
+  }
+
+  /** A direct inbound message → publish for the Inbox to persist (decoupled). */
+  onInbound(
+    workspaceSlug: string,
+    msg: { contactHandle: string; contactName: string; text: string },
+  ): void {
+    this.events.emit("session.inbound", { workspaceSlug, channel: "tg", ...msg });
   }
 
   private async persistDialogs(workspaceSlug: string, dialogs: TelegramDialog[]): Promise<void> {

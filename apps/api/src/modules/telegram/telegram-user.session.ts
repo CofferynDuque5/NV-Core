@@ -58,11 +58,16 @@ export class TelegramUserSession {
     if (this.starting || this.isConnected) return;
     this.starting = true;
     try {
-      const { TelegramClient, StringSession } = loadGram();
+      const { TelegramClient, StringSession, NewMessage } = loadGram();
       const session = new StringSession(this.store.load(this.workspaceSlug) || "");
       this.client = new TelegramClient(session, this.apiId, this.apiHash, {
         connectionRetries: 5,
       });
+      // Capture incoming private (1:1) messages for the Inbox.
+      this.client.addEventHandler(
+        (event: any) => this.onNewMessage(event),
+        new NewMessage({ incoming: true }),
+      );
       if (this.status === "disconnected") this.setStatus("connecting");
       await this.client.connect();
 
@@ -128,6 +133,29 @@ export class TelegramUserSession {
       /* ignore meta errors */
     }
     void this.sync();
+  }
+
+  /**
+   * Forward incoming PRIVATE (1:1) text messages to the Inbox. Group and
+   * channel messages are ignored so the inbox isn't flooded with broadcasts.
+   */
+  private async onNewMessage(event: any): Promise<void> {
+    try {
+      const msg = event?.message;
+      if (!msg || msg.out) return;
+      if (!event.isPrivate) return; // 1:1 only
+      const text: string = msg.message ?? "";
+      if (!text.trim()) return;
+      const sender = await msg.getSender().catch(() => null);
+      const id = String(msg.senderId ?? sender?.id ?? "");
+      if (!id) return;
+      const name =
+        (sender && ([sender.firstName, sender.lastName].filter(Boolean).join(" ") || sender.username)) ||
+        id;
+      this.events.onInbound(this.workspaceSlug, { contactHandle: id, contactName: String(name), text });
+    } catch (err) {
+      this.logger.warn(`Mensaje entrante ignorado: ${(err as Error).message}`);
+    }
   }
 
   /** Fetch the account's groups + channels, persist them, report the count. */

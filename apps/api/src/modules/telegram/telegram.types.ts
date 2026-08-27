@@ -36,6 +36,11 @@ export interface TelegramSessionEvents {
     meta: { username?: string | null; phone?: string | null; groupsCount?: number; connectedAt?: Date },
   ): void;
   onDialogs(workspaceSlug: string, dialogs: TelegramDialog[]): void;
+  /** A direct (private) inbound message, for the Inbox. */
+  onInbound(
+    workspaceSlug: string,
+    msg: { contactHandle: string; contactName: string; text: string },
+  ): void;
 }
 
 /**
@@ -48,6 +53,7 @@ let cached: {
   StringSession: any;
   Api: any;
   CustomFile: any;
+  NewMessage: any;
 } | null = null;
 
 export function loadGram(): {
@@ -55,17 +61,20 @@ export function loadGram(): {
   StringSession: any;
   Api: any;
   CustomFile: any;
+  NewMessage: any;
 } {
   if (cached) return cached;
   const req = eval("require") as NodeRequire;
   const core = req("telegram");
   const sessions = req("telegram/sessions");
   const uploads = req("telegram/client/uploads");
+  const events = req("telegram/events");
   cached = {
     TelegramClient: core.TelegramClient,
     Api: core.Api,
     StringSession: sessions.StringSession,
     CustomFile: uploads.CustomFile,
+    NewMessage: events.NewMessage,
   };
   return cached;
 }
