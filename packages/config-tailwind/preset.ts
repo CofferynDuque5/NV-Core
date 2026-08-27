@@ -98,9 +98,14 @@ const preset = {
         sm: "calc(var(--radius) - 4px)",
       },
       boxShadow: {
-        brand: "0 3px 10px -3px rgba(91,141,239,.7)",
+        brand: "0 6px 20px -6px rgba(91,141,239,.55)",
+        glow: "0 0 0 1px rgba(124,124,240,.22), 0 10px 34px -10px rgba(124,124,240,.5)",
         panel: "0 8px 30px -12px rgba(0,0,0,.6)",
+        "panel-lg": "0 24px 60px -24px rgba(0,0,0,.82)",
         drawer: "-16px 0 40px -20px rgba(0,0,0,.7)",
+      },
+      backgroundImage: {
+        "brand-gradient": "linear-gradient(135deg, hsl(var(--brand-a)), hsl(var(--brand-b)))",
       },
       keyframes: {
         fadein: { from: { opacity: "0" }, to: { opacity: "1" } },

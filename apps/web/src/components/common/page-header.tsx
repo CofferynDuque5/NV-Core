@@ -13,11 +13,12 @@ export function PageHeader({ eyebrow, title, description, actions, className }: 
     <div className={cn("flex flex-wrap items-end justify-between gap-4", className)}>
       <div className="space-y-1">
         {eyebrow ? (
-          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-ink-faint">
+          <p className="inline-flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-ink-faint">
+            <span className="h-3 w-1 rounded-full nv-brand-gradient" />
             {eyebrow}
           </p>
         ) : null}
-        <h1 className="font-display text-2xl font-semibold tracking-tight text-ink-bright">
+        <h1 className="font-display text-[1.7rem] font-semibold leading-tight tracking-tight text-ink-bright">
           {title}
         </h1>
         {description ? <p className="text-sm text-ink-muted">{description}</p> : null}

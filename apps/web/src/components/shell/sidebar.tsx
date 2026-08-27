@@ -56,7 +56,7 @@ export function Sidebar({ onOpenSwitcher }: { onOpenSwitcher: () => void }) {
         {!collapsed ? (
           <>
             <div className="min-w-0 flex-1 leading-none">
-              <div className="font-display text-lg font-semibold tracking-tight text-ink-bright">
+              <div className="font-display text-lg font-semibold tracking-tight nv-gradient-text">
                 NV Core
               </div>
               <div className="mt-0.5 text-[8.5px] font-semibold tracking-[0.22em] text-ink-faint">
@@ -123,23 +123,23 @@ export function Sidebar({ onOpenSwitcher }: { onOpenSwitcher: () => void }) {
                     to={href}
                     data-tour={`nav-${item.module}`}
                     className={cn(
-                      "group flex items-center gap-2.5 rounded-[9px] px-2 py-2 text-[13px] font-medium transition-colors",
+                      "group relative flex items-center gap-2.5 rounded-[10px] px-2 py-2 text-[13px] font-medium transition-all",
                       collapsed && "justify-center px-0",
                       active
-                        ? "bg-brand/12 text-ink-bright"
+                        ? "bg-gradient-to-r from-brand/18 to-brand-violet/10 text-ink-bright ring-1 ring-inset ring-brand/25 shadow-[0_6px_18px_-12px_rgba(124,124,240,0.8)]"
                         : "text-ink-soft hover:bg-panel-raised hover:text-ink",
                     )}
                   >
+                    {active && !collapsed ? (
+                      <span className="absolute left-0 top-1/2 h-5 w-1 -translate-y-1/2 rounded-r-full nv-brand-gradient" />
+                    ) : null}
                     <Icon
                       className={cn(
-                        "size-[18px] shrink-0",
-                        active ? "text-brand" : "text-ink-muted group-hover:text-ink-soft",
+                        "size-[18px] shrink-0 transition-colors",
+                        active ? "text-brand-bright" : "text-ink-muted group-hover:text-ink-soft",
                       )}
                     />
                     {!collapsed ? <span className="truncate">{item.label}</span> : null}
-                    {active && !collapsed ? (
-                      <span className="ml-auto h-4 w-1 rounded-full bg-brand" />
-                    ) : null}
                   </Link>
                 );
                 return (
