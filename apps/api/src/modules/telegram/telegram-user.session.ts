@@ -30,6 +30,8 @@ export class TelegramUserSession {
   private client: any = null;
   private status: TelegramStatusValue = "disconnected";
   private starting = false;
+  /** Last failure reason (surfaced in the panel so problems aren't silent). */
+  lastError: string | null = null;
 
   constructor(
     private readonly workspaceSlug: string,
@@ -57,6 +59,7 @@ export class TelegramUserSession {
   async start(): Promise<void> {
     if (this.starting || this.isConnected) return;
     this.starting = true;
+    this.lastError = null;
     try {
       const { TelegramClient, StringSession, NewMessage } = loadGram();
       const session = new StringSession(this.store.load(this.workspaceSlug) || "");
@@ -78,8 +81,11 @@ export class TelegramUserSession {
         void this.runQrLogin(); // background — resolves when the user scans
       }
     } catch (err) {
-      this.logger.error(`No se pudo iniciar Telegram: ${(err as Error).message}`);
+      const msg = (err as Error).message;
+      this.lastError = msg;
+      this.logger.error(`No se pudo iniciar Telegram: ${msg}`);
       this.setStatus("disconnected");
+      throw err; // surface to the HTTP "connect" call → panel shows the reason
     } finally {
       this.starting = false;
     }
@@ -113,12 +119,15 @@ export class TelegramUserSession {
       );
       await this.onAuthorized();
     } catch (err) {
-      this.logger.error(`No se pudo completar el login por QR: ${(err as Error).message}`);
+      const msg = (err as Error).message;
+      this.lastError = msg;
+      this.logger.error(`No se pudo completar el login por QR: ${msg}`);
       this.setStatus("disconnected");
     }
   }
 
   private async onAuthorized(): Promise<void> {
+    this.lastError = null;
     this.store.save(this.workspaceSlug, this.client.session.save());
     this.setStatus("connected");
     try {

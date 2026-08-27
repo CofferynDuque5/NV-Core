@@ -127,6 +127,12 @@ export function TelegramPanel() {
             )}
           </div>
 
+          {status?.error ? (
+            <p className="rounded-lg border border-state-danger/30 bg-state-danger/10 px-3 py-2 text-xs text-state-danger">
+              {status.error}
+            </p>
+          ) : null}
+
           <p className="text-[11px] text-ink-faint">
             Requiere <code>TELEGRAM_API_ID</code> y <code>TELEGRAM_API_HASH</code> (gratis en
             my.telegram.org). Escanea el QR desde Telegram → Ajustes → Dispositivos → Vincular

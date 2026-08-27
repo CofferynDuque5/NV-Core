@@ -10,6 +10,8 @@ export interface TelegramStatus {
   phone: string | null;
   lastConnectionAt: string | null;
   groupsCount: number;
+  /** Last failure reason, surfaced in the panel (null when healthy). */
+  error?: string | null;
 }
 
 /** A Telegram dialog (group or channel) fetched from the account. */

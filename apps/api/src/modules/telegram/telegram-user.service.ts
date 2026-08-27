@@ -47,7 +47,9 @@ export class TelegramUserService implements TelegramSessionEvents, OnModuleInit 
   async onModuleInit(): Promise<void> {
     if (!this.configured) return;
     for (const slug of this.store.listSessions()) {
-      void this.getOrCreate(slug).start();
+      void this.getOrCreate(slug)
+        .start()
+        .catch(() => undefined); // resume best-effort; errors surface on manual connect
     }
   }
 
@@ -141,7 +143,8 @@ export class TelegramUserService implements TelegramSessionEvents, OnModuleInit 
       this.prisma.enabled && this.configured
         ? await this.prisma.telegramSession.findUnique({ where: { workspaceSlug } })
         : null;
-    const live = this.live.get(workspaceSlug)?.currentStatus;
+    const session = this.live.get(workspaceSlug);
+    const live = session?.currentStatus;
     return {
       status: live ?? (row?.status as TelegramStatusValue) ?? "disconnected",
       provider: "mtproto",
@@ -149,6 +152,7 @@ export class TelegramUserService implements TelegramSessionEvents, OnModuleInit 
       phone: row?.phone ?? null,
       lastConnectionAt: row?.lastConnectionAt?.toISOString() ?? null,
       groupsCount: row?.groupsCount ?? 0,
+      error: session?.lastError ?? null,
     };
   }
 
