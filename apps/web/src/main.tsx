@@ -18,3 +18,15 @@ createRoot(container).render(
     </BrowserRouter>
   </React.StrictMode>,
 );
+
+// PWA: register the service worker so the app is installable. Only in secure
+// contexts (production/HTTPS, or localhost in dev). The SW only cache-firsts
+// hashed /assets/*, so it never interferes with Vite HMR (dev uses /src, /@vite).
+{
+  const local = ["localhost", "127.0.0.1"].includes(location.hostname);
+  if ("serviceWorker" in navigator && (import.meta.env.PROD || local)) {
+    window.addEventListener("load", () => {
+      navigator.serviceWorker.register("/sw.js").catch(() => undefined);
+    });
+  }
+}

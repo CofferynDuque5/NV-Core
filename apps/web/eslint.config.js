@@ -6,7 +6,7 @@ import tseslint from "typescript-eslint";
  * Flat ESLint config for the Vite React SPA (no Next.js).
  */
 export default tseslint.config(
-  { ignores: ["dist", "node_modules", "playwright-report", "test-results"] },
+  { ignores: ["dist", "node_modules", "playwright-report", "test-results", "public"] },
   js.configs.recommended,
   ...tseslint.configs.recommended,
   {
