@@ -17,6 +17,7 @@ export interface AuthResult {
   accessToken: string;
   user: AuthUser;
   memberships: Membership[];
+  superAdmin: boolean;
 }
 
 export interface RegisterInput {
@@ -73,6 +74,7 @@ async function request<T>(path: string, init: RequestInit & { token?: string } =
 export interface SessionView {
   user: AuthUser;
   memberships: Membership[];
+  superAdmin: boolean;
 }
 
 export const authClient = {

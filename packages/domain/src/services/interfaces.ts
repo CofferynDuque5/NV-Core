@@ -677,6 +677,22 @@ export interface TelegramService {
   sync(workspaceId: string): Promise<TelegramStatus>;
 }
 
+/** A user as seen by the platform super-admin, with all their memberships. */
+export interface AdminUser {
+  id: string;
+  email: string;
+  name: string;
+  memberships: { workspaceSlug: string; role: Role }[];
+}
+
+/** Platform super-admin: control every user and their roles across workspaces. */
+export interface AdminService {
+  users(): Promise<AdminUser[]>;
+  workspaces(): Promise<Workspace[]>;
+  setMembership(input: { email: string; workspaceSlug: string; role: Role }): Promise<{ ok: true }>;
+  removeMembership(userId: string, workspaceSlug: string): Promise<void>;
+}
+
 export interface WorkspaceService {
   /** All workspaces (built-in config + user-created). */
   list(): Promise<Workspace[]>;
@@ -722,6 +738,7 @@ export interface Services {
   system: SystemService;
   whatsapp: WhatsappService;
   telegram: TelegramService;
+  admin: AdminService;
   campaigns: CampaignService;
   posts: PostService;
   calendar: CalendarService;

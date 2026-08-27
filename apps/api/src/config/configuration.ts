@@ -24,6 +24,8 @@ export interface AppConfig {
     allowOpenWorkspaceClaim: boolean;
   };
   security: { encryptionKey: string };
+  /** Emails that are platform super-admins (control all users/roles). */
+  superAdmins: string[];
   /** Optional bearer token protecting the Prometheus /metrics endpoint. */
   metricsToken?: string;
   sentry: { dsn?: string };
@@ -99,6 +101,13 @@ export function buildConfig(env: Env): AppConfig {
         env.ALLOW_OPEN_WORKSPACE_CLAIM === "true" || env.ALLOW_OPEN_WORKSPACE_CLAIM === "1",
     },
     security: { encryptionKey },
+    superAdmins: Array.from(
+      new Set(
+        [...(env.NV_SUPER_ADMINS?.split(",") ?? []), env.NV_ADMIN_EMAIL ?? ""]
+          .map((s) => s.trim().toLowerCase())
+          .filter(Boolean),
+      ),
+    ),
     metricsToken: env.METRICS_TOKEN,
     sentry: { dsn: env.SENTRY_DSN },
     database: { url: env.DATABASE_URL },

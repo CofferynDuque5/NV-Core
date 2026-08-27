@@ -29,6 +29,7 @@ import { AffiliatesModule } from "./modules/affiliates/affiliates.module";
 import { CampaignsModule } from "./modules/campaigns/campaigns.module";
 import { PostsModule } from "./modules/posts/posts.module";
 import { CalendarModule } from "./modules/calendar/calendar.module";
+import { AdminModule } from "./modules/admin/admin.module";
 import { InboxModule } from "./modules/inbox/inbox.module";
 import { MediaModule } from "./modules/media/media.module";
 import { TemplatesModule } from "./modules/templates/templates.module";
@@ -83,6 +84,7 @@ import { ProvidersModule } from "./providers/providers.module";
     PostsModule,
     CalendarModule,
     InboxModule,
+    AdminModule,
     MediaModule,
     TemplatesModule,
     AutomationsModule,

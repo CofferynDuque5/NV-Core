@@ -1,5 +1,5 @@
 import { useNavigate } from "react-router-dom";
-import { LogIn, LogOut, MessageSquarePlus, Settings, User } from "lucide-react";
+import { LogIn, LogOut, MessageSquarePlus, Settings, ShieldCheck, User } from "lucide-react";
 
 import { useAuthStore } from "@/stores/auth-store";
 import { useUiStore } from "@/stores/ui-store";
@@ -25,6 +25,7 @@ function initialsOf(name: string): string {
 export function UserMenu() {
   const navigate = useNavigate();
   const user = useAuthStore((s) => s.user);
+  const superAdmin = useAuthStore((s) => s.superAdmin);
   const logout = useAuthStore((s) => s.logout);
   const openFeedback = useUiStore((s) => s.openFeedback);
 
@@ -58,6 +59,14 @@ export function UserMenu() {
             <DropdownMenuItem onClick={openFeedback}>
               <MessageSquarePlus /> Enviar comentarios
             </DropdownMenuItem>
+            {superAdmin ? (
+              <>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={() => navigate("/admin")}>
+                  <ShieldCheck /> Admin general
+                </DropdownMenuItem>
+              </>
+            ) : null}
             <DropdownMenuSeparator />
             <DropdownMenuItem onClick={onLogout}>
               <LogOut /> Cerrar sesión

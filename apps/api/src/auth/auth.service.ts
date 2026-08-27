@@ -33,12 +33,15 @@ export interface AuthResult {
   refreshToken: string;
   user: PublicUser;
   memberships: MembershipView[];
+  superAdmin: boolean;
 }
 
 /** Sanitized session view returned in the response body. */
 export interface SessionView {
   user: PublicUser;
   memberships: MembershipView[];
+  /** True when the user is a platform super-admin (NV_SUPER_ADMINS / NV_ADMIN_EMAIL). */
+  superAdmin: boolean;
 }
 
 @Injectable()
@@ -200,7 +203,13 @@ export class AuthService {
     return {
       user: { id: user.id, email: user.email, name: user.name },
       memberships: memberships.map((m) => ({ workspaceSlug: m.workspaceSlug, role: m.role })),
+      superAdmin: this.isSuperAdmin(user.email),
     };
+  }
+
+  /** Whether an email is a platform super-admin. */
+  isSuperAdmin(email: string): boolean {
+    return this.config.get("superAdmins", { infer: true }).includes(email.toLowerCase());
   }
 
   /**
@@ -289,6 +298,7 @@ export class AuthService {
       refreshToken,
       user: { id: user.id, email: user.email, name: user.name },
       memberships: memberships.map((m) => ({ workspaceSlug: m.workspaceSlug, role: m.role })),
+      superAdmin: this.isSuperAdmin(user.email),
     };
   }
 }

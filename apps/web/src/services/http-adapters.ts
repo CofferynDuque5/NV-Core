@@ -48,6 +48,7 @@ import type {
   TemplateImportResult,
   TeamMember,
   AuditLogEntry,
+  AdminUser,
   Workspace,
   WhatsappStatus,
   TelegramStatus,
@@ -154,6 +155,13 @@ export function createHttpAdapters(opts: HttpAdapterOptions): Services {
       reconnect: (id) => post<TelegramStatus>(`${ws(id)}/telegram/reconnect`, {}),
       disconnect: (id) => post<TelegramStatus>(`${ws(id)}/telegram/disconnect`, {}),
       sync: (id) => post<TelegramStatus>(`${ws(id)}/telegram/sync`, {}),
+    },
+    admin: {
+      users: () => get<AdminUser[]>(`/admin/users`),
+      workspaces: () => get<Workspace[]>(`/admin/workspaces`),
+      setMembership: (input) => post<{ ok: true }>(`/admin/memberships`, input),
+      removeMembership: (userId, workspaceSlug) =>
+        del<void>(`/admin/memberships/${encodeURIComponent(userId)}/${encodeURIComponent(workspaceSlug)}`),
     },
     campaigns: {
       list: (id) => get<ListResult<Campaign>>(`${ws(id)}/campaigns`),

@@ -117,7 +117,7 @@ describe("AuthService login lockout", () => {
       createRefreshToken: vi.fn(async () => undefined),
     };
     const jwt = { signAsync: vi.fn(async () => "access-token") };
-    const config = { get: vi.fn(() => ({ refreshTtlDays: 7 })) };
+    const config = { get: vi.fn((k: string) => (k === "superAdmins" ? [] : { refreshTtlDays: 7 })) };
     const svc = new AuthService(
       store as unknown as AuthStore,
       jwt as never,

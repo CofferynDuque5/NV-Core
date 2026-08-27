@@ -89,6 +89,23 @@ export class AuthStore {
     return rows.map((m) => ({ userId: m.userId, workspaceSlug: m.workspaceSlug, role: m.role as Role }));
   }
 
+  /** Every user with their memberships (platform admin view). */
+  async listAllUsers(): Promise<
+    Array<{ user: UserRecord; memberships: Array<{ workspaceSlug: string; role: Role }> }>
+  > {
+    const users = await this.prisma.user.findMany({
+      include: { memberships: true },
+      orderBy: { createdAt: "asc" },
+    });
+    return users.map((u) => ({
+      user: this.toUser(u),
+      memberships: (u.memberships ?? []).map((m) => ({
+        workspaceSlug: m.workspaceSlug,
+        role: m.role as Role,
+      })),
+    }));
+  }
+
   /** Members of a workspace, joined with their user record. */
   async listWorkspaceMembers(
     workspaceSlug: string,

@@ -18,6 +18,8 @@ interface AuthState {
   token: string | null;
   user: AuthUser | null;
   memberships: Membership[];
+  /** Platform super-admin (controls all users/roles). */
+  superAdmin: boolean;
 
   /** Restore the session from the httpOnly refresh cookie (call once on mount). */
   hydrate: () => Promise<void>;
@@ -35,6 +37,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   token: null,
   user: null,
   memberships: [],
+  superAdmin: false,
 
   hydrate: async () => {
     if (!isBackendConfigured()) {
@@ -52,9 +55,10 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         token: res.accessToken,
         user: res.user,
         memberships: res.memberships,
+        superAdmin: res.superAdmin,
       });
     } catch {
-      set({ status: "unauthenticated", token: null, user: null, memberships: [] });
+      set({ status: "unauthenticated", token: null, user: null, memberships: [], superAdmin: false });
     }
   },
 
@@ -65,6 +69,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       token: res.accessToken,
       user: res.user,
       memberships: res.memberships,
+      superAdmin: res.superAdmin,
     });
   },
 
@@ -75,12 +80,13 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       token: res.accessToken,
       user: res.user,
       memberships: res.memberships,
+      superAdmin: res.superAdmin,
     });
   },
 
   logout: () => {
     void authClient.logout().catch(() => undefined);
-    set({ status: "unauthenticated", token: null, user: null, memberships: [] });
+    set({ status: "unauthenticated", token: null, user: null, memberships: [], superAdmin: false });
   },
 
   refreshSession: async () => {
@@ -90,6 +96,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       token: res.accessToken,
       user: res.user,
       memberships: res.memberships,
+      superAdmin: res.superAdmin,
     });
     return res.accessToken;
   },

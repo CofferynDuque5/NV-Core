@@ -24,6 +24,11 @@ export const envSchema = z.object({
   // Allow public registration to claim Owner of an unclaimed built-in workspace.
   // Off by default (secure); "true"/"1" to enable open self-serve claiming.
   ALLOW_OPEN_WORKSPACE_CLAIM: z.string().optional(),
+  // Bootstrap admin (también super-admin de la plataforma).
+  NV_ADMIN_EMAIL: z.string().optional(),
+  // Super-admins de la plataforma (emails separados por coma): controlan a
+  // todos los usuarios y sus roles en cualquier workspace.
+  NV_SUPER_ADMINS: z.string().optional(),
   // Optional bearer token guarding GET /api/metrics (Prometheus scrape).
   METRICS_TOKEN: z.string().optional(),
 

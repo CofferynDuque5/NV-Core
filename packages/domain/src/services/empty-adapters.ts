@@ -98,6 +98,12 @@ export const emptyAdapters: Services = {
     disconnect: () => notAvailable(),
     sync: () => notAvailable(),
   },
+  admin: {
+    users: () => delay([]),
+    workspaces: () => delay([]),
+    setMembership: () => notAvailable(),
+    removeMembership: () => notAvailable(),
+  },
   campaigns: {
     list: () => emptyList(),
     get: () => delay(null),
