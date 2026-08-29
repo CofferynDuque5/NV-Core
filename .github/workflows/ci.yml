@@ -19,9 +19,10 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  # Match the local toolchain (see package.json engines / packageManager).
+  # Match the local toolchain. pnpm's version is pinned by the `packageManager`
+  # field in package.json, so pnpm/action-setup reads it from there (passing a
+  # `version` here as well makes the action fail with "multiple versions").
   NODE_VERSION: "22"
-  PNPM_VERSION: "10"
 
 jobs:
   quality:
@@ -30,8 +31,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
-        with:
-          version: ${{ env.PNPM_VERSION }}
       - uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
@@ -84,8 +83,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
-        with:
-          version: ${{ env.PNPM_VERSION }}
       - uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
