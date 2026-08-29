@@ -11,6 +11,10 @@ import {
   FacebookBrowserAutomationAdapter,
   InstagramBrowserAutomationAdapter,
 } from "./adapters/browser-automation.adapter";
+import {
+  FacebookAyrshareAdapter,
+  InstagramAyrshareAdapter,
+} from "./adapters/ayrshare.adapter";
 import { ResendAdapter } from "./adapters/resend.adapter";
 import { TiktokOfficialApiAdapter } from "./adapters/tiktok-official-api.adapter";
 import { TelegramBotApiAdapter } from "./adapters/telegram-bot-api.adapter";
@@ -62,11 +66,18 @@ export class TelegramProvider extends BaseProvider {
 export class FacebookProvider extends BaseProvider {
   readonly id: ProviderId = "facebook";
   readonly label = "Facebook";
+  // Meta Graph stays the default so existing token-based connections keep
+  // working untouched. Ayrshare (single API key, no Meta app review) is offered
+  // as the easy alternative — pick it per workspace in Conexiones.
   readonly defaultAdapterId = "meta-graph";
   readonly adapters: ChannelAdapter[];
-  constructor(graph: FacebookMetaGraphAdapter, browser: FacebookBrowserAutomationAdapter) {
+  constructor(
+    graph: FacebookMetaGraphAdapter,
+    ayrshare: FacebookAyrshareAdapter,
+    browser: FacebookBrowserAutomationAdapter,
+  ) {
     super();
-    this.adapters = [graph, browser];
+    this.adapters = [graph, ayrshare, browser];
   }
 }
 
@@ -76,9 +87,13 @@ export class InstagramProvider extends BaseProvider {
   readonly label = "Instagram";
   readonly defaultAdapterId = "meta-graph";
   readonly adapters: ChannelAdapter[];
-  constructor(graph: InstagramMetaGraphAdapter, browser: InstagramBrowserAutomationAdapter) {
+  constructor(
+    graph: InstagramMetaGraphAdapter,
+    ayrshare: InstagramAyrshareAdapter,
+    browser: InstagramBrowserAutomationAdapter,
+  ) {
     super();
-    this.adapters = [graph, browser];
+    this.adapters = [graph, ayrshare, browser];
   }
 }
 

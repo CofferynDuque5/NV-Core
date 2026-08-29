@@ -33,6 +33,10 @@ import {
   FacebookBrowserAutomationAdapter,
   InstagramBrowserAutomationAdapter,
 } from "./adapters/browser-automation.adapter";
+import {
+  FacebookAyrshareAdapter,
+  InstagramAyrshareAdapter,
+} from "./adapters/ayrshare.adapter";
 import { ResendAdapter } from "./adapters/resend.adapter";
 import { TiktokOfficialApiAdapter } from "./adapters/tiktok-official-api.adapter";
 
@@ -102,6 +106,8 @@ export class ProvidersController {
     TelegramUserAdapter,
     FacebookMetaGraphAdapter,
     InstagramMetaGraphAdapter,
+    FacebookAyrshareAdapter,
+    InstagramAyrshareAdapter,
     FacebookBrowserAutomationAdapter,
     InstagramBrowserAutomationAdapter,
     ResendAdapter,

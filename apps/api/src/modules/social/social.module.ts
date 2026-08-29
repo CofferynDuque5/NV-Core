@@ -45,8 +45,15 @@ export class SocialController {
   ) {}
 
   @Get("status")
-  status(@WorkspaceId() workspaceId: string) {
-    return this.meta.status(workspaceId);
+  async status(@WorkspaceId() workspaceId: string) {
+    // Provider-agnostic: report whether the ACTIVE adapter (Meta Graph or
+    // Ayrshare) is configured for each network, so switching adapter in
+    // Conexiones is reflected here without special-casing the transport.
+    const [fb, ig] = await Promise.all([
+      this.providers.healthCheck(workspaceId, "facebook"),
+      this.providers.healthCheck(workspaceId, "instagram"),
+    ]);
+    return { facebook: fb.configured, instagram: ig.configured };
   }
 
   @Post("publish")

@@ -16,6 +16,7 @@
     "fb": "node scripts/conectar-fb.mjs",
     "tg": "node scripts/conectar-tg.mjs",
     "imgbb": "node scripts/conectar-imgbb.mjs",
+    "ayrshare": "node scripts/conectar-ayrshare.mjs",
     "dev": "turbo run dev",
     "build": "turbo run build",
     "lint": "turbo run lint",
