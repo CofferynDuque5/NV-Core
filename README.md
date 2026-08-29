@@ -1,5 +1,7 @@
 # NV Core — Business Operating System
 
+[![CI](https://github.com/CofferynDuque5/NV-Core/actions/workflows/ci.yml/badge.svg)](https://github.com/CofferynDuque5/NV-Core/actions/workflows/ci.yml)
+
 Plataforma **multi-workspace** de marketing, CRM y automatización omnicanal.
 Monorepo profesional, en modo **Release Candidate**: frontend y backend
 implementados y funcionando end-to-end (auth, multi-tenancy, colas, billing,

@@ -1,13 +1,27 @@
 name: CI
 
+# Runs on every push to the main and development branches, on every PR, and on
+# demand. The fast `quality` gate (typecheck · lint · build · unit + coverage)
+# runs everywhere so a bad commit is caught the moment it lands on your branch.
+# The heavier `e2e` job (Postgres + Playwright) runs on PRs and on main, where a
+# clean database service is available.
 on:
   push:
-    branches: [main]
+    branches:
+      - main
+      - master
+      - "claude/**"
   pull_request:
+  workflow_dispatch:
 
 concurrency:
-  group: ci-${{ github.ref }}
+  group: ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
+
+env:
+  # Match the local toolchain (see package.json engines / packageManager).
+  NODE_VERSION: "22"
+  PNPM_VERSION: "10"
 
 jobs:
   quality:
@@ -17,17 +31,24 @@ jobs:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
         with:
-          version: 10
+          version: ${{ env.PNPM_VERSION }}
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: ${{ env.NODE_VERSION }}
           cache: pnpm
-      - run: pnpm install --frozen-lockfile
-      - run: pnpm --filter @nv/domain build
-      - run: pnpm typecheck
-      - run: pnpm lint
-      - run: pnpm build
-      - name: Unit tests + coverage gate (api)
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      # @nv/domain is the contracts package every app compiles against — build it
+      # first so typecheck/lint/build see fresh declarations.
+      - name: Build domain (contracts)
+        run: pnpm --filter @nv/domain build
+      - name: Typecheck
+        run: pnpm typecheck
+      - name: Lint
+        run: pnpm lint
+      - name: Build (api + web)
+        run: pnpm build
+      - name: Unit tests + coverage (api)
         run: pnpm --filter @nv/api test:coverage
       - name: Unit tests + coverage gate (web)
         run: pnpm --filter @nv/web test:coverage
@@ -35,6 +56,12 @@ jobs:
   e2e:
     name: E2E (Playwright)
     runs-on: ubuntu-latest
+    # Keep feature-branch pushes fast: E2E runs on PRs, on main, and on demand.
+    if: >-
+      github.event_name == 'pull_request' ||
+      github.event_name == 'workflow_dispatch' ||
+      github.ref == 'refs/heads/main' ||
+      github.ref == 'refs/heads/master'
     services:
       postgres:
         image: postgres:16
@@ -58,17 +85,23 @@ jobs:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
         with:
-          version: 10
+          version: ${{ env.PNPM_VERSION }}
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: ${{ env.NODE_VERSION }}
           cache: pnpm
-      - run: pnpm install --frozen-lockfile
-      - run: pnpm --filter @nv/domain build
-      - run: pnpm --filter @nv/api prisma:generate
-      - run: pnpm --filter @nv/api exec prisma migrate deploy
-      - run: pnpm --filter @nv/api build
-      - run: pnpm --filter @nv/web build
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Build domain (contracts)
+        run: pnpm --filter @nv/domain build
+      - name: Prisma generate + migrate
+        run: |
+          pnpm --filter @nv/api prisma:generate
+          pnpm --filter @nv/api exec prisma migrate deploy
+      - name: Build api + web
+        run: |
+          pnpm --filter @nv/api build
+          pnpm --filter @nv/web build
       - name: Install Playwright browser
         run: pnpm --filter @nv/web exec playwright install --with-deps chromium
       - name: Start servers + run E2E
