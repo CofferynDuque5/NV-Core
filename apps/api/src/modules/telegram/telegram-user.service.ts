@@ -4,6 +4,7 @@ import { ConfigService } from "@nestjs/config";
 import type { AppConfig } from "../../config/configuration";
 import { PrismaService } from "../../prisma/prisma.service";
 import { EventBus } from "../../core/events/event-bus.service";
+import { NotificationsService } from "../notifications/notifications.module";
 import { TelegramGateway } from "./telegram.gateway";
 import { TelegramSessionStore } from "./telegram-session.store";
 import { TelegramUserSession } from "./telegram-user.session";
@@ -33,6 +34,7 @@ export class TelegramUserService implements TelegramSessionEvents, OnModuleInit 
     private readonly prisma: PrismaService,
     private readonly gateway: TelegramGateway,
     private readonly events: EventBus,
+    private readonly notifications: NotificationsService,
   ) {
     const integrations = config.get("integrations", { infer: true });
     this.apiId = integrations.telegram.apiId;
@@ -93,6 +95,16 @@ export class TelegramUserService implements TelegramSessionEvents, OnModuleInit 
     msg: { contactHandle: string; contactName: string; text: string },
   ): void {
     this.events.emit("session.inbound", { workspaceSlug, channel: "tg", ...msg });
+  }
+
+  /** A connection problem → persist a notification and push the live status. */
+  onAlert(workspaceSlug: string, alert: { level: "warning" | "error"; reason: string }): void {
+    void this.notifications.create(workspaceSlug, {
+      type: alert.level === "error" ? "error" : "warning",
+      title: `Telegram: ${alert.reason}`,
+      meta: "telegram",
+    });
+    void this.emit(workspaceSlug);
   }
 
   private async persistDialogs(workspaceSlug: string, dialogs: TelegramDialog[]): Promise<void> {

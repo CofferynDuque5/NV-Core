@@ -29,6 +29,22 @@ export class NotificationsService {
     return this.prisma;
   }
 
+  /** Record a notification (e.g. a channel disconnect alert). No-op without a DB. */
+  async create(
+    workspaceId: string,
+    input: { type: Notification["type"]; title: string; meta?: string | null },
+  ): Promise<void> {
+    if (!this.prisma.enabled) return;
+    await this.prisma.notification.create({
+      data: {
+        workspaceSlug: workspaceId,
+        type: input.type,
+        title: input.title,
+        meta: input.meta ?? null,
+      },
+    });
+  }
+
   async list(workspaceId: string): Promise<Notification[]> {
     if (!this.prisma.enabled) return [];
     const rows = await this.prisma.notification.findMany({
@@ -91,5 +107,9 @@ export class NotificationsController {
   }
 }
 
-@Module({ controllers: [NotificationsController], providers: [NotificationsService] })
+@Module({
+  controllers: [NotificationsController],
+  providers: [NotificationsService],
+  exports: [NotificationsService],
+})
 export class NotificationsModule {}

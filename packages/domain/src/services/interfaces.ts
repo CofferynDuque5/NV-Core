@@ -673,6 +673,8 @@ export interface WhatsappStatus {
   lastConnectionAt: string | null;
   groupsCount: number;
   contactsCount: number;
+  /** Last failure reason, surfaced in the panel (null when healthy). */
+  error?: string | null;
 }
 
 export interface WhatsappService {

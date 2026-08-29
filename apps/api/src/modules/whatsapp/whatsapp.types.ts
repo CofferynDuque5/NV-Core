@@ -7,6 +7,14 @@ export interface WhatsappStatus {
   lastConnectionAt: string | null;
   groupsCount: number;
   contactsCount: number;
+  /** Last failure reason, surfaced in the panel (null when healthy). */
+  error?: string | null;
+}
+
+/** A connection alert worth surfacing to the user (panel + notifications). */
+export interface SessionAlert {
+  level: "warning" | "error";
+  reason: string;
 }
 
 /** A WhatsApp group as fetched from Baileys. */
@@ -39,6 +47,8 @@ export interface SessionEvents {
     workspaceSlug: string,
     msg: { contactHandle: string; contactName: string; text: string },
   ): void;
+  /** A connection problem worth alerting the user about (disconnect, gave up…). */
+  onAlert(workspaceSlug: string, alert: SessionAlert): void;
 }
 
 /** Load the ESM-only Baileys package from CommonJS without TS turning it into require(). */

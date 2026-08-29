@@ -11,6 +11,7 @@ import {
   type WhatsappGroup,
   type WhatsappStatusValue,
 } from "./whatsapp.types";
+import { MAX_RECONNECT_ATTEMPTS, backoffDelay, classifyDisconnect } from "./reconnect-policy";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -27,6 +28,12 @@ export class BaileysSession {
   private status: WhatsappStatusValue = "disconnected";
   private starting = false;
   private manualStop = false;
+  /** Consecutive failed reconnects; reset to 0 on a successful open. */
+  private reconnectAttempts = 0;
+  /** Pending reconnect timer, so we never stack overlapping retries. */
+  private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+  /** Last failure reason, surfaced in the panel (null when healthy). */
+  lastError: string | null = null;
   private readonly contacts = new Set<string>();
 
   constructor(
@@ -53,6 +60,11 @@ export class BaileysSession {
   /** Open the socket. Safe to call repeatedly (no-ops while already starting/connected). */
   async start(): Promise<void> {
     if (this.starting || this.isConnected) return;
+    // A fresh start supersedes any pending backoff retry.
+    if (this.reconnectTimer) {
+      clearTimeout(this.reconnectTimer);
+      this.reconnectTimer = null;
+    }
     this.starting = true;
     this.manualStop = false;
     try {
@@ -94,7 +106,7 @@ export class BaileysSession {
       this.sock.ev.on("contacts.update", (rows: any[]) => this.trackContacts(rows));
       this.sock.ev.on("messaging-history.set", (h: any) => this.trackContacts(h?.contacts ?? []));
       this.sock.ev.on("messages.upsert", (u: any) => this.onIncomingMessages(u));
-      this.sock.ev.on("connection.update", (u: any) => this.onConnectionUpdate(baileys, u));
+      this.sock.ev.on("connection.update", (u: any) => this.onConnectionUpdate(u));
     } catch (err) {
       this.logger.error(`No se pudo iniciar Baileys: ${(err as Error).message}`);
       this.setStatus("disconnected");
@@ -103,7 +115,7 @@ export class BaileysSession {
     }
   }
 
-  private async onConnectionUpdate(baileys: any, u: any): Promise<void> {
+  private async onConnectionUpdate(u: any): Promise<void> {
     const { connection, lastDisconnect, qr } = u;
 
     if (qr) {
@@ -119,24 +131,75 @@ export class BaileysSession {
 
     if (connection === "open") {
       const number = numberFromJid(this.sock?.user?.id);
+      // Healthy again: clear the backoff counter and any surfaced error.
+      this.reconnectAttempts = 0;
+      this.lastError = null;
       this.setStatus("connected");
       this.events.onMeta(this.workspaceSlug, { number, connectedAt: new Date() });
       this.logger.log(`Conectado${number ? ` (${number})` : ""}.`);
       void this.sync();
     } else if (connection === "close") {
-      const statusCode = lastDisconnect?.error?.output?.statusCode;
-      const loggedOut = statusCode === baileys.DisconnectReason?.loggedOut;
-      if (loggedOut || this.manualStop) {
-        this.sessions.deleteSession(this.workspaceSlug);
-        this.sock = null;
-        this.setStatus("disconnected");
-        this.logger.warn("Sesión cerrada (logout). Hará falta un QR nuevo.");
-      } else {
-        this.setStatus("connecting");
-        this.logger.warn("Conexión caída; reconectando…");
-        setTimeout(() => void this.start(), 2000);
-      }
+      this.handleClose(lastDisconnect?.error?.output?.statusCode);
     }
+  }
+
+  /** Decide what to do when the socket closes: clear, stop, or retry w/ backoff. */
+  private handleClose(statusCode: number | undefined): void {
+    this.sock = null;
+
+    // A user-initiated stop is never an error and never auto-reconnects.
+    if (this.manualStop) {
+      this.setStatus("disconnected");
+      return;
+    }
+
+    const decision = classifyDisconnect(statusCode);
+
+    if (decision.action === "clear") {
+      // Credentials are dead — drop them so the next connect shows a fresh QR.
+      this.sessions.deleteSession(this.workspaceSlug);
+      this.reconnectAttempts = 0;
+      this.lastError = decision.reason;
+      this.setStatus("disconnected");
+      this.logger.warn(`Sesión cerrada: ${decision.reason}`);
+      this.events.onAlert(this.workspaceSlug, { level: "warning", reason: decision.reason });
+      return;
+    }
+
+    if (decision.action === "stop") {
+      // Retrying would be harmful (another session active / blocked). Wait for a
+      // manual reconnect and tell the user why.
+      this.reconnectAttempts = 0;
+      this.lastError = decision.reason;
+      this.setStatus("disconnected");
+      this.logger.error(`Reconexión detenida: ${decision.reason}`);
+      this.events.onAlert(this.workspaceSlug, { level: "error", reason: decision.reason });
+      return;
+    }
+
+    // action === "retry": back off, and give up (with an alert) after too many.
+    this.reconnectAttempts += 1;
+    if (this.reconnectAttempts > MAX_RECONNECT_ATTEMPTS) {
+      const reason = `No se pudo reconectar tras ${MAX_RECONNECT_ATTEMPTS} intentos. Reconecta manualmente.`;
+      this.reconnectAttempts = 0;
+      this.lastError = reason;
+      this.setStatus("disconnected");
+      this.logger.error(reason);
+      this.events.onAlert(this.workspaceSlug, { level: "error", reason });
+      return;
+    }
+
+    const delay = backoffDelay(this.reconnectAttempts);
+    this.lastError = decision.expected ? null : decision.reason;
+    this.setStatus("connecting");
+    this.logger.warn(
+      `${decision.reason} Reintento ${this.reconnectAttempts}/${MAX_RECONNECT_ATTEMPTS} en ${Math.round(delay / 1000)}s.`,
+    );
+    if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
+    this.reconnectTimer = setTimeout(() => {
+      this.reconnectTimer = null;
+      void this.start();
+    }, delay);
   }
 
   /**
@@ -282,6 +345,13 @@ export class BaileysSession {
   /** Log out: closes the socket and clears stored credentials. */
   async logout(): Promise<void> {
     this.manualStop = true;
+    // Cancel any pending backoff retry so we don't reconnect after logout.
+    if (this.reconnectTimer) {
+      clearTimeout(this.reconnectTimer);
+      this.reconnectTimer = null;
+    }
+    this.reconnectAttempts = 0;
+    this.lastError = null;
     try {
       await this.sock?.logout?.();
     } catch {

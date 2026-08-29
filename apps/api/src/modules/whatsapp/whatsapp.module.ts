@@ -5,6 +5,7 @@ import { WorkspaceId } from "../../common/tenant/workspace.decorator";
 import { WorkspaceGuard } from "../../common/tenant/workspace.guard";
 import { RolesGuard } from "../../auth/guards/roles.guard";
 import { Roles } from "../../auth/decorators/roles.decorator";
+import { NotificationsModule } from "../notifications/notifications.module";
 import { WhatsappGateway } from "./whatsapp.gateway";
 import { WhatsappService } from "./whatsapp.service";
 
@@ -56,6 +57,7 @@ export class WhatsappController {
 }
 
 @Module({
+  imports: [NotificationsModule],
   controllers: [WhatsappController],
   providers: [WhatsappService, WhatsappGateway],
   exports: [WhatsappService],

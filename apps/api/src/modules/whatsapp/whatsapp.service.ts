@@ -4,10 +4,12 @@ import { ConfigService } from "@nestjs/config";
 import type { AppConfig } from "../../config/configuration";
 import { PrismaService } from "../../prisma/prisma.service";
 import { EventBus } from "../../core/events/event-bus.service";
+import { NotificationsService } from "../notifications/notifications.module";
 import { BaileysSession } from "./baileys.session";
 import { SessionManager } from "./session-manager";
 import { WhatsappGateway } from "./whatsapp.gateway";
 import type {
+  SessionAlert,
   SessionEvents,
   WhatsappAttachment,
   WhatsappGroup,
@@ -25,6 +27,7 @@ export class WhatsappService implements SessionEvents, OnModuleInit {
     private readonly prisma: PrismaService,
     private readonly gateway: WhatsappGateway,
     private readonly events: EventBus,
+    private readonly notifications: NotificationsService,
   ) {
     this.sessions = new SessionManager(config.get("integrations", { infer: true }).whatsappSessionDir);
   }
@@ -79,6 +82,16 @@ export class WhatsappService implements SessionEvents, OnModuleInit {
     this.events.emit("session.inbound", { workspaceSlug, channel: "wa", ...msg });
   }
 
+  /** A connection problem → persist a notification and push the live status. */
+  onAlert(workspaceSlug: string, alert: SessionAlert): void {
+    void this.notifications.create(workspaceSlug, {
+      type: alert.level === "error" ? "error" : "warning",
+      title: `WhatsApp: ${alert.reason}`,
+      meta: "whatsapp",
+    });
+    void this.emit(workspaceSlug);
+  }
+
   private async persistGroups(workspaceSlug: string, groups: WhatsappGroup[]): Promise<void> {
     if (!this.prisma.enabled || !groups.length) return;
     for (const g of groups) {
@@ -125,14 +138,15 @@ export class WhatsappService implements SessionEvents, OnModuleInit {
     const row = this.prisma.enabled
       ? await this.prisma.whatsappSession.findUnique({ where: { workspaceSlug } })
       : null;
-    const liveStatus = this.live.get(workspaceSlug)?.currentStatus;
+    const session = this.live.get(workspaceSlug);
     return {
-      status: liveStatus ?? (row?.status as WhatsappStatusValue) ?? "disconnected",
+      status: session?.currentStatus ?? (row?.status as WhatsappStatusValue) ?? "disconnected",
       provider: "baileys",
       number: row?.number ?? null,
       lastConnectionAt: row?.lastConnectionAt?.toISOString() ?? null,
       groupsCount: row?.groupsCount ?? 0,
       contactsCount: row?.contactsCount ?? 0,
+      error: session?.lastError ?? null,
     };
   }
 

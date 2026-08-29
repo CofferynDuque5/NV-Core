@@ -93,6 +93,12 @@ export function WhatsAppPanel() {
             <Field label="Contactos" value={String(status?.contactsCount ?? 0)} />
           </dl>
 
+          {status?.error ? (
+            <p className="rounded-lg border border-state-danger/30 bg-state-danger/10 px-3 py-2 text-xs text-state-danger">
+              {status.error}
+            </p>
+          ) : null}
+
           <div className="flex flex-wrap gap-2 pt-1">
             {state === "disconnected" ? (
               <Button size="sm" onClick={() => connect.mutate()} disabled={connect.isPending}>

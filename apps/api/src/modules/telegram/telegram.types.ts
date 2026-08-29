@@ -43,6 +43,8 @@ export interface TelegramSessionEvents {
     workspaceSlug: string,
     msg: { contactHandle: string; contactName: string; text: string },
   ): void;
+  /** A connection problem worth alerting the user about (drop, reconnect…). */
+  onAlert(workspaceSlug: string, alert: { level: "warning" | "error"; reason: string }): void;
 }
 
 /**

@@ -32,6 +32,12 @@ export class TelegramUserSession {
   private starting = false;
   /** Last failure reason (surfaced in the panel so problems aren't silent). */
   lastError: string | null = null;
+  /** Health-check timer: catches silent drops after GramJS gives up retrying. */
+  private heartbeat: ReturnType<typeof setInterval> | null = null;
+  private reconnecting = false;
+
+  /** How often to verify the MTProto connection is still alive. */
+  private static readonly HEARTBEAT_MS = 30_000;
 
   constructor(
     private readonly workspaceSlug: string,
@@ -130,6 +136,7 @@ export class TelegramUserSession {
     this.lastError = null;
     this.store.save(this.workspaceSlug, this.client.session.save());
     this.setStatus("connected");
+    this.startHeartbeat();
     try {
       const me = await this.client.getMe();
       this.events.onMeta(this.workspaceSlug, {
@@ -142,6 +149,57 @@ export class TelegramUserSession {
       /* ignore meta errors */
     }
     void this.sync();
+  }
+
+  /** Periodically verify the connection; reconnect once if GramJS dropped it. */
+  private startHeartbeat(): void {
+    this.stopHeartbeat();
+    this.heartbeat = setInterval(() => void this.checkConnection(), TelegramUserSession.HEARTBEAT_MS);
+  }
+
+  private stopHeartbeat(): void {
+    if (this.heartbeat) {
+      clearInterval(this.heartbeat);
+      this.heartbeat = null;
+    }
+  }
+
+  /**
+   * GramJS reconnects transient drops on its own (connectionRetries). This
+   * catches the case where it exhausted them: the client is no longer connected
+   * but we still think we are. Try one reconnect; alert the user if it fails.
+   */
+  private async checkConnection(): Promise<void> {
+    if (this.status !== "connected" || this.reconnecting || !this.client) return;
+    // GramJS exposes a `connected` flag; treat a missing flag as still-alive.
+    const alive = this.client.connected !== false;
+    if (alive) return;
+
+    this.reconnecting = true;
+    this.setStatus("connecting");
+    this.logger.warn("Conexión de Telegram perdida; reintentando…");
+    try {
+      await this.client.connect();
+      if (this.client.connected !== false && (await this.client.isUserAuthorized())) {
+        this.lastError = null;
+        this.setStatus("connected");
+        this.logger.log("Telegram reconectado.");
+      } else {
+        const reason = "Telegram se desconectó y requiere volver a vincular (QR).";
+        this.lastError = reason;
+        this.setStatus("disconnected");
+        this.stopHeartbeat();
+        this.events.onAlert(this.workspaceSlug, { level: "error", reason });
+      }
+    } catch (err) {
+      const reason = `No se pudo reconectar Telegram: ${(err as Error).message}`;
+      this.lastError = reason;
+      this.setStatus("disconnected");
+      this.stopHeartbeat();
+      this.events.onAlert(this.workspaceSlug, { level: "error", reason });
+    } finally {
+      this.reconnecting = false;
+    }
   }
 
   /**
@@ -238,6 +296,8 @@ export class TelegramUserSession {
   }
 
   async logout(): Promise<void> {
+    this.stopHeartbeat();
+    this.lastError = null;
     try {
       await this.client?.disconnect?.();
     } catch {
