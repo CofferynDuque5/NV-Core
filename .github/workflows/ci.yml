@@ -41,6 +41,11 @@ jobs:
       # first so typecheck/lint/build see fresh declarations.
       - name: Build domain (contracts)
         run: pnpm --filter @nv/domain build
+      # Generate the Prisma client so @nv/api typechecks against real model types
+      # (Group, PrismaClient, providerSelection…). There is no postinstall hook,
+      # so a clean checkout has no generated client until we ask for it.
+      - name: Prisma generate
+        run: pnpm --filter @nv/api prisma:generate
       - name: Typecheck
         run: pnpm typecheck
       - name: Lint
