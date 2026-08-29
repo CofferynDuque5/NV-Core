@@ -261,6 +261,7 @@ export const emptyAdapters: Services = {
   },
   ai: {
     generateVariants: () => delay([]),
+    generateContentPlan: () => delay([]),
     suggestHashtags: () => delay([]),
     generateImage: () => notAvailable(),
     usage: () =>

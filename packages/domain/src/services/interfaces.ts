@@ -42,7 +42,7 @@ import type {
   AuditLogEntry,
   Workspace,
 } from "../entities";
-import type { ContactStage, Role, WorkspaceKind } from "../enums";
+import type { ChannelId, ContactStage, Role, WorkspaceKind } from "../enums";
 import type { PlanId, PlanLimits } from "../config/plans";
 
 /** Server-side query for the contacts list (search + stage + pagination). */
@@ -556,6 +556,25 @@ export interface GenerateVariantsInput {
   length?: string;
 }
 
+/** One planned post in an AI-generated content plan. */
+export interface AiContentPlanItem {
+  /** 1-based day offset from today. */
+  day: number;
+  channel: ChannelId;
+  title: string;
+  copy: string;
+  hashtags?: string[];
+}
+
+export interface GenerateContentPlanInput {
+  topic: string;
+  /** Number of days to plan (default 7). */
+  days?: number;
+  /** Channels to spread the plan across (default a sensible mix). */
+  channels?: ChannelId[];
+  tone?: string;
+}
+
 export interface AiUsage {
   period: string;
   calls: number;
@@ -586,6 +605,10 @@ export interface AiRecommendationsResult {
 
 export interface AiService {
   generateVariants(workspaceId: string, input: GenerateVariantsInput): Promise<AiVariant[]>;
+  generateContentPlan(
+    workspaceId: string,
+    input: GenerateContentPlanInput,
+  ): Promise<AiContentPlanItem[]>;
   suggestHashtags(workspaceId: string, input: { prompt: string }): Promise<string[]>;
   /** Generate a flyer image from a prompt. Returns a URL (data: or hosted). */
   generateImage(

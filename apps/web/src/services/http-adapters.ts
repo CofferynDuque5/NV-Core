@@ -1,4 +1,5 @@
 import type {
+  AiContentPlanItem,
   AiRecommendationsResult,
   AiUsage,
   AnalyticsSnapshot,
@@ -350,6 +351,8 @@ export function createHttpAdapters(opts: HttpAdapterOptions): Services {
       // Action endpoints require a provider (return 503 until configured).
       generateVariants: (id, input) =>
         post<{ tag: string; text: string }[]>(`${ws(id)}/ai/variants`, input),
+      generateContentPlan: (id, input) =>
+        post<AiContentPlanItem[]>(`${ws(id)}/ai/content-plan`, input),
       suggestHashtags: (id, input) =>
         post<{ hashtags: string[] }>(`${ws(id)}/ai/hashtags`, input).then((r) => r.hashtags),
       usage: (id) => get<AiUsage>(`${ws(id)}/ai/usage`),

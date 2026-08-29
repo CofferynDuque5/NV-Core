@@ -15,6 +15,7 @@
     "seed": "pnpm --filter @nv/api exec node prisma/seed-examples.cjs",
     "fb": "node scripts/conectar-fb.mjs",
     "tg": "node scripts/conectar-tg.mjs",
+    "imgbb": "node scripts/conectar-imgbb.mjs",
     "dev": "turbo run dev",
     "build": "turbo run build",
     "lint": "turbo run lint",

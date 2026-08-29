@@ -13,8 +13,19 @@ import {
 import { ConfigService } from "@nestjs/config";
 import { Throttle } from "@nestjs/throttler";
 import { ApiBearerAuth, ApiTags } from "@nestjs/swagger";
-import type { AiRecommendation, AiVariant, BestTimes, PlanId } from "@nv/domain";
-import { IsIn, IsOptional, IsString, MaxLength, MinLength } from "class-validator";
+import { CHANNEL_IDS } from "@nv/domain";
+import type { AiContentPlanItem, AiRecommendation, AiVariant, BestTimes, PlanId } from "@nv/domain";
+import {
+  IsArray,
+  IsIn,
+  IsInt,
+  IsOptional,
+  IsString,
+  Max,
+  MaxLength,
+  Min,
+  MinLength,
+} from "class-validator";
 
 import type { AppConfig } from "../../config/configuration";
 import { WorkspaceId } from "../../common/tenant/workspace.decorator";
@@ -52,6 +63,13 @@ export class GenerateVariantsDto {
   @IsOptional() @IsString() format?: string;
   /** Desired length (corto / medio / largo). Optional. */
   @IsOptional() @IsString() length?: string;
+}
+
+export class GenerateContentPlanDto {
+  @IsString() @MinLength(3) @MaxLength(400) topic!: string;
+  @IsOptional() @IsInt() @Min(1) @Max(31) days?: number;
+  @IsOptional() @IsArray() @IsString({ each: true }) channels?: string[];
+  @IsOptional() @IsString() tone?: string;
 }
 
 export class SuggestHashtagsDto {
@@ -241,6 +259,55 @@ export class AiService {
       .slice(0, 3);
   }
 
+  async generateContentPlan(
+    workspaceId: string,
+    dto: GenerateContentPlanDto,
+  ): Promise<AiContentPlanItem[]> {
+    const provider = this.require();
+    await this.assertWithinQuota(workspaceId);
+    const days = Math.min(31, Math.max(1, dto.days ?? 7));
+    const channels =
+      dto.channels?.length ? dto.channels.filter((c) => (CHANNEL_IDS as readonly string[]).includes(c)) : [];
+    const useChannels = channels.length ? channels : ["ig", "fb", "wa"];
+
+    const messages: ChatMessage[] = [
+      {
+        role: "system",
+        content:
+          "Eres un estratega de contenidos de social media. Devuelve EXCLUSIVAMENTE un array " +
+          `JSON de ${days} objetos, uno por día (day 1..${days}), con la forma ` +
+          '{"day":number,"channel":string,"title":string,"copy":string,"hashtags":string[]}. ' +
+          `"channel" debe ser uno de: ${useChannels.join(", ")}. "title" es una idea corta; ` +
+          '"copy" es el texto listo para publicar (2-4 líneas, con gancho y CTA). Reparte los ' +
+          "canales de forma variada. Sin markdown ni texto fuera del JSON.",
+      },
+      {
+        role: "user",
+        content: [`Tema/negocio: ${dto.topic}`, dto.tone ? `Tono: ${dto.tone}` : null]
+          .filter(Boolean)
+          .join("\n"),
+      },
+    ];
+    const raw = await provider.complete(messages, { temperature: 0.85, maxTokens: 1800 });
+    await this.record(workspaceId, estimateTokens(dto.topic, raw));
+    const parsed = extractJson<AiContentPlanItem[]>(raw);
+    if (!Array.isArray(parsed)) {
+      throw new ServiceUnavailableException("La IA devolvió una respuesta no válida. Intenta de nuevo.");
+    }
+    return parsed
+      .filter((p) => p && typeof p.copy === "string")
+      .map((p, i) => ({
+        day: Number.isInteger(p.day) && p.day > 0 ? Number(p.day) : i + 1,
+        channel: ((CHANNEL_IDS as readonly string[]).includes(String(p.channel))
+          ? String(p.channel)
+          : useChannels[i % useChannels.length]) as AiContentPlanItem["channel"],
+        title: String(p.title ?? `Idea ${i + 1}`),
+        copy: String(p.copy),
+        hashtags: Array.isArray(p.hashtags) ? p.hashtags.map(String).slice(0, 12) : undefined,
+      }))
+      .slice(0, days);
+  }
+
   async suggestHashtags(workspaceId: string, dto: SuggestHashtagsDto): Promise<string[]> {
     const provider = this.require();
     await this.assertWithinQuota(workspaceId);
@@ -391,6 +458,13 @@ export class AiController {
   @RequiresActivePlan()
   async hashtags(@WorkspaceId() workspaceId: string, @Body() dto: SuggestHashtagsDto) {
     return { hashtags: await this.service.suggestHashtags(workspaceId, dto) };
+  }
+
+  @Post("content-plan")
+  @Throttle(AI_THROTTLE)
+  @RequiresActivePlan()
+  contentPlan(@WorkspaceId() workspaceId: string, @Body() dto: GenerateContentPlanDto) {
+    return this.service.generateContentPlan(workspaceId, dto);
   }
 
   @Post("improve")

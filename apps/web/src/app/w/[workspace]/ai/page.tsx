@@ -33,6 +33,7 @@ import {
   useImproveMessage,
   useSuggestHashtags,
 } from "@/hooks/use-domain-mutations";
+import { ContentPlanner } from "@/components/entities/content-planner";
 
 const FLYER_SIZES: { id: string; label: string }[] = [
   { id: "1024x1024", label: "Cuadrado" },
@@ -414,6 +415,9 @@ export default function AiStudioPage() {
           </div>
         </Panel>
       </div>
+
+      {/* Planificación de contenidos con IA */}
+      <ContentPlanner />
     </div>
   );
 }
