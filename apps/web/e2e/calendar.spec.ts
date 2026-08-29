@@ -18,6 +18,9 @@ test.describe.serial("calendar", () => {
     await register(page);
     await page.goto(`/w/${WS}/calendario`, { waitUntil: "networkidle" });
     await page.waitForTimeout(800);
+    // Month view so a mid-month date is always within the visible grid (the
+    // default view is week, which may not contain the 15th).
+    await page.getByRole("tab", { name: "Mes" }).click();
 
     await page.getByRole("button", { name: "Programar" }).first().click();
     await page.waitForSelector("#p-title");
@@ -32,9 +35,10 @@ test.describe.serial("calendar", () => {
 
     await expect(page.locator("body")).toContainText("Reel de lanzamiento", { timeout: 10000 });
 
-    // Persists across reload
+    // Persists across reload (view resets to default → switch back to month).
     await page.reload({ waitUntil: "networkidle" });
     await page.waitForTimeout(1200);
+    await page.getByRole("tab", { name: "Mes" }).click();
     await expect(page.locator("body")).toContainText("Reel de lanzamiento");
   });
 });

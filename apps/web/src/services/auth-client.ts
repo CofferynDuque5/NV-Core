@@ -77,6 +77,17 @@ export interface SessionView {
   superAdmin: boolean;
 }
 
+/**
+ * Single-flight guard for refresh. Refresh tokens ROTATE server-side: each call
+ * invalidates the presented token. On a page reload several callers fire at once
+ * — `hydrate()` restoring the session and any data query that 401s while the
+ * in-memory token is still empty. Without de-duping, the first call rotates the
+ * cookie and the rest hit a now-invalid token → 401 → the app signs the user
+ * out on every reload. Sharing one in-flight promise makes concurrent refreshes
+ * resolve to the same rotation.
+ */
+let refreshInFlight: Promise<AuthResult> | null = null;
+
 export const authClient = {
   register: (input: RegisterInput) =>
     request<AuthResult>("/auth/register", { method: "POST", body: JSON.stringify(input) }),
@@ -85,7 +96,13 @@ export const authClient = {
     request<AuthResult>("/auth/login", { method: "POST", body: JSON.stringify(input) }),
 
   /** Exchange the refresh cookie for a fresh access token (rotates the cookie). */
-  refresh: () => request<AuthResult>("/auth/refresh", { method: "POST" }),
+  refresh: () => {
+    if (refreshInFlight) return refreshInFlight;
+    refreshInFlight = request<AuthResult>("/auth/refresh", { method: "POST" }).finally(() => {
+      refreshInFlight = null;
+    });
+    return refreshInFlight;
+  },
 
   logout: () => request<null>("/auth/logout", { method: "POST" }),
 

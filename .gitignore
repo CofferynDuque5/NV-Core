@@ -35,3 +35,5 @@ nsap-listo.zip
 
 # NSAP runtime data (sesión Baileys, db.json, uploads)
 nsap/data/
+test-results/
+playwright-report/

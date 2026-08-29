@@ -22,6 +22,10 @@ test.describe.serial("contacts CRUD", () => {
     await page.waitForTimeout(800);
     await expect(page.locator("body")).toContainText("Tu CRM está vacío");
 
+    // The default view is the Kanban board; the per-row Editar/Eliminar actions
+    // live in the Tabla (table) view, so switch to it before editing rows.
+    await page.getByRole("tab", { name: "Tabla" }).click();
+
     // Create
     await page.getByRole("button", { name: "Nuevo", exact: true }).first().click();
     await page.waitForSelector("#c-name");
@@ -40,9 +44,10 @@ test.describe.serial("contacts CRUD", () => {
     await expect(page.locator("body")).toContainText("María G. (VIP)", { timeout: 10000 });
     await expect(page.locator("body")).toContainText("Cliente");
 
-    // Persist across reload
+    // Persist across reload (view resets to board → switch back to table).
     await page.reload({ waitUntil: "networkidle" });
     await page.waitForTimeout(1000);
+    await page.getByRole("tab", { name: "Tabla" }).click();
     await expect(page.locator("body")).toContainText("María G. (VIP)");
 
     // Delete (confirm dialog)

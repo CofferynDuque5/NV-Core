@@ -9,8 +9,10 @@ import { expect, test, type APIRequestContext } from "@playwright/test";
 
 const API = process.env.NV_API_URL ?? "http://localhost:4000/api";
 const stamp = Date.now();
+// Distinct built-in workspaces, each unused by any other spec so the one-time
+// "first member claims the workspace" bootstrap always succeeds on a clean DB.
 const WS_A = "perla-tour";
-const WS_B = "codigo-creativo";
+const WS_B = "varouduva-store";
 
 async function register(
   request: APIRequestContext,

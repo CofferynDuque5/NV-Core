@@ -85,6 +85,9 @@ jobs:
       JWT_SECRET: ci-secret-at-least-16-characters-long
       CORS_ORIGINS: http://localhost:3000
       VITE_API_URL: http://localhost:4000
+      # The E2E specs register into built-in demo workspaces (first member claims
+      # them as Owner). That self-serve claim is gated behind this flag.
+      ALLOW_OPEN_WORKSPACE_CLAIM: "true"
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
