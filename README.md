@@ -80,6 +80,18 @@ pnpm arrancar                       # al arrancar te vuelve Owner de todo
 pnpm studio
 ```
 
+**Copias de seguridad** (base de datos + sesiones de WhatsApp/Telegram, para no
+re-escanear el QR si se pierde el contenedor):
+
+```bash
+pnpm backup                          # crea backups/nvcore-AAAAMMDD-HHMMSS/
+pnpm restore --latest                # restaura solo las sesiones
+pnpm restore --latest --db           # también restaura la base de datos
+```
+
+Las copias quedan en `backups/` (ignorado por git; contienen sesiones activas —
+guárdalas en lugar seguro). Puedes programarlo con cron: `0 3 * * * pnpm backup`.
+
 Equivalentes por sistema (todos llaman al mismo script):
 
 ```text
