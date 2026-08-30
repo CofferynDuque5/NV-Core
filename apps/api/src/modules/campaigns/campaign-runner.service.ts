@@ -10,6 +10,7 @@ import { JobManager } from "../../core/jobs/job-manager.service";
 import { ProviderManager } from "../../providers/provider-manager.service";
 import type { MediaAttachment, PublishInput, PublishResult } from "../../providers/provider.types";
 import { builtinVars, renderTemplate } from "./render";
+import { resolvePacing, pacingDelay, type PacingOptions } from "./pacing";
 
 const TICK_MS = 30_000;
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -28,7 +29,8 @@ type Attachment = { url?: string; kind?: string; mime?: string | null; filename?
 @Injectable()
 export class CampaignRunner implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(CampaignRunner.name);
-  private readonly groupDelayMs: number;
+  /** Anti-ban pacing between bulk sends (jittered window + periodic cool-down). */
+  private readonly pacing: PacingOptions;
   private readonly retryBaseMs: number;
   private readonly maxAttempts: number;
   private timer?: NodeJS.Timeout;
@@ -41,7 +43,7 @@ export class CampaignRunner implements OnModuleInit, OnModuleDestroy {
     private readonly events: EventBus,
     private readonly audit: AuditLogger,
   ) {
-    this.groupDelayMs = Number(process.env.WHATSAPP_GROUP_DELAY_MS ?? 4000);
+    this.pacing = resolvePacing(process.env);
     // Retry policy for transient/rate-limited sends (exponential backoff).
     this.retryBaseMs = Number(process.env.WHATSAPP_RETRY_BASE_MS ?? 1000);
     this.maxAttempts = Math.max(1, Number(process.env.WHATSAPP_MAX_ATTEMPTS ?? 3));
@@ -166,6 +168,10 @@ export class CampaignRunner implements OnModuleInit, OnModuleDestroy {
 
     // Deliver to every target group via the provider matching its channel:
     // WhatsApp (Baileys/Cloud) or Telegram (bot). Social (fb/ig) is separate.
+    // Between sends we wait a randomized, human-like gap (anti-ban) instead of a
+    // fixed cadence — with a longer cool-down after each batch.
+    let sent = 0;
+    const total = campaign.targets.length;
     for (const target of campaign.targets) {
       const group = target.group;
       // Group.channel defaults to "wa"; only Telegram routes elsewhere.
@@ -184,7 +190,9 @@ export class CampaignRunner implements OnModuleInit, OnModuleDestroy {
       } catch (err) {
         results.push(await this.log(workspaceSlug, campaign, group, ch, text, false, (err as Error).message));
       }
-      await sleep(this.groupDelayMs);
+      sent += 1;
+      // No trailing wait after the final target.
+      if (sent < total) await sleep(pacingDelay(sent, this.pacing));
     }
 
     await this.publishSocial(workspaceSlug, campaign, channels, attachments, results);
