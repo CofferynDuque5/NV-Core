@@ -285,7 +285,9 @@ describe("AuthService · team invitations", () => {
     };
     const jwt = { signAsync: vi.fn(async () => "access-token") };
     const config = { get: vi.fn((k: string) => (k === "appUrl" ? "http://localhost:3000" : k === "auth" ? { allowOpenWorkspaceClaim: false } : k === "superAdmins" ? [] : { refreshTtlDays: 7 })) };
-    const mail = { send: vi.fn(async () => undefined) };
+    const mail = {
+      send: vi.fn(async (_input: { to: string; subject: string; html: string }) => undefined),
+    };
     const plans = { assertWithinLimit: vi.fn(async () => undefined) };
     const svc = new AuthService(store as never, jwt as never, config as never, mail as never, plans as never);
     return { svc, store, mail, invitations, memberships };
