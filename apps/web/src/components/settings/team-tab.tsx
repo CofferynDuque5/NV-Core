@@ -1,10 +1,10 @@
 
 import * as React from "react";
 import { ROLES, type Role } from "@nv/domain";
-import { Loader2, Trash2, UserPlus, Users } from "lucide-react";
+import { Loader2, MailCheck, Trash2, UserPlus, Users, X } from "lucide-react";
 
-import { useTeam } from "@/hooks/use-domain-data";
-import { useAddMember, useRemoveMember } from "@/hooks/use-domain-mutations";
+import { useTeam, useTeamInvitations } from "@/hooks/use-domain-data";
+import { useAddMember, useRemoveMember, useRevokeInvitation } from "@/hooks/use-domain-mutations";
 import { useConfirm } from "@/providers/confirm-provider";
 import { useWorkspace } from "@/hooks/use-workspace";
 import { useAuthStore } from "@/stores/auth-store";
@@ -21,6 +21,7 @@ export function TeamTab() {
   const currentUser = useAuthStore((s) => s.user);
   const addMember = useAddMember();
   const removeMember = useRemoveMember();
+  const revokeInvitation = useRevokeInvitation();
   const confirm = useConfirm();
   const [inviteOpen, setInviteOpen] = React.useState(false);
   const [busyId, setBusyId] = React.useState<string | null>(null);
@@ -28,6 +29,8 @@ export function TeamTab() {
   const myRole = memberships.find((m) => m.workspaceSlug === ws.slug)?.role;
   const canManage = myRole === "Owner" || myRole === "Admin";
   const members = team.data ?? [];
+  const invitationsQuery = useTeamInvitations();
+  const invitations = canManage ? (invitationsQuery.data ?? []) : [];
 
   function changeRole(email: string, role: Role, memberId: string) {
     setBusyId(memberId);
@@ -47,6 +50,7 @@ export function TeamTab() {
   }
 
   return (
+    <div className="space-y-4">
     <Panel>
       <PanelHeader
         title="Equipo"
@@ -144,5 +148,42 @@ export function TeamTab() {
 
       <InviteMemberDialog open={inviteOpen} onOpenChange={setInviteOpen} />
     </Panel>
+
+      {canManage && invitations.length > 0 ? (
+        <Panel>
+          <PanelHeader
+            title="Invitaciones pendientes"
+            description="Personas invitadas que aún no se han registrado. Entrarán al crear su cuenta con ese correo."
+          />
+          <ul className="divide-y divide-line p-4">
+            {invitations.map((inv) => (
+              <li key={inv.id} className="flex items-center gap-3 py-3 first:pt-0 last:pb-0">
+                <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-brand/10 text-brand">
+                  <MailCheck className="size-4" />
+                </span>
+                <div className="min-w-0 flex-1">
+                  <div className="truncate text-sm font-medium text-ink">{inv.email}</div>
+                  <div className="text-xs text-ink-muted">
+                    Invitado como {inv.role}
+                    {inv.invitedByName ? ` · por ${inv.invitedByName}` : ""}
+                  </div>
+                </div>
+                <span className="rounded-full border border-line-strong bg-panel-raised px-2 py-0.5 text-[11px] text-ink-muted">
+                  Pendiente
+                </span>
+                <button
+                  onClick={() => revokeInvitation.mutate(inv.id)}
+                  disabled={revokeInvitation.isPending}
+                  className="rounded-md p-1.5 text-ink-faint transition-colors hover:bg-state-danger/10 hover:text-state-danger disabled:opacity-50"
+                  title="Cancelar invitación"
+                >
+                  <X className="size-4" />
+                </button>
+              </li>
+            ))}
+          </ul>
+        </Panel>
+      ) : null}
+    </div>
   );
 }

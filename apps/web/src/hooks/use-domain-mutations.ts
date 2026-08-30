@@ -1393,6 +1393,7 @@ export function useImproveMessage() {
 function invalidateTeam(qc: ReturnType<typeof useQueryClient>, wsId: string) {
   void qc.invalidateQueries({ queryKey: [wsId, "team"] });
   void qc.invalidateQueries({ queryKey: [wsId, "roles"] });
+  void qc.invalidateQueries({ queryKey: [wsId, "invitations"] });
 }
 
 export function useAddMember() {
@@ -1401,9 +1402,27 @@ export function useAddMember() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (input: AddMemberInput) => svc.team.addMember(ws.id, input),
+    onSuccess: (result) => {
+      invalidateTeam(qc, ws.id);
+      toast.success(
+        result?.status === "invited"
+          ? "Invitación enviada. La persona entrará al registrarse con ese correo."
+          : "Miembro actualizado",
+      );
+    },
+    onError: (err) => toast.error(errText(err)),
+  });
+}
+
+export function useRevokeInvitation() {
+  const svc = useServices();
+  const ws = useWorkspace();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (invitationId: string) => svc.team.revokeInvitation(ws.id, invitationId),
     onSuccess: () => {
       invalidateTeam(qc, ws.id);
-      toast.success("Miembro actualizado");
+      toast.success("Invitación cancelada");
     },
     onError: (err) => toast.error(errText(err)),
   });

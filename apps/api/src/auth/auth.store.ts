@@ -2,7 +2,7 @@ import { Injectable } from "@nestjs/common";
 import type { Role } from "@nv/domain";
 
 import { PrismaService } from "../prisma/prisma.service";
-import type { MembershipRecord, UserRecord } from "./auth.types";
+import type { InvitationRecord, MembershipRecord, UserRecord } from "./auth.types";
 
 /**
  * Identity store backed by Prisma/PostgreSQL (User + Membership tables).
@@ -142,6 +142,79 @@ export class AuthStore {
   async removeMembership(userId: string, workspaceSlug: string): Promise<number> {
     const { count } = await this.prisma.membership.deleteMany({ where: { userId, workspaceSlug } });
     return count;
+  }
+
+  // ── Invitations (pending memberships for emails without an account) ──────────
+
+  /** Create or refresh a pending invitation (one per workspace+email). */
+  async upsertInvitation(input: {
+    workspaceSlug: string;
+    email: string;
+    role: Role;
+    token: string;
+    invitedByName?: string | null;
+    expiresAt: Date;
+  }): Promise<void> {
+    const email = input.email.toLowerCase();
+    await this.prisma.invitation.upsert({
+      where: { workspaceSlug_email: { workspaceSlug: input.workspaceSlug, email } },
+      create: {
+        workspaceSlug: input.workspaceSlug,
+        email,
+        role: input.role,
+        token: input.token,
+        invitedByName: input.invitedByName ?? null,
+        expiresAt: input.expiresAt,
+      },
+      update: { role: input.role, token: input.token, expiresAt: input.expiresAt, acceptedAt: null },
+    });
+  }
+
+  /** Pending (unaccepted, unexpired) invitations for a workspace. */
+  async listPendingInvitations(workspaceSlug: string): Promise<InvitationRecord[]> {
+    const rows = await this.prisma.invitation.findMany({
+      where: { workspaceSlug, acceptedAt: null, expiresAt: { gt: new Date() } },
+      orderBy: { createdAt: "desc" },
+    });
+    return rows.map((r) => this.toInvitation(r));
+  }
+
+  /** Pending invitations addressed to an email (used on register to auto-join). */
+  async findPendingInvitationsByEmail(email: string): Promise<InvitationRecord[]> {
+    const rows = await this.prisma.invitation.findMany({
+      where: { email: email.toLowerCase(), acceptedAt: null, expiresAt: { gt: new Date() } },
+    });
+    return rows.map((r) => this.toInvitation(r));
+  }
+
+  async markInvitationAccepted(id: string): Promise<void> {
+    await this.prisma.invitation.update({ where: { id }, data: { acceptedAt: new Date() } });
+  }
+
+  /** Revoke a pending invitation by id, scoped to its workspace. */
+  async deleteInvitation(workspaceSlug: string, id: string): Promise<number> {
+    const { count } = await this.prisma.invitation.deleteMany({ where: { id, workspaceSlug } });
+    return count;
+  }
+
+  private toInvitation(r: {
+    id: string;
+    workspaceSlug: string;
+    email: string;
+    role: string;
+    invitedByName: string | null;
+    expiresAt: Date;
+    createdAt: Date;
+  }): InvitationRecord {
+    return {
+      id: r.id,
+      workspaceSlug: r.workspaceSlug,
+      email: r.email,
+      role: r.role as Role,
+      invitedByName: r.invitedByName,
+      expiresAt: r.expiresAt.toISOString(),
+      createdAt: r.createdAt.toISOString(),
+    };
   }
 
   // ── Refresh tokens ──────────────────────────────────────────────────────────

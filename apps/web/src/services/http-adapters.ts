@@ -48,6 +48,8 @@ import type {
   Template,
   TemplateImportResult,
   TeamMember,
+  TeamInvitation,
+  AddMemberResult,
   AuditLogEntry,
   AdminUser,
   Workspace,
@@ -345,8 +347,11 @@ export function createHttpAdapters(opts: HttpAdapterOptions): Services {
     team: {
       members: (id) => get<TeamMember[]>(`${ws(id)}/team/members`),
       roles: (id) => get<RoleDefinition[]>(`${ws(id)}/team/roles`),
-      addMember: (id, input) => post<void>(`${ws(id)}/members`, input),
+      addMember: (id, input) => post<AddMemberResult>(`${ws(id)}/members`, input),
       removeMember: (id, userId) => del<void>(`${ws(id)}/members/${userId}`),
+      invitations: (id) => get<TeamInvitation[]>(`${ws(id)}/members/invitations`),
+      revokeInvitation: (id, invitationId) =>
+        del<void>(`${ws(id)}/members/invitations/${invitationId}`),
     },
     audit: { logs: (id) => get<AuditLogEntry[]>(`${ws(id)}/audit/logs`) },
     ai: {

@@ -251,3 +251,69 @@ describe("AuthService email verification", () => {
     expect(hashToken(raw)).toBeDefined();
   });
 });
+
+describe("AuthService · team invitations", () => {
+  function makeInviteService(opts: { existingMember?: boolean } = {}) {
+    const invitations: Array<Record<string, unknown>> = [];
+    const memberships: Array<{ userId: string; workspaceSlug: string; role: string }> = [];
+    const store = {
+      // owner@x acts; bob@x has no account (invite path), carol@x exists (add path).
+      findUserByEmail: vi.fn(async (email: string) =>
+        email === "carol@x.com" ? { id: "carol", email, name: "Carol", passwordHash: "h" } : undefined,
+      ),
+      findUserById: vi.fn(async () => ({ id: "owner", email: "owner@x.com", name: "Owner", passwordHash: "h" })),
+      getMembership: vi.fn(async (userId: string) =>
+        userId === "owner"
+          ? { userId: "owner", workspaceSlug: "w1", role: "Owner" }
+          : opts.existingMember
+            ? { userId, workspaceSlug: "w1", role: "Editor" }
+            : undefined,
+      ),
+      upsertInvitation: vi.fn(async (inv: Record<string, unknown>) => invitations.push(inv)),
+      upsertMembership: vi.fn(async (userId: string, workspaceSlug: string, role: string) =>
+        memberships.push({ userId, workspaceSlug, role }),
+      ),
+      findPendingInvitationsByEmail: vi.fn(async () => [
+        { id: "inv1", workspaceSlug: "w1", email: "bob@x.com", role: "Editor", invitedByName: null, expiresAt: "", createdAt: "" },
+      ]),
+      markInvitationAccepted: vi.fn(async () => undefined),
+      createUser: vi.fn(async () => ({ id: "bob", email: "bob@x.com", name: "Bob", passwordHash: "h", createdAt: new Date().toISOString(), failedLoginAttempts: 0, lockedUntil: null })),
+      workspaceHasMembers: vi.fn(async () => true),
+      createAuthToken: vi.fn(async () => undefined),
+      createRefreshToken: vi.fn(async () => undefined),
+      membershipsOf: vi.fn(async () => memberships.filter((m) => m.userId === "bob")),
+    };
+    const jwt = { signAsync: vi.fn(async () => "access-token") };
+    const config = { get: vi.fn((k: string) => (k === "appUrl" ? "http://localhost:3000" : k === "auth" ? { allowOpenWorkspaceClaim: false } : k === "superAdmins" ? [] : { refreshTtlDays: 7 })) };
+    const mail = { send: vi.fn(async () => undefined) };
+    const plans = { assertWithinLimit: vi.fn(async () => undefined) };
+    const svc = new AuthService(store as never, jwt as never, config as never, mail as never, plans as never);
+    return { svc, store, mail, invitations, memberships };
+  }
+
+  it("invites an email with no account (creates an invitation + sends a link)", async () => {
+    const { svc, store, mail, invitations } = makeInviteService();
+    const res = await svc.addMember("w1", "owner", "bob@x.com", "Editor");
+    expect(res.status).toBe("invited");
+    expect(store.upsertInvitation).toHaveBeenCalledTimes(1);
+    expect(invitations[0]).toMatchObject({ workspaceSlug: "w1", email: "bob@x.com", role: "Editor" });
+    // The invite email carries a register link.
+    expect(mail.send.mock.calls[0]![0].html).toContain("/register?invite=");
+  });
+
+  it("adds an existing user directly (no invitation)", async () => {
+    const { svc, store } = makeInviteService();
+    const res = await svc.addMember("w1", "owner", "carol@x.com", "Editor");
+    expect(res.status).toBe("added");
+    expect(store.upsertInvitation).not.toHaveBeenCalled();
+    expect(store.upsertMembership).toHaveBeenCalledWith("carol", "w1", "Editor");
+  });
+
+  it("grants pending invitations when the invitee registers", async () => {
+    const { svc, store, memberships } = makeInviteService();
+    await svc.register({ email: "bob@x.com", password: "password123", name: "Bob" } as never);
+    expect(store.findPendingInvitationsByEmail).toHaveBeenCalledWith("bob@x.com");
+    expect(memberships).toContainEqual({ userId: "bob", workspaceSlug: "w1", role: "Editor" });
+    expect(store.markInvitationAccepted).toHaveBeenCalledWith("inv1");
+  });
+});

@@ -525,12 +525,34 @@ export interface AddMemberInput {
   role: Role;
 }
 
+/** A pending invitation for an email that has no account yet. */
+export interface TeamInvitation {
+  id: string;
+  email: string;
+  role: Role;
+  invitedByName: string | null;
+  expiresAt: string;
+  createdAt: string;
+}
+
+/** Result of addMember: whether an existing user was added or an email invited. */
+export interface AddMemberResult {
+  status: "added" | "invited";
+}
+
 export interface TeamService {
   members(workspaceId: string): Promise<TeamMember[]>;
   roles(workspaceId: string): Promise<RoleDefinition[]>;
-  /** Invite a registered user or change an existing member's role (upsert). */
-  addMember(workspaceId: string, input: AddMemberInput): Promise<void>;
+  /**
+   * Add a registered user (or change their role), OR invite an email that has
+   * no account yet — the invitee joins automatically when they register.
+   */
+  addMember(workspaceId: string, input: AddMemberInput): Promise<AddMemberResult>;
   removeMember(workspaceId: string, userId: string): Promise<void>;
+  /** Pending invitations (emails invited but not yet registered). */
+  invitations(workspaceId: string): Promise<TeamInvitation[]>;
+  /** Revoke a pending invitation. */
+  revokeInvitation(workspaceId: string, invitationId: string): Promise<void>;
 }
 
 export interface AuditService {

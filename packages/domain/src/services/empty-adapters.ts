@@ -256,6 +256,8 @@ export const emptyAdapters: Services = {
     roles: () => delay([]),
     addMember: () => notAvailable(),
     removeMember: () => notAvailable(),
+    invitations: () => delay([]),
+    revokeInvitation: () => notAvailable(),
   },
   audit: {
     logs: () => delay([]),

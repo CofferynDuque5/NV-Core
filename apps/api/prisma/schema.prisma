@@ -727,3 +727,25 @@ model Feedback {
 
   @@index([workspaceSlug, createdAt])
 }
+
+/**
+ * Pending invitation to join a workspace for an email that has no account yet.
+ * When that email registers, the membership is granted automatically (see
+ * AuthService.register). Existing users are added directly, without an
+ * Invitation row.
+ */
+model Invitation {
+  id            String    @id @default(cuid())
+  workspaceSlug String
+  email         String
+  role          String    @default("Editor")
+  token         String    @unique
+  invitedByName String?
+  acceptedAt    DateTime?
+  expiresAt     DateTime
+  createdAt     DateTime  @default(now())
+
+  @@unique([workspaceSlug, email])
+  @@index([workspaceSlug])
+  @@index([email])
+}

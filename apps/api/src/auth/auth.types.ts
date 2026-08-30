@@ -20,6 +20,17 @@ export interface MembershipRecord {
   role: Role;
 }
 
+/** A pending invitation for an email that has no account yet. */
+export interface InvitationRecord {
+  id: string;
+  workspaceSlug: string;
+  email: string;
+  role: Role;
+  invitedByName: string | null;
+  expiresAt: string;
+  createdAt: string;
+}
+
 /** JWT payload. */
 export interface JwtPayload {
   sub: string;

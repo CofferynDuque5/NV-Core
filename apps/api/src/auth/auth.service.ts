@@ -19,6 +19,7 @@ import { AuthStore } from "./auth.store";
 import { DUMMY_PASSWORD_HASH, hashPassword, verifyPassword } from "./password.util";
 import { generateRefreshToken, hashToken } from "./token.util";
 import type {
+  InvitationRecord,
   JwtPayload,
   MembershipView,
   PublicUser,
@@ -78,6 +79,10 @@ export class AuthService {
         await this.store.upsertMembership(user.id, dto.workspaceSlug, "Owner");
       }
     }
+
+    // Grant any workspace invitations addressed to this email so the invitee
+    // lands in the workspace immediately after registering.
+    await this.applyPendingInvitations(user.id, user.email);
 
     // Best-effort verification email (no-op if Resend isn't configured).
     await this.sendVerificationEmail(user.id, user.email, user.name);
@@ -223,22 +228,55 @@ export class AuthService {
     actingUserId: string,
     email: string,
     role: Role,
-  ): Promise<MembershipView> {
+  ): Promise<{ status: "added" | "invited" }> {
     const actorMembership = await this.store.getMembership(actingUserId, workspaceSlug);
     const actorIsOwner = actorMembership?.role === "Owner";
+    const workspace = getWorkspaceBySlug(workspaceSlug);
 
     const user = await this.store.findUserByEmail(email);
+
+    // Guard the Owner role up-front (applies to both add and invite): only an
+    // Owner can grant the Owner role. Blocks Admin self-escalation.
+    if (!actorIsOwner && role === "Owner") {
+      throw new ForbiddenException("Solo un Owner puede asignar el rol Owner.");
+    }
+
+    // ── Email without an account yet → create a pending invitation ──────────
     if (!user) {
-      throw new NotFoundException("No existe un usuario con ese email. Debe registrarse primero.");
+      // A new seat is being committed (best-effort — accepted invites also join).
+      await this.plans.assertWithinLimit(workspaceSlug, "teamMembers", 1);
+      const token = generateRefreshToken();
+      const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+      const actor = await this.store.findUserById(actingUserId);
+      await this.store.upsertInvitation({
+        workspaceSlug,
+        email,
+        role,
+        token,
+        invitedByName: actor?.name ?? null,
+        expiresAt,
+      });
+      const url = `${this.config.get("appUrl", { infer: true })}/register?invite=${token}&email=${encodeURIComponent(email)}`;
+      void this.mail.send({
+        to: email,
+        subject: `Te invitaron a ${workspace?.name ?? workspaceSlug} en NV Core`,
+        html:
+          `<p>¡Hola!</p>` +
+          `<p>Te invitaron a colaborar como <strong>${role}</strong> en el workspace ` +
+          `<strong>${workspace?.name ?? workspaceSlug}</strong> de NV Core.</p>` +
+          `<p><a href="${url}">Crea tu cuenta para unirte</a>. Al registrarte con este ` +
+          `correo (${email}) entrarás automáticamente al workspace.</p>` +
+          `<p>La invitación caduca en 7 días.</p>`,
+      });
+      return { status: "invited" };
     }
+
+    // ── Existing user → add or change role directly ─────────────────────────
     const existing = await this.store.getMembership(user.id, workspaceSlug);
-
-    // Guard the Owner role: only an Owner can create an Owner or change an
-    // existing Owner's role. Blocks Admin self-escalation and Owner demotion.
-    if (!actorIsOwner && (role === "Owner" || existing?.role === "Owner")) {
-      throw new ForbiddenException("Solo un Owner puede asignar o modificar el rol Owner.");
+    // Only an Owner can modify an existing Owner's role (blocks Owner demotion).
+    if (!actorIsOwner && existing?.role === "Owner") {
+      throw new ForbiddenException("Solo un Owner puede modificar el rol Owner.");
     }
-
     // Only genuinely new members count against the plan seat limit; changing an
     // existing member's role must never be blocked (net member count is unchanged).
     if (!existing) {
@@ -247,7 +285,6 @@ export class AuthService {
     await this.store.upsertMembership(user.id, workspaceSlug, role);
 
     // Best-effort notification — never blocks the membership change.
-    const workspace = getWorkspaceBySlug(workspaceSlug);
     void this.mail.send({
       to: user.email,
       subject: `Te añadieron a ${workspace?.name ?? workspaceSlug} en NV Core`,
@@ -258,7 +295,27 @@ export class AuthService {
         `<p>Inicia sesión para empezar a colaborar.</p>`,
     });
 
-    return { workspaceSlug, role };
+    return { status: "added" };
+  }
+
+  /** Pending invitations for a workspace (Owner/Admin view). */
+  async listInvitations(workspaceSlug: string): Promise<InvitationRecord[]> {
+    return this.store.listPendingInvitations(workspaceSlug);
+  }
+
+  /** Revoke a pending invitation. */
+  async revokeInvitation(workspaceSlug: string, invitationId: string): Promise<void> {
+    const removed = await this.store.deleteInvitation(workspaceSlug, invitationId);
+    if (!removed) throw new NotFoundException("Invitación no encontrada.");
+  }
+
+  /** Grant any pending invitations addressed to this email (called on register). */
+  private async applyPendingInvitations(userId: string, email: string): Promise<void> {
+    const pending = await this.store.findPendingInvitationsByEmail(email);
+    for (const inv of pending) {
+      await this.store.upsertMembership(userId, inv.workspaceSlug, inv.role);
+      await this.store.markInvitationAccepted(inv.id);
+    }
   }
 
   /** Removes a member from a workspace. Protects the last Owner, and only an

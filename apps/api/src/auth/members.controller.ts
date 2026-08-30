@@ -1,6 +1,6 @@
 import { Body, Controller, Delete, Get, HttpCode, Param, Post, UseGuards } from "@nestjs/common";
 import { ApiBearerAuth, ApiTags } from "@nestjs/swagger";
-import type { TeamMember } from "@nv/domain";
+import type { TeamInvitation, TeamMember } from "@nv/domain";
 
 import { WorkspaceGuard } from "../common/tenant/workspace.guard";
 import { WorkspaceId } from "../common/tenant/workspace.decorator";
@@ -55,5 +55,29 @@ export class MembersController {
     @Param("userId") userId: string,
   ) {
     return this.auth.removeMember(workspaceId, user.userId, userId);
+  }
+
+  /** Pending invitations for emails that haven't registered yet. */
+  @Roles("Owner", "Admin")
+  @UseGuards(RolesGuard)
+  @Get("invitations")
+  async invitations(@WorkspaceId() workspaceId: string): Promise<TeamInvitation[]> {
+    const rows = await this.auth.listInvitations(workspaceId);
+    return rows.map((r) => ({
+      id: r.id,
+      email: r.email,
+      role: r.role,
+      invitedByName: r.invitedByName,
+      expiresAt: r.expiresAt,
+      createdAt: r.createdAt,
+    }));
+  }
+
+  @Roles("Owner", "Admin")
+  @UseGuards(RolesGuard)
+  @Delete("invitations/:id")
+  @HttpCode(204)
+  revokeInvitation(@WorkspaceId() workspaceId: string, @Param("id") id: string) {
+    return this.auth.revokeInvitation(workspaceId, id);
   }
 }

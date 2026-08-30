@@ -326,6 +326,15 @@ export function useTeam() {
   return useQuery({ queryKey: [ws.id, "team"], queryFn: () => svc.team.members(ws.id) });
 }
 
+export function useTeamInvitations() {
+  const svc = useServices();
+  const ws = useWorkspace();
+  return useQuery({
+    queryKey: [ws.id, "invitations"],
+    queryFn: () => svc.team.invitations(ws.id),
+  });
+}
+
 export function useRoles() {
   const svc = useServices();
   const ws = useWorkspace();
