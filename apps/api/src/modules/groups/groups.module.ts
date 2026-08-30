@@ -11,6 +11,7 @@ import {
   Patch,
   Post,
   Put,
+  Query,
   ServiceUnavailableException,
   UseGuards,
 } from "@nestjs/common";
@@ -130,6 +131,22 @@ export class GroupsService {
     await this.audit.record(workspaceId, actor, "group.delete", id);
   }
 
+  /**
+   * Delete every AUTO-SYNCED group (imported from WhatsApp/Telegram) for this
+   * workspace — the cleanup for "there are groups here I never added". Manually
+   * created groups (synced=false) are kept. Cascades to their campaign targets.
+   */
+  async clearSynced(
+    workspaceId: string,
+    actor: string,
+    channel?: "wa" | "tg",
+  ): Promise<{ deleted: number }> {
+    const where = { workspaceSlug: workspaceId, synced: true, ...(channel ? { channel } : {}) };
+    const { count } = await this.db().group.deleteMany({ where });
+    await this.audit.record(workspaceId, actor, "group.clearSynced", String(count));
+    return { deleted: count };
+  }
+
   /** Per-group merge variables as a flat { key: value } map. */
   async getVars(workspaceId: string, id: string): Promise<Record<string, string>> {
     const group = await this.db().group.findFirst({ where: { id, workspaceSlug: workspaceId } });
@@ -215,6 +232,21 @@ export class GroupsController {
     @Body() dto: UpdateGroupDto,
   ) {
     return this.service.update(workspaceId, user.email, id, dto);
+  }
+
+  // Static path BEFORE `:id` so it isn't captured as an id. Clears auto-synced
+  // (imported) groups; optional ?channel=wa|tg narrows it.
+  @Post("clear-synced")
+  @Roles("Owner", "Admin")
+  @UseGuards(RolesGuard)
+  @HttpCode(200)
+  clearSynced(
+    @WorkspaceId() workspaceId: string,
+    @CurrentUser() user: AuthenticatedUser,
+    @Query("channel") channel?: string,
+  ) {
+    const ch = channel === "wa" || channel === "tg" ? channel : undefined;
+    return this.service.clearSynced(workspaceId, user.email, ch);
   }
 
   @Delete(":id")

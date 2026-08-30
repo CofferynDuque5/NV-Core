@@ -271,6 +271,8 @@ export interface GroupService {
   create(workspaceId: string, input: CreateGroupInput): Promise<Group>;
   update(workspaceId: string, id: string, input: UpdateGroupInput): Promise<Group>;
   remove(workspaceId: string, id: string): Promise<void>;
+  /** Delete auto-synced (imported) groups; optional channel narrows it. */
+  clearSynced(workspaceId: string, channel?: "wa" | "tg"): Promise<{ deleted: number }>;
   getVars(workspaceId: string, id: string): Promise<Record<string, string>>;
   setVars(workspaceId: string, id: string, vars: Record<string, string>): Promise<Record<string, string>>;
 }

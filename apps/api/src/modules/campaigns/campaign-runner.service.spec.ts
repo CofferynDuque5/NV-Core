@@ -124,6 +124,23 @@ describe("CampaignRunner.isDue", () => {
     expect(isDue({ ...c, lastRunSlot: slot }, at)).toBe(false);
   });
 
+  it("catches up a daily slot that passed recently (PC turned on a bit late)", () => {
+    const now = new Date();
+    now.setHours(12, 0, 0, 0); // fixed noon for deterministic math
+    const past30 = new Date(now.getTime() - 30 * 60 * 1000); // 30 min ago
+    const past4h = new Date(now.getTime() - 4 * 60 * 60 * 1000); // 4 h ago
+    const hhmm = (d: Date) =>
+      `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+    // A slot 30 min ago is still due (within the 3h catch-up window).
+    expect(
+      isDue(campaign({ scheduleType: "daily", status: "activa", scheduleAt: hhmm(past30) }), now),
+    ).toBe(true);
+    // A slot 4 h ago is too old → skip (fires again next day).
+    expect(
+      isDue(campaign({ scheduleType: "daily", status: "activa", scheduleAt: hhmm(past4h) }), now),
+    ).toBe(false);
+  });
+
   it("runs a weekly campaign only on the configured weekday", () => {
     const at = new Date();
     const hh = String(at.getHours()).padStart(2, "0");

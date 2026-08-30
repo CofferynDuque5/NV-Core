@@ -823,6 +823,20 @@ export function useUpdateGroup() {
   });
 }
 
+export function useClearSyncedGroups() {
+  const svc = useServices();
+  const ws = useWorkspace();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (channel?: "wa" | "tg") => svc.groups.clearSynced(ws.id, channel),
+    onSuccess: (res) => {
+      void qc.invalidateQueries({ queryKey: [ws.id, "groups"] });
+      toast.success(`${res.deleted} grupo(s) importado(s) eliminados`);
+    },
+    onError: (err) => toast.error(errText(err)),
+  });
+}
+
 export function useSetGroupVars(groupId: string) {
   const svc = useServices();
   const ws = useWorkspace();

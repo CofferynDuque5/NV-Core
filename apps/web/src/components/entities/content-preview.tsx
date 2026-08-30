@@ -151,9 +151,9 @@ function SurfacePreview({
           {groupName?.trim() || (isTg ? "Grupo de Telegram" : "Grupo de WhatsApp")}
         </div>
         <div className="flex justify-end">
-          <div className={cn("max-w-[85%] space-y-1.5 rounded-2xl rounded-tr-sm border p-1.5", bubble)}>
+          <div className={cn("max-w-[85%] min-w-0 space-y-1.5 overflow-hidden rounded-2xl rounded-tr-sm border p-1.5", bubble)}>
             {visual ? <Media visual={visual} className="max-h-52" /> : null}
-            <p className="whitespace-pre-wrap px-1.5 text-sm text-ink">
+            <p className="whitespace-pre-wrap break-words px-1.5 text-sm text-ink">
               {text || <EmptyText>Escribe el mensaje…</EmptyText>}
             </p>
             <div className="flex items-center justify-end gap-0.5 px-1.5 text-[10px] text-ink-faint">
@@ -177,7 +177,7 @@ function SurfacePreview({
             <Media visual={visual} rounded="rounded-lg" className="aspect-[9/16]" />
             {text ? (
               <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 to-transparent p-3">
-                <p className="whitespace-pre-wrap text-sm font-medium text-white">{text}</p>
+                <p className="whitespace-pre-wrap break-words text-sm font-medium text-white">{text}</p>
               </div>
             ) : null}
           </div>
@@ -186,7 +186,7 @@ function SurfacePreview({
             className="flex aspect-[9/16] items-center justify-center rounded-lg p-4 text-center"
             style={{ backgroundColor: "#0B3D2E" }}
           >
-            <p className="whitespace-pre-wrap text-base font-semibold text-white">
+            <p className="whitespace-pre-wrap break-words text-base font-semibold text-white">
               {text || <span className="italic text-white/50">Tu Estado…</span>}
             </p>
           </div>
@@ -207,7 +207,7 @@ function SurfacePreview({
           <p className="truncate text-xs font-semibold text-ink">{surface.label}</p>
         </div>
         {visual ? <Media visual={visual} rounded="rounded-none" className="aspect-video" /> : null}
-        <p className="whitespace-pre-wrap p-2.5 text-sm text-ink">
+        <p className="whitespace-pre-wrap break-words p-2.5 text-sm text-ink">
           {text || <EmptyText>Escribe el contenido…</EmptyText>}
         </p>
       </div>
@@ -236,11 +236,11 @@ function SurfacePreview({
         </div>
       </div>
       {!isIg && text ? (
-        <p className="whitespace-pre-wrap px-2.5 pb-2 text-xs text-ink">{text}</p>
+        <p className="whitespace-pre-wrap break-words px-2.5 pb-2 text-xs text-ink">{text}</p>
       ) : null}
       <Media visual={visual} rounded="rounded-none" className={vertical ? "aspect-[9/16]" : "aspect-square"} />
       {isIg ? (
-        <p className="whitespace-pre-wrap p-2.5 text-xs text-ink">
+        <p className="whitespace-pre-wrap break-words p-2.5 text-xs text-ink">
           <span className="font-semibold">tu_cuenta</span>{" "}
           {text || <EmptyText>Escribe el pie de foto…</EmptyText>}
         </p>

@@ -1,10 +1,11 @@
 
 import * as React from "react";
 import type { Group } from "@nv/domain";
-import { Plus, Send, Settings2, Tag, Users } from "lucide-react";
+import { Plus, Send, Settings2, Tag, Trash2, Users } from "lucide-react";
 
 import { useGroups } from "@/hooks/use-domain-data";
-import { useUpdateGroup } from "@/hooks/use-domain-mutations";
+import { useClearSyncedGroups, useUpdateGroup } from "@/hooks/use-domain-mutations";
+import { useConfirm } from "@/providers/confirm-provider";
 import { filterGroups, groupCategories } from "@/lib/groups";
 import { cn } from "@/lib/utils";
 import { PageHeader } from "@/components/common/page-header";
@@ -23,6 +24,8 @@ const COLUMNS = ["Grupo", "Categorías", "Miembros", "Estado", ""];
 export function GruposContent({ showHeader = true }: { showHeader?: boolean }) {
   const groups = useGroups();
   const updateGroup = useUpdateGroup();
+  const clearSynced = useClearSyncedGroups();
+  const confirm = useConfirm();
   const [createOpen, setCreateOpen] = React.useState(false);
   const [varsGroup, setVarsGroup] = React.useState<Group | null>(null);
   const [campaignOpen, setCampaignOpen] = React.useState(false);
@@ -31,6 +34,20 @@ export function GruposContent({ showHeader = true }: { showHeader?: boolean }) {
 
   const allItems = groups.data?.items ?? [];
   const cats = groupCategories(allItems);
+  const syncedCount = allItems.filter((g) => g.synced).length;
+
+  async function onClearSynced() {
+    const ok = await confirm({
+      title: "Borrar grupos importados",
+      description:
+        `Se eliminarán los ${syncedCount} grupos importados automáticamente de WhatsApp/Telegram ` +
+        `(los que no agregaste a mano). Los grupos creados manualmente se conservan. ` +
+        `Podrás volver a importarlos con "Sincronizar" en Conexiones.`,
+      confirmLabel: "Borrar importados",
+      destructive: true,
+    });
+    if (ok) clearSynced.mutate(undefined);
+  }
 
   function editCategories(g: Group) {
     const current = (g.tags ?? []).join(", ");
@@ -48,6 +65,17 @@ export function GruposContent({ showHeader = true }: { showHeader?: boolean }) {
 
   const actions = (
     <>
+      {syncedCount > 0 ? (
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={onClearSynced}
+          disabled={clearSynced.isPending}
+          className="text-state-danger hover:bg-state-danger/10"
+        >
+          <Trash2 className="size-4" /> Borrar importados ({syncedCount})
+        </Button>
+      ) : null}
       <Button variant="secondary" size="sm" onClick={() => setCampaignOpen(true)}>
         <Send className="size-4" /> Enviar a grupos
       </Button>

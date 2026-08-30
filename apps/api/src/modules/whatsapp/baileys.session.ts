@@ -325,7 +325,19 @@ export class BaileysSession {
     if (!this.isConnected || !this.sock) {
       throw new Error("WhatsApp no está conectado en este workspace.");
     }
+    // WhatsApp only delivers a status to the JIDs in `statusJidList` (your
+    // contacts). If none synced yet, the status would post to nobody and look
+    // like it "didn't publish" — fail loudly with an actionable message instead.
+    // We intentionally do NOT fall back to group members (broadcasting a status
+    // to strangers is spammy and a ban risk).
     const statusJidList = this.contactJids();
+    if (statusJidList.length === 0) {
+      throw new Error(
+        "Sin destinatarios para el Estado: tus contactos aún no se sincronizaron. " +
+          "Abre WhatsApp en el teléfono, recibe/envía algún mensaje para que se sincronicen " +
+          "los contactos, pulsa «Sincronizar» en Conexiones y reintenta.",
+      );
+    }
     let content: any;
     if (attachment?.url) {
       const caption = text || undefined;

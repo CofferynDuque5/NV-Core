@@ -146,6 +146,7 @@ export const emptyAdapters: Services = {
     create: () => notAvailable(),
     update: () => notAvailable(),
     remove: () => notAvailable(),
+    clearSynced: () => delay({ deleted: 0 }),
     getVars: () => delay({}),
     setVars: () => notAvailable(),
   },

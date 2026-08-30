@@ -29,6 +29,12 @@ type Attachment = { url?: string; kind?: string; mime?: string | null; filename?
 @Injectable()
 export class CampaignRunner implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(CampaignRunner.name);
+  /**
+   * How late a daily/weekly slot may still fire (catch-up window). A locally
+   * hosted app isn't always running at the exact scheduled minute; within this
+   * window it sends when it comes online. Beyond it, the slot waits for next day.
+   */
+  private static readonly CATCHUP_MS = 3 * 60 * 60 * 1000; // 3h
   /** Anti-ban pacing between bulk sends (jittered window + periodic cool-down). */
   private readonly pacing: PacingOptions;
   private readonly retryBaseMs: number;
@@ -111,8 +117,11 @@ export class CampaignRunner implements OnModuleInit, OnModuleDestroy {
   /**
    * The due time-slot for a campaign at `now`, or null if it shouldn't run.
    * - "once": sentinel "once" when its datetime has passed and it's still scheduled.
-   * - "daily"/"weekly": matches ANY of `scheduleTimes` (or `scheduleAt` when empty),
-   *   deduped per slot ("YYYY-MM-DDTHH:MM") so it can run several times a day.
+   * - "daily"/"weekly": fires a slot whose time has ARRIVED today, once per slot
+   *   per day. Uses a catch-up window (not an exact-minute match) so a locally
+   *   hosted app that wasn't running at the exact minute — e.g. the PC turned on
+   *   a few minutes late — still sends when it comes online. Slots older than the
+   *   window are skipped (they fire again the next day) to avoid odd-hour sends.
    */
   private dueSlot(c: PCampaign, now: Date): string | null {
     if (c.status === "pausada" || c.status === "completada") return null;
@@ -124,13 +133,17 @@ export class CampaignRunner implements OnModuleInit, OnModuleDestroy {
     }
     if (c.scheduleType === "weekly" && !(c.scheduleDays ?? []).includes(now.getDay())) return null;
     const times = c.scheduleTimes?.length ? c.scheduleTimes : at ? [at] : [];
-    const matched = times.find((t) => {
+    for (const t of times) {
       const [h, m] = String(t).split(":").map(Number);
-      return !Number.isNaN(h) && now.getHours() === h && now.getMinutes() === m;
-    });
-    if (!matched) return null;
-    const slot = `${todayKey()}T${matched}`;
-    return c.lastRunSlot === slot ? null : slot;
+      if (Number.isNaN(h) || Number.isNaN(m)) continue;
+      const slotTime = new Date(now);
+      slotTime.setHours(h, m, 0, 0);
+      const elapsed = now.getTime() - slotTime.getTime();
+      if (elapsed < 0 || elapsed > CampaignRunner.CATCHUP_MS) continue; // not yet, or too old
+      const slot = `${todayKey()}T${t}`;
+      if (c.lastRunSlot !== slot) return slot; // due today and not yet run
+    }
+    return null;
   }
 
   private async tick(): Promise<void> {

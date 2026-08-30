@@ -216,6 +216,11 @@ export function createHttpAdapters(opts: HttpAdapterOptions): Services {
       create: (id, input) => post<Group>(`${ws(id)}/groups`, input),
       update: (id, gid, input) => patch<Group>(`${ws(id)}/groups/${gid}`, input),
       remove: (id, gid) => del<void>(`${ws(id)}/groups/${gid}`),
+      clearSynced: (id, channel) =>
+        post<{ deleted: number }>(
+          `${ws(id)}/groups/clear-synced${channel ? `?channel=${channel}` : ""}`,
+          {},
+        ),
       getVars: (id, gid) => get<Record<string, string>>(`${ws(id)}/groups/${gid}/vars`),
       setVars: (id, gid, vars) => put<Record<string, string>>(`${ws(id)}/groups/${gid}/vars`, vars),
     },
