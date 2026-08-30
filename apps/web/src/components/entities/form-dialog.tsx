@@ -1,4 +1,3 @@
-
 import * as React from "react";
 import { Loader2 } from "lucide-react";
 
@@ -17,10 +16,11 @@ import { Button } from "@/components/ui/button";
  * Presentational wrapper for create/edit forms: handles submit state, error
  * display and demo-mode gating. The caller owns field state and the mutation.
  */
-const SIZE_CLASS: Record<"md" | "lg" | "xl", string> = {
+const SIZE_CLASS: Record<"md" | "lg" | "xl" | "2xl", string> = {
   md: "max-w-lg",
   lg: "max-w-2xl",
   xl: "max-w-3xl",
+  "2xl": "max-w-5xl",
 };
 
 export function FormDialog({
@@ -43,8 +43,8 @@ export function FormDialog({
   pending: boolean;
   error?: string | null;
   submitLabel?: string;
-  /** Modal width. Use "lg"/"xl" for forms with many fields or list pickers. */
-  size?: "md" | "lg" | "xl";
+  /** Modal width. Use "lg"/"xl"/"2xl" for forms with many fields or list pickers. */
+  size?: "md" | "lg" | "xl" | "2xl";
   children: React.ReactNode;
 }) {
   const backend = isBackendConfigured();
@@ -65,7 +65,7 @@ export function FormDialog({
           className="space-y-4"
         >
           {!backend ? (
-            <div className="rounded-lg border border-state-warning/30 bg-state-warning/10 px-3 py-2 text-xs text-state-warning">
+            <div className="border-state-warning/30 bg-state-warning/10 text-state-warning rounded-lg border px-3 py-2 text-xs">
               Modo demo: conecta el backend (<code>VITE_API_URL</code>) para guardar.
             </div>
           ) : null}
@@ -73,7 +73,7 @@ export function FormDialog({
           <div className="space-y-4">{children}</div>
 
           {error ? (
-            <p className="rounded-lg border border-state-danger/30 bg-state-danger/10 px-3 py-2 text-xs text-state-danger">
+            <p className="border-state-danger/30 bg-state-danger/10 text-state-danger rounded-lg border px-3 py-2 text-xs">
               {error}
             </p>
           ) : null}
