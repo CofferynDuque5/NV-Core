@@ -17,6 +17,7 @@
     "tg": "node scripts/conectar-tg.mjs",
     "imgbb": "node scripts/conectar-imgbb.mjs",
     "ayrshare": "node scripts/conectar-ayrshare.mjs",
+    "stripe": "node scripts/conectar-stripe.mjs",
     "backup": "node scripts/backup.mjs",
     "restore": "node scripts/restore.mjs",
     "dev": "turbo run dev",
