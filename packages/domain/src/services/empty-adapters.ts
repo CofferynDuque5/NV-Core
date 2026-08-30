@@ -97,6 +97,7 @@ export const emptyAdapters: Services = {
     reconnect: () => notAvailable(),
     disconnect: () => notAvailable(),
     sync: () => notAvailable(),
+    submitPassword: () => notAvailable(),
   },
   admin: {
     users: () => delay([]),

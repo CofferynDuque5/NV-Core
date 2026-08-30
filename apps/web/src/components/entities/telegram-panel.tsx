@@ -13,17 +13,20 @@ import {
   useTelegramConnect,
   useTelegramDisconnect,
   useTelegramReconnect,
+  useTelegramSubmitPassword,
   useTelegramSync,
 } from "@/hooks/use-domain-mutations";
 import { useConfirm } from "@/providers/confirm-provider";
 import { useQueryClient } from "@tanstack/react-query";
 import { Panel, PanelHeader } from "@/components/common/panel";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 
 const STATUS_META: Record<TelegramStatus["status"], { label: string; dot: string }> = {
   connected: { label: "Conectado", dot: "bg-state-success" },
   connecting: { label: "Conectando…", dot: "bg-state-warning" },
   qr: { label: "Escanea el QR", dot: "bg-state-warning" },
+  password: { label: "Contraseña 2FA", dot: "bg-state-warning" },
   disconnected: { label: "Desconectado", dot: "bg-ink-faint" },
 };
 
@@ -36,8 +39,10 @@ export function TelegramPanel() {
   const reconnect = useTelegramReconnect();
   const disconnect = useTelegramDisconnect();
   const sync = useTelegramSync();
+  const submitPassword = useTelegramSubmitPassword();
   const confirm = useConfirm();
   const [qr, setQr] = React.useState<string | null>(null);
+  const [password, setPassword] = React.useState("");
 
   const status = statusQuery.data;
   const state = status?.status ?? "disconnected";
@@ -133,6 +138,37 @@ export function TelegramPanel() {
             </p>
           ) : null}
 
+          {state === "password" ? (
+            <form
+              className="space-y-2 rounded-lg border border-brand/30 bg-brand/5 p-3"
+              onSubmit={(e) => {
+                e.preventDefault();
+                if (!password.trim()) return;
+                submitPassword.mutate(password, { onSuccess: () => setPassword("") });
+              }}
+            >
+              <label className="text-xs font-medium text-ink-bright">
+                Verificación en dos pasos (2FA)
+              </label>
+              <p className="text-[11px] text-ink-muted">
+                Esta cuenta tiene contraseña 2FA. Ingrésala para completar la vinculación.
+              </p>
+              <div className="flex gap-2">
+                <Input
+                  type="password"
+                  autoComplete="one-time-code"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="Tu contraseña de Telegram"
+                  className="h-9"
+                />
+                <Button size="sm" type="submit" disabled={submitPassword.isPending || !password.trim()}>
+                  {submitPassword.isPending ? <Loader2 className="size-4 animate-spin" /> : "Enviar"}
+                </Button>
+              </div>
+            </form>
+          ) : null}
+
           <p className="text-[11px] text-ink-faint">
             Requiere <code>TELEGRAM_API_ID</code> y <code>TELEGRAM_API_HASH</code> (gratis en
             my.telegram.org). Escanea el QR desde Telegram → Ajustes → Dispositivos → Vincular
@@ -152,6 +188,11 @@ export function TelegramPanel() {
             <div className="flex flex-col items-center gap-2 text-center text-ink-muted">
               <Loader2 className="size-8 animate-spin" />
               <span className="text-xs">Generando QR…</span>
+            </div>
+          ) : state === "password" ? (
+            <div className="flex flex-col items-center gap-2 text-center text-ink-muted">
+              <Send className="size-10 text-state-warning" />
+              <span className="text-xs">Ingresa tu contraseña 2FA</span>
             </div>
           ) : (
             <div className="flex flex-col items-center gap-2 text-center text-ink-faint">

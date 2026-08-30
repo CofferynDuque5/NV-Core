@@ -35,6 +35,8 @@ export class TelegramUserSession {
   /** Health-check timer: catches silent drops after GramJS gives up retrying. */
   private heartbeat: ReturnType<typeof setInterval> | null = null;
   private reconnecting = false;
+  /** Resolver for the 2FA password prompt (set while status === "password"). */
+  private passwordResolver: ((password: string) => void) | null = null;
 
   /** How often to verify the MTProto connection is still alive. */
   private static readonly HEARTBEAT_MS = 30_000;
@@ -116,10 +118,15 @@ export class TelegramUserSession {
             this.logger.warn(`QR login: ${err?.message ?? err}`);
             return false; // keep polling until scanned or the promise settles
           },
+          // The account has 2-Step Verification: instead of failing, ask the
+          // user for their password via the panel and wait for it here. GramJS
+          // calls this again on a wrong password, so each call arms a new prompt.
           password: async () => {
-            throw new Error(
-              "La cuenta tiene verificación en dos pasos (2FA). Desactívala temporalmente para vincular por QR.",
-            );
+            this.lastError = "La cuenta tiene verificación en dos pasos (2FA). Ingresa tu contraseña.";
+            this.setStatus("password");
+            return new Promise<string>((resolve) => {
+              this.passwordResolver = resolve;
+            });
           },
         },
       );
@@ -130,6 +137,17 @@ export class TelegramUserSession {
       this.logger.error(`No se pudo completar el login por QR: ${msg}`);
       this.setStatus("disconnected");
     }
+  }
+
+  /** Provide the 2FA password the QR sign-in is waiting for. */
+  submitPassword(password: string): void {
+    if (!this.passwordResolver) {
+      throw new Error("Telegram no está esperando una contraseña ahora mismo.");
+    }
+    const resolve = this.passwordResolver;
+    this.passwordResolver = null;
+    this.setStatus("connecting");
+    resolve(password);
   }
 
   private async onAuthorized(): Promise<void> {
@@ -297,6 +315,7 @@ export class TelegramUserSession {
 
   async logout(): Promise<void> {
     this.stopHeartbeat();
+    this.passwordResolver = null;
     this.lastError = null;
     try {
       await this.client?.disconnect?.();

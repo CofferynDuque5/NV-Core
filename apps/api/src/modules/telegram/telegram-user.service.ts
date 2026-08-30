@@ -194,6 +194,14 @@ export class TelegramUserService implements TelegramSessionEvents, OnModuleInit 
     return this.status(workspaceSlug);
   }
 
+  /** Provide the 2FA password when a QR sign-in is waiting for it. */
+  async submitPassword(workspaceSlug: string, password: string): Promise<TelegramStatus> {
+    const session = this.live.get(workspaceSlug);
+    if (!session) throw new Error("No hay una conexión de Telegram en curso en este workspace.");
+    session.submitPassword(password);
+    return this.status(workspaceSlug);
+  }
+
   isConnected(workspaceSlug: string): boolean {
     return this.live.get(workspaceSlug)?.isConnected ?? false;
   }

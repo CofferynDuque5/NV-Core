@@ -156,6 +156,8 @@ export function createHttpAdapters(opts: HttpAdapterOptions): Services {
       reconnect: (id) => post<TelegramStatus>(`${ws(id)}/telegram/reconnect`, {}),
       disconnect: (id) => post<TelegramStatus>(`${ws(id)}/telegram/disconnect`, {}),
       sync: (id) => post<TelegramStatus>(`${ws(id)}/telegram/sync`, {}),
+      submitPassword: (id, password) =>
+        post<TelegramStatus>(`${ws(id)}/telegram/password`, { password }),
     },
     admin: {
       users: () => get<AdminUser[]>(`/admin/users`),

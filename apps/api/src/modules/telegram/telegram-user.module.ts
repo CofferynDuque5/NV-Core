@@ -1,5 +1,6 @@
-import { Controller, Get, HttpCode, Module, Post, UseGuards } from "@nestjs/common";
+import { Body, Controller, Get, HttpCode, Module, Post, UseGuards } from "@nestjs/common";
 import { ApiBearerAuth, ApiTags } from "@nestjs/swagger";
+import { IsString, MinLength } from "class-validator";
 
 import { WorkspaceId } from "../../common/tenant/workspace.decorator";
 import { WorkspaceGuard } from "../../common/tenant/workspace.guard";
@@ -8,6 +9,10 @@ import { Roles } from "../../auth/decorators/roles.decorator";
 import { NotificationsModule } from "../notifications/notifications.module";
 import { TelegramGateway } from "./telegram.gateway";
 import { TelegramUserService } from "./telegram-user.service";
+
+class TelegramPasswordDto {
+  @IsString() @MinLength(1) password!: string;
+}
 
 @ApiTags("telegram")
 @ApiBearerAuth()
@@ -48,6 +53,14 @@ export class TelegramUserController {
   @HttpCode(200)
   sync(@WorkspaceId() workspaceId: string) {
     return this.service.sync(workspaceId);
+  }
+
+  @Post("password")
+  @Roles("Owner", "Admin")
+  @UseGuards(RolesGuard)
+  @HttpCode(200)
+  password(@WorkspaceId() workspaceId: string, @Body() dto: TelegramPasswordDto) {
+    return this.service.submitPassword(workspaceId, dto.password);
   }
 }
 

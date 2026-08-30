@@ -43,4 +43,8 @@ describe("TelegramUserService", () => {
     expect(s.error ?? null).toBeNull();
     expect(s.groupsCount).toBe(0);
   });
+
+  it("submitPassword() rejects when there is no live connection in progress", async () => {
+    await expect(makeService(1, "h").submitPassword("w1", "secret")).rejects.toThrow(/conexión/i);
+  });
 });

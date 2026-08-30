@@ -686,7 +686,8 @@ export interface WhatsappService {
 }
 
 export interface TelegramStatus {
-  status: "disconnected" | "connecting" | "qr" | "connected";
+  // "password" = the account has 2FA; it's waiting for the user's password.
+  status: "disconnected" | "connecting" | "qr" | "password" | "connected";
   provider: "mtproto";
   username: string | null;
   phone: string | null;
@@ -702,6 +703,8 @@ export interface TelegramService {
   reconnect(workspaceId: string): Promise<TelegramStatus>;
   disconnect(workspaceId: string): Promise<TelegramStatus>;
   sync(workspaceId: string): Promise<TelegramStatus>;
+  /** Submit the 2FA password when status is "password". */
+  submitPassword(workspaceId: string, password: string): Promise<TelegramStatus>;
 }
 
 /** A user as seen by the platform super-admin, with all their memberships. */

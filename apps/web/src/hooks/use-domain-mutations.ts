@@ -1133,6 +1133,20 @@ export const useTelegramReconnect = () => useTelegramAction("reconnect");
 export const useTelegramDisconnect = () => useTelegramAction("disconnect");
 export const useTelegramSync = () => useTelegramAction("sync");
 
+export function useTelegramSubmitPassword() {
+  const svc = useServices();
+  const ws = useWorkspace();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (password: string) => svc.telegram.submitPassword(ws.id, password),
+    onSuccess: (status) => {
+      qc.setQueryData([ws.id, "telegram", "status"], status);
+      void qc.invalidateQueries({ queryKey: [ws.id, "telegram", "status"] });
+    },
+    onError: (err) => toast.error(errText(err)),
+  });
+}
+
 // ── Google OAuth ──────────────────────────────────────────────────────────────
 export function useGoogleConnect() {
   const svc = useServices();

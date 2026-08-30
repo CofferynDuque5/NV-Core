@@ -1,7 +1,15 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
-/** Connection state of a Telegram (MTProto/user) session, mirrors WhatsApp. */
-export type TelegramStatusValue = "disconnected" | "connecting" | "qr" | "connected";
+/**
+ * Connection state of a Telegram (MTProto/user) session, mirrors WhatsApp.
+ * "password" = the scanned account has 2FA; waiting for the user's password.
+ */
+export type TelegramStatusValue =
+  | "disconnected"
+  | "connecting"
+  | "qr"
+  | "password"
+  | "connected";
 
 export interface TelegramStatus {
   status: TelegramStatusValue;
