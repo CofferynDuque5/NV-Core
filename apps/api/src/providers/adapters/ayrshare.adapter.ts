@@ -75,14 +75,22 @@ abstract class AyrshareAdapter extends BaseAdapter {
   }
 }
 
+// Explicit constructor so TypeScript emits DI metadata on the concrete class
+// (otherwise Nest injects nothing and `this.ayrshare` is undefined at runtime).
 @Injectable()
 export class FacebookAyrshareAdapter extends AyrshareAdapter {
   readonly provider: ProviderId = "facebook";
   protected readonly platform: AyrsharePlatform = "facebook";
+  constructor(ayrshare: AyrshareService) {
+    super(ayrshare);
+  }
 }
 
 @Injectable()
 export class InstagramAyrshareAdapter extends AyrshareAdapter {
   readonly provider: ProviderId = "instagram";
   protected readonly platform: AyrsharePlatform = "instagram";
+  constructor(ayrshare: AyrshareService) {
+    super(ayrshare);
+  }
 }

@@ -79,14 +79,23 @@ abstract class MetaGraphAdapter extends BaseAdapter {
   }
 }
 
+// The concrete adapters declare an explicit constructor so TypeScript emits the
+// DI metadata (design:paramtypes) on THIS class — without it Nest constructs the
+// subclass with no args and `this.meta` is undefined at runtime.
 @Injectable()
 export class FacebookMetaGraphAdapter extends MetaGraphAdapter {
   readonly provider: ProviderId = "facebook";
   protected readonly target: MetaTarget = "facebook";
+  constructor(meta: MetaService) {
+    super(meta);
+  }
 }
 
 @Injectable()
 export class InstagramMetaGraphAdapter extends MetaGraphAdapter {
   readonly provider: ProviderId = "instagram";
   protected readonly target: MetaTarget = "instagram";
+  constructor(meta: MetaService) {
+    super(meta);
+  }
 }
