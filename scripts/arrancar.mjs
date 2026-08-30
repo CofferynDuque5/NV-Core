@@ -16,7 +16,7 @@
  *   4) prisma generate + migrate deploy
  *   5) pnpm dev  (API + Web con recarga en caliente)
  */
-import { spawnSync } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import { randomBytes } from "node:crypto";
 import { existsSync, copyFileSync, readFileSync, appendFileSync, writeFileSync } from "node:fs";
 import { createConnection } from "node:net";
@@ -62,6 +62,39 @@ function run(cmd, opts = {}) {
 function capture(cmd) {
   const r = spawnSync(cmd, { shell: true, cwd: ROOT, encoding: "utf8" });
   return r.status === 0 ? (r.stdout || "").trim() : "";
+}
+
+/**
+ * Levanta API y Web como procesos hijos DIRECTOS (sin turbo). El binario nativo
+ * de turbo falla al spawnear en algunos Windows con Node reciente ("spawn
+ * UNKNOWN", errno -4094), y para desarrollo no lo necesitamos: basta con lanzar
+ * el `dev` de cada app. Si uno cae (o Ctrl+C), se detienen ambos.
+ */
+function startDevServers() {
+  const children = [];
+  let stopping = false;
+  const stop = (code) => {
+    if (stopping) return;
+    stopping = true;
+    for (const ch of children) {
+      try {
+        ch.kill();
+      } catch {
+        /* ignore */
+      }
+    }
+    process.exit(code ?? 0);
+  };
+  const launch = (cmd) => {
+    const child = spawn(cmd, { stdio: "inherit", shell: true, cwd: ROOT, env: process.env });
+    child.on("exit", (code) => stop(code ?? 0));
+    child.on("error", () => stop(1));
+    children.push(child);
+  };
+  process.on("SIGINT", () => stop(0));
+  process.on("SIGTERM", () => stop(0));
+  launch("pnpm --filter @nv/api dev");
+  launch("pnpm --filter @nv/web dev");
 }
 const genSecret = () => randomBytes(32).toString("hex");
 
@@ -298,13 +331,25 @@ const printLogin = () => {
 // ── Paso 5: arrancar ─────────────────────────────────────────────────────────
 if (PREPARE_ONLY) {
   step("Listo (preparación completa)");
-  console.log("  Levanta los servidores con: " + c("1", "pnpm dev"));
+  console.log("  Levanta los servidores con: " + c("1", "pnpm arrancar --skip-install"));
+  console.log(
+    "  (o por separado: " +
+      c("1", "pnpm --filter @nv/api dev") +
+      " y " +
+      c("1", "pnpm --filter @nv/web dev") +
+      ")",
+  );
   console.log(`  Web: ${c("36", webUrl)}   API: ${c("36", apiUrl)}`);
   printLogin();
   process.exit(0);
 }
 step(`Paso 5 · Levantar API (:${apiPort}) + Web (:${webPort})`);
+// El paquete de dominio se compila una vez antes de arrancar (los servidores
+// consumen sus tipos); cada `dev` también lo reconstruye, pero así evitamos
+// cualquier carrera en el primer arranque.
+run("pnpm --filter @nv/domain build");
 console.log(`  ${c("1", "Abre en el navegador:")} ${c("36", webUrl)}`);
 printLogin();
 console.log(`  API: ${c("36", apiUrl)}    (Ctrl+C para detener)\n`);
-process.exit(run("pnpm dev") ? 0 : 1);
+// Sin turbo (ver startDevServers): más robusto en Windows.
+startDevServers();
