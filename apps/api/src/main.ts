@@ -11,11 +11,21 @@ import type { AppConfig } from "./config/configuration";
 import { AllExceptionsFilter } from "./common/filters/all-exceptions.filter";
 import { requestIdMiddleware } from "./common/middleware/request-id";
 import { initSentry } from "./common/observability/sentry";
+import { JsonLogger } from "./common/observability/json-logger";
+import { HttpLoggerInterceptor } from "./common/observability/http-logger.interceptor";
 
 async function bootstrap(): Promise<void> {
+  // Structured JSON logs in production (or when LOG_FORMAT=json) so aggregators
+  // can parse them; pretty console logs in dev. Decided from env before the app
+  // exists, so the very first boot lines already use the chosen format.
+  const logFormat = process.env.LOG_FORMAT ?? (process.env.NODE_ENV === "production" ? "json" : "pretty");
   // rawBody: true keeps a raw copy of the body (needed for Stripe webhook
   // signature verification) alongside normal JSON parsing for every other route.
-  const app = await NestFactory.create(AppModule, { bufferLogs: false, rawBody: true });
+  const app = await NestFactory.create(AppModule, {
+    bufferLogs: false,
+    rawBody: true,
+    ...(logFormat === "json" ? { logger: new JsonLogger() } : {}),
+  });
   const config = app.get(ConfigService<AppConfig, true>);
 
   // Error monitoring (no-op unless SENTRY_DSN is set).
@@ -40,6 +50,8 @@ async function bootstrap(): Promise<void> {
   );
 
   app.useGlobalFilters(new AllExceptionsFilter());
+  // Per-request access log (success path; errors are logged by the filter).
+  app.useGlobalInterceptors(new HttpLoggerInterceptor());
 
   // Drain in-flight work on SIGTERM/SIGINT: fires every provider's
   // onModuleDestroy (Prisma disconnect, BullMQ worker/queue close, campaign

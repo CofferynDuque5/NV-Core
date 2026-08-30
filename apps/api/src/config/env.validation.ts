@@ -38,6 +38,9 @@ export const envSchema = z.object({
 
   // Observability
   SENTRY_DSN: z.string().url().optional(),
+  // Log format: "json" (structured, for aggregators) or "pretty" (dev console).
+  // Defaults to json in production, pretty otherwise (resolved in main.ts).
+  LOG_FORMAT: z.enum(["json", "pretty"]).optional(),
 
   // Automation — n8n as the orchestrator
   N8N_BASE_URL: z.string().url().optional(),
