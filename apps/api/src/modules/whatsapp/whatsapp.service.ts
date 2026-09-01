@@ -93,7 +93,10 @@ export class WhatsappService implements SessionEvents, OnModuleInit {
   }
 
   private async persistGroups(workspaceSlug: string, groups: WhatsappGroup[]): Promise<void> {
+    // Never prune on an empty fetch (a transient sync error would wipe everything);
+    // the early return keeps the last known list until a real sync arrives.
     if (!this.prisma.enabled || !groups.length) return;
+    const jids = groups.map((g) => g.remoteJid);
     for (const g of groups) {
       await this.prisma.group.upsert({
         where: { workspaceSlug_remoteJid: { workspaceSlug, remoteJid: g.remoteJid } },
@@ -108,6 +111,12 @@ export class WhatsappService implements SessionEvents, OnModuleInit {
         update: { name: g.subject, members: g.size, synced: true },
       });
     }
+    // Prune auto-imported WhatsApp groups this account is no longer in — e.g. after
+    // linking a DIFFERENT WhatsApp, so campaigns stop targeting the old account's
+    // groups. Manually created groups (synced=false) are always kept.
+    await this.prisma.group.deleteMany({
+      where: { workspaceSlug, channel: "wa", synced: true, remoteJid: { notIn: jids } },
+    });
   }
 
   private async persist(

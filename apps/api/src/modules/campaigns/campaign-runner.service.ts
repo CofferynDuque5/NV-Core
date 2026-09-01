@@ -187,6 +187,11 @@ export class CampaignRunner implements OnModuleInit, OnModuleDestroy {
     const total = campaign.targets.length;
     for (const target of campaign.targets) {
       const group = target.group;
+      // Defense-in-depth: never send to a group that isn't this workspace's own
+      // (e.g. a stale target left after switching accounts). Targeting is already
+      // validated on write, but this guarantees the historial never shows sends
+      // to groups that don't belong to this workspace's WhatsApp/Telegram.
+      if (!group || group.workspaceSlug !== workspaceSlug) continue;
       // Group.channel defaults to "wa"; only Telegram routes elsewhere.
       const ch = group.channel === "tg" ? "tg" : "wa";
       const provider = ch === "tg" ? "telegram" : "whatsapp";

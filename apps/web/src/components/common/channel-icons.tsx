@@ -10,7 +10,16 @@ import type { ChannelId } from "@nv/domain";
 type IconProps = { className?: string };
 
 const Svg = ({ children, className }: { children: React.ReactNode; className?: string }) => (
-  <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden className={className}>
+  <svg
+    viewBox="0 0 24 24"
+    fill="currentColor"
+    // Explicit 1em size is a fallback so the glyph never collapses to 0 or blows
+    // up to its intrinsic size if a utility class is missing; className still wins.
+    width="1em"
+    height="1em"
+    aria-hidden="true"
+    className={className ? `shrink-0 ${className}` : "shrink-0"}
+  >
     {children}
   </svg>
 );

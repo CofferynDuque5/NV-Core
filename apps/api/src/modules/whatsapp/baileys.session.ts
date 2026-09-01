@@ -104,7 +104,10 @@ export class BaileysSession {
       this.sock.ev.on("creds.update", saveCreds);
       this.sock.ev.on("contacts.upsert", (rows: any[]) => this.trackContacts(rows));
       this.sock.ev.on("contacts.update", (rows: any[]) => this.trackContacts(rows));
-      this.sock.ev.on("messaging-history.set", (h: any) => this.trackContacts(h?.contacts ?? []));
+      this.sock.ev.on("messaging-history.set", (h: any) => {
+        this.trackContacts(h?.contacts ?? []);
+        this.seedInboxFromHistory(h?.messages ?? []);
+      });
       this.sock.ev.on("messages.upsert", (u: any) => this.onIncomingMessages(u));
       this.sock.ev.on("connection.update", (u: any) => this.onConnectionUpdate(u));
     } catch (err) {
@@ -214,12 +217,7 @@ export class BaileysSession {
         if (m?.key?.fromMe) continue;
         const jid: string = m?.key?.remoteJid ?? "";
         if (!jid.endsWith("@s.whatsapp.net")) continue; // 1:1 chats only
-        const text: string =
-          m?.message?.conversation ??
-          m?.message?.extendedTextMessage?.text ??
-          m?.message?.imageMessage?.caption ??
-          m?.message?.videoMessage?.caption ??
-          "";
+        const text = BaileysSession.textOf(m);
         if (!text.trim()) continue;
         const handle = numberFromJid(jid) ?? jid.split("@")[0];
         const name = String(m?.pushName || handle);
@@ -227,6 +225,51 @@ export class BaileysSession {
       } catch (err) {
         this.logger.warn(`Mensaje entrante ignorado: ${(err as Error).message}`);
       }
+    }
+  }
+
+  /** Extract the readable text/caption from a Baileys message (empty if none). */
+  private static textOf(m: any): string {
+    return (
+      m?.message?.conversation ??
+      m?.message?.extendedTextMessage?.text ??
+      m?.message?.imageMessage?.caption ??
+      m?.message?.videoMessage?.caption ??
+      ""
+    );
+  }
+
+  /**
+   * Seed the Inbox with recent 1:1 conversations from the history Baileys sends
+   * right after linking. WhatsApp Web doesn't replay full history, but this gives
+   * the operator their recent chats immediately instead of an empty inbox until
+   * someone writes. One entry per contact (their most recent inbound text).
+   */
+  private seedInboxFromHistory(messages: any[]): void {
+    if (!Array.isArray(messages) || !messages.length) return;
+    const latest = new Map<string, { handle: string; name: string; text: string; ts: number }>();
+    for (const m of messages) {
+      try {
+        if (m?.key?.fromMe) continue;
+        const jid: string = m?.key?.remoteJid ?? "";
+        if (!jid.endsWith("@s.whatsapp.net")) continue; // 1:1 chats only
+        const text = BaileysSession.textOf(m);
+        if (!text.trim()) continue;
+        const ts = Number(m?.messageTimestamp ?? 0);
+        const prev = latest.get(jid);
+        if (prev && prev.ts >= ts) continue;
+        const handle = numberFromJid(jid) ?? jid.split("@")[0];
+        latest.set(jid, { handle, name: String(m?.pushName || handle), text, ts });
+      } catch {
+        /* ignore malformed history rows */
+      }
+    }
+    for (const c of latest.values()) {
+      this.events.onInbound(this.workspaceSlug, {
+        contactHandle: c.handle,
+        contactName: c.name,
+        text: c.text,
+      });
     }
   }
 

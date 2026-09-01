@@ -226,13 +226,38 @@ export class CampaignsService {
     };
   }
 
+  /**
+   * A campaign that carries a real schedule must be "programada" so the runner
+   * picks it up. Otherwise a freshly created scheduled campaign stays "borrador"
+   * and never fires — the tick only processes "programada"/"activa". An explicit
+   * non-draft status (pausada/completada/activa) is always respected.
+   */
+  private static scheduledStatus(
+    status: CampaignStatus | undefined,
+    scheduleType: string | undefined | null,
+    scheduleAt: string | undefined | null,
+    scheduleTimes: string[] | undefined | null,
+  ): CampaignStatus | undefined {
+    if (status && status !== "borrador") return status;
+    const hasRecurring =
+      (scheduleType === "daily" || scheduleType === "weekly") && (scheduleTimes?.length ?? 0) > 0;
+    const hasOnce = scheduleType === "once" && Boolean(scheduleAt);
+    return hasRecurring || hasOnce ? "programada" : status;
+  }
+
   async create(workspaceId: string, actor: string, dto: CreateCampaignDto): Promise<Campaign> {
     await this.plans.assertWithinLimit(workspaceId, "campaigns", 1);
     const created = await this.db().campaign.create({
       data: {
         workspaceSlug: workspaceId,
         name: dto.name,
-        status: dto.status ?? "borrador",
+        status:
+          CampaignsService.scheduledStatus(
+            dto.status,
+            dto.scheduleType,
+            dto.scheduleAt,
+            dto.scheduleTimes,
+          ) ?? "borrador",
         channels: dto.channels ?? [],
         progress: dto.progress ?? 0,
         nextRunAt: dto.nextRunAt ? new Date(dto.nextRunAt) : null,
@@ -261,11 +286,19 @@ export class CampaignsService {
   ): Promise<Campaign> {
     const existing = await this.db().campaign.findFirst({ where: { id, workspaceSlug: workspaceId } });
     if (!existing) throw new NotFoundException("Campaña no encontrada.");
+    // Activate a campaign that (now) carries a schedule but is still a draft, so
+    // the runner fires it. Merges with the stored values since the update is partial.
+    const status = CampaignsService.scheduledStatus(
+      dto.status ?? (existing.status as CampaignStatus),
+      dto.scheduleType ?? existing.scheduleType,
+      dto.scheduleAt ?? existing.scheduleAt,
+      dto.scheduleTimes ?? (existing.scheduleTimes as string[] | null),
+    );
     await this.prisma.campaign.update({
       where: { id },
       data: {
         name: dto.name,
-        status: dto.status,
+        status,
         channels: dto.channels,
         progress: dto.progress,
         nextRunAt: dto.nextRunAt ? new Date(dto.nextRunAt) : undefined,

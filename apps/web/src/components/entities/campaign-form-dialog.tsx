@@ -24,6 +24,7 @@ import { AiFlyerButton } from "./ai-flyer-button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { TimePicker12h } from "@/components/ui/time-picker";
 
 type ScheduleType = "once" | "daily" | "weekly";
 
@@ -108,7 +109,7 @@ export function CampaignFormDialog({
     setMessage(campaign?.message ?? "");
     setScheduleType(type);
     setDateTime(type === "once" ? isoToLocalInput(campaign?.scheduleAt) : "");
-    setTime("");
+    setTime("20:00"); // default the picker to 8:00 PM, ready to add
     setScheduleTimes(
       type === "once"
         ? []
@@ -177,8 +178,8 @@ export function CampaignFormDialog({
   function addTime() {
     const t = time.trim();
     if (!t) return;
+    // Keep the picker on the last value so adding several nearby times is quick.
     setScheduleTimes((prev) => (prev.includes(t) ? prev : [...prev, t].sort()));
-    setTime("");
   }
   function removeTime(t: string) {
     setScheduleTimes((prev) => prev.filter((x) => x !== t));
@@ -194,11 +195,16 @@ export function CampaignFormDialog({
     if (fb) channels.push("fb");
     if (ig) channels.push("ig");
 
-    // Include any time still typed in the box but not yet "added".
+    // Use the added times; if none were added, fall back to the one shown in the
+    // picker so a single time still works even without pressing "Agregar".
     const times =
       scheduleType === "once"
         ? []
-        : Array.from(new Set([...scheduleTimes, ...(time.trim() ? [time.trim()] : [])])).sort();
+        : scheduleTimes.length
+          ? [...scheduleTimes].sort()
+          : time.trim()
+            ? [time.trim()]
+            : [];
 
     const scheduleAt =
       scheduleType === "once"
@@ -471,20 +477,15 @@ export function CampaignFormDialog({
                     <Label className="text-ink-muted text-xs">
                       Horas de envío (puedes agregar varias)
                     </Label>
-                    <div className="flex items-center gap-2">
-                      <Input
-                        type="time"
-                        value={time}
-                        onChange={(e) => setTime(e.target.value)}
-                        className="flex-1"
-                      />
+                    <div className="flex flex-wrap items-center gap-2">
+                      <TimePicker12h value={time} onChange={setTime} />
                       <button
                         type="button"
                         onClick={addTime}
-                        disabled={!time}
+                        disabled={!time || scheduleTimes.includes(time)}
                         className="border-line-soft text-ink-muted hover:border-brand/60 hover:text-ink rounded-lg border px-3 py-1.5 text-xs transition-colors disabled:opacity-50"
                       >
-                        Agregar hora
+                        {scheduleTimes.includes(time) ? "Agregada ✓" : "Agregar hora"}
                       </button>
                     </div>
                     {scheduleTimes.length > 0 ? (

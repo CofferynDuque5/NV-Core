@@ -58,24 +58,33 @@ function makeRunner(overrides: {
   return { runner, prisma, providers, jobs, events, audit, sendLogs, updates, emitted };
 }
 
-const campaign = (over: AnyRec = {}): AnyRec => ({
-  id: "c1",
-  name: "Promo",
-  workspaceSlug: "w1",
-  status: "programada",
-  message: "Hola",
-  channels: ["wa"],
-  attachments: [],
-  socialFormat: null,
-  scheduleType: "once",
-  scheduleAt: "",
-  scheduleTimes: [],
-  scheduleDays: [],
-  lastRunDay: null,
-  lastRunSlot: null,
-  targets: [],
-  ...over,
-});
+const campaign = (over: AnyRec = {}): AnyRec => {
+  const base: AnyRec = {
+    id: "c1",
+    name: "Promo",
+    workspaceSlug: "w1",
+    status: "programada",
+    message: "Hola",
+    channels: ["wa"],
+    attachments: [],
+    socialFormat: null,
+    scheduleType: "once",
+    scheduleAt: "",
+    scheduleTimes: [],
+    scheduleDays: [],
+    lastRunDay: null,
+    lastRunSlot: null,
+    targets: [],
+    ...over,
+  };
+  // The runner only sends to groups belonging to the campaign's workspace, so
+  // fixture groups default to that workspace unless a test sets one explicitly.
+  base.targets = (base.targets as AnyRec[]).map((t) => ({
+    ...t,
+    group: t.group ? { workspaceSlug: base.workspaceSlug, ...t.group } : t.group,
+  }));
+  return base;
+};
 
 describe("CampaignRunner.isDue", () => {
   const { runner } = makeRunner();
@@ -253,6 +262,22 @@ describe("CampaignRunner.run", () => {
     expect(emitted).toEqual([
       { event: "campaign.completed", payload: expect.objectContaining({ campaignId: "c1", ok: true }) },
     ]);
+  });
+
+  it("skips targets whose group belongs to another workspace (no send, no log)", async () => {
+    const c = campaign({
+      targets: [
+        { group: { id: "g1", name: "Propio", remoteJid: "1@g.us" } }, // workspace w1
+        { group: { id: "gX", name: "Ajeno", remoteJid: "9@g.us", workspaceSlug: "other" } },
+      ],
+    });
+    const { runner, providers, sendLogs } = makeRunner({ campaign: c });
+
+    await runner.run("w1", "c1");
+
+    expect(providers.sendMessage).toHaveBeenCalledTimes(1);
+    expect(sendLogs).toHaveLength(1);
+    expect(sendLogs[0]!.groupName).toBe("Propio");
   });
 
   it("logs a failed send and re-arms the campaign as 'programada' (not completed)", async () => {

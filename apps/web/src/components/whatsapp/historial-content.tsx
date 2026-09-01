@@ -1,6 +1,5 @@
-
 import * as React from "react";
-import type { SendLogEntry } from "@nv/domain";
+import type { ChannelId, SendLogEntry } from "@nv/domain";
 import { BarChart2, Download, History, Loader2, Trash2 } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 
@@ -12,10 +11,13 @@ import { useWorkspace } from "@/hooks/use-workspace";
 import { formatDateTime, cn } from "@/lib/utils";
 import {
   channelCounts,
+  channelOf,
   searchHistorial,
   summarize,
+  type HistorialChannel,
   type HistorialFilter,
 } from "@/lib/historial";
+import { ChannelChip } from "@/components/common/channel-badge";
 import { Input } from "@/components/ui/input";
 import { PageHeader } from "@/components/common/page-header";
 import { QueryBoundary } from "@/components/common/query-boundary";
@@ -31,9 +33,29 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 
-const COLUMNS = ["Fecha", "Campaña", "Destino", "Estado", "Detalle", ""];
+const COLUMNS = ["Fecha", "Campaña", "Canal", "Destino", "Estado", "Detalle", ""];
 
 const SOCIAL_TARGETS = new Set(["facebook", "instagram"]);
+
+/** Map the historial channel to a brand chip id + label for the per-row badge. */
+const CHANNEL_BADGE: Record<HistorialChannel, { id: ChannelId; label: string } | null> = {
+  whatsapp: { id: "wa", label: "WhatsApp" },
+  telegram: { id: "tg", label: "Telegram" },
+  facebook: { id: "fb", label: "Facebook" },
+  instagram: { id: "ig", label: "Instagram" },
+  otro: null,
+};
+
+function ChannelCell({ entry }: { entry: SendLogEntry }) {
+  const badge = CHANNEL_BADGE[channelOf(entry)];
+  if (!badge) return <span className="text-ink-faint">—</span>;
+  return (
+    <span className="inline-flex items-center gap-1.5">
+      <ChannelChip id={badge.id} />
+      <span className="text-ink-muted text-xs">{badge.label}</span>
+    </span>
+  );
+}
 
 function destination(entry: SendLogEntry): string {
   return entry.groupName ?? entry.target ?? "—";
@@ -98,7 +120,12 @@ export function HistorialContent({ showHeader = true }: { showHeader?: boolean }
 
   const actions = (
     <div className="flex items-center gap-2">
-      <Button size="sm" variant="secondary" onClick={() => downloadCsv(rows)} disabled={rows.length === 0}>
+      <Button
+        size="sm"
+        variant="secondary"
+        onClick={() => downloadCsv(rows)}
+        disabled={rows.length === 0}
+      >
         <Download className="size-4" /> Exportar CSV
       </Button>
       <Button
@@ -108,7 +135,11 @@ export function HistorialContent({ showHeader = true }: { showHeader?: boolean }
         disabled={rows.length === 0 || clear.isPending}
         className="text-state-danger hover:bg-state-danger/10"
       >
-        {clear.isPending ? <Loader2 className="size-4 animate-spin" /> : <Trash2 className="size-4" />}
+        {clear.isPending ? (
+          <Loader2 className="size-4 animate-spin" />
+        ) : (
+          <Trash2 className="size-4" />
+        )}
         Borrar historial
       </Button>
     </div>
@@ -151,15 +182,25 @@ export function HistorialContent({ showHeader = true }: { showHeader?: boolean }
                   placeholder="Buscar campaña, grupo o mensaje…"
                   className="h-9 w-full max-w-xs"
                 />
-                <label className="flex items-center gap-1.5 text-xs text-ink-muted">
+                <label className="text-ink-muted flex items-center gap-1.5 text-xs">
                   Desde
-                  <Input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className="h-9" />
+                  <Input
+                    type="date"
+                    value={from}
+                    onChange={(e) => setFrom(e.target.value)}
+                    className="h-9"
+                  />
                 </label>
-                <label className="flex items-center gap-1.5 text-xs text-ink-muted">
+                <label className="text-ink-muted flex items-center gap-1.5 text-xs">
                   Hasta
-                  <Input type="date" value={to} onChange={(e) => setTo(e.target.value)} className="h-9" />
+                  <Input
+                    type="date"
+                    value={to}
+                    onChange={(e) => setTo(e.target.value)}
+                    className="h-9"
+                  />
                 </label>
-                {(q || from || to) ? (
+                {q || from || to ? (
                   <button
                     type="button"
                     onClick={() => {
@@ -167,7 +208,7 @@ export function HistorialContent({ showHeader = true }: { showHeader?: boolean }
                       setFrom("");
                       setTo("");
                     }}
-                    className="text-xs text-ink-muted underline-offset-2 hover:text-ink hover:underline"
+                    className="text-ink-muted hover:text-ink text-xs underline-offset-2 hover:underline"
                   >
                     Limpiar
                   </button>
@@ -191,7 +232,7 @@ export function HistorialContent({ showHeader = true }: { showHeader?: boolean }
                     </button>
                   ))}
                 </div>
-                <div className="ml-auto flex items-center gap-2 text-xs text-ink-muted">
+                <div className="text-ink-muted ml-auto flex items-center gap-2 text-xs">
                   <Badge variant="success">{sum.ok} OK</Badge>
                   {sum.error > 0 ? <Badge variant="danger">{sum.error} error</Badge> : null}
                   <span>· {sum.total} en total</span>
@@ -199,67 +240,71 @@ export function HistorialContent({ showHeader = true }: { showHeader?: boolean }
               </div>
 
               <Panel className="overflow-hidden">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-line text-left text-xs text-ink-faint">
-                  {COLUMNS.map((c, i) => (
-                    <th key={i} className="px-4 py-3 font-medium">
-                      {c}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {filtered.length === 0 ? (
-                  <tr>
-                    <td colSpan={COLUMNS.length} className="px-4 py-8 text-center text-ink-faint">
-                      Sin envíos en este canal.
-                    </td>
-                  </tr>
-                ) : null}
-                {filtered.map((entry) => {
-                  const target = entry.target ?? "";
-                  const showMetrics = SOCIAL_TARGETS.has(target) && Boolean(entry.postId);
-                  return (
-                    <tr
-                      key={entry.id}
-                      className="border-b border-line last:border-0 align-top hover:bg-panel-raised/40"
-                    >
-                      <td className="whitespace-nowrap px-4 py-3 text-ink-muted">
-                        {formatDateTime(entry.createdAt)}
-                      </td>
-                      <td className="px-4 py-3 text-ink">{entry.campaignName ?? "—"}</td>
-                      <td className="px-4 py-3 text-ink-muted">{destination(entry)}</td>
-                      <td className="px-4 py-3">
-                        {entry.ok ? (
-                          <Badge variant="success">OK</Badge>
-                        ) : (
-                          <Badge variant="danger">Error</Badge>
-                        )}
-                      </td>
-                      <td className="max-w-xs px-4 py-3 text-ink-muted">
-                        <span className={entry.ok ? undefined : "text-state-danger"}>
-                          {entry.ok ? (entry.preview ?? "—") : (entry.error ?? "—")}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3 text-right">
-                        {showMetrics ? (
-                          <button
-                            onClick={() =>
-                              setInsights({ target, id: entry.postId as string })
-                            }
-                            className="inline-flex items-center gap-1.5 rounded-md px-2 py-1.5 text-xs text-ink-muted transition-colors hover:bg-panel-high hover:text-ink"
-                            title="Ver métricas"
-                          >
-                            <BarChart2 className="size-4" /> Métricas
-                          </button>
-                        ) : null}
-                      </td>
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-line text-ink-faint border-b text-left text-xs">
+                      {COLUMNS.map((c, i) => (
+                        <th key={i} className="px-4 py-3 font-medium">
+                          {c}
+                        </th>
+                      ))}
                     </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+                  </thead>
+                  <tbody>
+                    {filtered.length === 0 ? (
+                      <tr>
+                        <td
+                          colSpan={COLUMNS.length}
+                          className="text-ink-faint px-4 py-8 text-center"
+                        >
+                          Sin envíos en este canal.
+                        </td>
+                      </tr>
+                    ) : null}
+                    {filtered.map((entry) => {
+                      const target = entry.target ?? "";
+                      const showMetrics = SOCIAL_TARGETS.has(target) && Boolean(entry.postId);
+                      return (
+                        <tr
+                          key={entry.id}
+                          className="border-line hover:bg-panel-raised/40 border-b align-top last:border-0"
+                        >
+                          <td className="text-ink-muted whitespace-nowrap px-4 py-3">
+                            {formatDateTime(entry.createdAt)}
+                          </td>
+                          <td className="text-ink px-4 py-3">{entry.campaignName ?? "—"}</td>
+                          <td className="whitespace-nowrap px-4 py-3">
+                            <ChannelCell entry={entry} />
+                          </td>
+                          <td className="text-ink-muted px-4 py-3">{destination(entry)}</td>
+                          <td className="px-4 py-3">
+                            {entry.ok ? (
+                              <Badge variant="success">OK</Badge>
+                            ) : (
+                              <Badge variant="danger">Error</Badge>
+                            )}
+                          </td>
+                          <td className="text-ink-muted max-w-xs px-4 py-3">
+                            <span className={entry.ok ? undefined : "text-state-danger"}>
+                              {entry.ok ? (entry.preview ?? "—") : (entry.error ?? "—")}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3 text-right">
+                            {showMetrics ? (
+                              <button
+                                onClick={() => setInsights({ target, id: entry.postId as string })}
+                                className="text-ink-muted hover:bg-panel-high hover:text-ink inline-flex items-center gap-1.5 rounded-md px-2 py-1.5 text-xs transition-colors"
+                                title="Ver métricas"
+                              >
+                                <BarChart2 className="size-4" /> Métricas
+                              </button>
+                            ) : null}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
               </Panel>
             </div>
           );
@@ -302,21 +347,21 @@ function InsightsDialog({
         </DialogHeader>
 
         {query.isLoading ? (
-          <div className="flex items-center gap-2 py-4 text-sm text-ink-muted">
+          <div className="text-ink-muted flex items-center gap-2 py-4 text-sm">
             <Loader2 className="size-4 animate-spin" /> Cargando métricas…
           </div>
         ) : query.isError ? (
-          <p className="rounded-lg border border-state-danger/30 bg-state-danger/10 px-3 py-2 text-xs text-state-danger">
+          <p className="border-state-danger/30 bg-state-danger/10 text-state-danger rounded-lg border px-3 py-2 text-xs">
             No se pudieron cargar las métricas.
           </p>
         ) : entries.length === 0 ? (
-          <p className="py-4 text-sm text-ink-muted">No hay métricas disponibles.</p>
+          <p className="text-ink-muted py-4 text-sm">No hay métricas disponibles.</p>
         ) : (
-          <dl className="divide-y divide-line">
+          <dl className="divide-line divide-y">
             {entries.map(([key, value]) => (
               <div key={key} className="flex items-center justify-between gap-3 py-2 text-sm">
                 <dt className="text-ink-muted">{key}</dt>
-                <dd className="font-medium text-ink">{String(value)}</dd>
+                <dd className="text-ink font-medium">{String(value)}</dd>
               </div>
             ))}
           </dl>
