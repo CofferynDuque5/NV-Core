@@ -111,7 +111,11 @@ export class CreateCampaignDto {
   @Max(6, { each: true })
   scheduleDays?: number[];
 
-  @ApiPropertyOptional({ isArray: true, type: String, description: "daily/weekly → varias horas HH:MM" })
+  @ApiPropertyOptional({
+    isArray: true,
+    type: String,
+    description: "daily/weekly → varias horas HH:MM",
+  })
   @IsOptional()
   @IsArray()
   @IsString({ each: true })
@@ -131,6 +135,11 @@ export class CreateCampaignDto {
   @IsOptional()
   @IsBoolean()
   postToWaStatus?: boolean;
+
+  @ApiPropertyOptional({ description: "Rotar las imágenes adjuntas en cada envío" })
+  @IsOptional()
+  @IsBoolean()
+  rotateAttachments?: boolean;
 
   @ApiPropertyOptional({ isArray: true, type: String, description: "Ids de grupos objetivo" })
   @IsOptional()
@@ -153,11 +162,17 @@ export class UpdateCampaignDto {
   @IsOptional() @IsString() message?: string;
   @IsOptional() @IsIn(["once", "daily", "weekly"]) scheduleType?: "once" | "daily" | "weekly";
   @IsOptional() @IsString() scheduleAt?: string;
-  @IsOptional() @IsArray() @IsInt({ each: true }) @Min(0, { each: true }) @Max(6, { each: true }) scheduleDays?: number[];
+  @IsOptional()
+  @IsArray()
+  @IsInt({ each: true })
+  @Min(0, { each: true })
+  @Max(6, { each: true })
+  scheduleDays?: number[];
   @IsOptional() @IsArray() @IsString({ each: true }) scheduleTimes?: string[];
   @IsOptional() @IsArray() attachments?: CampaignAttachment[];
   @IsOptional() @IsIn(["feed", "reel", "story", "carousel"]) socialFormat?: string;
   @IsOptional() @IsBoolean() postToWaStatus?: boolean;
+  @IsOptional() @IsBoolean() rotateAttachments?: boolean;
   @IsOptional() @IsArray() @IsString({ each: true }) targetGroups?: string[];
 }
 
@@ -174,7 +189,8 @@ export class CampaignsService {
   ) {}
 
   private db() {
-    if (!this.prisma.enabled) throw new ServiceUnavailableException("Base de datos no configurada.");
+    if (!this.prisma.enabled)
+      throw new ServiceUnavailableException("Base de datos no configurada.");
     return this.prisma;
   }
 
@@ -182,7 +198,12 @@ export class CampaignsService {
     if (!this.prisma.enabled) return ListResultDto.empty<Campaign>();
     const where = { workspaceSlug: workspaceId };
     const [rows, total] = await Promise.all([
-      this.prisma.campaign.findMany({ where, orderBy: { createdAt: "desc" }, take: LIST_CAP, ...WITH_COUNT }),
+      this.prisma.campaign.findMany({
+        where,
+        orderBy: { createdAt: "desc" },
+        take: LIST_CAP,
+        ...WITH_COUNT,
+      }),
       this.prisma.campaign.count({ where }),
     ]);
     return new ListResultDto(rows.map(mapCampaign), total);
@@ -198,7 +219,11 @@ export class CampaignsService {
   }
 
   /** Replace a campaign's target groups (validating they belong to the workspace). */
-  private async setTargets(workspaceId: string, campaignId: string, groupIds: string[]): Promise<void> {
+  private async setTargets(
+    workspaceId: string,
+    campaignId: string,
+    groupIds: string[],
+  ): Promise<void> {
     await this.prisma.campaignTarget.deleteMany({ where: { campaignId } });
     if (!groupIds.length) return;
     const owned = await this.prisma.group.findMany({
@@ -223,6 +248,7 @@ export class CampaignsService {
       attachments: dto.attachments as object | undefined,
       socialFormat: dto.socialFormat,
       postToWaStatus: dto.postToWaStatus,
+      rotateAttachments: dto.rotateAttachments,
     };
   }
 
@@ -270,6 +296,7 @@ export class CampaignsService {
         attachments: (dto.attachments as object) ?? [],
         socialFormat: dto.socialFormat,
         postToWaStatus: dto.postToWaStatus ?? false,
+        rotateAttachments: dto.rotateAttachments ?? false,
       },
     });
     if (dto.targetGroups) await this.setTargets(workspaceId, created.id, dto.targetGroups);
@@ -284,7 +311,9 @@ export class CampaignsService {
     id: string,
     dto: UpdateCampaignDto,
   ): Promise<Campaign> {
-    const existing = await this.db().campaign.findFirst({ where: { id, workspaceSlug: workspaceId } });
+    const existing = await this.db().campaign.findFirst({
+      where: { id, workspaceSlug: workspaceId },
+    });
     if (!existing) throw new NotFoundException("Campaña no encontrada.");
     // Activate a campaign that (now) carries a schedule but is still a draft, so
     // the runner fires it. Merges with the stored values since the update is partial.
@@ -322,7 +351,9 @@ export class CampaignsService {
 
   /** Change status (pause/resume). */
   async setStatus(workspaceId: string, id: string, status: CampaignStatus): Promise<Campaign> {
-    const existing = await this.db().campaign.findFirst({ where: { id, workspaceSlug: workspaceId } });
+    const existing = await this.db().campaign.findFirst({
+      where: { id, workspaceSlug: workspaceId },
+    });
     if (!existing) throw new NotFoundException("Campaña no encontrada.");
     await this.prisma.campaign.update({ where: { id }, data: { status } });
     const row = await this.prisma.campaign.findUnique({ where: { id }, ...WITH_COUNT });
@@ -342,7 +373,9 @@ export class CampaignsService {
   /** Delete all send-log entries for a workspace. Returns how many were removed. */
   async clearLogs(workspaceId: string, actor: string): Promise<{ deleted: number }> {
     if (!this.prisma.enabled) return { deleted: 0 };
-    const { count } = await this.prisma.sendLog.deleteMany({ where: { workspaceSlug: workspaceId } });
+    const { count } = await this.prisma.sendLog.deleteMany({
+      where: { workspaceSlug: workspaceId },
+    });
     await this.audit.record(workspaceId, actor, "campaigns.logs.clear", `deleted=${count}`);
     return { deleted: count };
   }
@@ -412,12 +445,17 @@ export class CampaignsService {
     const records = parseCsv(csv);
     const MAX = 2000;
     if (records.length > MAX) {
-      throw new BadRequestException(`Máximo ${MAX} filas por importación (recibidas ${records.length}).`);
+      throw new BadRequestException(
+        `Máximo ${MAX} filas por importación (recibidas ${records.length}).`,
+      );
     }
 
     const [existing, groups] = await Promise.all([
       db.campaign.findMany({ where: { workspaceSlug: workspaceId }, select: { name: true } }),
-      db.group.findMany({ where: { workspaceSlug: workspaceId }, select: { id: true, name: true } }),
+      db.group.findMany({
+        where: { workspaceSlug: workspaceId },
+        select: { id: true, name: true },
+      }),
     ]);
     const seen = new Set(existing.map((c) => c.name.toLowerCase()));
     const groupIdByName = new Map(groups.map((g) => [g.name.toLowerCase(), g.id] as const));
@@ -521,7 +559,12 @@ export class CampaignsService {
         errors.push(`Fila ${line}: ${(err as Error).message}`);
       }
     }
-    await this.audit.record(workspaceId, actor, "campaigns.import", `created=${created} skipped=${skipped}`);
+    await this.audit.record(
+      workspaceId,
+      actor,
+      "campaigns.import",
+      `created=${created} skipped=${skipped}`,
+    );
     return { created, skipped, errors: errors.slice(0, 50) };
   }
 }

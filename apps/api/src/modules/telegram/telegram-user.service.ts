@@ -58,7 +58,13 @@ export class TelegramUserService implements TelegramSessionEvents, OnModuleInit 
   private getOrCreate(workspaceSlug: string): TelegramUserSession {
     let session = this.live.get(workspaceSlug);
     if (!session) {
-      session = new TelegramUserSession(workspaceSlug, this.apiId!, this.apiHash!, this.store, this);
+      session = new TelegramUserSession(
+        workspaceSlug,
+        this.apiId!,
+        this.apiHash!,
+        this.store,
+        this,
+      );
       this.live.set(workspaceSlug, session);
     }
     return session;
@@ -75,7 +81,12 @@ export class TelegramUserService implements TelegramSessionEvents, OnModuleInit 
 
   onMeta(
     workspaceSlug: string,
-    meta: { username?: string | null; phone?: string | null; groupsCount?: number; connectedAt?: Date },
+    meta: {
+      username?: string | null;
+      phone?: string | null;
+      groupsCount?: number;
+      connectedAt?: Date;
+    },
   ): void {
     void this.persist(workspaceSlug, {
       username: meta.username ?? undefined,
@@ -157,8 +168,14 @@ export class TelegramUserService implements TelegramSessionEvents, OnModuleInit 
         : null;
     const session = this.live.get(workspaceSlug);
     const live = session?.currentStatus;
+    // Never report a stale "connected" from the DB when no live session backs it
+    // — sends only work through the live session, so the panel must reflect that
+    // reality (prompting a reconnect) instead of showing a green "Conectado" that
+    // silently fails every send.
+    const persisted = row?.status as TelegramStatusValue | undefined;
+    const status = live ?? (persisted && persisted !== "connected" ? persisted : "disconnected");
     return {
-      status: live ?? (row?.status as TelegramStatusValue) ?? "disconnected",
+      status,
       provider: "mtproto",
       username: row?.username ?? null,
       phone: row?.phone ?? null,
@@ -185,7 +202,12 @@ export class TelegramUserService implements TelegramSessionEvents, OnModuleInit 
   async disconnect(workspaceSlug: string): Promise<TelegramStatus> {
     await this.live.get(workspaceSlug)?.logout();
     this.live.delete(workspaceSlug);
-    await this.persist(workspaceSlug, { status: "disconnected", username: undefined, phone: undefined, groupsCount: 0 });
+    await this.persist(workspaceSlug, {
+      status: "disconnected",
+      username: undefined,
+      phone: undefined,
+      groupsCount: 0,
+    });
     return this.status(workspaceSlug);
   }
 
@@ -206,20 +228,43 @@ export class TelegramUserService implements TelegramSessionEvents, OnModuleInit 
     return this.live.get(workspaceSlug)?.isConnected ?? false;
   }
 
-  sendText(workspaceSlug: string, to: string, text: string): Promise<{ id: string }> {
-    const session = this.live.get(workspaceSlug);
-    if (!session?.isConnected) throw new Error("Telegram (cuenta) no está conectado en este workspace.");
-    return session.sendText(to, text);
+  /**
+   * Guarantee a live, connected session before a send. Self-heals the common
+   * case where the account is still authorized but the live session dropped
+   * (e.g. after an API restart): it resumes silently from the stored
+   * StringSession — no QR needed. Only throws an actionable error when there is
+   * genuinely no way to reconnect without the operator re-linking.
+   */
+  private async ensureConnected(workspaceSlug: string): Promise<void> {
+    if (this.isConnected(workspaceSlug)) return;
+    if (!this.configured) {
+      throw new Error(
+        "Telegram (cuenta) no configurado. Define TELEGRAM_API_ID y TELEGRAM_API_HASH (my.telegram.org).",
+      );
+    }
+    if (this.store.load(workspaceSlug)) {
+      await this.getOrCreate(workspaceSlug)
+        .start()
+        .catch(() => undefined);
+    }
+    if (this.isConnected(workspaceSlug)) return;
+    throw new Error(
+      "Telegram (cuenta) no está conectado. Abre Conexiones → Telegram y pulsa Reconectar (o escanea el QR).",
+    );
   }
 
-  sendMedia(
+  async sendText(workspaceSlug: string, to: string, text: string): Promise<{ id: string }> {
+    await this.ensureConnected(workspaceSlug);
+    return this.live.get(workspaceSlug)!.sendText(to, text);
+  }
+
+  async sendMedia(
     workspaceSlug: string,
     to: string,
     text: string,
     attachment?: TelegramAttachment | null,
   ): Promise<{ id: string }> {
-    const session = this.live.get(workspaceSlug);
-    if (!session?.isConnected) throw new Error("Telegram (cuenta) no está conectado en este workspace.");
-    return session.sendMedia(to, text, attachment);
+    await this.ensureConnected(workspaceSlug);
+    return this.live.get(workspaceSlug)!.sendMedia(to, text, attachment);
   }
 }

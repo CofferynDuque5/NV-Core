@@ -129,6 +129,8 @@ export interface Campaign {
   socialFormat?: string | null;
   /** When true, also publish to the connected WhatsApp Status (Estados). */
   postToWaStatus?: boolean;
+  /** When true, sends rotate through the attachments (one image per run). */
+  rotateAttachments?: boolean;
   /** Ids of the WhatsApp groups this campaign targets. */
   targetGroups?: string[];
   lastRunAt?: string | null;

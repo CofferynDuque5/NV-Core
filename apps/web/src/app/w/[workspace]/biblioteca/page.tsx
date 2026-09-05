@@ -1,10 +1,20 @@
 import * as React from "react";
-import { Image as ImageIcon, Loader2, Pencil, Search, Send, Trash2, Upload, X } from "lucide-react";
+import {
+  FolderPlus,
+  Image as ImageIcon,
+  Loader2,
+  Pencil,
+  Search,
+  Send,
+  Trash2,
+  Upload,
+  X,
+} from "lucide-react";
 import type { CampaignAttachment, MediaAsset } from "@nv/domain";
 
 import { cn } from "@/lib/utils";
 import { useMediaAssets, useMediaFolders, useMediaTags } from "@/hooks/use-domain-data";
-import { useDeleteAsset, useUploadMedia } from "@/hooks/use-domain-mutations";
+import { useCreateFolder, useDeleteAsset, useUploadMedia } from "@/hooks/use-domain-mutations";
 import { useConfirm } from "@/providers/confirm-provider";
 import { PageHeader } from "@/components/common/page-header";
 import { Panel, PanelHeader } from "@/components/common/panel";
@@ -24,6 +34,7 @@ export default function BibliotecaPage() {
   const tags = useMediaTags();
   const assets = useMediaAssets({ folderId, q: q.trim() || undefined, tag });
   const upload = useUploadMedia();
+  const createFolder = useCreateFolder();
   const del = useDeleteAsset();
   const confirm = useConfirm();
   const inputRef = React.useRef<HTMLInputElement>(null);
@@ -43,7 +54,12 @@ export default function BibliotecaPage() {
   async function onFiles(e: React.ChangeEvent<HTMLInputElement>) {
     const files = Array.from(e.target.files ?? []);
     e.target.value = "";
-    for (const file of files) await upload.mutateAsync(file).catch(() => undefined);
+    // Upload straight into the folder currently selected in the sidebar.
+    for (const file of files) await upload.mutateAsync({ file, folderId }).catch(() => undefined);
+  }
+  function onCreateFolder() {
+    const label = prompt("Nombre de la nueva carpeta/categoría:")?.trim();
+    if (label) createFolder.mutate(label, { onSuccess: (f) => setFolderId(f.id) });
   }
   async function remove(id: string, title: string) {
     const ok = await confirm({
@@ -64,14 +80,25 @@ export default function BibliotecaPage() {
 
   return (
     <div className="space-y-6">
-      <input ref={inputRef} type="file" accept="image/*,video/*" multiple className="hidden" onChange={onFiles} />
+      <input
+        ref={inputRef}
+        type="file"
+        accept="image/*,video/*"
+        multiple
+        className="hidden"
+        onChange={onFiles}
+      />
       <PageHeader
         eyebrow="Media Manager"
         title="Biblioteca"
         description="Gestiona, busca y organiza imágenes y videos para reutilizarlos."
         actions={
           <Button size="sm" onClick={pickFiles} disabled={upload.isPending}>
-            {upload.isPending ? <Loader2 className="size-4 animate-spin" /> : <Upload className="size-4" />}
+            {upload.isPending ? (
+              <Loader2 className="size-4 animate-spin" />
+            ) : (
+              <Upload className="size-4" />
+            )}
             Subir
           </Button>
         }
@@ -80,17 +107,36 @@ export default function BibliotecaPage() {
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-[220px_1fr]">
         {/* Folders */}
         <Panel className="h-fit">
-          <PanelHeader title="Carpetas" />
+          <PanelHeader
+            title="Carpetas"
+            action={
+              <button
+                onClick={onCreateFolder}
+                disabled={createFolder.isPending}
+                className="text-ink-muted hover:text-brand inline-flex items-center gap-1 text-xs disabled:opacity-60"
+                title="Nueva carpeta"
+              >
+                {createFolder.isPending ? (
+                  <Loader2 className="size-3.5 animate-spin" />
+                ) : (
+                  <FolderPlus className="size-3.5" />
+                )}
+                Nueva
+              </button>
+            }
+          />
           <div className="p-2">
             <button
               onClick={() => setFolderId(undefined)}
               className={cn(
                 "flex w-full items-center justify-between rounded-lg px-2 py-1.5 text-sm transition-colors",
-                !folderId ? "bg-panel-raised text-ink-bright" : "text-ink-soft hover:bg-panel-raised",
+                !folderId
+                  ? "bg-panel-raised text-ink-bright"
+                  : "text-ink-soft hover:bg-panel-raised",
               )}
             >
               <span>Todos los archivos</span>
-              <span className="text-xs text-ink-faint">{assets.data?.total ?? ""}</span>
+              <span className="text-ink-faint text-xs">{assets.data?.total ?? ""}</span>
             </button>
             {folders.isLoading ? (
               <div className="space-y-2 p-1">
@@ -106,11 +152,13 @@ export default function BibliotecaPage() {
                       onClick={() => setFolderId(f.id)}
                       className={cn(
                         "flex w-full items-center justify-between rounded-lg px-2 py-1.5 text-sm transition-colors",
-                        folderId === f.id ? "bg-panel-raised text-ink-bright" : "text-ink-soft hover:bg-panel-raised",
+                        folderId === f.id
+                          ? "bg-panel-raised text-ink-bright"
+                          : "text-ink-soft hover:bg-panel-raised",
                       )}
                     >
                       <span className="truncate">{f.label}</span>
-                      <span className="text-xs text-ink-faint">{f.count}</span>
+                      <span className="text-ink-faint text-xs">{f.count}</span>
                     </button>
                   </li>
                 ))}
@@ -123,7 +171,7 @@ export default function BibliotecaPage() {
         <div className="space-y-3">
           <div className="flex flex-wrap items-center gap-2">
             <div className="relative min-w-[220px] flex-1">
-              <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-ink-faint" />
+              <Search className="text-ink-faint pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2" />
               <Input
                 value={q}
                 onChange={(e) => setQ(e.target.value)}
@@ -135,7 +183,7 @@ export default function BibliotecaPage() {
             {hasFilters ? (
               <button
                 onClick={clearFilters}
-                className="inline-flex items-center gap-1 rounded-lg border border-line-soft px-2.5 py-2 text-xs text-ink-muted hover:text-brand"
+                className="border-line-soft text-ink-muted hover:text-brand inline-flex items-center gap-1 rounded-lg border px-2.5 py-2 text-xs"
               >
                 <X className="size-3.5" /> Limpiar
               </button>
@@ -191,29 +239,37 @@ export default function BibliotecaPage() {
           ) : (
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
               {items.map((asset) => (
-                <div key={asset.id} className="group relative overflow-hidden rounded-xl border border-line-soft bg-panel">
-                  <div className="aspect-square bg-panel-raised">
+                <div
+                  key={asset.id}
+                  className="border-line-soft bg-panel group relative overflow-hidden rounded-xl border"
+                >
+                  <div className="bg-panel-raised aspect-square">
                     {asset.url ? (
                       asset.type === "video" ? (
                         <video src={asset.url} className="size-full object-cover" muted />
                       ) : (
-                        <img src={asset.url} alt={asset.title} className="size-full object-cover" loading="lazy" />
+                        <img
+                          src={asset.url}
+                          alt={asset.title}
+                          className="size-full object-cover"
+                          loading="lazy"
+                        />
                       )
                     ) : (
-                      <div className="grid size-full place-items-center text-ink-faint">
+                      <div className="text-ink-faint grid size-full place-items-center">
                         <ImageIcon className="size-8" />
                       </div>
                     )}
                   </div>
                   <div className="space-y-1 p-2">
                     <div className="flex items-center justify-between gap-2">
-                      <span className="truncate text-xs text-ink-soft" title={asset.title}>
+                      <span className="text-ink-soft truncate text-xs" title={asset.title}>
                         {asset.title}
                       </span>
                       <div className="flex shrink-0 items-center gap-0.5">
                         <button
                           onClick={() => setEditing(asset)}
-                          className="grid size-6 place-items-center rounded-md text-ink-faint transition-colors hover:text-ink"
+                          className="text-ink-faint hover:text-ink grid size-6 place-items-center rounded-md transition-colors"
                           title="Editar"
                         >
                           <Pencil className="size-3.5" />
@@ -227,7 +283,7 @@ export default function BibliotecaPage() {
                                 filename: asset.title,
                               })
                             }
-                            className="grid size-6 place-items-center rounded-md text-ink-faint transition-colors hover:text-brand"
+                            className="text-ink-faint hover:text-brand grid size-6 place-items-center rounded-md transition-colors"
                             title="Publicar en redes"
                           >
                             <Send className="size-3.5" />
@@ -236,7 +292,7 @@ export default function BibliotecaPage() {
                         <button
                           onClick={() => remove(asset.id, asset.title)}
                           disabled={deletingId === asset.id}
-                          className="grid size-6 place-items-center rounded-md text-ink-faint transition-colors hover:text-state-danger"
+                          className="text-ink-faint hover:text-state-danger grid size-6 place-items-center rounded-md transition-colors"
                           title="Eliminar"
                         >
                           {deletingId === asset.id ? (
@@ -248,7 +304,7 @@ export default function BibliotecaPage() {
                       </div>
                     </div>
                     {asset.tag ? (
-                      <span className="inline-block rounded bg-panel-raised px-1.5 py-0.5 text-[10px] text-ink-muted">
+                      <span className="bg-panel-raised text-ink-muted inline-block rounded px-1.5 py-0.5 text-[10px]">
                         {asset.tag}
                       </span>
                     ) : null}

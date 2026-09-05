@@ -157,7 +157,9 @@ export class CampaignRunner implements OnModuleInit, OnModuleDestroy {
       this.logger.log(`Encolando campaña "${c.name}" (${c.workspaceSlug}) — franja ${slot}.`);
       // Mark the slot now so the next tick doesn't re-enqueue the same run.
       const dedupe = slot === "once" ? { lastRunDay: todayKey() } : { lastRunSlot: slot };
-      await this.prisma.campaign.update({ where: { id: c.id }, data: dedupe }).catch(() => undefined);
+      await this.prisma.campaign
+        .update({ where: { id: c.id }, data: dedupe })
+        .catch(() => undefined);
       await this.jobs.dispatch("campaign.run", c.workspaceSlug, {
         workspaceSlug: c.workspaceSlug,
         campaignId: c.id,
@@ -175,7 +177,16 @@ export class CampaignRunner implements OnModuleInit, OnModuleDestroy {
     if (!campaign) throw new Error("Campaña no encontrada.");
 
     const attachments = (campaign.attachments as Attachment[]) ?? [];
-    const waAttachment = attachments[0]?.url ? (attachments[0] as MediaAttachment) : null;
+    const withUrl = attachments.filter((a) => a.url);
+    // Image rotation: when enabled and there are several images, this run uses the
+    // next one in turn (round-robin) instead of always the first — so a daily
+    // campaign varies its creative. The cursor is advanced after the run.
+    const rotate = campaign.rotateAttachments && withUrl.length > 1;
+    const rotIndex = rotate ? campaign.attachmentRotation % withUrl.length : 0;
+    const rotated = withUrl[rotIndex] ?? null;
+    const waAttachment = rotated?.url ? (rotated as MediaAttachment) : null;
+    // The single image WhatsApp Status uses (the rotated one when rotating).
+    const statusMedia = rotate ? (rotated ? [rotated] : []) : withUrl;
     const channels = campaign.channels as string[];
     const results: { ok: boolean }[] = [];
 
@@ -201,12 +212,18 @@ export class CampaignRunner implements OnModuleInit, OnModuleDestroy {
       try {
         const res = await this.withRetry(() =>
           waAttachment
-            ? this.providers.sendMedia(workspaceSlug, provider, { to, body: text, attachment: waAttachment })
+            ? this.providers.sendMedia(workspaceSlug, provider, {
+                to,
+                body: text,
+                attachment: waAttachment,
+              })
             : this.providers.sendMessage(workspaceSlug, provider, { to, body: text }),
         );
         results.push(await this.log(workspaceSlug, campaign, group, ch, text, true, null, res.id));
       } catch (err) {
-        results.push(await this.log(workspaceSlug, campaign, group, ch, text, false, (err as Error).message));
+        results.push(
+          await this.log(workspaceSlug, campaign, group, ch, text, false, (err as Error).message),
+        );
       }
       sent += 1;
       // No trailing wait after the final target.
@@ -215,7 +232,7 @@ export class CampaignRunner implements OnModuleInit, OnModuleDestroy {
 
     await this.publishSocial(workspaceSlug, campaign, channels, attachments, results);
     if (campaign.postToWaStatus) {
-      await this.publishWaStatus(workspaceSlug, campaign, attachments, results);
+      await this.publishWaStatus(workspaceSlug, campaign, statusMedia, results);
     }
 
     const recurring = campaign.scheduleType === "daily" || campaign.scheduleType === "weekly";
@@ -227,6 +244,8 @@ export class CampaignRunner implements OnModuleInit, OnModuleDestroy {
         progress: 100,
         lastRunAt: new Date(),
         lastRunDay: todayKey(),
+        // Advance the rotation cursor so the next run picks the following image.
+        ...(rotate ? { attachmentRotation: campaign.attachmentRotation + 1 } : {}),
       },
     });
     await this.audit.record(workspaceSlug, "system", "campaign.run", campaignId);
@@ -283,13 +302,13 @@ export class CampaignRunner implements OnModuleInit, OnModuleDestroy {
   private async publishWaStatus(
     workspaceSlug: string,
     campaign: PCampaign,
-    attachments: Attachment[],
+    media: Attachment[],
     results: { ok: boolean }[],
   ): Promise<void> {
     const text = renderTemplate(campaign.message, builtinVars(""));
     const input: PublishInput = {
       message: text,
-      attachments: attachments.filter((a) => a.url) as MediaAttachment[],
+      attachments: media.filter((a) => a.url) as MediaAttachment[],
       format: "status",
     };
     let r = await this.providers.publish(workspaceSlug, "whatsapp", input);

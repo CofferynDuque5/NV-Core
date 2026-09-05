@@ -1,4 +1,3 @@
-
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import type {
@@ -314,7 +313,8 @@ export function useAddContactNote(contactId: string) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (body: string) => svc.contacts.addNote(ws.id, contactId, body),
-    onSuccess: () => void qc.invalidateQueries({ queryKey: [ws.id, "contacts", contactId, "notes"] }),
+    onSuccess: () =>
+      void qc.invalidateQueries({ queryKey: [ws.id, "contacts", contactId, "notes"] }),
     onError: (err) => toast.error(errText(err)),
   });
 }
@@ -325,7 +325,8 @@ export function useDeleteContactNote(contactId: string) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (noteId: string) => svc.contacts.removeNote(ws.id, contactId, noteId),
-    onSuccess: () => void qc.invalidateQueries({ queryKey: [ws.id, "contacts", contactId, "notes"] }),
+    onSuccess: () =>
+      void qc.invalidateQueries({ queryKey: [ws.id, "contacts", contactId, "notes"] }),
     onError: (err) => toast.error(errText(err)),
   });
 }
@@ -790,7 +791,11 @@ export function useDeleteFunnel() {
 export function useSegmentPreview() {
   const svc = useServices();
   const ws = useWorkspace();
-  return useMutation<SegmentPreview, unknown, { match?: Segment["match"]; rules: Segment["rules"] }>({
+  return useMutation<
+    SegmentPreview,
+    unknown,
+    { match?: Segment["match"]; rules: Segment["rules"] }
+  >({
     mutationFn: (input) => svc.segments.preview(ws.id, input),
   });
 }
@@ -1188,22 +1193,66 @@ export function useGoogleDisconnect() {
   });
 }
 
-// ── Media (Cloudinary uploads) ───────────────────────────────────────────────
+// ── Media (ImgBB for images, Cloudinary for video) ──────────────────────────
+export function useCreateFolder() {
+  const svc = useServices();
+  const ws = useWorkspace();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (label: string) => svc.media.createFolder(ws.id, { label }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: [ws.id, "media"] });
+      toast.success("Carpeta creada");
+    },
+    onError: (err) => toast.error(errText(err)),
+  });
+}
+
+/**
+ * Biblioteca uploader. Images go to ImgBB (preferred); video/documents (or
+ * images when ImgBB isn't configured) fall back to Cloudinary. Optionally files
+ * land directly in a folder.
+ */
 export function useUploadMedia() {
   const svc = useServices();
   const ws = useWorkspace();
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (file: File) => {
+    mutationFn: async (arg: File | { file: File; folderId?: string | null }) => {
+      const file = arg instanceof File ? arg : arg.file;
+      const folderId = arg instanceof File ? undefined : (arg.folderId ?? undefined);
+      const isImage = file.type.startsWith("image/");
+
+      // Imágenes → ImgBB (preferido). Si no está configurado, cae a Cloudinary.
+      if (isImage) {
+        try {
+          const base64 = await fileToBase64(file);
+          const { url } = await svc.media.uploadImage(ws.id, base64);
+          return await svc.media.createAsset(ws.id, {
+            type: "image",
+            title: file.name,
+            url,
+            folderId,
+          });
+        } catch {
+          /* ImgBB no configurado → intentar Cloudinary abajo */
+        }
+      }
+
       const sig = await svc.media.uploadSignature(ws.id);
       if (!sig) {
-        throw new Error("Cloudinary no está configurado. Define CLOUDINARY_URL en el backend.");
+        throw new Error(
+          isImage
+            ? "Sube imágenes con ImgBB (IMGBB_API_KEY) o Cloudinary (CLOUDINARY_URL)."
+            : "Para video/documentos define CLOUDINARY_URL en el backend.",
+        );
       }
       const uploaded = await uploadToCloudinary(sig, file);
       return svc.media.createAsset(ws.id, {
         type: uploaded.resourceType === "video" ? "video" : "image",
         title: file.name,
         url: uploaded.secureUrl,
+        folderId,
       });
     },
     onSuccess: () => {
@@ -1242,7 +1291,9 @@ export function useUploadCampaignAttachment() {
         try {
           const base64 = await fileToBase64(file);
           const { url } = await svc.media.uploadImage(ws.id, base64);
-          await svc.media.createAsset(ws.id, { type: "image", title: file.name, url }).catch(() => undefined);
+          await svc.media
+            .createAsset(ws.id, { type: "image", title: file.name, url })
+            .catch(() => undefined);
           void qc.invalidateQueries({ queryKey: [ws.id, "media"] });
           return { url, kind: "image", mime: file.type || "image/png", filename: file.name };
         } catch {
@@ -1267,7 +1318,11 @@ export function useUploadCampaignAttachment() {
             ? "image"
             : "document";
       await svc.media
-        .createAsset(ws.id, { type: kind === "video" ? "video" : "image", title: file.name, url: uploaded.secureUrl })
+        .createAsset(ws.id, {
+          type: kind === "video" ? "video" : "image",
+          title: file.name,
+          url: uploaded.secureUrl,
+        })
         .catch(() => undefined);
       void qc.invalidateQueries({ queryKey: [ws.id, "media"] });
       return { url: uploaded.secureUrl, kind, mime: file.type || null, filename: file.name };

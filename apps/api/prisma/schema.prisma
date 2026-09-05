@@ -309,6 +309,12 @@ model Campaign {
   /// Uploaded media descriptors [{ path, filename, mime, kind, url }]. First is
   /// used for WhatsApp; all are used for IG carousel.
   attachments   Json           @default("[]")
+  /// When true, WhatsApp/Telegram/Status sends rotate through the attachments
+  /// (one image per run) instead of always using the first. Great for daily
+  /// campaigns that should vary the creative.
+  rotateAttachments Boolean    @default(false)
+  /// Cursor for attachment rotation — which image the next run should use.
+  attachmentRotation Int       @default(0)
   /// IG publish format: "feed" | "reel" | "story" | "carousel".
   socialFormat  String?
   /// When true, the campaign also publishes to the connected WhatsApp Status

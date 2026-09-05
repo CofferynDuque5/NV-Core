@@ -166,7 +166,9 @@ export function createHttpAdapters(opts: HttpAdapterOptions): Services {
       workspaces: () => get<Workspace[]>(`/admin/workspaces`),
       setMembership: (input) => post<{ ok: true }>(`/admin/memberships`, input),
       removeMembership: (userId, workspaceSlug) =>
-        del<void>(`/admin/memberships/${encodeURIComponent(userId)}/${encodeURIComponent(workspaceSlug)}`),
+        del<void>(
+          `/admin/memberships/${encodeURIComponent(userId)}/${encodeURIComponent(workspaceSlug)}`,
+        ),
     },
     campaigns: {
       list: (id) => get<ListResult<Campaign>>(`${ws(id)}/campaigns`),
@@ -228,7 +230,9 @@ export function createHttpAdapters(opts: HttpAdapterOptions): Services {
       status: (id) => get<SocialStatus>(`${ws(id)}/social/status`),
       publish: (id, input) => post<{ results: SocialResult[] }>(`${ws(id)}/social/publish`, input),
       insights: (id, target, mediaId) =>
-        get<SocialInsights>(`${ws(id)}/social/insights?target=${target}&id=${encodeURIComponent(mediaId)}`),
+        get<SocialInsights>(
+          `${ws(id)}/social/insights?target=${target}&id=${encodeURIComponent(mediaId)}`,
+        ),
     },
     forms: {
       list: (id) => get<ListResult<Form>>(`${ws(id)}/forms`),
@@ -258,8 +262,7 @@ export function createHttpAdapters(opts: HttpAdapterOptions): Services {
       remove: (id, sid) => del<void>(`${ws(id)}/sequences/${sid}`),
       enroll: (id, sid, input) =>
         post<SequenceEnrollResult>(`${ws(id)}/sequences/${sid}/enroll`, input),
-      enrollments: (id, sid) =>
-        get<SequenceEnrollment[]>(`${ws(id)}/sequences/${sid}/enrollments`),
+      enrollments: (id, sid) => get<SequenceEnrollment[]>(`${ws(id)}/sequences/${sid}/enrollments`),
       preview: (id, sid) => get<SequencePreviewStep[]>(`${ws(id)}/sequences/${sid}/preview`),
     },
     segments: {
@@ -272,8 +275,7 @@ export function createHttpAdapters(opts: HttpAdapterOptions): Services {
     inbox: {
       conversations: (id) => get<ListResult<Conversation>>(`${ws(id)}/inbox/conversations`),
       messages: (id, cid) => get<Message[]>(`${ws(id)}/inbox/conversations/${cid}/messages`),
-      createConversation: (id, input) =>
-        post<Conversation>(`${ws(id)}/inbox/conversations`, input),
+      createConversation: (id, input) => post<Conversation>(`${ws(id)}/inbox/conversations`, input),
       sendMessage: (id, cid, input) =>
         post<Message>(`${ws(id)}/inbox/conversations/${cid}/messages`, input),
       setResolved: (id, cid, resolved) =>
@@ -283,6 +285,7 @@ export function createHttpAdapters(opts: HttpAdapterOptions): Services {
     },
     media: {
       folders: (id) => get<MediaFolder[]>(`${ws(id)}/media/folders`),
+      createFolder: (id, input) => post<MediaFolder>(`${ws(id)}/media/folders`, input),
       assets: (id, query) => {
         const params = new URLSearchParams();
         if (query?.folderId) params.set("folderId", query.folderId);
@@ -298,7 +301,8 @@ export function createHttpAdapters(opts: HttpAdapterOptions): Services {
         ),
       uploadImage: (id, image) => post<{ url: string }>(`${ws(id)}/media/upload-image`, { image }),
       createAsset: (id, input) => post<MediaAsset>(`${ws(id)}/media/assets`, input),
-      updateAsset: (id, assetId, input) => patch<MediaAsset>(`${ws(id)}/media/assets/${assetId}`, input),
+      updateAsset: (id, assetId, input) =>
+        patch<MediaAsset>(`${ws(id)}/media/assets/${assetId}`, input),
       removeAsset: (id, assetId) => del<void>(`${ws(id)}/media/assets/${assetId}`),
     },
     templates: {

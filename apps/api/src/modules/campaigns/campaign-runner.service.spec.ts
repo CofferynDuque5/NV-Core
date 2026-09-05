@@ -10,11 +10,13 @@ import { CampaignRunner } from "./campaign-runner.service";
 
 type AnyRec = Record<string, unknown>;
 
-function makeRunner(overrides: {
-  campaign?: AnyRec | null;
-  send?: ReturnType<typeof vi.fn>;
-  publish?: ReturnType<typeof vi.fn>;
-} = {}) {
+function makeRunner(
+  overrides: {
+    campaign?: AnyRec | null;
+    send?: ReturnType<typeof vi.fn>;
+    publish?: ReturnType<typeof vi.fn>;
+  } = {},
+) {
   const sendLogs: AnyRec[] = [];
   const updates: AnyRec[] = [];
   const emitted: { event: string; payload: unknown }[] = [];
@@ -44,7 +46,9 @@ function makeRunner(overrides: {
     publish: overrides.publish ?? vi.fn(async () => ({ ok: true, id: "post.1", format: null })),
   };
   const jobs = { register: vi.fn(), dispatch: vi.fn() };
-  const events = { emit: vi.fn((event: string, payload: unknown) => emitted.push({ event, payload })) };
+  const events = {
+    emit: vi.fn((event: string, payload: unknown) => emitted.push({ event, payload })),
+  };
   const audit = { record: vi.fn() };
 
   const runner = new CampaignRunner(
@@ -99,7 +103,11 @@ describe("CampaignRunner.isDue", () => {
   });
 
   it("runs a one-off only once its scheduled instant has passed", () => {
-    const c = campaign({ scheduleType: "once", status: "programada", scheduleAt: "2026-01-01T10:00:00.000Z" });
+    const c = campaign({
+      scheduleType: "once",
+      status: "programada",
+      scheduleAt: "2026-01-01T10:00:00.000Z",
+    });
     expect(isDue(c, new Date("2026-01-01T09:59:00Z"))).toBe(false);
     expect(isDue(c, new Date("2026-01-01T10:01:00Z"))).toBe(true);
   });
@@ -222,7 +230,9 @@ describe("CampaignRunner.run", () => {
     let calls = 0;
     const publish = vi.fn(async () => {
       calls += 1;
-      return calls < 2 ? { ok: false, retriable: true, error: "throttled" } : { ok: true, id: "p1" };
+      return calls < 2
+        ? { ok: false, retriable: true, error: "throttled" }
+        : { ok: true, id: "p1" };
     });
     const { runner, sendLogs } = makeRunner({ campaign: c, publish });
 
@@ -260,8 +270,50 @@ describe("CampaignRunner.run", () => {
     expect(updates[0]!.status).toBe("completada");
     expect(updates[0]!.progress).toBe(100);
     expect(emitted).toEqual([
-      { event: "campaign.completed", payload: expect.objectContaining({ campaignId: "c1", ok: true }) },
+      {
+        event: "campaign.completed",
+        payload: expect.objectContaining({ campaignId: "c1", ok: true }),
+      },
     ]);
+  });
+
+  it("rotates attachments: uses the next image and advances the cursor", async () => {
+    const c = campaign({
+      rotateAttachments: true,
+      attachmentRotation: 1, // → picks index 1 of 2
+      attachments: [
+        { url: "a.png", kind: "image" },
+        { url: "b.png", kind: "image" },
+      ],
+      targets: [{ group: { id: "g1", name: "A", remoteJid: "1@g.us" } }],
+    });
+    const { runner, providers, updates } = makeRunner({ campaign: c });
+
+    await runner.run("w1", "c1");
+
+    expect(providers.sendMedia).toHaveBeenCalledTimes(1);
+    const arg = providers.sendMedia.mock.calls[0]![2] as { attachment?: { url?: string } };
+    expect(arg.attachment?.url).toBe("b.png");
+    expect(updates[0]!.attachmentRotation).toBe(2); // cursor advanced
+  });
+
+  it("without rotation always uses the first attachment", async () => {
+    const c = campaign({
+      rotateAttachments: false,
+      attachmentRotation: 5,
+      attachments: [
+        { url: "a.png", kind: "image" },
+        { url: "b.png", kind: "image" },
+      ],
+      targets: [{ group: { id: "g1", name: "A", remoteJid: "1@g.us" } }],
+    });
+    const { runner, providers, updates } = makeRunner({ campaign: c });
+
+    await runner.run("w1", "c1");
+
+    const arg = providers.sendMedia.mock.calls[0]![2] as { attachment?: { url?: string } };
+    expect(arg.attachment?.url).toBe("a.png");
+    expect(updates[0]!.attachmentRotation).toBeUndefined(); // cursor untouched
   });
 
   it("skips targets whose group belongs to another workspace (no send, no log)", async () => {

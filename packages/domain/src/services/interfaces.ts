@@ -102,6 +102,7 @@ export interface CreateCampaignInput {
   attachments?: Campaign["attachments"];
   socialFormat?: string;
   postToWaStatus?: boolean;
+  rotateAttachments?: boolean;
   targetGroups?: string[];
 }
 export type UpdateCampaignInput = Partial<CreateCampaignInput>;
@@ -274,7 +275,11 @@ export interface GroupService {
   /** Delete auto-synced (imported) groups; optional channel narrows it. */
   clearSynced(workspaceId: string, channel?: "wa" | "tg"): Promise<{ deleted: number }>;
   getVars(workspaceId: string, id: string): Promise<Record<string, string>>;
-  setVars(workspaceId: string, id: string, vars: Record<string, string>): Promise<Record<string, string>>;
+  setVars(
+    workspaceId: string,
+    id: string,
+    vars: Record<string, string>,
+  ): Promise<Record<string, string>>;
 }
 
 export interface SocialStatus {
@@ -311,7 +316,10 @@ export interface SegmentService {
   update(workspaceId: string, id: string, input: UpdateSegmentInput): Promise<Segment>;
   remove(workspaceId: string, id: string): Promise<void>;
   /** Evaluate rules against the contact base without persisting a segment. */
-  preview(workspaceId: string, input: { match?: Segment["match"]; rules: Segment["rules"] }): Promise<SegmentPreview>;
+  preview(
+    workspaceId: string,
+    input: { match?: Segment["match"]; rules: Segment["rules"] },
+  ): Promise<SegmentPreview>;
 }
 
 export interface CreateFormInput {
@@ -379,7 +387,11 @@ export interface SequenceService {
   update(workspaceId: string, id: string, input: UpdateSequenceInput): Promise<Sequence>;
   remove(workspaceId: string, id: string): Promise<void>;
   /** Enroll a single contact or everyone with a tag into the sequence. */
-  enroll(workspaceId: string, id: string, input: { contactId?: string; tag?: string }): Promise<SequenceEnrollResult>;
+  enroll(
+    workspaceId: string,
+    id: string,
+    input: { contactId?: string; tag?: string },
+  ): Promise<SequenceEnrollResult>;
   /** Active/finished enrollments for the sequence. */
   enrollments(workspaceId: string, id: string): Promise<SequenceEnrollment[]>;
   /** Computed send schedule (offsets from enrollment) — a dry-run preview. */
@@ -409,8 +421,16 @@ export interface InboxService {
   conversations(workspaceId: string): Promise<ListResult<Conversation>>;
   messages(workspaceId: string, conversationId: string): Promise<Message[]>;
   createConversation(workspaceId: string, input: CreateConversationInput): Promise<Conversation>;
-  sendMessage(workspaceId: string, conversationId: string, input: SendMessageInput): Promise<Message>;
-  setResolved(workspaceId: string, conversationId: string, resolved: boolean): Promise<Conversation>;
+  sendMessage(
+    workspaceId: string,
+    conversationId: string,
+    input: SendMessageInput,
+  ): Promise<Message>;
+  setResolved(
+    workspaceId: string,
+    conversationId: string,
+    resolved: boolean,
+  ): Promise<Conversation>;
   updateConversation(
     workspaceId: string,
     conversationId: string,
@@ -452,6 +472,8 @@ export interface UpdateAssetInput {
 
 export interface MediaService {
   folders(workspaceId: string): Promise<MediaFolder[]>;
+  /** Create a folder/category to organize the library. */
+  createFolder(workspaceId: string, input: { label: string }): Promise<MediaFolder>;
   assets(workspaceId: string, query?: MediaAssetQuery): Promise<ListResult<MediaAsset>>;
   /** Distinct tags in the workspace (for filter chips). */
   tags(workspaceId: string): Promise<string[]>;
@@ -505,7 +527,6 @@ export interface GoogleStatus {
   connected: boolean;
   email: string | null;
 }
-
 
 export interface IntegrationService {
   catalog(workspaceId: string): Promise<Integration[]>;

@@ -63,7 +63,12 @@ export const emptyAdapters: Services = {
         components: [
           { key: "api", name: "API", status: "operational" },
           { key: "database", name: "Base de datos", status: "unknown", detail: "Sin backend" },
-          { key: "queue", name: "Procesamiento de trabajos", status: "unknown", detail: "Sin backend" },
+          {
+            key: "queue",
+            name: "Procesamiento de trabajos",
+            status: "unknown",
+            detail: "Sin backend",
+          },
         ],
         timestamp: new Date(0).toISOString(),
       }),
@@ -201,6 +206,7 @@ export const emptyAdapters: Services = {
   },
   media: {
     folders: () => delay([]),
+    createFolder: () => notAvailable(),
     assets: () => emptyList(),
     tags: () => delay([]),
     uploadSignature: () => delay(null),

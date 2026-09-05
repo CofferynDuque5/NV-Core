@@ -195,6 +195,7 @@ export const mapCampaign = (
   attachments: (c.attachments as Campaign["attachments"]) ?? [],
   socialFormat: c.socialFormat ?? null,
   postToWaStatus: c.postToWaStatus ?? false,
+  rotateAttachments: c.rotateAttachments ?? false,
   lastRunAt: iso(c.lastRunAt) ?? null,
   targetGroups: c.targets?.map((t) => t.groupId) ?? [],
 });

@@ -96,6 +96,7 @@ export function CampaignFormDialog({
   const [fb, setFb] = React.useState(false);
   const [ig, setIg] = React.useState(false);
   const [postToWaStatus, setPostToWaStatus] = React.useState(false);
+  const [rotateAttachments, setRotateAttachments] = React.useState(false);
   const [socialFormat, setSocialFormat] = React.useState("feed");
   const [attachments, setAttachments] = React.useState<CampaignAttachment[]>([]);
   const [error, setError] = React.useState<string | null>(null);
@@ -124,6 +125,7 @@ export function CampaignFormDialog({
     setFb(campaign?.channels?.includes("fb") ?? false);
     setIg(campaign?.channels?.includes("ig") ?? false);
     setPostToWaStatus(campaign?.postToWaStatus ?? false);
+    setRotateAttachments(campaign?.rotateAttachments ?? false);
     setSocialFormat(campaign?.socialFormat ?? "feed");
     setAttachments(campaign?.attachments ?? []);
     setError(null);
@@ -227,6 +229,7 @@ export function CampaignFormDialog({
       attachments,
       socialFormat: ig ? socialFormat : undefined,
       postToWaStatus,
+      rotateAttachments,
       ...(campaign?.accent ? { accent: campaign.accent } : {}),
     };
 
@@ -380,7 +383,7 @@ export function CampaignFormDialog({
                 ) : (
                   <Paperclip className="size-4" />
                 )}
-                {upload.isPending ? "Subiendo…" : "Subir imagen o video (Cloudinary)"}
+                {upload.isPending ? "Subiendo…" : "Subir imagen (ImgBB) o video (Cloudinary)"}
               </button>
               <AiFlyerButton
                 defaultPrompt={message.trim() || name.trim()}
@@ -414,6 +417,23 @@ export function CampaignFormDialog({
               <p className="text-ink-faint text-[11px]">
                 El primero se envía por WhatsApp; para carrusel de Instagram sube varios.
               </p>
+              {attachments.length > 1 ? (
+                <label className="border-line-soft bg-panel-raised flex cursor-pointer items-start gap-2.5 rounded-lg border px-3 py-2.5">
+                  <input
+                    type="checkbox"
+                    checked={rotateAttachments}
+                    onChange={(e) => setRotateAttachments(e.target.checked)}
+                    className="border-line-strong accent-brand mt-0.5 size-4 rounded"
+                  />
+                  <span className="min-w-0 flex-1">
+                    <span className="text-ink block text-sm">Rotar imágenes en cada envío</span>
+                    <span className="text-ink-faint block text-[11px]">
+                      Cada envío (WhatsApp/Telegram/Estado) usa la siguiente imagen por turnos, en
+                      vez de siempre la primera. Ideal para campañas diarias.
+                    </span>
+                  </span>
+                </label>
+              ) : null}
             </div>
           </section>
 
