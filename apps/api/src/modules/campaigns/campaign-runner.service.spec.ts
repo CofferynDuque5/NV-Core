@@ -292,7 +292,9 @@ describe("CampaignRunner.run", () => {
     await runner.run("w1", "c1");
 
     expect(providers.sendMedia).toHaveBeenCalledTimes(1);
-    const arg = providers.sendMedia.mock.calls[0]![2] as { attachment?: { url?: string } };
+    const arg = (providers.sendMedia.mock.calls[0] as unknown as unknown[])[2] as {
+      attachment?: { url?: string };
+    };
     expect(arg.attachment?.url).toBe("b.png");
     expect(updates[0]!.attachmentRotation).toBe(2); // cursor advanced
   });
@@ -311,7 +313,9 @@ describe("CampaignRunner.run", () => {
 
     await runner.run("w1", "c1");
 
-    const arg = providers.sendMedia.mock.calls[0]![2] as { attachment?: { url?: string } };
+    const arg = (providers.sendMedia.mock.calls[0] as unknown as unknown[])[2] as {
+      attachment?: { url?: string };
+    };
     expect(arg.attachment?.url).toBe("a.png");
     expect(updates[0]!.attachmentRotation).toBeUndefined(); // cursor untouched
   });
