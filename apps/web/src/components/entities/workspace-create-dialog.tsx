@@ -127,8 +127,11 @@ export function WorkspaceCreateDialog({
 
   function submit() {
     setError(null);
+    // Smart default: if no tagline was typed, use the category's description so
+    // the new space is personalized from the chosen vertical.
+    const finalTagline = tagline.trim() || KIND_META[kind].desc;
     mutation.mutate(
-      { name: name.trim(), kind, accent, tagline: tagline.trim() || undefined },
+      { name: name.trim(), kind, accent, tagline: finalTagline },
       {
         onSuccess: (ws) => {
           reset();

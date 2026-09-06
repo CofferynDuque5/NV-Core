@@ -22,6 +22,8 @@
     "restore": "node scripts/restore.mjs",
     "dev": "turbo run dev",
     "build": "turbo run build",
+    "build:web": "pnpm --filter @nv/domain build && pnpm --filter @nv/web build",
+    "desplegar:web": "node scripts/desplegar-web.mjs",
     "lint": "turbo run lint",
     "typecheck": "turbo run typecheck",
     "clean": "turbo run clean && rm -rf node_modules"

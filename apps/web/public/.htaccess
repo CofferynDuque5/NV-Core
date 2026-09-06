@@ -1,0 +1,21 @@
+# NV Core SPA — Apache (hosting compartido tipo cPanel).
+# Sirve index.html para las rutas del cliente (p.ej. /w/mi-workspace/dashboard)
+# para que los enlaces profundos no den 404. Los archivos que existen se sirven tal cual.
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+  RewriteBase /
+  RewriteRule ^index\.html$ - [L]
+  RewriteCond %{REQUEST_FILENAME} !-f
+  RewriteCond %{REQUEST_FILENAME} !-d
+  RewriteRule . /index.html [L]
+</IfModule>
+
+# Cachea fuerte los assets con hash; nunca cachees index.html ni el service worker.
+<IfModule mod_headers.c>
+  <FilesMatch "\.(js|css|woff2?|png|jpe?g|gif|svg|webp|ico)$">
+    Header set Cache-Control "public, max-age=31536000, immutable"
+  </FilesMatch>
+  <FilesMatch "(index\.html|sw\.js|manifest\.webmanifest)$">
+    Header set Cache-Control "no-cache"
+  </FilesMatch>
+</IfModule>
