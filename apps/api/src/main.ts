@@ -1,6 +1,9 @@
 import "reflect-metadata";
+import { existsSync } from "node:fs";
+import { join } from "node:path";
 import { Logger, ValidationPipe } from "@nestjs/common";
 import { NestFactory } from "@nestjs/core";
+import type { NestExpressApplication } from "@nestjs/platform-express";
 import { ConfigService } from "@nestjs/config";
 import { DocumentBuilder, SwaggerModule } from "@nestjs/swagger";
 import cookieParser from "cookie-parser";
@@ -18,10 +21,11 @@ async function bootstrap(): Promise<void> {
   // Structured JSON logs in production (or when LOG_FORMAT=json) so aggregators
   // can parse them; pretty console logs in dev. Decided from env before the app
   // exists, so the very first boot lines already use the chosen format.
-  const logFormat = process.env.LOG_FORMAT ?? (process.env.NODE_ENV === "production" ? "json" : "pretty");
+  const logFormat =
+    process.env.LOG_FORMAT ?? (process.env.NODE_ENV === "production" ? "json" : "pretty");
   // rawBody: true keeps a raw copy of the body (needed for Stripe webhook
   // signature verification) alongside normal JSON parsing for every other route.
-  const app = await NestFactory.create(AppModule, {
+  const app = await NestFactory.create<NestExpressApplication>(AppModule, {
     bufferLogs: false,
     rawBody: true,
     ...(logFormat === "json" ? { logger: new JsonLogger() } : {}),
@@ -74,6 +78,28 @@ async function bootstrap(): Promise<void> {
       .build();
     const document = SwaggerModule.createDocument(app, swaggerConfig);
     SwaggerModule.setup("api/docs", app, document);
+  }
+
+  // Single-service deploy (e.g. Render): when WEB_DIST points at the built SPA,
+  // this same server also serves the front end. Same origin → no CORS and the
+  // auth cookie stays first-party. API routes (/api) and Socket.IO (/socket.io)
+  // are left untouched; every other GET falls back to index.html for SPA routing.
+  const webDist = process.env.WEB_DIST;
+  if (webDist && existsSync(join(webDist, "index.html"))) {
+    app.useStaticAssets(webDist, { index: false });
+    const indexHtml = join(webDist, "index.html");
+    app.use(
+      (
+        req: { method: string; path: string },
+        res: { sendFile: (p: string) => void },
+        next: () => void,
+      ) => {
+        if (req.method !== "GET" && req.method !== "HEAD") return next();
+        if (req.path.startsWith("/api") || req.path.startsWith("/socket.io")) return next();
+        res.sendFile(indexHtml);
+      },
+    );
+    new Logger("Bootstrap").log(`Sirviendo la web (SPA) desde ${webDist}`);
   }
 
   const port = config.get("port", { infer: true });

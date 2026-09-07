@@ -17,26 +17,58 @@ un `index.html` en la raíz ni nadie que compile el proyecto. La solución es su
 
 ---
 
-## Opción A — Recomendada: todo el stack (web + API + BD)
+## Opción A — Recomendada: Render en un clic (todo funcionando, una sola URL)
 
-La forma más simple de tener NV Core funcionando de verdad (login, envíos,
-campañas, inbox) es un servicio que ejecute contenedores Docker. El repo ya trae
-todo lo necesario:
+El repo trae un **Blueprint de Render** (`render.yaml`) que crea automáticamente
+la base de datos PostgreSQL, un Redis y **un único servicio web** donde la API
+**también sirve la web** en la misma URL. Al ser el mismo origen, no hay CORS ni
+problemas de cookies: todo funciona de una.
 
-- `docker-compose.yml` — levanta PostgreSQL + API + Web.
-- `apps/api/Dockerfile` y `apps/web/Dockerfile`.
+Pasos (una sola vez):
 
-Pasos generales (VPS propio, Render, Railway, Fly.io, etc.):
+1. Sube este repo a **GitHub** (tu rama ya se publica ahí).
+2. Entra a <https://dashboard.render.com> → **New +** → **Blueprint**.
+3. Conecta este repositorio y elige la rama. Render lee `render.yaml`, crea la BD,
+   el Redis y el servicio web, y hace el primer deploy (tarda unos minutos la
+   primera vez porque compila la imagen Docker).
+4. Cuando termine, tendrás una URL tipo `https://nv-core.onrender.com` con **todo
+   funcionando**: login, workspaces, campañas, WhatsApp/Telegram, inbox, biblioteca.
 
-1. Sube el repositorio a tu servidor/servicio (o conéctalo a tu repo de GitHub).
-2. Define las variables de entorno de la API (ver `apps/api/.env.example`):
-   `DATABASE_URL`, `JWT_SECRET`, y las claves que uses (ImgBB, Stripe, Telegram…).
-3. Construye la web apuntando a la URL pública de tu API:
-   `VITE_API_URL=https://api.tudominio.com`
-4. Arranca: `docker compose up -d --build`.
+`JWT_SECRET` y `ENCRYPTION_KEY` los genera Render solo. `DATABASE_URL` y
+`REDIS_URL` se conectan automáticamente. **No tienes que configurar nada más** para
+el núcleo.
 
-La web quedará servida por Nginx (ver `apps/web/nginx.conf`, que ya hace el
-fallback de rutas de la SPA) y la API en su propio contenedor contra Postgres.
+### Integraciones opcionales (cuando las tengas)
+
+En el panel de Render → tu servicio → **Environment**, rellena solo las que uses y
+pulsa **Save** (redepliega solo):
+
+- `IMGBB_API_KEY` — imágenes (recomendado). `CLOUDINARY_URL` — si quieres video.
+- `TELEGRAM_API_ID` + `TELEGRAM_API_HASH` — cuenta de Telegram (my.telegram.org).
+- `STRIPE_SECRET_KEY` (+ `STRIPE_WEBHOOK_SECRET`, `STRIPE_PRICE_ID`) — cobros.
+- `META_APP_ID` + `META_APP_SECRET` / `WHATSAPP_TOKEN` — Facebook/Instagram/WA Cloud.
+- `OPENAI_API_KEY` / `ANTHROPIC_API_KEY` — IA de contenido.
+- `RESEND_API_KEY` — envío de correos (invitaciones).
+- `APP_URL` y `API_URL` — pon la URL de Render (p.ej. `https://nv-core.onrender.com`)
+  en ambas **solo si** vas a usar callbacks de Meta/Google/Stripe.
+
+### Notas importantes del plan gratis
+
+- Los servicios **free se duermen** tras ~15 min de inactividad y **la BD gratis
+  caduca a los ~90 días**. Para uso real (y para que WhatsApp siga conectado 24/7)
+  sube el servicio a **Starter** y la BD a un plan de pago.
+- **Sesiones de WhatsApp/Telegram**: se guardan en disco y el disco del plan free
+  es efímero (se borra en cada deploy/reinicio), así que tras un reinicio tendrás
+  que volver a escanear el QR. Para que persistan, añade un **Disk** de Render
+  (planes de pago) montado en `/data` y define
+  `WHATSAPP_SESSION_DIR=/data/whatsapp` y `TELEGRAM_SESSION_DIR=/data/telegram`.
+
+### Alternativa: Docker en tu propio servidor/VPS
+
+El repo también trae `docker-compose.yml` + `apps/api/Dockerfile` y
+`apps/web/Dockerfile` (dos servicios). Define las variables de `apps/api/.env.example`,
+construye la web con `VITE_API_URL=https://api.tudominio.com` y arranca con
+`docker compose up -d --build`.
 
 ---
 

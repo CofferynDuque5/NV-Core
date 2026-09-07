@@ -1,0 +1,97 @@
+# NV Core — Blueprint de Render (un clic).
+#
+# Cómo usarlo:
+#   1. Sube este repo a GitHub (ya lo haces con tu rama).
+#   2. En Render: New +  →  Blueprint  →  conecta este repositorio.
+#   3. Render lee este archivo, crea la base de datos PostgreSQL y el servicio web
+#      (API + front en la misma URL) y hace el primer deploy. No hay que tocar más.
+#
+# Al terminar tendrás UNA URL (https://nv-core.onrender.com) con TODO funcionando:
+# login, workspaces, campañas, WhatsApp/Telegram, inbox, biblioteca…
+#
+# Las integraciones opcionales (ImgBB, Stripe, Telegram, Meta, IA, email) se dejan
+# como "sync: false": el deploy funciona sin ellas y las rellenas en el panel de
+# Render (Environment) cuando tengas las claves. Guía: docs/DESPLIEGUE-HOSTING.md
+
+databases:
+  - name: nv-core-db
+    databaseName: nvcore
+    user: nvcore
+    plan: free # 90 días gratis; súbelo a un plan de pago para producción.
+
+services:
+  # Redis (Key Value) — la API lo usa para la publicación programada (colas).
+  - type: redis
+    name: nv-core-redis
+    plan: free
+    ipAllowList: [] # solo accesible internamente por la API.
+    maxmemoryPolicy: noeviction # requerido por las colas (BullMQ).
+
+  - type: web
+    name: nv-core
+    runtime: docker
+    dockerfilePath: ./Dockerfile.render
+    dockerContext: .
+    plan: free # el plan free "duerme" tras inactividad; usa Starter para WhatsApp 24/7.
+    healthCheckPath: /api/health
+    autoDeploy: true
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: nv-core-db
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          name: nv-core-redis
+          type: redis
+          property: connectionString
+      - key: NODE_ENV
+        value: production
+      # Secretos generados automáticamente por Render (no hay que inventarlos).
+      - key: JWT_SECRET
+        generateValue: true
+      - key: ENCRYPTION_KEY
+        generateValue: true
+      # Permite que el primer registro reclame un workspace de ejemplo como Owner.
+      - key: ALLOW_OPEN_WORKSPACE_CLAIM
+        value: "true"
+      # Tu correo de administrador (opcional, para el bootstrap de admin).
+      - key: NV_ADMIN_EMAIL
+        sync: false
+
+      # ── Integraciones opcionales (rellénalas en el panel cuando las tengas) ──
+      - key: IMGBB_API_KEY
+        sync: false
+      - key: CLOUDINARY_URL
+        sync: false
+      - key: TELEGRAM_API_ID
+        sync: false
+      - key: TELEGRAM_API_HASH
+        sync: false
+      - key: TELEGRAM_BOT_TOKEN
+        sync: false
+      - key: WHATSAPP_TOKEN
+        sync: false
+      - key: META_APP_ID
+        sync: false
+      - key: META_APP_SECRET
+        sync: false
+      - key: STRIPE_SECRET_KEY
+        sync: false
+      - key: STRIPE_WEBHOOK_SECRET
+        sync: false
+      - key: STRIPE_PRICE_ID
+        sync: false
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: RESEND_API_KEY
+        sync: false
+      # URLs públicas para callbacks de OAuth/Stripe. Tras el primer deploy, copia
+      # la URL que te da Render (https://nv-core.onrender.com) en estas dos si vas
+      # a usar Meta/Google/Stripe. El núcleo funciona sin tocarlas.
+      - key: APP_URL
+        sync: false
+      - key: API_URL
+        sync: false
