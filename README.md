@@ -2,6 +2,16 @@
 
 [![CI](https://github.com/CofferynDuque5/NV-Core/actions/workflows/ci.yml/badge.svg)](https://github.com/CofferynDuque5/NV-Core/actions/workflows/ci.yml)
 
+## 🚀 Publicar en línea (funcional, en un clic)
+
+[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/CofferynDuque5/NV-Core)
+
+Pulsa el botón (o Render → **New +** → **Blueprint** → conecta este repo y elige
+la rama). Render lee [`render.yaml`](./render.yaml) y crea **PostgreSQL + Redis +
+el servicio web** (API + front en la misma URL). No configuras nada más: los
+secretos y las conexiones se generan solos. Guía paso a paso:
+[`docs/DESPLIEGUE-HOSTING.md`](./docs/DESPLIEGUE-HOSTING.md).
+
 Plataforma **multi-workspace** de marketing, CRM y automatización omnicanal.
 Monorepo profesional, en modo **Release Candidate**: frontend y backend
 implementados y funcionando end-to-end (auth, multi-tenancy, colas, billing,
