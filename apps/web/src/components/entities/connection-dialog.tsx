@@ -65,7 +65,7 @@ export function ConnectionDialog({
         onOpenChange(v);
       }}
       title={`Conectar ${channelName}`}
-      description="Registra las credenciales del canal. El OAuth real llegará en la fase de proveedores."
+      description="Registra las credenciales del canal."
       onSubmit={submit}
       pending={mutation.isPending}
       error={error}
@@ -97,8 +97,25 @@ export function ConnectionDialog({
         </select>
       </div>
       <div className="space-y-1.5">
-        <Label htmlFor="cn-token">Token (opcional)</Label>
+        <Label htmlFor="cn-token">Token de acceso</Label>
         <Input id="cn-token" value={token} onChange={(e) => setToken(e.target.value)} placeholder="EAAG…" />
+        {channel === "fb" || channel === "ig" ? (
+          <p className="text-[11px] text-ink-faint">
+            Pega tu <strong>token de la API de Meta</strong> (Graph). Con él basta: resolvemos tu
+            Página e Instagram automáticamente. Consíguelo gratis en el{" "}
+            <a
+              href="https://developers.facebook.com/tools/explorer/"
+              target="_blank"
+              rel="noreferrer"
+              className="text-brand hover:underline"
+            >
+              Graph API Explorer
+            </a>{" "}
+            (permisos: <code>pages_show_list</code>, <code>pages_manage_posts</code>,{" "}
+            <code>instagram_basic</code>, <code>instagram_content_publish</code>). Instagram debe ser
+            cuenta <strong>Business/Creator</strong> vinculada a una Página de Facebook.
+          </p>
+        ) : null}
       </div>
       <div className="space-y-1.5">
         <Label htmlFor="cn-webhook">Webhook (opcional)</Label>
