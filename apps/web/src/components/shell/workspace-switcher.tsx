@@ -1,11 +1,10 @@
-import * as React from "react";
 import { useNavigate } from "react-router-dom";
 import { ArrowRight, Check, Plus } from "lucide-react";
 
 import { cn } from "@/lib/utils";
+import { isBackendConfigured } from "@/lib/env";
 import { useWorkspace, useWorkspaces } from "@/hooks/use-workspace";
 import { useAuthStore } from "@/stores/auth-store";
-import { WorkspaceCreateDialog } from "@/components/entities/workspace-create-dialog";
 import {
   Dialog,
   DialogContent,
@@ -25,24 +24,28 @@ export function WorkspaceSwitcher({
   const active = useWorkspace();
   const workspaces = useWorkspaces();
   const memberships = useAuthStore((s) => s.memberships);
-  const [createOpen, setCreateOpen] = React.useState(false);
 
-  // When authenticated with memberships, show only accessible workspaces.
-  const visible =
-    memberships.length > 0
-      ? workspaces.filter((w) => memberships.some((m) => m.workspaceSlug === w.slug))
-      : workspaces;
+  // With a real backend, only ever show the workspaces this user belongs to
+  // (never the built-in demo list). Demo mode shows whatever the store holds.
+  const visible = isBackendConfigured()
+    ? workspaces.filter((w) => memberships.some((m) => m.workspaceSlug === w.slug))
+    : workspaces;
 
   function go(slug: string) {
     navigate(`/w/${slug}/dashboard`);
     onOpenChange(false);
   }
 
+  function createWorkspace() {
+    onOpenChange(false);
+    navigate("/onboarding");
+  }
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl">
         <DialogHeader>
-          <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-ink-faint">
+          <p className="text-ink-faint text-[11px] font-semibold uppercase tracking-[0.2em]">
             Business Operating System
           </p>
           <DialogTitle className="font-display text-xl">Elige tu workspace</DialogTitle>
@@ -73,20 +76,20 @@ export function WorkspaceSwitcher({
                 </span>
                 <span className="min-w-0 flex-1">
                   <span className="flex items-center gap-1.5">
-                    <span className="truncate text-sm font-semibold text-ink-bright">{w.name}</span>
+                    <span className="text-ink-bright truncate text-sm font-semibold">{w.name}</span>
                     {isActive ? (
-                      <span className="inline-flex items-center gap-0.5 rounded-full bg-brand/15 px-1.5 py-0.5 text-[9px] font-bold uppercase text-brand">
+                      <span className="bg-brand/15 text-brand inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 text-[9px] font-bold uppercase">
                         <Check className="size-2.5" /> Actual
                       </span>
                     ) : null}
                   </span>
-                  <span className="block truncate text-xs text-ink-muted">
+                  <span className="text-ink-muted block truncate text-xs">
                     {w.enabledModules.length} módulos + Core
                   </span>
                 </span>
                 <ArrowRight
                   className={cn(
-                    "size-4 shrink-0 text-ink-faint transition-transform group-hover:translate-x-0.5 group-hover:text-ink-muted",
+                    "text-ink-faint group-hover:text-ink-muted size-4 shrink-0 transition-transform group-hover:translate-x-0.5",
                   )}
                 />
               </button>
@@ -94,18 +97,19 @@ export function WorkspaceSwitcher({
           })}
         </div>
 
+        {visible.length === 0 ? (
+          <p className="text-ink-muted py-2 text-center text-sm">
+            Aún no tienes workspaces. Crea el tuyo para empezar.
+          </p>
+        ) : null}
+
         <button
-          onClick={() => {
-            onOpenChange(false);
-            setCreateOpen(true);
-          }}
-          className="flex items-center justify-center gap-2 rounded-xl border border-dashed border-line-strong py-2.5 text-sm font-medium text-ink-muted transition-colors hover:border-brand/50 hover:text-brand"
+          onClick={createWorkspace}
+          className="border-line-strong text-ink-muted hover:border-brand/50 hover:text-brand flex items-center justify-center gap-2 rounded-xl border border-dashed py-2.5 text-sm font-medium transition-colors"
         >
           <Plus className="size-4" /> Crear workspace
         </button>
       </DialogContent>
-
-      <WorkspaceCreateDialog open={createOpen} onOpenChange={setCreateOpen} />
     </Dialog>
   );
 }

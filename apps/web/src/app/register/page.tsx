@@ -1,7 +1,5 @@
-
 import * as React from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { DEFAULT_WORKSPACE_SLUG, WORKSPACES } from "@nv/domain";
 import { Loader2 } from "lucide-react";
 
 import { useAuthStore } from "@/stores/auth-store";
@@ -20,7 +18,6 @@ export default function RegisterPage() {
   const [name, setName] = React.useState("");
   const [email, setEmail] = React.useState("");
   const [password, setPassword] = React.useState("");
-  const [workspaceSlug, setWorkspaceSlug] = React.useState("");
   const [error, setError] = React.useState<string | null>(null);
   const [submitting, setSubmitting] = React.useState(false);
 
@@ -33,14 +30,11 @@ export default function RegisterPage() {
     }
     setSubmitting(true);
     try {
-      await register({
-        name,
-        email,
-        password,
-        workspaceSlug: workspaceSlug || undefined,
-      });
-      const target = useAuthStore.getState().memberships[0]?.workspaceSlug ?? DEFAULT_WORKSPACE_SLUG;
-      navigate(`/w/${target}/dashboard`, { replace: true });
+      await register({ name, email, password });
+      // New account: send them straight to the guided setup to create their first
+      // workspace (unless a pending invitation already added them to one).
+      const target = useAuthStore.getState().memberships[0]?.workspaceSlug;
+      navigate(target ? `/w/${target}/dashboard` : "/onboarding", { replace: true });
     } catch (err) {
       setError(err instanceof Error && err.message ? err.message : "No se pudo crear la cuenta.");
       setSubmitting(false);
@@ -54,7 +48,7 @@ export default function RegisterPage() {
       footer={
         <>
           ¿Ya tienes cuenta?{" "}
-          <Link to="/login" className="font-medium text-brand hover:underline">
+          <Link to="/login" className="text-brand font-medium hover:underline">
             Inicia sesión
           </Link>
         </>
@@ -96,28 +90,8 @@ export default function RegisterPage() {
             placeholder="Mínimo 8 caracteres"
           />
         </div>
-        <div className="space-y-1.5">
-          <Label htmlFor="workspace">Workspace a reclamar (opcional)</Label>
-          <select
-            id="workspace"
-            value={workspaceSlug}
-            onChange={(e) => setWorkspaceSlug(e.target.value)}
-            className="flex h-9 w-full rounded-lg border border-line-soft bg-panel-raised px-3 text-sm text-ink focus-visible:border-brand/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/25"
-          >
-            <option value="">Ninguno por ahora</option>
-            {WORKSPACES.map((w) => (
-              <option key={w.slug} value={w.slug}>
-                {w.name}
-              </option>
-            ))}
-          </select>
-          <p className="text-[11px] text-ink-faint">
-            Si el workspace aún no tiene dueño, te conviertes en Owner.
-          </p>
-        </div>
-
         {error ? (
-          <p className="rounded-lg border border-state-danger/30 bg-state-danger/10 px-3 py-2 text-xs text-state-danger">
+          <p className="border-state-danger/30 bg-state-danger/10 text-state-danger rounded-lg border px-3 py-2 text-xs">
             {error}
           </p>
         ) : null}

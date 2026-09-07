@@ -52,9 +52,10 @@ services:
         generateValue: true
       - key: ENCRYPTION_KEY
         generateValue: true
-      # Permite que el primer registro reclame un workspace de ejemplo como Owner.
+      # Cada usuario crea su propio workspace (onboarding). No se reclaman los de
+      # ejemplo, así nadie ve workspaces que no son suyos.
       - key: ALLOW_OPEN_WORKSPACE_CLAIM
-        value: "true"
+        value: "false"
       # Tu correo de administrador (opcional, para el bootstrap de admin).
       - key: NV_ADMIN_EMAIL
         sync: false

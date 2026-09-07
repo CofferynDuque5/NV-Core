@@ -1,6 +1,5 @@
-
 import * as React from "react";
-import { useParams } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 import { Lock } from "lucide-react";
 
 import { Sidebar } from "./sidebar";
@@ -23,6 +22,7 @@ import { isBackendConfigured } from "@/lib/env";
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const [switcherOpen, setSwitcherOpen] = React.useState(false);
+  const navigate = useNavigate();
   const services = useServices();
   const setWorkspaces = useWorkspaceStore((s) => s.setWorkspaces);
   const { workspace: routeSlug } = useParams<{ workspace?: string }>();
@@ -54,11 +54,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   return (
     <AuthGate>
-      <div className="flex min-h-screen w-full bg-canvas text-ink">
+      <div className="bg-canvas text-ink flex min-h-screen w-full">
         {/* Skip link (WCAG 2.4.1): hidden until focused. */}
         <a
           href="#main-content"
-          className="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-3 focus:z-50 focus:rounded-lg focus:bg-brand focus:px-3 focus:py-2 focus:text-sm focus:font-medium focus:text-white"
+          className="focus:bg-brand sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-3 focus:z-50 focus:rounded-lg focus:px-3 focus:py-2 focus:text-sm focus:font-medium focus:text-white"
         >
           Saltar al contenido
         </a>
@@ -67,24 +67,36 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
         <div className="flex min-w-0 flex-1 flex-col">
           <Topbar />
-          <main id="main-content" tabIndex={-1} className="flex-1 px-4 py-6 outline-none sm:px-6 lg:px-8">
-            <div className="mx-auto w-full max-w-[1400px] animate-fadein">
+          <main
+            id="main-content"
+            tabIndex={-1}
+            className="flex-1 px-4 py-6 outline-none sm:px-6 lg:px-8"
+          >
+            <div className="animate-fadein mx-auto w-full max-w-[1400px]">
               {noAccess ? (
                 <div className="grid min-h-[60vh] place-items-center">
                   <EmptyState
                     icon={Lock}
-                    title="No tienes acceso a este workspace"
+                    title={
+                      memberships.length > 0
+                        ? "No tienes acceso a este workspace"
+                        : "Crea tu primer workspace"
+                    }
                     description={
                       memberships.length > 0
                         ? "Tu cuenta no es miembro de este workspace. Cambia a uno de los tuyos."
-                        : "Tu cuenta no pertenece a ningún workspace todavía. Pide acceso a un administrador, o entra con la cuenta admin (NV_ADMIN_EMAIL)."
+                        : "Aún no tienes ningún workspace. Crea el tuyo en unos segundos para empezar."
                     }
                     action={
                       memberships.length > 0 ? (
                         <Button size="sm" onClick={() => setSwitcherOpen(true)}>
                           Cambiar de workspace
                         </Button>
-                      ) : undefined
+                      ) : (
+                        <Button size="sm" onClick={() => navigate("/onboarding")}>
+                          Crear mi workspace
+                        </Button>
+                      )
                     }
                   />
                 </div>

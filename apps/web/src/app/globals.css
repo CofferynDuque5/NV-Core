@@ -150,7 +150,7 @@
   /* Shared surface used by cards/panels across the app. A hairline top
    * highlight + soft drop shadow give a subtle "lifted glass" depth. */
   .nv-panel {
-    @apply rounded-xl border border-line bg-panel;
+    @apply border-line bg-panel rounded-xl border;
     box-shadow:
       inset 0 1px 0 0 rgba(255, 255, 255, 0.03),
       0 10px 34px -20px rgba(0, 0, 0, 0.72);
@@ -158,7 +158,7 @@
 
   /* A more elevated surface (modals, popovers, key cards). */
   .nv-elevated {
-    @apply rounded-xl border border-line-soft bg-panel-raised;
+    @apply border-line-soft bg-panel-raised rounded-xl border;
     box-shadow:
       inset 0 1px 0 0 rgba(255, 255, 255, 0.04),
       0 24px 60px -28px rgba(0, 0, 0, 0.85);
@@ -179,10 +179,10 @@
 
   /* Skeleton shimmer bar. */
   .nv-shimmer {
-    @apply relative overflow-hidden bg-line/60;
+    @apply bg-line/60 relative overflow-hidden;
   }
   .nv-shimmer::after {
-    @apply absolute inset-0 -translate-x-full animate-shimmer;
+    @apply animate-shimmer absolute inset-0 -translate-x-full;
     content: "";
     background-image: linear-gradient(
       90deg,
@@ -192,4 +192,70 @@
       rgba(255, 255, 255, 0)
     );
   }
+}
+
+/* ── Auth pages: animated "aurora" background + motion accents ─────────────── */
+@keyframes nv-orb-float {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  33% {
+    transform: translate3d(4%, -6%, 0) scale(1.08);
+  }
+  66% {
+    transform: translate3d(-5%, 4%, 0) scale(0.94);
+  }
+}
+@keyframes nv-grid-pan {
+  from {
+    background-position: 0 0;
+  }
+  to {
+    background-position: 48px 48px;
+  }
+}
+@keyframes nv-rise {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Full-bleed animated backdrop used behind the auth card. */
+.nv-aurora {
+  position: fixed;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  z-index: 0;
+}
+.nv-aurora__grid {
+  position: absolute;
+  inset: -2px;
+  background-image:
+    linear-gradient(to right, rgba(255, 255, 255, 0.035) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(255, 255, 255, 0.035) 1px, transparent 1px);
+  background-size: 48px 48px;
+  mask-image: radial-gradient(ellipse 80% 60% at 50% 40%, #000 30%, transparent 75%);
+  -webkit-mask-image: radial-gradient(ellipse 80% 60% at 50% 40%, #000 30%, transparent 75%);
+  animation: nv-grid-pan 24s linear infinite;
+}
+.nv-orb {
+  position: absolute;
+  border-radius: 9999px;
+  filter: blur(70px);
+  opacity: 0.5;
+  will-change: transform;
+  animation: nv-orb-float 18s ease-in-out infinite;
+}
+
+/* Staggered entrance for form fields / feature rows. */
+.nv-rise {
+  opacity: 0;
+  animation: nv-rise 0.55s cubic-bezier(0.22, 1, 0.36, 1) forwards;
 }

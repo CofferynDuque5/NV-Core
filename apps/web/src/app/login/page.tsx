@@ -1,7 +1,5 @@
-
 import * as React from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { DEFAULT_WORKSPACE_SLUG } from "@nv/domain";
 import { Loader2 } from "lucide-react";
 
 import { useAuthStore } from "@/stores/auth-store";
@@ -32,8 +30,10 @@ export default function LoginPage() {
     setSubmitting(true);
     try {
       await login({ email, password });
-      const target = useAuthStore.getState().memberships[0]?.workspaceSlug ?? DEFAULT_WORKSPACE_SLUG;
-      navigate(`/w/${target}/dashboard`, { replace: true });
+      // Take the user to one of their workspaces; if they have none yet, guide
+      // them through creating their first one.
+      const target = useAuthStore.getState().memberships[0]?.workspaceSlug;
+      navigate(target ? `/w/${target}/dashboard` : "/onboarding", { replace: true });
     } catch (err) {
       setError(err instanceof Error && err.message ? err.message : "No se pudo iniciar sesión.");
       setSubmitting(false);
@@ -47,7 +47,7 @@ export default function LoginPage() {
       footer={
         <>
           ¿No tienes cuenta?{" "}
-          <Link to="/register" className="font-medium text-brand hover:underline">
+          <Link to="/register" className="text-brand font-medium hover:underline">
             Crear cuenta
           </Link>
         </>
@@ -70,7 +70,7 @@ export default function LoginPage() {
         <div className="space-y-1.5">
           <div className="flex items-center justify-between">
             <Label htmlFor="password">Contraseña</Label>
-            <Link to="/forgot-password" className="text-xs text-ink-muted hover:text-brand">
+            <Link to="/forgot-password" className="text-ink-muted hover:text-brand text-xs">
               ¿Olvidaste tu contraseña?
             </Link>
           </div>
@@ -85,7 +85,7 @@ export default function LoginPage() {
         </div>
 
         {error ? (
-          <p className="rounded-lg border border-state-danger/30 bg-state-danger/10 px-3 py-2 text-xs text-state-danger">
+          <p className="border-state-danger/30 bg-state-danger/10 text-state-danger rounded-lg border px-3 py-2 text-xs">
             {error}
           </p>
         ) : null}

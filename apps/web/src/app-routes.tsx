@@ -1,6 +1,6 @@
 import * as React from "react";
 import { Navigate, Route, Routes, useParams } from "react-router-dom";
-import { DEFAULT_WORKSPACE_SLUG, getWorkspaceBySlug } from "@nv/domain";
+import { DEFAULT_WORKSPACE_SLUG } from "@nv/domain";
 
 import { AppShell } from "@/components/shell/app-shell";
 
@@ -10,6 +10,7 @@ import RegisterPage from "@/app/register/page";
 import ForgotPasswordPage from "@/app/forgot-password/page";
 import ResetPasswordPage from "@/app/reset-password/page";
 import VerifyEmailPage from "@/app/verify-email/page";
+import OnboardingPage from "@/app/onboarding/page";
 import NotFound from "@/app/not-found";
 
 // Public embeddable lead-capture form (no auth, no shell).
@@ -48,8 +49,8 @@ const EstadoPage = React.lazy(() => import("@/app/w/[workspace]/estado/page"));
 
 function RouteFallback() {
   return (
-    <div className="grid min-h-[40vh] place-items-center text-ink-muted">
-      <span className="size-5 animate-spin rounded-full border-2 border-line-strong border-t-brand" />
+    <div className="text-ink-muted grid min-h-[40vh] place-items-center">
+      <span className="border-line-strong border-t-brand size-5 animate-spin rounded-full border-2" />
     </div>
   );
 }
@@ -60,7 +61,10 @@ function RouteFallback() {
  */
 function WorkspacePage({ children }: { children: React.ReactNode }) {
   const { workspace } = useParams<{ workspace: string }>();
-  if (!workspace || !getWorkspaceBySlug(workspace)) return <NotFound />;
+  // Any non-empty slug is allowed: user-created workspaces exist only in the DB
+  // (not in the built-in config), so gating on getWorkspaceBySlug would 404 them.
+  // Access control is enforced by AppShell/AuthGate + the backend.
+  if (!workspace) return <NotFound />;
   return (
     <AppShell>
       <React.Suspense fallback={<RouteFallback />}>{children}</React.Suspense>
@@ -83,6 +87,7 @@ export function AppRoutes() {
       <Route path="/forgot-password" element={<ForgotPasswordPage />} />
       <Route path="/reset-password" element={<ResetPasswordPage />} />
       <Route path="/verify-email" element={<VerifyEmailPage />} />
+      <Route path="/onboarding" element={<OnboardingPage />} />
 
       {/* Public embeddable form (no auth) */}
       <Route
@@ -114,36 +119,198 @@ export function AppRoutes() {
 
       {/* Workspace shell */}
       <Route path="/w/:workspace" element={<Navigate to="dashboard" replace />} />
-      <Route path="/w/:workspace/dashboard" element={<WorkspacePage><DashboardPage /></WorkspacePage>} />
-      <Route path="/w/:workspace/calendario" element={<WorkspacePage><CalendarioPage /></WorkspacePage>} />
-      <Route path="/w/:workspace/campanas" element={<WorkspacePage><CampanasPage /></WorkspacePage>} />
-      <Route path="/w/:workspace/contactos" element={<WorkspacePage><ContactosPage /></WorkspacePage>} />
-      <Route path="/w/:workspace/grupos" element={<WorkspacePage><GruposPage /></WorkspacePage>} />
-      <Route path="/w/:workspace/segmentos" element={<WorkspacePage><SegmentosPage /></WorkspacePage>} />
-      <Route path="/w/:workspace/formularios" element={<WorkspacePage><FormulariosPage /></WorkspacePage>} />
-      <Route path="/w/:workspace/embudos" element={<WorkspacePage><EmbudosPage /></WorkspacePage>} />
-      <Route path="/w/:workspace/secuencias" element={<WorkspacePage><SecuenciasPage /></WorkspacePage>} />
-      <Route path="/w/:workspace/afiliados" element={<WorkspacePage><AfiliadosPage /></WorkspacePage>} />
-      <Route path="/w/:workspace/inbox" element={<WorkspacePage><InboxPage /></WorkspacePage>} />
-      <Route path="/w/:workspace/builder" element={<WorkspacePage><BuilderPage /></WorkspacePage>} />
-      <Route path="/w/:workspace/ai" element={<WorkspacePage><AiPage /></WorkspacePage>} />
-      <Route path="/w/:workspace/plantillas" element={<WorkspacePage><PlantillasPage /></WorkspacePage>} />
-      <Route path="/w/:workspace/biblioteca" element={<WorkspacePage><BibliotecaPage /></WorkspacePage>} />
+      <Route
+        path="/w/:workspace/dashboard"
+        element={
+          <WorkspacePage>
+            <DashboardPage />
+          </WorkspacePage>
+        }
+      />
+      <Route
+        path="/w/:workspace/calendario"
+        element={
+          <WorkspacePage>
+            <CalendarioPage />
+          </WorkspacePage>
+        }
+      />
+      <Route
+        path="/w/:workspace/campanas"
+        element={
+          <WorkspacePage>
+            <CampanasPage />
+          </WorkspacePage>
+        }
+      />
+      <Route
+        path="/w/:workspace/contactos"
+        element={
+          <WorkspacePage>
+            <ContactosPage />
+          </WorkspacePage>
+        }
+      />
+      <Route
+        path="/w/:workspace/grupos"
+        element={
+          <WorkspacePage>
+            <GruposPage />
+          </WorkspacePage>
+        }
+      />
+      <Route
+        path="/w/:workspace/segmentos"
+        element={
+          <WorkspacePage>
+            <SegmentosPage />
+          </WorkspacePage>
+        }
+      />
+      <Route
+        path="/w/:workspace/formularios"
+        element={
+          <WorkspacePage>
+            <FormulariosPage />
+          </WorkspacePage>
+        }
+      />
+      <Route
+        path="/w/:workspace/embudos"
+        element={
+          <WorkspacePage>
+            <EmbudosPage />
+          </WorkspacePage>
+        }
+      />
+      <Route
+        path="/w/:workspace/secuencias"
+        element={
+          <WorkspacePage>
+            <SecuenciasPage />
+          </WorkspacePage>
+        }
+      />
+      <Route
+        path="/w/:workspace/afiliados"
+        element={
+          <WorkspacePage>
+            <AfiliadosPage />
+          </WorkspacePage>
+        }
+      />
+      <Route
+        path="/w/:workspace/inbox"
+        element={
+          <WorkspacePage>
+            <InboxPage />
+          </WorkspacePage>
+        }
+      />
+      <Route
+        path="/w/:workspace/builder"
+        element={
+          <WorkspacePage>
+            <BuilderPage />
+          </WorkspacePage>
+        }
+      />
+      <Route
+        path="/w/:workspace/ai"
+        element={
+          <WorkspacePage>
+            <AiPage />
+          </WorkspacePage>
+        }
+      />
+      <Route
+        path="/w/:workspace/plantillas"
+        element={
+          <WorkspacePage>
+            <PlantillasPage />
+          </WorkspacePage>
+        }
+      />
+      <Route
+        path="/w/:workspace/biblioteca"
+        element={
+          <WorkspacePage>
+            <BibliotecaPage />
+          </WorkspacePage>
+        }
+      />
       <Route
         path="/w/:workspace/automatizaciones"
-        element={<WorkspacePage><AutomatizacionesPage /></WorkspacePage>}
+        element={
+          <WorkspacePage>
+            <AutomatizacionesPage />
+          </WorkspacePage>
+        }
       />
-      <Route path="/w/:workspace/analytics" element={<WorkspacePage><AnalyticsPage /></WorkspacePage>} />
-      <Route path="/w/:workspace/marketplace" element={<WorkspacePage><MarketplacePage /></WorkspacePage>} />
-      <Route path="/w/:workspace/conexiones" element={<WorkspacePage><ConexionesPage /></WorkspacePage>} />
+      <Route
+        path="/w/:workspace/analytics"
+        element={
+          <WorkspacePage>
+            <AnalyticsPage />
+          </WorkspacePage>
+        }
+      />
+      <Route
+        path="/w/:workspace/marketplace"
+        element={
+          <WorkspacePage>
+            <MarketplacePage />
+          </WorkspacePage>
+        }
+      />
+      <Route
+        path="/w/:workspace/conexiones"
+        element={
+          <WorkspacePage>
+            <ConexionesPage />
+          </WorkspacePage>
+        }
+      />
       <Route
         path="/w/:workspace/configuracion"
-        element={<WorkspacePage><ConfiguracionPage /></WorkspacePage>}
+        element={
+          <WorkspacePage>
+            <ConfiguracionPage />
+          </WorkspacePage>
+        }
       />
-      <Route path="/w/:workspace/historial" element={<WorkspacePage><HistorialPage /></WorkspacePage>} />
-      <Route path="/w/:workspace/ayuda" element={<WorkspacePage><AyudaPage /></WorkspacePage>} />
-      <Route path="/w/:workspace/novedades" element={<WorkspacePage><NovedadesPage /></WorkspacePage>} />
-      <Route path="/w/:workspace/estado" element={<WorkspacePage><EstadoPage /></WorkspacePage>} />
+      <Route
+        path="/w/:workspace/historial"
+        element={
+          <WorkspacePage>
+            <HistorialPage />
+          </WorkspacePage>
+        }
+      />
+      <Route
+        path="/w/:workspace/ayuda"
+        element={
+          <WorkspacePage>
+            <AyudaPage />
+          </WorkspacePage>
+        }
+      />
+      <Route
+        path="/w/:workspace/novedades"
+        element={
+          <WorkspacePage>
+            <NovedadesPage />
+          </WorkspacePage>
+        }
+      />
+      <Route
+        path="/w/:workspace/estado"
+        element={
+          <WorkspacePage>
+            <EstadoPage />
+          </WorkspacePage>
+        }
+      />
 
       {/* 404 */}
       <Route path="*" element={<NotFound />} />

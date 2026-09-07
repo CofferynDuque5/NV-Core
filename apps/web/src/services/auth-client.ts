@@ -45,17 +45,27 @@ export class AuthError extends Error {
 
 async function request<T>(path: string, init: RequestInit & { token?: string } = {}): Promise<T> {
   const { token, ...rest } = init;
-  const res = await fetch(`${API_URL}/api${path}`, {
-    ...rest,
-    // Send/receive the httpOnly refresh cookie.
-    credentials: "include",
-    headers: {
-      Accept: "application/json",
-      ...(rest.body ? { "Content-Type": "application/json" } : {}),
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      ...rest.headers,
-    },
-  });
+  let res: Response;
+  try {
+    res = await fetch(`${API_URL}/api${path}`, {
+      ...rest,
+      // Send/receive the httpOnly refresh cookie.
+      credentials: "include",
+      headers: {
+        Accept: "application/json",
+        ...(rest.body ? { "Content-Type": "application/json" } : {}),
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        ...rest.headers,
+      },
+    });
+  } catch {
+    // Network-level failure (server offline, wrong API URL, CORS/DNS) — turn the
+    // opaque "NetworkError" into an actionable message.
+    throw new AuthError(
+      "No se pudo conectar con el servidor. Verifica que la API esté en línea y que la URL sea correcta (config.js / VITE_API_URL).",
+      0,
+    );
+  }
 
   const text = await res.text();
   const data = text ? JSON.parse(text) : null;
