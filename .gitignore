@@ -38,3 +38,7 @@ nsap/data/
 test-results/
 playwright-report/
 backups/
+
+# cPanel deploy bundle (generated)
+deploy-cpanel/
+scratch/
