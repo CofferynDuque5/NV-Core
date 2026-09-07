@@ -77,19 +77,25 @@ export function buildConfig(env: Env): AppConfig {
     encryptionKey = "nv-core-dev-encryption-key-change-me";
   }
 
-  // Redis powers the job queue (BullMQ). Without it the queue runs inline, which
-  // means scheduled publishing NEVER fires (a future-dated post can't run inline).
-  // Requiring it in production turns a silent data-loss bug into a loud boot error.
+  // Redis powers the distributed job queue (BullMQ) with retries. It's optional:
+  // without it, jobs run in-process and the campaign runner still fires on its own
+  // 30s tick (scheduled campaigns work). Redis only adds distribution + retries,
+  // so we warn instead of crashing — this lets NV Core run on any host with just
+  // PostgreSQL (Render, a VPS, a cPanel Node app, etc.).
   if (env.NODE_ENV === "production" && !env.REDIS_URL) {
-    throw new Error(
-      "REDIS_URL es obligatorio en producción: la publicación programada (posts/campañas) lo requiere.",
+    // eslint-disable-next-line no-console
+    console.warn(
+      "[config] REDIS_URL no definido: la cola corre en modo inline (sin Redis). " +
+        "Las campañas programadas sí funcionan; solo se pierden reintentos distribuidos.",
     );
   }
 
   return {
     env: env.NODE_ENV,
     port: env.PORT,
-    corsOrigins: env.CORS_ORIGINS.split(",").map((o) => o.trim()).filter(Boolean),
+    corsOrigins: env.CORS_ORIGINS.split(",")
+      .map((o) => o.trim())
+      .filter(Boolean),
     appUrl: env.APP_URL.replace(/\/$/, ""),
     apiUrl: env.API_URL.replace(/\/$/, ""),
     inboundWorkspace: env.INBOUND_WORKSPACE,
