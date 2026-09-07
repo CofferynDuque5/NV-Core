@@ -76,6 +76,23 @@ const pkg = {
     "@nv/domain": "file:./vendor/domain",
     prisma: "6.19.3", // CLI a juego con @prisma/client (para generate + migrate)
   },
+  // cPanel usa npm (que sí ejecuta los scripts). Esto es por si alguien instala
+  // con pnpm: le permite correr los build scripts que pnpm bloquea por defecto
+  // (Prisma genera el motor; el resto son optimizaciones nativas opcionales).
+  pnpm: {
+    onlyBuiltDependencies: [
+      "@prisma/client",
+      "@prisma/engines",
+      "prisma",
+      "@whiskeysockets/baileys",
+      "protobufjs",
+      "es5-ext",
+      "bufferutil",
+      "utf-8-validate",
+      "msgpackr-extract",
+      "@scarf/scarf",
+    ],
+  },
 };
 writeFileSync(join(out, "package.json"), JSON.stringify(pkg, null, 2) + "\n");
 

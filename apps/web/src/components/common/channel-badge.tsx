@@ -26,9 +26,9 @@ export function ChannelStack({ ids }: { ids: ChannelId[] }) {
   return (
     <span className="flex items-center -space-x-1.5">
       {ids.map((id) => (
-        <span key={id} className="ring-2 ring-panel">
-          <ChannelChip id={id} />
-        </span>
+        // The ring goes on the ROUNDED chip itself (not a square wrapper), so the
+        // corners follow the chip's radius and the logo never looks "cut".
+        <ChannelChip key={id} id={id} className="ring-panel ring-2" />
       ))}
     </span>
   );
