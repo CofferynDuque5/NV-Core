@@ -42,3 +42,6 @@ backups/
 # cPanel deploy bundle (generated)
 deploy-cpanel/
 scratch/
+
+# PostgreSQL embebido de desarrollo (datos locales de 'pnpm arrancar' sin Docker)
+.nvcore-db/

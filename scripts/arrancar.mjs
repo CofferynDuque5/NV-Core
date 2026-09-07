@@ -10,8 +10,9 @@
  *
  * Hace de un tirón:
  *   1) Verifica Node/pnpm y crea los .env que falten (secretos aleatorios).
- *   2) Asegura un PostgreSQL de desarrollo (contenedor Docker con puerto al host,
- *      salvo --no-db o que ya tengas uno accesible).
+ *   2) Asegura un PostgreSQL de desarrollo: si hay Docker, un contenedor; si no,
+ *      un Postgres EMBEBIDO (paquete embedded-postgres, sin instalar nada) con
+ *      datos en .nvcore-db/. Salvo --no-db o que ya tengas uno accesible.
  *   3) pnpm install
  *   4) prisma generate + migrate deploy
  *   5) pnpm dev  (API + Web con recarga en caliente)
@@ -41,6 +42,90 @@ if (has("--help") || has("-h")) {
 const PREPARE_ONLY = has("--prepare-only");
 const SKIP_INSTALL = has("--skip-install");
 const NO_DB = has("--no-db");
+
+// PostgreSQL embebido (fallback sin Docker). Se detiene al salir.
+let embeddedPg = null;
+async function stopEmbedded() {
+  if (!embeddedPg) return;
+  const pg = embeddedPg;
+  embeddedPg = null;
+  try {
+    await pg.stop();
+  } catch {
+    /* ignore */
+  }
+}
+
+/**
+ * Levanta un PostgreSQL EMBEBIDO (paquete `embedded-postgres`, sin Docker):
+ * descarga un binario de Postgres la primera vez y guarda los datos en
+ * `.nvcore-db/` (persisten entre arranques, como un volumen). Alinea
+ * DATABASE_URL al puerto elegido. Devuelve true si quedó listo.
+ */
+async function startEmbeddedPostgres({ apiEnv, dbUser, dbPass, dbName }) {
+  let EmbeddedPostgres;
+  try {
+    EmbeddedPostgres = (await import("embedded-postgres")).default;
+  } catch {
+    die(
+      "No hay Docker y falta el paquete 'embedded-postgres' (Postgres sin Docker).\n" +
+        "  Ejecuta 'pnpm install' y reintenta, o abre Docker Desktop, o usa tu propio\n" +
+        "  PostgreSQL: pon su DATABASE_URL en apps/api/.env y ejecuta 'pnpm arrancar --no-db'.",
+    );
+  }
+
+  const dataDir = join(ROOT, ".nvcore-db");
+  // Elegir un puerto de host libre para el Postgres embebido.
+  let port = null;
+  for (const p of [5432, 5433, 5434, 5435, 5544]) {
+    if (!(await tcpOpen("127.0.0.1", p, 700))) {
+      port = p;
+      break;
+    }
+  }
+  if (!port) die("No encontré un puerto libre para PostgreSQL (probé 5432-5435, 5544).");
+
+  const firstRun = !existsSync(dataDir);
+  warn(
+    firstRun
+      ? `Preparando PostgreSQL embebido por 1ª vez (crea el clúster local, puerto ${port})…`
+      : `Iniciando PostgreSQL embebido (puerto ${port})…`,
+  );
+
+  // Postgres no arranca como root. En un PC normal (Windows/Mac/Linux) no lo
+  // eres, así que esto queda en false; solo en contenedores root-only (CI/Docker)
+  // se crea un usuario auxiliar para poder ejecutar el binario.
+  const asRoot = typeof process.getuid === "function" && process.getuid() === 0;
+  const pg = new EmbeddedPostgres({
+    databaseDir: dataDir,
+    user: dbUser,
+    password: dbPass,
+    port,
+    persistent: true,
+    createPostgresUser: asRoot,
+  });
+
+  if (firstRun) await pg.initialise();
+  await pg.start();
+  embeddedPg = pg;
+  // Al recibir Ctrl+C/kill (p.ej. en --prepare-only), detener el servidor.
+  const bye = () => void stopEmbedded().finally(() => process.exit(0));
+  process.once("SIGINT", bye);
+  process.once("SIGTERM", bye);
+
+  // Crear la base si no existe (idempotente).
+  try {
+    await pg.createDatabase(dbName);
+  } catch {
+    /* ya existe */
+  }
+
+  const url = `postgresql://${dbUser}:${dbPass}@localhost:${port}/${dbName}?schema=public`;
+  setEnvVar(apiEnv, "DATABASE_URL", url);
+  process.env.DATABASE_URL = url;
+  ok(`PostgreSQL embebido listo en localhost:${port} (datos en .nvcore-db/)`);
+  return true;
+}
 
 // ── Log helpers ──────────────────────────────────────────────────────────────
 const color = process.stdout.isTTY;
@@ -83,7 +168,8 @@ function startDevServers() {
         /* ignore */
       }
     }
-    process.exit(code ?? 0);
+    // Detener el Postgres embebido (si lo levantamos) antes de salir.
+    void stopEmbedded().finally(() => process.exit(code ?? 0));
   };
   const launch = (cmd) => {
     const child = spawn(cmd, { stdio: "inherit", shell: true, cwd: ROOT, env: process.env });
@@ -151,7 +237,11 @@ if (!existsSync(apiEnv)) {
   copyFileSync(join(ROOT, "apps", "api", ".env.example"), apiEnv);
   ok("Creado apps/api/.env a partir del ejemplo");
 }
-ensureVar(apiEnv, "DATABASE_URL", "postgresql://postgres:postgres@localhost:5432/nvcore?schema=public");
+ensureVar(
+  apiEnv,
+  "DATABASE_URL",
+  "postgresql://postgres:postgres@localhost:5432/nvcore?schema=public",
+);
 ensureVar(apiEnv, "JWT_SECRET", genSecret());
 ensureVar(apiEnv, "ENCRYPTION_KEY", genSecret());
 // Admin de desarrollo: la API lo crea al arrancar (Owner de todos los
@@ -196,72 +286,75 @@ if (NO_DB) {
 } else if (!isLocalDb) {
   // BD remota declarada por el usuario: no la gestionamos.
   const up = await tcpOpen(dbHost, dbPort);
-  up ? ok(`PostgreSQL remoto accesible (${dbHost}:${dbPort})`) : warn(`No respondo por ${dbHost}:${dbPort}.`);
+  up
+    ? ok(`PostgreSQL remoto accesible (${dbHost}:${dbPort})`)
+    : warn(`No respondo por ${dbHost}:${dbPort}.`);
 } else {
   // Modo automático: gestionamos NUESTRO propio contenedor Docker. No asumimos
   // que "el puerto está abierto" signifique credenciales válidas — por eso no
   // reutilizamos un Postgres ajeno que ya escuche en el 5432.
   const dockerOk = Boolean(capture("docker --version")) && Boolean(capture("docker info"));
   if (!dockerOk) {
-    die(
-      `Necesito Docker para levantar PostgreSQL automáticamente, y no está disponible.\n` +
-        `  Opciones:\n` +
-        `   • Abre Docker Desktop y reintenta (levanto Postgres yo), o\n` +
-        `   • Usa tu propio PostgreSQL: pon su DATABASE_URL en apps/api/.env y ejecuta 'pnpm arrancar --no-db'.`,
-    );
-  }
-
-  const running = capture(`docker ps --filter "name=^/${NAME}$" --format "{{.Names}}"`);
-  const exists = capture(`docker ps -a --filter "name=^/${NAME}$" --format "{{.Names}}"`);
-
-  if (!running && exists) {
-    run(`docker start ${NAME}`);
-    ok(`Contenedor ${NAME} iniciado`);
-  } else if (!exists) {
-    // Elegir un puerto de host libre (evita chocar con un Postgres ya instalado).
-    let port = null;
-    for (const p of [dbPort, 5433, 5434, 5435, 5544]) {
-      if (!(await tcpOpen("127.0.0.1", p, 700))) {
-        port = p;
-        break;
-      }
-    }
-    if (!port) die("No encontré un puerto libre para PostgreSQL (probé 5432-5435, 5544).");
-    if (port !== dbPort) warn(`El puerto ${dbPort} está ocupado; usaré ${port} para el Postgres de NV Core.`);
-    warn(`Levantando PostgreSQL en Docker (${NAME}, puerto ${port})…`);
-    const created = run(
-      `docker run -d --name ${NAME} ` +
-        `-e POSTGRES_USER=${dbUser} -e POSTGRES_PASSWORD=${dbPass} -e POSTGRES_DB=${dbName} ` +
-        // Volumen con nombre: los datos sobreviven aunque se borre el contenedor.
-        `-v nvcore-dev-db-data:/var/lib/postgresql/data ` +
-        `-p ${port}:5432 postgres:16`,
-    );
-    if (!created) die(`No se pudo crear el contenedor ${NAME}.`);
-    ok(`Contenedor ${NAME} creado`);
+    // Sin Docker → Postgres embebido (no requiere nada instalado aparte).
+    await startEmbeddedPostgres({ apiEnv, dbUser, dbPass, dbName });
   } else {
-    ok(`Contenedor ${NAME} ya está corriendo`);
-  }
+    const running = capture(`docker ps --filter "name=^/${NAME}$" --format "{{.Names}}"`);
+    const exists = capture(`docker ps -a --filter "name=^/${NAME}$" --format "{{.Names}}"`);
 
-  // Puerto real publicado por el contenedor → alinear DATABASE_URL a él.
-  const mapped = capture(`docker port ${NAME} 5432/tcp`); // ej. "0.0.0.0:5433"
-  const realPort = Number((mapped.match(/:(\d+)\s*$/m) || mapped.match(/:(\d+)/) || [])[1] || dbPort);
-  if (realPort !== dbPort) {
-    const url = `postgresql://${dbUser}:${dbPass}@localhost:${realPort}/${dbName}?schema=public`;
-    setEnvVar(apiEnv, "DATABASE_URL", url);
-    process.env.DATABASE_URL = url;
-    ok(`DATABASE_URL apuntando a localhost:${realPort} (contenedor gestionado)`);
-  }
+    if (!running && exists) {
+      run(`docker start ${NAME}`);
+      ok(`Contenedor ${NAME} iniciado`);
+    } else if (!exists) {
+      // Elegir un puerto de host libre (evita chocar con un Postgres ya instalado).
+      let port = null;
+      for (const p of [dbPort, 5433, 5434, 5435, 5544]) {
+        if (!(await tcpOpen("127.0.0.1", p, 700))) {
+          port = p;
+          break;
+        }
+      }
+      if (!port) die("No encontré un puerto libre para PostgreSQL (probé 5432-5435, 5544).");
+      if (port !== dbPort)
+        warn(`El puerto ${dbPort} está ocupado; usaré ${port} para el Postgres de NV Core.`);
+      warn(`Levantando PostgreSQL en Docker (${NAME}, puerto ${port})…`);
+      const created = run(
+        `docker run -d --name ${NAME} ` +
+          `-e POSTGRES_USER=${dbUser} -e POSTGRES_PASSWORD=${dbPass} -e POSTGRES_DB=${dbName} ` +
+          // Volumen con nombre: los datos sobreviven aunque se borre el contenedor.
+          `-v nvcore-dev-db-data:/var/lib/postgresql/data ` +
+          `-p ${port}:5432 postgres:16`,
+      );
+      if (!created) die(`No se pudo crear el contenedor ${NAME}.`);
+      ok(`Contenedor ${NAME} creado`);
+    } else {
+      ok(`Contenedor ${NAME} ya está corriendo`);
+    }
 
-  // Esperar a que Postgres acepte conexiones AUTENTICADAS (pg_isready).
-  process.stdout.write("  Esperando a que PostgreSQL esté listo");
-  let ready = false;
-  for (let i = 0; i < 40 && !ready; i++) {
-    await sleep(1000);
-    process.stdout.write(".");
-    ready = containerReady();
+    // Puerto real publicado por el contenedor → alinear DATABASE_URL a él.
+    const mapped = capture(`docker port ${NAME} 5432/tcp`); // ej. "0.0.0.0:5433"
+    const realPort = Number(
+      (mapped.match(/:(\d+)\s*$/m) || mapped.match(/:(\d+)/) || [])[1] || dbPort,
+    );
+    if (realPort !== dbPort) {
+      const url = `postgresql://${dbUser}:${dbPass}@localhost:${realPort}/${dbName}?schema=public`;
+      setEnvVar(apiEnv, "DATABASE_URL", url);
+      process.env.DATABASE_URL = url;
+      ok(`DATABASE_URL apuntando a localhost:${realPort} (contenedor gestionado)`);
+    }
+
+    // Esperar a que Postgres acepte conexiones AUTENTICADAS (pg_isready).
+    process.stdout.write("  Esperando a que PostgreSQL esté listo");
+    let ready = false;
+    for (let i = 0; i < 40 && !ready; i++) {
+      await sleep(1000);
+      process.stdout.write(".");
+      ready = containerReady();
+    }
+    process.stdout.write("\n");
+    ready
+      ? ok("PostgreSQL listo")
+      : warn("Postgres tardó en responder; intentaré migrar de todos modos.");
   }
-  process.stdout.write("\n");
-  ready ? ok("PostgreSQL listo") : warn("Postgres tardó en responder; intentaré migrar de todos modos.");
 }
 
 // ── Paso 3: dependencias ─────────────────────────────────────────────────────
@@ -325,7 +418,9 @@ const adminEmail = (envNow.match(/^NV_ADMIN_EMAIL=(.*)$/m) || [])[1] || "";
 const adminPass = (envNow.match(/^NV_ADMIN_PASSWORD=(.*)$/m) || [])[1] || "";
 const printLogin = () => {
   if (!adminEmail || !adminPass) return;
-  console.log(`  ${c("1", "Inicia sesión con:")}  ${c("32", adminEmail)}  /  ${c("32", adminPass)}`);
+  console.log(
+    `  ${c("1", "Inicia sesión con:")}  ${c("32", adminEmail)}  /  ${c("32", adminPass)}`,
+  );
 };
 
 // ── Paso 5: arrancar ─────────────────────────────────────────────────────────
@@ -341,6 +436,7 @@ if (PREPARE_ONLY) {
   );
   console.log(`  Web: ${c("36", webUrl)}   API: ${c("36", apiUrl)}`);
   printLogin();
+  await stopEmbedded();
   process.exit(0);
 }
 step(`Paso 5 · Levantar API (:${apiPort}) + Web (:${webPort})`);
