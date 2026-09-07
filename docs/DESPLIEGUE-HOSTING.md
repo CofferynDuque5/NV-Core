@@ -72,28 +72,42 @@ construye la web con `VITE_API_URL=https://api.tudominio.com` y arranca con
 
 ---
 
-## Opción B — Hosting compartido (cPanel/Apache) solo para el front
+## Opción B — Front en cPanel + API en Render (config.js, sin recompilar)
 
-Sirve si ya tienes la **API publicada en otro sitio** (Opción A para la API, o un
-VPS) y solo quieres el front en tu hosting compartido.
+La API va en **Render** (Opción A) y el **front en tu cPanel**. El front lee la URL
+de la API de un archivo **`config.js`** que puedes editar **después** de subirlo, así
+que subes el zip UNA vez y solo cambias esa línea — no hay que recompilar nada.
 
-1. En tu equipo, dentro del proyecto, compila el front apuntando a tu API:
+**Paso 1 — API en Render.** Sigue la Opción A (Blueprint). Anota la URL que te da
+Render, p.ej. `https://nv-core.onrender.com`.
 
-   ```bash
-   pnpm install
-   pnpm desplegar:web https://api.tudominio.com
-   ```
+**Paso 2 — sube el front a cPanel.** Descomprime el zip del front y sube su
+**CONTENIDO** (`index.html`, `assets/`, `.htaccess`, `config.js`, iconos) a la raíz
+del dominio (normalmente `public_html`). Si el File Manager de cPanel falla al subir
+("could not determine if the file(s) already exist"), marca **"Overwrite existing
+files"**, o mejor sube por **FTP** (FileZilla), que no da ese error. Borra primero lo
+que hubiera de antes en `public_html`.
 
-   Esto genera la carpeta **`apps/web/dist`** con todo listo (incluye un
-   `.htaccess` para que las rutas de la SPA funcionen en Apache).
+**Paso 3 — conecta el front con tu API.** Edita **`config.js`** en `public_html` y
+pon tu URL de Render:
 
-2. Sube **el CONTENIDO** de `apps/web/dist` (el `index.html`, la carpeta
-   `assets/`, el `.htaccess`, los iconos…) a la raíz de tu hosting (normalmente
-   `public_html`). **No** subas la carpeta `dist` en sí, ni el repositorio.
+```js
+window.__NV_CONFIG__ = { apiUrl: "https://nv-core.onrender.com" };
+```
 
-3. Si tu panel oculta los archivos que empiezan por punto, activa "mostrar
-   ocultos" para subir también el **`.htaccess`** (o créalo desde el panel con el
-   contenido de `apps/web/public/.htaccess`). Sin él, las rutas profundas darán 404.
+Guarda y recarga la web. ¡Listo! (Déjalo en `""` para modo demo.)
+
+**Paso 4 — permite tu dominio en la API (CORS).** En Render → tu servicio →
+**Environment**, define `CORS_ORIGINS` con el origen exacto de tu front, p.ej.
+`https://nvcore.tudominio.com`. Guarda (redepliega solo).
+
+> **Sesión que se cierra al recargar (cookies de terceros).** Como el front y la API
+> están en dominios distintos, el navegador puede bloquear la cookie de sesión y
+> cerrarte al recargar. Para evitarlo, en Render añade un **dominio propio** a la API
+> que sea **subdominio del mismo dominio del front** (p.ej. front en
+> `nvcore.tudominio.com` y API en `api.tudominio.com`): al compartir dominio, la
+> cookie es de primera parte y la sesión persiste. Si no, usa la Opción A (todo en
+> Render, una sola URL), que no tiene este problema.
 
 ### ¿Y si solo quiero ver la interfaz (demo)?
 
@@ -114,6 +128,9 @@ enseñar el diseño; para uso real necesitas la API (Opción A).
 - **Pantalla en blanco / rutas que dan 404 al recargar** → falta el `.htaccess`
   (Opción B, paso 3), o el hosting está en un subdirectorio (entonces necesitas
   ajustar `base` en `apps/web/vite.config.ts`).
-- **La web carga pero no hay login ni datos** → se compiló sin `VITE_API_URL`
-  (modo demo) o la API no es accesible desde el navegador. Reconstruye con la URL
-  pública correcta de tu API.
+- **La web carga pero no hay login ni datos** → `config.js` tiene `apiUrl: ""`
+  (modo demo) o la API no es accesible desde el navegador. Edita `config.js` con la
+  URL pública de tu API (Opción B, paso 3).
+- **Me cierra la sesión al recargar** → cookies de terceros (front y API en dominios
+  distintos). Usa un subdominio del mismo dominio para la API, o la Opción A. Ver la
+  nota en la Opción B.
