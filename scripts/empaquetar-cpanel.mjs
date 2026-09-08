@@ -67,9 +67,11 @@ const pkg = {
   version: "1.0.0",
   private: true,
   engines: { node: ">=20" },
+  // Sin 'postinstall': cPanel ejecuta el install desde el venv (otra cwd), y una
+  // ruta relativa a prisma/schema.prisma falla. La generación de Prisma se hace
+  // en passenger-start.js al arrancar, con ruta ABSOLUTA (siempre funciona).
   scripts: {
     start: "node passenger-start.js",
-    postinstall: "prisma generate --schema=prisma/schema.prisma",
   },
   dependencies: {
     ...deps,
@@ -107,13 +109,21 @@ process.env.NODE_ENV = process.env.NODE_ENV || "production";
 // El mismo proceso sirve la web (SPA) en la misma URL que la API.
 process.env.WEB_DIST = process.env.WEB_DIST || path.join(__dirname, "web");
 
-// Aplica las migraciones de la base de datos al arrancar (idempotente).
+const prisma = path.join(__dirname, "node_modules", ".bin", "prisma");
+const schema = path.join(__dirname, "prisma", "schema.prisma");
+const q = (s) => JSON.stringify(s);
+
+// 1) Genera el cliente de Prisma con ruta ABSOLUTA (cPanel corre el install en
+//    otra carpeta, por eso no se hace en postinstall). Idempotente.
 try {
-  const prisma = path.join(__dirname, "node_modules", ".bin", "prisma");
-  execSync(JSON.stringify(prisma) + " migrate deploy --schema=" + JSON.stringify(path.join(__dirname, "prisma", "schema.prisma")), {
-    cwd: __dirname,
-    stdio: "inherit",
-  });
+  execSync(q(prisma) + " generate --schema=" + q(schema), { cwd: __dirname, stdio: "inherit" });
+} catch (e) {
+  console.error("[nvcore] 'prisma generate' falló:", e.message);
+}
+
+// 2) Aplica las migraciones de la base de datos al arrancar (idempotente).
+try {
+  execSync(q(prisma) + " migrate deploy --schema=" + q(schema), { cwd: __dirname, stdio: "inherit" });
 } catch (e) {
   console.error("[nvcore] 'prisma migrate deploy' falló (revisa DATABASE_URL):", e.message);
 }
