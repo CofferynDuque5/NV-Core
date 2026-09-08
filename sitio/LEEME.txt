@@ -1,0 +1,33 @@
+NV Core — Página de ventas (sitio web estático)
+================================================
+
+Esta carpeta ES tu página de ventas. Es estática (solo HTML), NO necesita Node
+ni base de datos. NO subas aquí el resto del proyecto: eso es la aplicación y va
+por separado (Setup Node.js App).
+
+POR QUÉ VEÍAS "Index of /"
+--------------------------
+Subiste toda la carpeta del proyecto a la raíz del subdominio, y en la raíz no
+había ningún index.html, así que el servidor mostró el listado de carpetas.
+La solución es que en la RAÍZ del subdominio esté el index.html de ESTA carpeta.
+
+CÓMO DEJARLO CARGANDO DIRECTO (elige UNA opción)
+------------------------------------------------
+Opción A (la más simple):
+  1) En el Administrador de archivos de cPanel, entra a la raíz del subdominio
+     nvmarketing (donde ahora ves la carpeta "NV-Core").
+  2) Sube AQUÍ el contenido de esta carpeta: "index.html" y ".htaccess"
+     (o sube el zip "sitio-nvcore.zip" y extráelo AQUÍ).
+  3) Recarga nvmarketing.nvcorx.com → ya carga la página directa.
+  (Puedes borrar la carpeta "NV-Core" de este subdominio; la app va en otro sitio.)
+
+Opción B (sin mover archivos):
+  1) cPanel → "Dominios" (o "Subdominios") → nvmarketing.
+  2) Cambia el "Document Root" (Raíz del documento) a:  .../NV-Core/sitio
+  3) Guarda y recarga. El servidor servirá esta carpeta directamente.
+
+PERSONALIZAR
+------------
+- Botón "Abrir NV Core": abre index.html y busca  id="app-link"  para poner la
+  URL real de tu aplicación (donde corre el software).
+- Precios: busca  data-monthly  /  data-annual  y cámbialos a tu gusto.

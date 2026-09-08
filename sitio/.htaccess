@@ -1,0 +1,18 @@
+# NV Core — sitio de ventas (estático). Colócalo junto a index.html en la raíz
+# del dominio/subdominio. Hace que la web cargue directa (sin "Index of /").
+
+# Servir index.html por defecto (evita el listado de carpetas).
+DirectoryIndex index.html
+Options -Indexes
+
+# Forzar HTTPS.
+RewriteEngine On
+RewriteCond %{HTTPS} !=on
+RewriteRule ^ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]
+
+# Cache de estáticos (la página es un único HTML; no lo cacheamos para que los
+# cambios se vean al instante).
+<IfModule mod_expires.c>
+  ExpiresActive On
+  ExpiresByType text/html "access plus 0 seconds"
+</IfModule>
