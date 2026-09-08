@@ -1,4 +1,3 @@
-
 import { useQuery } from "@tanstack/react-query";
 
 import { useServices } from "./use-services";
@@ -72,11 +71,20 @@ export function useCalendarEvents(month: string) {
   });
 }
 
-export function useContacts(query: { q?: string; stage?: string; page?: number; pageSize?: number } = {}) {
+export function useContacts(
+  query: { q?: string; stage?: string; page?: number; pageSize?: number } = {},
+) {
   const svc = useServices();
   const ws = useWorkspace();
   return useQuery({
-    queryKey: [ws.id, "contacts", query.q ?? "", query.stage ?? "", query.page ?? 1, query.pageSize ?? 100],
+    queryKey: [
+      ws.id,
+      "contacts",
+      query.q ?? "",
+      query.stage ?? "",
+      query.page ?? 1,
+      query.pageSize ?? 100,
+    ],
     queryFn: () =>
       svc.contacts.list(ws.id, {
         q: query.q,
@@ -202,7 +210,10 @@ export function useMessages(conversationId: string | null) {
 export function useMediaFolders() {
   const svc = useServices();
   const ws = useWorkspace();
-  return useQuery({ queryKey: [ws.id, "media", "folders"], queryFn: () => svc.media.folders(ws.id) });
+  return useQuery({
+    queryKey: [ws.id, "media", "folders"],
+    queryFn: () => svc.media.folders(ws.id),
+  });
 }
 
 export function useMediaAssets(query: { folderId?: string; q?: string; tag?: string } = {}) {
@@ -259,6 +270,15 @@ export function useIntegrations() {
   return useQuery({
     queryKey: [ws.id, "integrations"],
     queryFn: () => svc.integrations.catalog(ws.id),
+  });
+}
+
+export function useIntegrationCredentials() {
+  const svc = useServices();
+  const ws = useWorkspace();
+  return useQuery({
+    queryKey: [ws.id, "credentials"],
+    queryFn: () => svc.integrations.credentials(ws.id),
   });
 }
 

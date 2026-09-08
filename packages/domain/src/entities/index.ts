@@ -487,6 +487,15 @@ export interface CalendarEvent {
   campaignId?: string;
 }
 
+/** A single credential field the user can fill in-app (no server env edit). */
+export interface IntegrationField {
+  key: string;
+  label: string;
+  type?: "text" | "password";
+  placeholder?: string;
+  help?: string;
+}
+
 export interface Integration {
   id: string;
   name: string;
@@ -498,6 +507,10 @@ export interface Integration {
   module?: ModuleId;
   /** Short hint on how to enable it (e.g. which env var / OAuth flow). */
   setupHint?: string;
+  /** Credential provider id (when the key/token can be entered in-app). */
+  provider?: string;
+  /** Fields to render in the in-app "Configurar" dialog (when `provider` set). */
+  fields?: IntegrationField[];
 }
 
 export interface Conversation {

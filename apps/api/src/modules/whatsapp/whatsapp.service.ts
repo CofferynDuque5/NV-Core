@@ -1,4 +1,4 @@
-import { Injectable, type OnModuleInit } from "@nestjs/common";
+import { Injectable, type OnModuleInit, type OnModuleDestroy } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 
 import type { AppConfig } from "../../config/configuration";
@@ -17,10 +17,14 @@ import type {
   WhatsappStatusValue,
 } from "./whatsapp.types";
 
+/** How often the watchdog re-checks dropped sessions (ms). */
+const WATCHDOG_INTERVAL_MS = 3 * 60_000;
+
 @Injectable()
-export class WhatsappService implements SessionEvents, OnModuleInit {
+export class WhatsappService implements SessionEvents, OnModuleInit, OnModuleDestroy {
   private readonly sessions: SessionManager;
   private readonly live = new Map<string, BaileysSession>();
+  private watchdog: ReturnType<typeof setInterval> | null = null;
 
   constructor(
     config: ConfigService<AppConfig, true>,
@@ -29,13 +33,33 @@ export class WhatsappService implements SessionEvents, OnModuleInit {
     private readonly events: EventBus,
     private readonly notifications: NotificationsService,
   ) {
-    this.sessions = new SessionManager(config.get("integrations", { infer: true }).whatsappSessionDir);
+    this.sessions = new SessionManager(
+      config.get("integrations", { infer: true }).whatsappSessionDir,
+    );
   }
 
   /** On boot, resume any workspace that still has stored credentials. */
   async onModuleInit(): Promise<void> {
     for (const slug of this.sessions.listSessions()) {
       void this.getOrCreate(slug).start();
+    }
+    // Vigilante: en un hosting el proceso se reinicia o el socket cae tras un
+    // rato inactivo. Cada pocos minutos re-levantamos las sesiones caídas que
+    // aún tienen credenciales guardadas, así WhatsApp se mantiene conectado sin
+    // que el usuario tenga que volver a escanear el QR.
+    this.watchdog = setInterval(() => this.sweep(), WATCHDOG_INTERVAL_MS);
+    this.watchdog.unref?.();
+  }
+
+  onModuleDestroy(): void {
+    if (this.watchdog) clearInterval(this.watchdog);
+    this.watchdog = null;
+  }
+
+  /** Re-launch any stored session that dropped and is safe to resume. */
+  private sweep(): void {
+    for (const slug of this.sessions.listSessions()) {
+      this.getOrCreate(slug).ensureAlive();
     }
   }
 
@@ -59,7 +83,12 @@ export class WhatsappService implements SessionEvents, OnModuleInit {
 
   onMeta(
     workspaceSlug: string,
-    meta: { number?: string | null; groupsCount?: number; contactsCount?: number; connectedAt?: Date },
+    meta: {
+      number?: string | null;
+      groupsCount?: number;
+      contactsCount?: number;
+      connectedAt?: Date;
+    },
   ): void {
     void this.persist(workspaceSlug, {
       number: meta.number ?? undefined,

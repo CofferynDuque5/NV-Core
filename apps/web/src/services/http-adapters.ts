@@ -25,6 +25,7 @@ import type {
   Connection,
   Contact,
   Conversation,
+  CredentialStatus,
   GoogleStatus,
   Group,
   Integration,
@@ -346,6 +347,10 @@ export function createHttpAdapters(opts: HttpAdapterOptions): Services {
       googleAuthUrl: (id) =>
         get<{ url: string }>(`${ws(id)}/integrations/google/auth-url`).then((r) => r.url),
       googleDisconnect: (id) => del<void>(`${ws(id)}/integrations/google`),
+      credentials: (id) => get<Record<string, CredentialStatus>>(`${ws(id)}/credentials`),
+      saveCredential: (id, provider, data) =>
+        post<{ ok: boolean }>(`${ws(id)}/credentials/${provider}`, { data }).then(() => undefined),
+      removeCredential: (id, provider) => del<void>(`${ws(id)}/credentials/${provider}`),
     },
     notifications: {
       list: (id) => get<Notification[]>(`${ws(id)}/notifications`),

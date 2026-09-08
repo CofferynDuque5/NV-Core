@@ -1,9 +1,16 @@
-import { Injectable, type OnModuleInit } from "@nestjs/common";
+import {
+  Injectable,
+  ServiceUnavailableException,
+  UnprocessableEntityException,
+  type OnModuleInit,
+  type OnModuleDestroy,
+} from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 
 import type { AppConfig } from "../../config/configuration";
 import { PrismaService } from "../../prisma/prisma.service";
 import { EventBus } from "../../core/events/event-bus.service";
+import { CredentialsService } from "../credentials/credentials.module";
 import { NotificationsService } from "../notifications/notifications.module";
 import { TelegramGateway } from "./telegram.gateway";
 import { TelegramSessionStore } from "./telegram-session.store";
@@ -22,12 +29,16 @@ import type {
  * group and channel the account belongs to — imported automatically on sync.
  * No-op when TELEGRAM_API_ID / TELEGRAM_API_HASH are not configured.
  */
+/** How often the watchdog re-checks dropped sessions (ms). */
+const TG_WATCHDOG_INTERVAL_MS = 3 * 60_000;
+
 @Injectable()
-export class TelegramUserService implements TelegramSessionEvents, OnModuleInit {
+export class TelegramUserService implements TelegramSessionEvents, OnModuleInit, OnModuleDestroy {
   private readonly store: TelegramSessionStore;
   private readonly apiId?: number;
   private readonly apiHash?: string;
   private readonly live = new Map<string, TelegramUserSession>();
+  private watchdog: ReturnType<typeof setInterval> | null = null;
 
   constructor(
     config: ConfigService<AppConfig, true>,
@@ -35,6 +46,7 @@ export class TelegramUserService implements TelegramSessionEvents, OnModuleInit 
     private readonly gateway: TelegramGateway,
     private readonly events: EventBus,
     private readonly notifications: NotificationsService,
+    private readonly credentials: CredentialsService,
   ) {
     const integrations = config.get("integrations", { infer: true });
     this.apiId = integrations.telegram.apiId;
@@ -42,26 +54,61 @@ export class TelegramUserService implements TelegramSessionEvents, OnModuleInit 
     this.store = new TelegramSessionStore(integrations.telegramSessionDir);
   }
 
+  /** True when API credentials exist in the server env (global fallback). */
   get configured(): boolean {
     return Boolean(this.apiId && this.apiHash);
   }
 
+  /**
+   * Effective API_ID / API_HASH for a workspace: pasted-in-app (DB) first, then
+   * the server env fallback. `null` when neither is set (→ actionable error).
+   */
+  private async resolveCreds(
+    workspaceSlug: string,
+  ): Promise<{ apiId: number; apiHash: string } | null> {
+    const db = await this.credentials.get(workspaceSlug, "telegram");
+    const apiId = db.apiId ? Number(db.apiId) : this.apiId;
+    const apiHash = db.apiHash || this.apiHash;
+    if (!apiId || Number.isNaN(apiId) || !apiHash) return null;
+    return { apiId, apiHash };
+  }
+
   async onModuleInit(): Promise<void> {
-    if (!this.configured) return;
     for (const slug of this.store.listSessions()) {
-      void this.getOrCreate(slug)
+      const creds = await this.resolveCreds(slug);
+      if (!creds) continue;
+      void this.getOrCreate(slug, creds)
         .start()
         .catch(() => undefined); // resume best-effort; errors surface on manual connect
     }
+    // Vigilante: re-levanta sesiones caídas que aún tienen credenciales (tras
+    // reinicios del hosting o caídas silenciosas), sin pedir un QR nuevo.
+    this.watchdog = setInterval(() => void this.sweep(), TG_WATCHDOG_INTERVAL_MS);
+    this.watchdog.unref?.();
   }
 
-  private getOrCreate(workspaceSlug: string): TelegramUserSession {
+  onModuleDestroy(): void {
+    if (this.watchdog) clearInterval(this.watchdog);
+    this.watchdog = null;
+  }
+
+  private async sweep(): Promise<void> {
+    for (const slug of this.store.listSessions()) {
+      const creds = await this.resolveCreds(slug);
+      if (creds) this.getOrCreate(slug, creds).ensureAlive();
+    }
+  }
+
+  private getOrCreate(
+    workspaceSlug: string,
+    creds: { apiId: number; apiHash: string },
+  ): TelegramUserSession {
     let session = this.live.get(workspaceSlug);
     if (!session) {
       session = new TelegramUserSession(
         workspaceSlug,
-        this.apiId!,
-        this.apiHash!,
+        creds.apiId,
+        creds.apiHash,
         this.store,
         this,
       );
@@ -162,10 +209,9 @@ export class TelegramUserService implements TelegramSessionEvents, OnModuleInit 
 
   // ── Public API ────────────────────────────────────────────────────────────
   async status(workspaceSlug: string): Promise<TelegramStatus> {
-    const row =
-      this.prisma.enabled && this.configured
-        ? await this.prisma.telegramSession.findUnique({ where: { workspaceSlug } })
-        : null;
+    const row = this.prisma.enabled
+      ? await this.prisma.telegramSession.findUnique({ where: { workspaceSlug } })
+      : null;
     const session = this.live.get(workspaceSlug);
     const live = session?.currentStatus;
     // Never report a stale "connected" from the DB when no live session backs it
@@ -186,12 +232,23 @@ export class TelegramUserService implements TelegramSessionEvents, OnModuleInit 
   }
 
   async connect(workspaceSlug: string): Promise<TelegramStatus> {
-    if (!this.configured) {
-      throw new Error(
-        "Telegram (cuenta) no configurado. Define TELEGRAM_API_ID y TELEGRAM_API_HASH (my.telegram.org).",
+    const creds = await this.resolveCreds(workspaceSlug);
+    if (!creds) {
+      // 422 (not 500): es un fallo de configuración, no un crash del servidor.
+      // El front muestra este mensaje tal cual para guiar al usuario.
+      throw new UnprocessableEntityException(
+        "Telegram (cuenta) no configurado. Añade tu API ID y API Hash (gratis en " +
+          "my.telegram.org) en Integraciones → Telegram y pulsa Conectar.",
       );
     }
-    await this.getOrCreate(workspaceSlug).start();
+    try {
+      await this.getOrCreate(workspaceSlug, creds).start();
+    } catch (err) {
+      // Cualquier fallo al iniciar la sesión (red, credenciales, timeout) se
+      // reporta como 503 con el motivo, nunca como un 500 sin explicación.
+      const reason = err instanceof Error ? err.message : "error desconocido";
+      throw new ServiceUnavailableException(`No se pudo iniciar Telegram: ${reason}`);
+    }
     return this.status(workspaceSlug);
   }
 
@@ -219,7 +276,10 @@ export class TelegramUserService implements TelegramSessionEvents, OnModuleInit 
   /** Provide the 2FA password when a QR sign-in is waiting for it. */
   async submitPassword(workspaceSlug: string, password: string): Promise<TelegramStatus> {
     const session = this.live.get(workspaceSlug);
-    if (!session) throw new Error("No hay una conexión de Telegram en curso en este workspace.");
+    if (!session)
+      throw new UnprocessableEntityException(
+        "No hay una conexión de Telegram en curso. Pulsa Conectar y escanea el QR primero.",
+      );
     session.submitPassword(password);
     return this.status(workspaceSlug);
   }
@@ -237,13 +297,14 @@ export class TelegramUserService implements TelegramSessionEvents, OnModuleInit 
    */
   private async ensureConnected(workspaceSlug: string): Promise<void> {
     if (this.isConnected(workspaceSlug)) return;
-    if (!this.configured) {
+    const creds = await this.resolveCreds(workspaceSlug);
+    if (!creds) {
       throw new Error(
-        "Telegram (cuenta) no configurado. Define TELEGRAM_API_ID y TELEGRAM_API_HASH (my.telegram.org).",
+        "Telegram (cuenta) no configurado. Añade tu API ID y API Hash en Integraciones → Telegram (my.telegram.org).",
       );
     }
     if (this.store.load(workspaceSlug)) {
-      await this.getOrCreate(workspaceSlug)
+      await this.getOrCreate(workspaceSlug, creds)
         .start()
         .catch(() => undefined);
     }

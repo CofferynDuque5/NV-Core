@@ -928,6 +928,35 @@ export function useUpsertConnection() {
   });
 }
 
+export function useSaveCredential() {
+  const svc = useServices();
+  const ws = useWorkspace();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { provider: string; data: Record<string, string> }) =>
+      svc.integrations.saveCredential(ws.id, input.provider, input.data),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: [ws.id, "integrations"] });
+      void qc.invalidateQueries({ queryKey: [ws.id, "credentials"] });
+      toast.success("Credenciales guardadas");
+    },
+  });
+}
+
+export function useRemoveCredential() {
+  const svc = useServices();
+  const ws = useWorkspace();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (provider: string) => svc.integrations.removeCredential(ws.id, provider),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: [ws.id, "integrations"] });
+      void qc.invalidateQueries({ queryKey: [ws.id, "credentials"] });
+      toast.success("Credenciales eliminadas");
+    },
+  });
+}
+
 export function useDeleteConnection() {
   const svc = useServices();
   const ws = useWorkspace();

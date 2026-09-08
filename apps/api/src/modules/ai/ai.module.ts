@@ -34,6 +34,7 @@ import { PlanGuard } from "../../common/guards/plan.guard";
 import { RequiresActivePlan } from "../../common/decorators/requires-plan.decorator";
 import { PlanService } from "../../common/plan/plan.service";
 import { PrismaService } from "../../prisma/prisma.service";
+import { CredentialsModule, CredentialsService } from "../credentials/credentials.module";
 import {
   createImageProvider,
   createProvider,
@@ -115,19 +116,62 @@ export interface AiUsageView {
 
 @Injectable()
 export class AiService {
-  private readonly provider: AiProvider | null;
-  private readonly imageProvider: ImageProvider | null;
+  private readonly aiConfig: AppConfig["integrations"]["ai"];
   private readonly monthlyQuota?: number;
 
   constructor(
     config: ConfigService<AppConfig, true>,
     private readonly prisma: PrismaService,
     private readonly plans: PlanService,
+    private readonly credentials: CredentialsService,
   ) {
-    const ai = config.get("integrations", { infer: true }).ai;
-    this.provider = createProvider(ai);
-    this.imageProvider = createImageProvider(ai);
-    this.monthlyQuota = ai.monthlyQuota && ai.monthlyQuota > 0 ? ai.monthlyQuota : undefined;
+    this.aiConfig = config.get("integrations", { infer: true }).ai;
+    this.monthlyQuota =
+      this.aiConfig.monthlyQuota && this.aiConfig.monthlyQuota > 0
+        ? this.aiConfig.monthlyQuota
+        : undefined;
+  }
+
+  /**
+   * Effective AI config for a workspace: server env merged with keys the user
+   * pasted in the app (DB wins). This is what lets someone start using AI by
+   * pasting their OpenAI key in Integraciones — no server env edit required.
+   */
+  private async resolveAiConfig(workspaceId: string): Promise<AppConfig["integrations"]["ai"]> {
+    const base = this.aiConfig;
+    const [openai, anthropic, gemini] = await Promise.all([
+      this.credentials.get(workspaceId, "openai"),
+      this.credentials.get(workspaceId, "anthropic"),
+      this.credentials.get(workspaceId, "gemini"),
+    ]);
+    return {
+      ...base,
+      openai: openai.apiKey || base.openai,
+      anthropic: anthropic.apiKey || base.anthropic,
+      gemini: gemini.apiKey || base.gemini,
+    };
+  }
+
+  private async resolveProvider(workspaceId: string): Promise<AiProvider> {
+    const provider = createProvider(await this.resolveAiConfig(workspaceId));
+    if (!provider) {
+      throw new ServiceUnavailableException(
+        "Proveedor de IA no configurado. Añade tu clave de OpenAI, Anthropic o Gemini en " +
+          "Integraciones (o define OPENAI_API_KEY / ANTHROPIC_API_KEY / GEMINI_API_KEY en el servidor).",
+      );
+    }
+    return provider;
+  }
+
+  private async resolveImageProvider(workspaceId: string): Promise<ImageProvider> {
+    const provider = createImageProvider(await this.resolveAiConfig(workspaceId));
+    if (!provider) {
+      throw new ServiceUnavailableException(
+        "Generación de imágenes no configurada. Añade tu clave de OpenAI en Integraciones " +
+          "(los flyers usan la API de imágenes de OpenAI).",
+      );
+    }
+    return provider;
   }
 
   /** The workspace's effective AI plan + monthly quota (plan limit capped by env override). */
@@ -144,27 +188,9 @@ export class AiService {
     };
   }
 
-  private require(): AiProvider {
-    if (!this.provider) {
-      throw new ServiceUnavailableException(
-        "Proveedor de IA no configurado. Define OPENAI_API_KEY, ANTHROPIC_API_KEY o GEMINI_API_KEY.",
-      );
-    }
-    return this.provider;
-  }
-
-  private requireImage(): ImageProvider {
-    if (!this.imageProvider) {
-      throw new ServiceUnavailableException(
-        "Generación de imágenes no configurada. Define OPENAI_API_KEY (los flyers usan la API de imágenes de OpenAI).",
-      );
-    }
-    return this.imageProvider;
-  }
-
   /** Generate a flyer image from a prompt. Returns a URL (data: base64 PNG). */
   async generateImage(workspaceId: string, dto: GenerateImageDto): Promise<{ url: string }> {
-    const provider = this.requireImage();
+    const provider = await this.resolveImageProvider(workspaceId);
     await this.assertWithinQuota(workspaceId);
     const url = await provider.generateImage(dto.prompt.trim(), dto.size ?? "1024x1024");
     // Images cost more than a text call; record a nominal token weight.
@@ -178,10 +204,13 @@ export class AiService {
     const { planId, planName, quota } = await this.resolveQuota(workspaceId);
     if (quota == null) return; // unlimited
     const row = await this.prisma.aiUsage.findUnique({
-      where: { workspaceSlug_period: { workspaceSlug: workspaceId, period: usagePeriod(new Date()) } },
+      where: {
+        workspaceSlug_period: { workspaceSlug: workspaceId, period: usagePeriod(new Date()) },
+      },
     });
     if ((row?.calls ?? 0) >= quota) {
-      const upgrade = planId === "free" ? " Amplía a Pro para uso ilimitado." : " Vuelve el próximo mes.";
+      const upgrade =
+        planId === "free" ? " Amplía a Pro para uso ilimitado." : " Vuelve el próximo mes.";
       throw new HttpException(
         `Alcanzaste el límite mensual de IA de tu plan ${planName} (${quota}).${upgrade}`,
         HttpStatus.TOO_MANY_REQUESTS,
@@ -221,7 +250,7 @@ export class AiService {
   }
 
   async generateVariants(workspaceId: string, dto: GenerateVariantsDto): Promise<AiVariant[]> {
-    const provider = this.require();
+    const provider = await this.resolveProvider(workspaceId);
     await this.assertWithinQuota(workspaceId);
     const messages: ChatMessage[] = [
       {
@@ -263,11 +292,12 @@ export class AiService {
     workspaceId: string,
     dto: GenerateContentPlanDto,
   ): Promise<AiContentPlanItem[]> {
-    const provider = this.require();
+    const provider = await this.resolveProvider(workspaceId);
     await this.assertWithinQuota(workspaceId);
     const days = Math.min(31, Math.max(1, dto.days ?? 7));
-    const channels =
-      dto.channels?.length ? dto.channels.filter((c) => (CHANNEL_IDS as readonly string[]).includes(c)) : [];
+    const channels = dto.channels?.length
+      ? dto.channels.filter((c) => (CHANNEL_IDS as readonly string[]).includes(c))
+      : [];
     const useChannels = channels.length ? channels : ["ig", "fb", "wa"];
 
     const messages: ChatMessage[] = [
@@ -292,7 +322,9 @@ export class AiService {
     await this.record(workspaceId, estimateTokens(dto.topic, raw));
     const parsed = extractJson<AiContentPlanItem[]>(raw);
     if (!Array.isArray(parsed)) {
-      throw new ServiceUnavailableException("La IA devolvió una respuesta no válida. Intenta de nuevo.");
+      throw new ServiceUnavailableException(
+        "La IA devolvió una respuesta no válida. Intenta de nuevo.",
+      );
     }
     return parsed
       .filter((p) => p && typeof p.copy === "string")
@@ -309,7 +341,7 @@ export class AiService {
   }
 
   async suggestHashtags(workspaceId: string, dto: SuggestHashtagsDto): Promise<string[]> {
-    const provider = this.require();
+    const provider = await this.resolveProvider(workspaceId);
     await this.assertWithinQuota(workspaceId);
     const messages: ChatMessage[] = [
       {
@@ -332,7 +364,7 @@ export class AiService {
 
   /** Mejora un mensaje manteniendo sus variables {{...}}. */
   async improve(workspaceId: string, dto: ImproveMessageDto): Promise<{ text: string }> {
-    const provider = this.require();
+    const provider = await this.resolveProvider(workspaceId);
     await this.assertWithinQuota(workspaceId);
     const messages: ChatMessage[] = [
       {
@@ -369,8 +401,15 @@ export class AiService {
       }
     }
     const topDay = sampleSize ? DAYS[byDay.indexOf(Math.max(...byDay))] : null;
-    const topHour = sampleSize ? `${String(byHour.indexOf(Math.max(...byHour))).padStart(2, "0")}:00` : null;
-    return { sampleSize, topDay, topHour, byDay: DAYS.map((label, i) => ({ label, count: byDay[i] })) };
+    const topHour = sampleSize
+      ? `${String(byHour.indexOf(Math.max(...byHour))).padStart(2, "0")}:00`
+      : null;
+    return {
+      sampleSize,
+      topDay,
+      topHour,
+      byDay: DAYS.map((label, i) => ({ label, count: byDay[i] })),
+    };
   }
 
   /**
@@ -383,7 +422,8 @@ export class AiService {
     aiConfigured: boolean;
   }> {
     const times = await this.bestSendTimes(workspaceId);
-    if (!this.provider) return { recommendations: [], times, aiConfigured: false };
+    const provider = createProvider(await this.resolveAiConfig(workspaceId));
+    if (!provider) return { recommendations: [], times, aiConfigured: false };
     await this.assertWithinQuota(workspaceId);
 
     const [groups, logs, templates] = this.prisma.enabled
@@ -400,7 +440,11 @@ export class AiService {
 
     const context = {
       grupos: groups.map((g) => ({ nombre: g.name, miembros: g.members })),
-      envios_recientes: logs.map((l) => ({ campaña: l.campaignName, destino: l.groupName, ok: l.ok })),
+      envios_recientes: logs.map((l) => ({
+        campaña: l.campaignName,
+        destino: l.groupName,
+        ok: l.ok,
+      })),
       plantillas: templates.map((t) => t.name),
     };
     const messages: ChatMessage[] = [
@@ -415,7 +459,7 @@ export class AiService {
       },
       { role: "user", content: `Contexto (JSON):\n${JSON.stringify(context)}` },
     ];
-    const raw = await this.provider.complete(messages, { temperature: 0.8 });
+    const raw = await provider.complete(messages, { temperature: 0.8 });
     await this.record(workspaceId, estimateTokens(JSON.stringify(context), raw));
     const parsed = extractJson<AiRecommendation[]>(raw) ?? [];
     const recommendations = (Array.isArray(parsed) ? parsed : [])
@@ -488,5 +532,5 @@ export class AiController {
   }
 }
 
-@Module({ controllers: [AiController], providers: [AiService] })
+@Module({ imports: [CredentialsModule], controllers: [AiController], providers: [AiService] })
 export class AiModule {}

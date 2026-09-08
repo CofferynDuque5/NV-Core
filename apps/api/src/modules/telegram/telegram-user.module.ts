@@ -6,6 +6,7 @@ import { WorkspaceId } from "../../common/tenant/workspace.decorator";
 import { WorkspaceGuard } from "../../common/tenant/workspace.guard";
 import { RolesGuard } from "../../auth/guards/roles.guard";
 import { Roles } from "../../auth/decorators/roles.decorator";
+import { CredentialsModule } from "../credentials/credentials.module";
 import { NotificationsModule } from "../notifications/notifications.module";
 import { TelegramGateway } from "./telegram.gateway";
 import { TelegramUserService } from "./telegram-user.service";
@@ -65,7 +66,7 @@ export class TelegramUserController {
 }
 
 @Module({
-  imports: [NotificationsModule],
+  imports: [NotificationsModule, CredentialsModule],
   controllers: [TelegramUserController],
   providers: [TelegramUserService, TelegramGateway],
   exports: [TelegramUserService],

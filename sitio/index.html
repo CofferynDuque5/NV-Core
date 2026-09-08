@@ -1,0 +1,923 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="theme-color" content="#0B0D10" />
+<title>NV Core — Business Operating System</title>
+<meta name="description" content="NV Core es el sistema operativo de tu negocio: campañas, CRM, automatizaciones, contenido con IA y analítica en un solo espacio multi-workspace." />
+<style>
+  /* ==================== TOKENS ==================== */
+  :root{
+    --bg:#0B0D10;
+    --bg-2:#0E1116;
+    --panel:#151A21;
+    --panel-2:#11151b;
+    --line:rgba(255,255,255,.08);
+    --line-strong:rgba(255,255,255,.14);
+    --text:#E6EAF0;
+    --muted:#9AA4B2;
+    --muted-2:#6f7885;
+    --brand-1:#6366F1;
+    --brand-2:#8B5CF6;
+    --cyan:#22D3EE;
+    --grad:linear-gradient(135deg,#6366F1 0%,#8B5CF6 55%,#22D3EE 130%);
+    --grad-soft:linear-gradient(135deg,rgba(99,102,241,.18),rgba(139,92,246,.14));
+    --radius:16px;
+    --radius-lg:22px;
+    --radius-sm:12px;
+    --shadow:0 24px 60px -18px rgba(0,0,0,.65);
+    --glow:0 0 0 1px rgba(139,92,246,.35),0 18px 50px -12px rgba(99,102,241,.55);
+    --maxw:1180px;
+    --font:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Inter,"Helvetica Neue",Arial,sans-serif;
+  }
+
+  /* ==================== RESET / BASE ==================== */
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  html,body{max-width:100%;overflow-x:hidden}
+  body{
+    margin:0;
+    font-family:var(--font);
+    background:var(--bg);
+    color:var(--text);
+    line-height:1.6;
+    -webkit-font-smoothing:antialiased;
+    text-rendering:optimizeLegibility;
+    font-size:16px;
+  }
+  a{color:inherit;text-decoration:none}
+  img,svg{display:block;max-width:100%}
+  h1,h2,h3,h4{margin:0;line-height:1.12;letter-spacing:-.02em;font-weight:700}
+  p{margin:0}
+  ul{margin:0;padding:0;list-style:none}
+  button{font-family:inherit;cursor:pointer}
+  :focus-visible{outline:2px solid var(--cyan);outline-offset:3px;border-radius:6px}
+
+  .container{width:100%;max-width:var(--maxw);margin:0 auto;padding:0 22px}
+  section{position:relative}
+
+  .eyebrow{
+    display:inline-flex;align-items:center;gap:8px;
+    font-size:12px;font-weight:700;letter-spacing:.16em;text-transform:uppercase;
+    color:#c9c2ff;
+    padding:6px 12px;border-radius:999px;
+    background:var(--grad-soft);border:1px solid rgba(139,92,246,.28);
+  }
+  .eyebrow .dot{width:6px;height:6px;border-radius:50%;background:var(--cyan);box-shadow:0 0 10px var(--cyan)}
+
+  .grad-text{
+    background:var(--grad);
+    -webkit-background-clip:text;background-clip:text;
+    -webkit-text-fill-color:transparent;color:transparent;
+  }
+
+  .section-head{max-width:640px;margin:0 auto 54px;text-align:center}
+  .section-head h2{font-size:clamp(28px,4.4vw,44px)}
+  .section-head p{color:var(--muted);margin-top:16px;font-size:clamp(15px,1.8vw,18px)}
+
+  /* ==================== BUTTONS ==================== */
+  .btn{
+    display:inline-flex;align-items:center;justify-content:center;gap:9px;
+    font-weight:650;font-size:15px;
+    padding:12px 22px;border-radius:12px;border:1px solid transparent;
+    transition:transform .18s ease, box-shadow .25s ease, background .25s ease, border-color .2s ease;
+    white-space:nowrap;
+  }
+  .btn-primary{
+    background:var(--grad);color:#fff;
+    box-shadow:0 10px 26px -8px rgba(99,102,241,.6), inset 0 1px 0 rgba(255,255,255,.2);
+  }
+  .btn-primary:hover{transform:translateY(-2px);box-shadow:0 18px 40px -10px rgba(99,102,241,.75)}
+  .btn-ghost{
+    background:rgba(255,255,255,.04);color:var(--text);border-color:var(--line-strong);
+  }
+  .btn-ghost:hover{transform:translateY(-2px);background:rgba(255,255,255,.08);border-color:rgba(255,255,255,.22)}
+  .btn-lg{padding:15px 30px;font-size:16px;border-radius:14px}
+  .btn-block{width:100%}
+
+  /* ==================== HEADER ==================== */
+  header.site{
+    position:sticky;top:0;z-index:60;
+    background:rgba(11,13,16,.72);
+    backdrop-filter:saturate(160%) blur(14px);
+    -webkit-backdrop-filter:saturate(160%) blur(14px);
+    border-bottom:1px solid transparent;
+    transition:border-color .3s ease, background .3s ease;
+  }
+  header.site.scrolled{border-bottom-color:var(--line);background:rgba(11,13,16,.86)}
+  .nav{display:flex;align-items:center;justify-content:space-between;height:68px;gap:20px}
+  .brand{display:flex;align-items:center;gap:11px;font-weight:750;font-size:18px;letter-spacing:-.01em}
+  .brand .logo{width:34px;height:34px;flex:none}
+  .nav-links{display:flex;align-items:center;gap:6px}
+  .nav-links a{
+    color:var(--muted);font-weight:550;font-size:15px;padding:9px 14px;border-radius:10px;
+    transition:color .2s ease, background .2s ease;
+  }
+  .nav-links a:hover{color:var(--text);background:rgba(255,255,255,.05)}
+  .nav-cta{display:flex;align-items:center;gap:12px}
+  .hamburger{
+    display:none;width:44px;height:44px;border-radius:11px;
+    background:rgba(255,255,255,.05);border:1px solid var(--line);
+    align-items:center;justify-content:center;flex:none;
+  }
+  .hamburger svg{width:22px;height:22px;stroke:var(--text)}
+
+  /* mobile menu */
+  .mobile-menu{
+    display:none;position:fixed;inset:68px 0 0;z-index:55;
+    background:rgba(11,13,16,.97);backdrop-filter:blur(12px);
+    padding:26px 22px;flex-direction:column;gap:8px;
+  }
+  .mobile-menu.open{display:flex}
+  .mobile-menu a{
+    color:var(--text);font-size:19px;font-weight:600;padding:16px 14px;border-radius:12px;
+    border:1px solid var(--line);background:var(--panel-2);
+  }
+  .mobile-menu .btn{margin-top:12px}
+
+  /* ==================== HERO ==================== */
+  .hero{padding:76px 0 90px;text-align:center;overflow:hidden}
+  .aurora{position:absolute;inset:-10% -10% auto -10%;height:640px;z-index:0;pointer-events:none;filter:blur(60px);opacity:.9}
+  .aurora .blob{position:absolute;border-radius:50%;mix-blend-mode:screen;opacity:.55}
+  .aurora .b1{width:520px;height:520px;left:8%;top:-140px;background:radial-gradient(circle,#6366F1,transparent 62%);animation:float1 16s ease-in-out infinite}
+  .aurora .b2{width:560px;height:560px;right:6%;top:-90px;background:radial-gradient(circle,#8B5CF6,transparent 62%);animation:float2 19s ease-in-out infinite}
+  .aurora .b3{width:420px;height:420px;left:42%;top:40px;background:radial-gradient(circle,#22D3EE,transparent 60%);opacity:.35;animation:float3 22s ease-in-out infinite}
+  @keyframes float1{0%,100%{transform:translate(0,0)}50%{transform:translate(50px,40px)}}
+  @keyframes float2{0%,100%{transform:translate(0,0)}50%{transform:translate(-60px,30px)}}
+  @keyframes float3{0%,100%{transform:translate(0,0) scale(1)}50%{transform:translate(30px,-30px) scale(1.08)}}
+
+  .hero .container{position:relative;z-index:1}
+  .hero h1{font-size:clamp(38px,7vw,72px);margin:22px auto 0;max-width:14ch}
+  .hero .subhead{color:var(--muted);font-size:clamp(16px,2.2vw,20px);max-width:620px;margin:22px auto 0}
+  .hero-cta{display:flex;gap:14px;justify-content:center;flex-wrap:wrap;margin-top:34px}
+  .hero-note{margin-top:16px;font-size:13px;color:var(--muted-2)}
+
+  /* fade-up on load */
+  .fade-up{opacity:0;transform:translateY(22px);animation:fadeUp .8s cubic-bezier(.22,.61,.36,1) forwards}
+  .d1{animation-delay:.05s}.d2{animation-delay:.18s}.d3{animation-delay:.31s}.d4{animation-delay:.44s}.d5{animation-delay:.57s}
+  @keyframes fadeUp{to{opacity:1;transform:none}}
+
+  /* ==================== DASHBOARD MOCKUP ==================== */
+  .mock-wrap{position:relative;z-index:1;margin:60px auto 0;max-width:1000px}
+  .mock-glow{position:absolute;inset:auto 0 -30px 0;height:120px;background:var(--grad);filter:blur(70px);opacity:.28;z-index:-1;border-radius:50%}
+  .window{
+    background:var(--panel);border:1px solid var(--line-strong);border-radius:var(--radius-lg);
+    box-shadow:var(--shadow);overflow:hidden;text-align:left;
+  }
+  .titlebar{display:flex;align-items:center;gap:8px;padding:14px 18px;border-bottom:1px solid var(--line);background:var(--panel-2)}
+  .dots{display:flex;gap:7px}
+  .dots i{width:11px;height:11px;border-radius:50%;display:block}
+  .dots i:nth-child(1){background:#ff5f57}.dots i:nth-child(2){background:#febc2e}.dots i:nth-child(3){background:#28c840}
+  .titlebar .urlbar{margin-left:12px;flex:1;background:rgba(255,255,255,.04);border:1px solid var(--line);border-radius:8px;padding:5px 12px;font-size:12px;color:var(--muted-2);max-width:300px}
+  .app{display:grid;grid-template-columns:210px 1fr;min-height:420px}
+  .sidebar{background:var(--panel-2);border-right:1px solid var(--line);padding:18px 14px;display:flex;flex-direction:column;gap:6px}
+  .side-brand{display:flex;align-items:center;gap:9px;font-weight:700;font-size:14px;padding:4px 8px 16px}
+  .side-brand .logo{width:24px;height:24px}
+  .side-item{display:flex;align-items:center;gap:11px;padding:9px 11px;border-radius:10px;color:var(--muted);font-size:13.5px;font-weight:550}
+  .side-item svg{width:17px;height:17px;stroke:currentColor;flex:none}
+  .side-item.active{background:var(--grad-soft);color:#fff;border:1px solid rgba(139,92,246,.28)}
+  .side-foot{margin-top:auto;display:flex;align-items:center;gap:10px;padding:10px;border-radius:12px;background:rgba(255,255,255,.03);border:1px solid var(--line)}
+  .side-foot .av{width:30px;height:30px;border-radius:50%;background:var(--grad);flex:none}
+  .side-foot .n{font-size:12.5px;font-weight:650}
+  .side-foot .w{font-size:11px;color:var(--muted-2)}
+
+  .canvas{padding:22px}
+  .canvas-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:18px;flex-wrap:wrap;gap:10px}
+  .canvas-head h3{font-size:18px}
+  .canvas-head .pill{font-size:11px;color:#c9c2ff;background:var(--grad-soft);border:1px solid rgba(139,92,246,.28);padding:5px 11px;border-radius:999px;font-weight:650}
+  .stats{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:18px}
+  .stat{background:var(--panel-2);border:1px solid var(--line);border-radius:14px;padding:14px}
+  .stat .k{font-size:11.5px;color:var(--muted);font-weight:600}
+  .stat .v{font-size:22px;font-weight:750;margin-top:6px;letter-spacing:-.02em}
+  .stat .t{font-size:11px;font-weight:650;margin-top:4px;color:#28c840}
+  .chart{background:var(--panel-2);border:1px solid var(--line);border-radius:14px;padding:18px}
+  .chart .ct{font-size:12.5px;color:var(--muted);font-weight:600;margin-bottom:16px;display:flex;justify-content:space-between}
+  .bars{display:flex;align-items:flex-end;gap:10px;height:130px}
+  .bars .bar{flex:1;border-radius:7px 7px 3px 3px;background:var(--grad);opacity:.9;position:relative;min-height:8px;transition:filter .2s}
+  .bars .bar:nth-child(even){opacity:.55;background:linear-gradient(180deg,#8B5CF6,#6366F1)}
+  .bars .bar:hover{filter:brightness(1.2)}
+
+  /* ==================== TRUST STRIP ==================== */
+  .trust{padding:60px 0 20px;text-align:center}
+  .trust p.lead{color:var(--muted);font-size:15px;font-weight:600;letter-spacing:.02em}
+  .chips{display:flex;flex-wrap:wrap;gap:14px;justify-content:center;margin-top:26px}
+  .chip{
+    display:flex;align-items:center;gap:10px;
+    background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:14px 20px;
+    transition:transform .2s ease,border-color .2s ease;
+  }
+  .chip:hover{transform:translateY(-3px);border-color:var(--line-strong)}
+  .chip .num{font-size:20px;font-weight:750;letter-spacing:-.02em}
+  .chip .lbl{font-size:12.5px;color:var(--muted);text-align:left}
+
+  /* ==================== FEATURES ==================== */
+  .features{padding:100px 0}
+  .grid-feat{display:grid;grid-template-columns:repeat(4,1fr);gap:18px}
+  .card{
+    background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);
+    padding:26px 24px;transition:transform .25s ease,border-color .25s ease,box-shadow .25s ease;
+    position:relative;overflow:hidden;
+  }
+  .card::before{content:"";position:absolute;inset:0;background:var(--grad-soft);opacity:0;transition:opacity .3s ease}
+  .card:hover{transform:translateY(-6px);border-color:rgba(139,92,246,.4);box-shadow:0 24px 50px -22px rgba(99,102,241,.5)}
+  .card:hover::before{opacity:.5}
+  .card > *{position:relative;z-index:1}
+  .ic{
+    width:46px;height:46px;border-radius:12px;display:flex;align-items:center;justify-content:center;
+    background:var(--grad-soft);border:1px solid rgba(139,92,246,.3);margin-bottom:18px;
+  }
+  .ic svg{width:23px;height:23px;stroke:#c9c2ff;fill:none;stroke-width:1.7}
+  .card h3{font-size:17px;margin-bottom:8px}
+  .card p{color:var(--muted);font-size:14px}
+
+  /* ==================== HOW IT WORKS ==================== */
+  .how{padding:40px 0 100px}
+  .steps{display:grid;grid-template-columns:repeat(3,1fr);gap:22px;counter-reset:step}
+  .step{
+    background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:30px 26px;position:relative;
+    transition:transform .25s ease,border-color .25s ease;
+  }
+  .step:hover{transform:translateY(-5px);border-color:var(--line-strong)}
+  .step .n{
+    counter-increment:step;
+    width:44px;height:44px;border-radius:12px;display:flex;align-items:center;justify-content:center;
+    font-weight:750;font-size:18px;background:var(--grad);color:#fff;margin-bottom:18px;
+    box-shadow:0 8px 22px -8px rgba(99,102,241,.7);
+  }
+  .step .n::before{content:counter(step,decimal-leading-zero)}
+  .step h3{font-size:19px;margin-bottom:10px}
+  .step p{color:var(--muted);font-size:14.5px}
+  .step-connector{position:absolute;top:52px;right:-13px;color:var(--muted-2)}
+  @media(max-width:860px){.step-connector{display:none}}
+
+  /* ==================== PRICING ==================== */
+  .pricing{padding:40px 0 100px}
+  .toggle{display:flex;align-items:center;justify-content:center;gap:16px;margin:0 auto 44px}
+  .toggle span{font-size:14px;font-weight:600;color:var(--muted);transition:color .2s}
+  .toggle span.on{color:var(--text)}
+  .switch{
+    width:56px;height:30px;border-radius:999px;background:var(--panel);border:1px solid var(--line-strong);
+    position:relative;padding:0;transition:background .25s;
+  }
+  .switch .knob{
+    position:absolute;top:3px;left:3px;width:22px;height:22px;border-radius:50%;
+    background:var(--grad);transition:transform .28s cubic-bezier(.22,.61,.36,1);
+  }
+  .switch[aria-checked="true"]{background:var(--grad-soft);border-color:rgba(139,92,246,.4)}
+  .switch[aria-checked="true"] .knob{transform:translateX(26px)}
+  .save-badge{font-size:11px;font-weight:700;color:#22D3EE;background:rgba(34,211,238,.12);border:1px solid rgba(34,211,238,.3);padding:3px 9px;border-radius:999px}
+
+  .grid-price{display:grid;grid-template-columns:repeat(4,1fr);gap:18px;align-items:stretch}
+  .plan{
+    background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:28px 24px;
+    display:flex;flex-direction:column;transition:transform .25s ease,border-color .25s ease;
+  }
+  .plan:hover{transform:translateY(-5px);border-color:var(--line-strong)}
+  .plan.featured{border-color:rgba(139,92,246,.55);box-shadow:var(--glow);background:linear-gradient(180deg,rgba(99,102,241,.08),var(--panel))}
+  .plan .badge{
+    align-self:flex-start;font-size:11px;font-weight:750;letter-spacing:.05em;text-transform:uppercase;
+    color:#fff;background:var(--grad);padding:5px 12px;border-radius:999px;margin-bottom:14px;
+  }
+  .plan .pname{font-size:16px;font-weight:700}
+  .plan .ptag{color:var(--muted);font-size:13px;margin-top:5px;min-height:36px}
+  .plan .price{display:flex;align-items:baseline;gap:4px;margin:16px 0 4px}
+  .plan .price .amt{font-size:40px;font-weight:800;letter-spacing:-.03em}
+  .plan .price .cur{font-size:15px;font-weight:650;color:var(--muted)}
+  .plan .price .per{font-size:13px;color:var(--muted)}
+  .plan .subprice{font-size:12px;color:var(--muted-2);min-height:18px;margin-bottom:20px}
+  .plan ul{display:flex;flex-direction:column;gap:11px;margin-bottom:26px;flex:1}
+  .plan li{display:flex;gap:10px;font-size:13.5px;color:var(--text)}
+  .plan li svg{width:18px;height:18px;flex:none;margin-top:2px;stroke:#22D3EE;fill:none;stroke-width:2}
+  .plan li.off{color:var(--muted-2)}
+  .plan li.off svg{stroke:var(--muted-2)}
+
+  /* ==================== DOWNLOAD ==================== */
+  .download{padding:40px 0 100px}
+  .dl-grid{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-top:14px}
+  .dl-card{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:30px 28px;transition:transform .25s ease,border-color .25s ease}
+  .dl-card:hover{transform:translateY(-5px);border-color:var(--line-strong)}
+  .dl-card .ic{margin-bottom:20px}
+  .dl-card h3{font-size:19px;margin-bottom:14px}
+  .dl-card ol{padding-left:0;counter-reset:dl;display:flex;flex-direction:column;gap:12px}
+  .dl-card ol li{display:flex;gap:12px;color:var(--muted);font-size:14.5px;counter-increment:dl}
+  .dl-card ol li::before{
+    content:counter(dl);flex:none;width:24px;height:24px;border-radius:7px;
+    background:var(--grad-soft);border:1px solid rgba(139,92,246,.3);color:#c9c2ff;
+    font-size:12px;font-weight:750;display:flex;align-items:center;justify-content:center;
+  }
+  .dl-cta{margin-top:38px;text-align:center;display:flex;flex-direction:column;align-items:center;gap:12px}
+  .offline{display:inline-flex;align-items:center;gap:8px;font-size:13px;color:var(--muted)}
+  .offline svg{width:16px;height:16px;stroke:#22D3EE;fill:none;stroke-width:1.8}
+
+  /* ==================== FAQ ==================== */
+  .faq{padding:40px 0 100px}
+  .faq-list{max-width:780px;margin:0 auto;display:flex;flex-direction:column;gap:12px}
+  details.qa{
+    background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:0 22px;
+    transition:border-color .2s ease;
+  }
+  details.qa[open]{border-color:rgba(139,92,246,.4)}
+  details.qa summary{
+    list-style:none;cursor:pointer;padding:20px 0;display:flex;align-items:center;justify-content:space-between;gap:16px;
+    font-weight:650;font-size:16px;
+  }
+  details.qa summary::-webkit-details-marker{display:none}
+  details.qa summary .plus{flex:none;width:24px;height:24px;position:relative;transition:transform .25s ease}
+  details.qa summary .plus::before,details.qa summary .plus::after{
+    content:"";position:absolute;background:#c9c2ff;border-radius:2px;top:50%;left:50%;transform:translate(-50%,-50%);
+  }
+  details.qa summary .plus::before{width:14px;height:2px}
+  details.qa summary .plus::after{width:2px;height:14px;transition:transform .25s ease}
+  details.qa[open] summary .plus::after{transform:translate(-50%,-50%) rotate(90deg);opacity:0}
+  details.qa .ans{color:var(--muted);font-size:14.5px;padding:0 0 22px;max-width:66ch}
+
+  /* ==================== FINAL CTA ==================== */
+  .cta-band{padding:90px 0}
+  .cta-inner{
+    position:relative;overflow:hidden;
+    background:linear-gradient(135deg,rgba(99,102,241,.16),rgba(139,92,246,.12));
+    border:1px solid rgba(139,92,246,.3);border-radius:var(--radius-lg);
+    padding:60px 40px;text-align:center;
+  }
+  .cta-inner .glow{position:absolute;inset:auto 30% -80px;height:200px;background:var(--grad);filter:blur(80px);opacity:.4;border-radius:50%}
+  .cta-inner h2{font-size:clamp(28px,4.6vw,42px);position:relative}
+  .cta-inner p{color:var(--muted);margin:16px auto 30px;max-width:520px;font-size:17px;position:relative}
+  .cta-inner .btn{position:relative}
+
+  /* ==================== FOOTER ==================== */
+  footer.site{border-top:1px solid var(--line);padding:64px 0 34px;background:var(--bg-2)}
+  .foot-grid{display:grid;grid-template-columns:1.6fr 1fr 1fr 1fr 1fr;gap:32px;margin-bottom:44px}
+  .foot-brand .brand{margin-bottom:16px}
+  .foot-brand p{color:var(--muted);font-size:14px;max-width:34ch}
+  .foot-col h4{font-size:13px;text-transform:uppercase;letter-spacing:.1em;color:var(--muted-2);margin-bottom:16px;font-weight:700}
+  .foot-col a{display:block;color:var(--muted);font-size:14.5px;padding:6px 0;transition:color .2s}
+  .foot-col a:hover{color:var(--text)}
+  .foot-bottom{display:flex;align-items:center;justify-content:space-between;padding-top:26px;border-top:1px solid var(--line);flex-wrap:wrap;gap:12px}
+  .foot-bottom p{color:var(--muted-2);font-size:13px}
+
+  /* ==================== REVEAL ON SCROLL ==================== */
+  .reveal{opacity:0;transform:translateY(30px);transition:opacity .7s cubic-bezier(.22,.61,.36,1),transform .7s cubic-bezier(.22,.61,.36,1)}
+  .reveal.in{opacity:1;transform:none}
+
+  /* ==================== RESPONSIVE ==================== */
+  @media(max-width:1000px){
+    .grid-feat{grid-template-columns:repeat(2,1fr)}
+    .grid-price{grid-template-columns:repeat(2,1fr)}
+  }
+  @media(max-width:860px){
+    .nav-links{display:none}
+    .nav-cta .btn{display:none}
+    .hamburger{display:flex}
+    .app{grid-template-columns:1fr}
+    .sidebar{display:none}
+    .stats{grid-template-columns:repeat(3,1fr)}
+    .steps{grid-template-columns:1fr}
+    .foot-grid{grid-template-columns:1fr 1fr;gap:26px}
+    .foot-brand{grid-column:1 / -1}
+  }
+  @media(max-width:620px){
+    .grid-feat{grid-template-columns:1fr}
+    .grid-price{grid-template-columns:1fr}
+    .dl-grid{grid-template-columns:1fr}
+    .stats{grid-template-columns:1fr}
+    .chips{gap:10px}
+    .chip{padding:12px 15px}
+    .cta-inner{padding:44px 24px}
+    .foot-grid{grid-template-columns:1fr}
+  }
+
+  @media(prefers-reduced-motion:reduce){
+    *{animation:none!important;transition:none!important;scroll-behavior:auto!important}
+    .fade-up{opacity:1;transform:none}
+    .reveal{opacity:1;transform:none}
+    html{scroll-behavior:auto}
+  }
+</style>
+</head>
+<body>
+
+<!-- ============ HEADER ============ -->
+<header class="site" id="site-header">
+  <div class="container">
+    <nav class="nav" aria-label="Principal">
+      <a class="brand" href="#top" aria-label="NV Core inicio">
+        <svg class="logo" viewBox="0 0 40 40" fill="none" aria-hidden="true">
+          <defs>
+            <linearGradient id="lg" x1="0" y1="0" x2="40" y2="40" gradientUnits="userSpaceOnUse">
+              <stop stop-color="#6366F1"/><stop offset=".55" stop-color="#8B5CF6"/><stop offset="1" stop-color="#22D3EE"/>
+            </linearGradient>
+          </defs>
+          <rect x="1.5" y="1.5" width="37" height="37" rx="11" fill="url(#lg)" opacity=".16"/>
+          <rect x="1.5" y="1.5" width="37" height="37" rx="11" stroke="url(#lg)" stroke-width="1.5"/>
+          <path d="M12 28V12l16 16V12" stroke="url(#lg)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+        <span>NV Core</span>
+      </a>
+      <div class="nav-links">
+        <a href="#features">Características</a>
+        <a href="#pricing">Precios</a>
+        <a href="#download">Descargar</a>
+        <a href="#faq">FAQ</a>
+      </div>
+      <div class="nav-cta">
+        <a class="btn btn-primary" href="#pricing">Empezar gratis</a>
+        <button class="hamburger" id="hamburger" aria-label="Abrir menú" aria-expanded="false" aria-controls="mobile-menu">
+          <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round"><path d="M3 6h18M3 12h18M3 18h18"/></svg>
+        </button>
+      </div>
+    </nav>
+  </div>
+</header>
+
+<!-- mobile menu -->
+<div class="mobile-menu" id="mobile-menu">
+  <a href="#features">Características</a>
+  <a href="#pricing">Precios</a>
+  <a href="#download">Descargar</a>
+  <a href="#faq">FAQ</a>
+  <a class="btn btn-primary btn-lg" href="#pricing">Empezar gratis</a>
+</div>
+
+<main id="top">
+
+  <!-- ============ HERO ============ -->
+  <section class="hero">
+    <div class="aurora" aria-hidden="true">
+      <div class="blob b1"></div><div class="blob b2"></div><div class="blob b3"></div>
+    </div>
+    <div class="container">
+      <span class="eyebrow fade-up d1"><span class="dot"></span>BUSINESS OPERATING SYSTEM</span>
+      <h1 class="fade-up d2">Todo tu negocio, <span class="grad-text">en un solo lugar.</span></h1>
+      <p class="subhead fade-up d3">NV Core unifica campañas, CRM, automatizaciones, contenido con IA y analítica en un espacio de trabajo colaborativo. Menos herramientas dispersas, más resultados.</p>
+      <div class="hero-cta fade-up d4">
+        <a class="btn btn-primary btn-lg" href="#pricing">Empezar gratis</a>
+        <a class="btn btn-ghost btn-lg" href="#pricing">Ver planes</a>
+      </div>
+      <p class="hero-note fade-up d4">Sin tarjeta de crédito · Configúralo en minutos</p>
+
+      <!-- Dashboard mockup -->
+      <div class="mock-wrap fade-up d5">
+        <div class="mock-glow" aria-hidden="true"></div>
+        <div class="window" role="img" aria-label="Vista previa del panel de NV Core con estadísticas y un gráfico de rendimiento de campañas">
+          <div class="titlebar">
+            <div class="dots"><i></i><i></i><i></i></div>
+            <div class="urlbar">app.nvcore.io/workspace</div>
+          </div>
+          <div class="app">
+            <aside class="sidebar">
+              <div class="side-brand">
+                <svg class="logo" viewBox="0 0 40 40" fill="none" aria-hidden="true"><rect x="1.5" y="1.5" width="37" height="37" rx="11" fill="url(#lg)" opacity=".16"/><path d="M12 28V12l16 16V12" stroke="url(#lg)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                NV Core
+              </div>
+              <div class="side-item active"><svg viewBox="0 0 24 24" fill="none" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/></svg>Panel</div>
+              <div class="side-item"><svg viewBox="0 0 24 24" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16v14H8l-4 3z"/></svg>Campañas</div>
+              <div class="side-item"><svg viewBox="0 0 24 24" fill="none" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3"/><path d="M4 20c0-3 2-5 5-5s5 2 5 5M16 6.5a3 3 0 010 5.5M15 15c3 0 5 2 5 5"/></svg>CRM</div>
+              <div class="side-item"><svg viewBox="0 0 24 24" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h9M4 12h6M4 17h9"/><circle cx="18" cy="7" r="2"/><circle cx="15" cy="17" r="2"/></svg>Automatizaciones</div>
+              <div class="side-item"><svg viewBox="0 0 24 24" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.8 4.2L18 9l-4.2 1.8L12 15l-1.8-4.2L6 9l4.2-1.8z"/><path d="M18 15l.9 2.1L21 18l-2.1.9L18 21l-.9-2.1L15 18l2.1-.9z"/></svg>AI Content</div>
+              <div class="side-item"><svg viewBox="0 0 24 24" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5v14M9 4l11 4-11 4z"/></svg>Analytics</div>
+              <div class="side-foot">
+                <div class="av" aria-hidden="true"></div>
+                <div><div class="n">Equipo Marketing</div><div class="w">Workspace · Pro</div></div>
+              </div>
+            </aside>
+            <div class="canvas">
+              <div class="canvas-head">
+                <h3>Resumen de rendimiento</h3>
+                <span class="pill">Últimos 30 días</span>
+              </div>
+              <div class="stats">
+                <div class="stat"><div class="k">Contactos activos</div><div class="v">1.842</div><div class="t">↑ 12,4%</div></div>
+                <div class="stat"><div class="k">Campañas enviadas</div><div class="v">64</div><div class="t">↑ 8,1%</div></div>
+                <div class="stat"><div class="k">Tasa de conversión</div><div class="v">4,7%</div><div class="t">↑ 2,3%</div></div>
+              </div>
+              <div class="chart">
+                <div class="ct"><span>Interacciones por semana</span><span>+18% vs. anterior</span></div>
+                <div class="bars" aria-hidden="true">
+                  <div class="bar" style="height:42%"></div>
+                  <div class="bar" style="height:64%"></div>
+                  <div class="bar" style="height:50%"></div>
+                  <div class="bar" style="height:78%"></div>
+                  <div class="bar" style="height:60%"></div>
+                  <div class="bar" style="height:92%"></div>
+                  <div class="bar" style="height:70%"></div>
+                  <div class="bar" style="height:100%"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ TRUST STRIP ============ -->
+  <section class="trust reveal">
+    <div class="container">
+      <p class="lead">La plataforma que centraliza tu operación</p>
+      <div class="chips">
+        <div class="chip"><span class="num grad-text">+1.500</span><span class="lbl">contactos<br>gestionados</span></div>
+        <div class="chip"><span class="num grad-text">99,9%</span><span class="lbl">uptime<br>garantizado</span></div>
+        <div class="chip"><span class="num grad-text">+50</span><span class="lbl">plantillas<br>listas para usar</span></div>
+        <div class="chip"><span class="num grad-text">8×</span><span class="lbl">más rápido<br>al crear campañas</span></div>
+        <div class="chip"><span class="num grad-text">24/7</span><span class="lbl">automatizaciones<br>siempre activas</span></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ FEATURES ============ -->
+  <section class="features" id="features">
+    <div class="container">
+      <div class="section-head reveal">
+        <span class="eyebrow"><span class="dot"></span>Características</span>
+        <h2 style="margin-top:18px">Un núcleo, todas las piezas de tu negocio</h2>
+        <p>Cada módulo trabaja conectado con los demás. Todo lo que necesitas para operar, crecer y medir, sin cambiar de herramienta.</p>
+      </div>
+      <div class="grid-feat">
+
+        <article class="card reveal">
+          <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5h16v11H8l-4 3z"/><path d="M8 9h8M8 12.5h5"/></svg></div>
+          <h3>Campaign Builder</h3>
+          <p>Diseña y lanza campañas con un editor visual, segmentación y programación en minutos.</p>
+        </article>
+
+        <article class="card reveal">
+          <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3.2"/><path d="M3.5 20c0-3.3 2.4-5.5 5.5-5.5s5.5 2.2 5.5 5.5M16 5.5a3 3 0 010 5.6M16.5 14.5c2.8.2 4.5 2.2 4.5 5"/></svg></div>
+          <h3>CRM y Contactos</h3>
+          <p>Centraliza tu base de contactos con etiquetas, segmentos y el historial completo de cada relación.</p>
+        </article>
+
+        <article class="card reveal">
+          <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6" r="2.4"/><circle cx="18" cy="18" r="2.4"/><path d="M8.4 6H15a3 3 0 013 3v6.6"/><path d="M8.4 6l2 2M8.4 6l2-2"/></svg></div>
+          <h3>Automatizaciones</h3>
+          <p>Crea flujos por disparadores y condiciones para que las tareas repetitivas se ejecuten solas.</p>
+        </article>
+
+        <article class="card reveal">
+          <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l2.1 4.9L19 10l-4.9 2.1L12 17l-2.1-4.9L5 10l4.9-2.1z"/><path d="M18.5 15l.8 1.9 1.9.8-1.9.8-.8 1.9-.8-1.9-1.9-.8 1.9-.8z"/></svg></div>
+          <h3>AI Content Studio</h3>
+          <p>Genera textos, ideas y variantes con inteligencia artificial, listos para tus campañas.</p>
+        </article>
+
+        <article class="card reveal">
+          <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="3" width="12" height="16" rx="2"/><path d="M8 3v16M16 7h4v12a2 2 0 01-2 2H9"/></svg></div>
+          <h3>Plantillas</h3>
+          <p>Empieza más rápido con plantillas profesionales y reutiliza tus propios diseños cuando quieras.</p>
+        </article>
+
+        <article class="card reveal">
+          <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="8.5" cy="9.5" r="1.8"/><path d="M4 17l5-5 4 4 3-3 4 4"/></svg></div>
+          <h3>Biblioteca de Medios</h3>
+          <p>Organiza imágenes y recursos en un solo lugar, disponibles al instante para todo el equipo.</p>
+        </article>
+
+        <article class="card reveal">
+          <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4v16h16"/><path d="M8 15l3.5-4 3 2.5L20 8"/></svg></div>
+          <h3>Analytics y Reportes</h3>
+          <p>Mide cada resultado con paneles claros y reportes exportables para tomar mejores decisiones.</p>
+        </article>
+
+        <article class="card reveal">
+          <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="7" height="7" rx="1.5"/><rect x="14" y="4" width="7" height="7" rx="1.5"/><rect x="3" y="15" width="7" height="5" rx="1.5"/><rect x="14" y="15" width="7" height="5" rx="1.5"/></svg></div>
+          <h3>Multi-workspace y Equipos</h3>
+          <p>Gestiona varios espacios de trabajo, roles y permisos para colaborar sin fricción.</p>
+        </article>
+
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ HOW IT WORKS ============ -->
+  <section class="how">
+    <div class="container">
+      <div class="section-head reveal">
+        <span class="eyebrow"><span class="dot"></span>Cómo funciona</span>
+        <h2 style="margin-top:18px">De la idea al resultado en tres pasos</h2>
+        <p>Empieza hoy mismo. NV Core está diseñado para que veas valor desde el primer día.</p>
+      </div>
+      <div class="steps">
+        <div class="step reveal">
+          <div class="n"></div>
+          <h3>Crea tu espacio</h3>
+          <p>Configura tu workspace, importa tus contactos e invita a tu equipo con los roles que necesites.</p>
+          <svg class="step-connector" width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+        </div>
+        <div class="step reveal">
+          <div class="n"></div>
+          <h3>Diseña y automatiza</h3>
+          <p>Construye campañas con plantillas y AI Content, y deja que las automatizaciones hagan el trabajo pesado.</p>
+          <svg class="step-connector" width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+        </div>
+        <div class="step reveal">
+          <div class="n"></div>
+          <h3>Mide y escala</h3>
+          <p>Analiza el rendimiento con reportes en tiempo real y optimiza para crecer con datos, no intuición.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ PRICING ============ -->
+  <section class="pricing" id="pricing">
+    <div class="container">
+      <div class="section-head reveal">
+        <span class="eyebrow"><span class="dot"></span>Precios</span>
+        <h2 style="margin-top:18px">Planes para cada etapa</h2>
+        <p>Empieza gratis y crece cuando lo necesites. Cambia o cancela en cualquier momento.</p>
+      </div>
+
+      <div class="toggle reveal">
+        <span id="lbl-monthly" class="on">Mensual</span>
+        <button class="switch" id="billing-switch" role="switch" aria-checked="false" aria-label="Cambiar entre facturación mensual y anual">
+          <span class="knob"></span>
+        </button>
+        <span id="lbl-annual">Anual <span class="save-badge">2 meses gratis</span></span>
+      </div>
+
+      <div class="grid-price">
+
+        <!-- FREE -->
+        <div class="plan reveal">
+          <div class="pname">Free</div>
+          <div class="ptag">Para empezar y explorar la plataforma.</div>
+          <div class="price">
+            <span class="cur">USD</span><span class="amt" data-monthly="0" data-annual="0">0</span><span class="per">/mes</span>
+          </div>
+          <div class="subprice" data-sub-monthly="Gratis para siempre" data-sub-annual="Gratis para siempre">Gratis para siempre</div>
+          <ul>
+            <li><svg viewBox="0 0 24 24"><path d="M5 13l4 4L19 7"/></svg>1 workspace</li>
+            <li><svg viewBox="0 0 24 24"><path d="M5 13l4 4L19 7"/></svg>Hasta 250 contactos</li>
+            <li><svg viewBox="0 0 24 24"><path d="M5 13l4 4L19 7"/></svg>Campañas básicas</li>
+            <li><svg viewBox="0 0 24 24"><path d="M5 13l4 4L19 7"/></svg>Plantillas esenciales</li>
+          </ul>
+          <a class="btn btn-ghost btn-block" href="#">Empezar gratis</a>
+        </div>
+
+        <!-- STARTER -->
+        <div class="plan reveal">
+          <div class="pname">Starter</div>
+          <div class="ptag">Para equipos pequeños que arrancan en serio.</div>
+          <div class="price">
+            <span class="cur">USD</span><span class="amt" data-monthly="19" data-annual="190">19</span><span class="per">/mes</span>
+          </div>
+          <div class="subprice" data-sub-monthly="Facturado mensualmente" data-sub-annual="190 USD/año · ahorra 38 USD">Facturado mensualmente</div>
+          <ul>
+            <li><svg viewBox="0 0 24 24"><path d="M5 13l4 4L19 7"/></svg>2 workspaces</li>
+            <li><svg viewBox="0 0 24 24"><path d="M5 13l4 4L19 7"/></svg>Hasta 2.500 contactos</li>
+            <li><svg viewBox="0 0 24 24"><path d="M5 13l4 4L19 7"/></svg>Automatizaciones básicas</li>
+            <li><svg viewBox="0 0 24 24"><path d="M5 13l4 4L19 7"/></svg>AI Content (límite mensual)</li>
+            <li><svg viewBox="0 0 24 24"><path d="M5 13l4 4L19 7"/></svg>Reportes estándar</li>
+          </ul>
+          <a class="btn btn-ghost btn-block" href="#">Elegir Starter</a>
+        </div>
+
+        <!-- PRO (featured) -->
+        <div class="plan featured reveal">
+          <span class="badge">Más popular</span>
+          <div class="pname">Pro</div>
+          <div class="ptag">Todo lo que un equipo en crecimiento necesita.</div>
+          <div class="price">
+            <span class="cur">USD</span><span class="amt" data-monthly="49" data-annual="490">49</span><span class="per">/mes</span>
+          </div>
+          <div class="subprice" data-sub-monthly="Facturado mensualmente" data-sub-annual="490 USD/año · ahorra 98 USD">Facturado mensualmente</div>
+          <ul>
+            <li><svg viewBox="0 0 24 24"><path d="M5 13l4 4L19 7"/></svg>5 workspaces</li>
+            <li><svg viewBox="0 0 24 24"><path d="M5 13l4 4L19 7"/></svg>Contactos ilimitados</li>
+            <li><svg viewBox="0 0 24 24"><path d="M5 13l4 4L19 7"/></svg>Automatizaciones avanzadas</li>
+            <li><svg viewBox="0 0 24 24"><path d="M5 13l4 4L19 7"/></svg>AI Content ampliado</li>
+            <li><svg viewBox="0 0 24 24"><path d="M5 13l4 4L19 7"/></svg>Analytics y reportes avanzados</li>
+            <li><svg viewBox="0 0 24 24"><path d="M5 13l4 4L19 7"/></svg>Roles y permisos</li>
+          </ul>
+          <a class="btn btn-primary btn-block" href="#">Elegir Pro</a>
+        </div>
+
+        <!-- BUSINESS -->
+        <div class="plan reveal">
+          <div class="pname">Business</div>
+          <div class="ptag">Para organizaciones que operan a gran escala.</div>
+          <div class="price">
+            <span class="cur">USD</span><span class="amt" data-monthly="99" data-annual="990">99</span><span class="per">/mes</span>
+          </div>
+          <div class="subprice" data-sub-monthly="Facturado mensualmente" data-sub-annual="990 USD/año · ahorra 198 USD">Facturado mensualmente</div>
+          <ul>
+            <li><svg viewBox="0 0 24 24"><path d="M5 13l4 4L19 7"/></svg>Workspaces ilimitados</li>
+            <li><svg viewBox="0 0 24 24"><path d="M5 13l4 4L19 7"/></svg>Todo lo de Pro</li>
+            <li><svg viewBox="0 0 24 24"><path d="M5 13l4 4L19 7"/></svg>Biblioteca de medios ampliada</li>
+            <li><svg viewBox="0 0 24 24"><path d="M5 13l4 4L19 7"/></svg>Soporte prioritario</li>
+            <li><svg viewBox="0 0 24 24"><path d="M5 13l4 4L19 7"/></svg>Gestión avanzada de equipos</li>
+          </ul>
+          <a class="btn btn-ghost btn-block" href="#">Elegir Business</a>
+        </div>
+
+      </div>
+      <p style="text-align:center;color:var(--muted-2);font-size:13px;margin-top:22px">Precios de referencia en USD. Editables según tu configuración.</p>
+    </div>
+  </section>
+
+  <!-- ============ DOWNLOAD ============ -->
+  <section class="download" id="download">
+    <div class="container">
+      <div class="section-head reveal">
+        <span class="eyebrow"><span class="dot"></span>Descargar</span>
+        <h2 style="margin-top:18px">Lleva NV Core contigo</h2>
+        <p>NV Core se instala como aplicación en teléfonos y computadoras. La misma experiencia, en cualquier dispositivo.</p>
+      </div>
+      <div class="dl-grid">
+
+        <div class="dl-card reveal">
+          <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="2.5" width="12" height="19" rx="3"/><path d="M10.5 5.5h3"/><path d="M12 18h.01"/></svg></div>
+          <h3>En tu teléfono</h3>
+          <ol>
+            <li>Abre NV Core en el navegador de tu teléfono.</li>
+            <li>Pulsa el menú del navegador y elige "Añadir a pantalla de inicio" o "Instalar app".</li>
+            <li>Confirma y abre NV Core como una app nativa.</li>
+          </ol>
+        </div>
+
+        <div class="dl-card reveal">
+          <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="4" width="19" height="13" rx="2"/><path d="M8 21h8M12 17v4"/></svg></div>
+          <h3>En tu computadora</h3>
+          <ol>
+            <li>Abre NV Core en Chrome o Edge.</li>
+            <li>Haz clic en el icono de instalar de la barra de direcciones.</li>
+            <li>Confirma la instalación y NV Core se abrirá en su propia ventana.</li>
+          </ol>
+        </div>
+
+      </div>
+      <div class="dl-cta reveal">
+        <a class="btn btn-primary btn-lg" id="app-link" href="#">Abrir NV Core</a>
+        <span class="offline">
+          <svg viewBox="0 0 24 24"><path d="M5 12.5l4 4 10-10"/><path d="M3 8a9 9 0 0114-2"/></svg>
+          Funciona sin conexión una vez instalada (PWA)
+        </span>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ FAQ ============ -->
+  <section class="faq" id="faq">
+    <div class="container">
+      <div class="section-head reveal">
+        <span class="eyebrow"><span class="dot"></span>FAQ</span>
+        <h2 style="margin-top:18px">Preguntas frecuentes</h2>
+        <p>Lo que necesitas saber antes de empezar con NV Core.</p>
+      </div>
+      <div class="faq-list">
+        <details class="qa reveal">
+          <summary>¿Qué es exactamente NV Core?<span class="plus" aria-hidden="true"></span></summary>
+          <div class="ans">NV Core es un "Business Operating System": una plataforma que reúne campañas, CRM, automatizaciones, contenido con IA, plantillas, biblioteca de medios y analítica en un mismo espacio de trabajo, con soporte para múltiples workspaces y equipos.</div>
+        </details>
+        <details class="qa reveal">
+          <summary>¿Necesito conocimientos técnicos para usarlo?<span class="plus" aria-hidden="true"></span></summary>
+          <div class="ans">No. NV Core está pensado para equipos de marketing y negocio. Los editores visuales, las plantillas y las automatizaciones guiadas te permiten empezar sin escribir una sola línea de código.</div>
+        </details>
+        <details class="qa reveal">
+          <summary>¿Puedo empezar gratis?<span class="plus" aria-hidden="true"></span></summary>
+          <div class="ans">Sí. El plan Free es gratuito para siempre e incluye lo esencial para explorar la plataforma. Puedes pasarte a un plan superior cuando lo necesites, sin fricción y sin perder tu información.</div>
+        </details>
+        <details class="qa reveal">
+          <summary>¿Cómo funcionan los múltiples workspaces?<span class="plus" aria-hidden="true"></span></summary>
+          <div class="ans">Cada workspace es un espacio independiente con sus propios contactos, campañas y datos. Puedes gestionar varios espacios, invitar a tu equipo y asignar roles y permisos según el plan que elijas.</div>
+        </details>
+        <details class="qa reveal">
+          <summary>¿NV Core se instala como aplicación?<span class="plus" aria-hidden="true"></span></summary>
+          <div class="ans">Sí. NV Core es una PWA: puedes instalarla en teléfonos y computadoras desde el navegador y usarla como una app nativa. Una vez instalada, sigue funcionando incluso sin conexión.</div>
+        </details>
+        <details class="qa reveal">
+          <summary>¿Puedo cambiar o cancelar mi plan cuando quiera?<span class="plus" aria-hidden="true"></span></summary>
+          <div class="ans">Totalmente. Puedes subir, bajar de plan o cancelar en cualquier momento desde la configuración de tu cuenta. Los cambios se aplican de forma inmediata en tu ciclo de facturación.</div>
+        </details>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ FINAL CTA ============ -->
+  <section class="cta-band">
+    <div class="container">
+      <div class="cta-inner reveal">
+        <div class="glow" aria-hidden="true"></div>
+        <h2>Empieza gratis hoy</h2>
+        <p>Centraliza tu operación, automatiza lo repetitivo y crece con datos. Todo tu negocio, en un solo lugar.</p>
+        <a class="btn btn-primary btn-lg" href="#pricing">Empezar gratis</a>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<!-- ============ FOOTER ============ -->
+<footer class="site">
+  <div class="container">
+    <div class="foot-grid">
+      <div class="foot-brand">
+        <a class="brand" href="#top" aria-label="NV Core inicio">
+          <svg class="logo" viewBox="0 0 40 40" fill="none" aria-hidden="true"><rect x="1.5" y="1.5" width="37" height="37" rx="11" fill="url(#lg)" opacity=".16"/><rect x="1.5" y="1.5" width="37" height="37" rx="11" stroke="url(#lg)" stroke-width="1.5"/><path d="M12 28V12l16 16V12" stroke="url(#lg)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          <span>NV Core</span>
+        </a>
+        <p>El sistema operativo de tu negocio. Campañas, CRM, automatizaciones, IA y analítica en un solo espacio.</p>
+      </div>
+      <div class="foot-col">
+        <h4>Producto</h4>
+        <a href="#features">Características</a>
+        <a href="#how">Cómo funciona</a>
+        <a href="#features">Automatizaciones</a>
+        <a href="#features">AI Content Studio</a>
+      </div>
+      <div class="foot-col">
+        <h4>Precios</h4>
+        <a href="#pricing">Planes</a>
+        <a href="#pricing">Free</a>
+        <a href="#pricing">Pro</a>
+        <a href="#pricing">Business</a>
+      </div>
+      <div class="foot-col">
+        <h4>Descargar</h4>
+        <a href="#download">En tu teléfono</a>
+        <a href="#download">En tu computadora</a>
+        <a href="#download">Instalar app (PWA)</a>
+      </div>
+      <div class="foot-col">
+        <h4>Soporte</h4>
+        <a href="#faq">Preguntas frecuentes</a>
+        <a href="#">Centro de ayuda</a>
+        <a href="#">Contacto</a>
+      </div>
+    </div>
+    <div class="foot-bottom">
+      <p>© 2026 NV Core. Todos los derechos reservados.</p>
+      <p>Hecho para equipos que quieren crecer.</p>
+    </div>
+  </div>
+</footer>
+
+<script>
+(function(){
+  "use strict";
+
+  /* ---------- Sticky header shadow ---------- */
+  var header = document.getElementById('site-header');
+  var onScroll = function(){
+    if(window.scrollY > 8){ header.classList.add('scrolled'); }
+    else { header.classList.remove('scrolled'); }
+  };
+  window.addEventListener('scroll', onScroll, {passive:true});
+  onScroll();
+
+  /* ---------- Mobile menu ---------- */
+  var burger = document.getElementById('hamburger');
+  var menu = document.getElementById('mobile-menu');
+  var closeMenu = function(){
+    menu.classList.remove('open');
+    burger.setAttribute('aria-expanded','false');
+    document.body.style.overflow = '';
+  };
+  burger.addEventListener('click', function(){
+    var open = menu.classList.toggle('open');
+    burger.setAttribute('aria-expanded', open ? 'true' : 'false');
+    document.body.style.overflow = open ? 'hidden' : '';
+  });
+  menu.querySelectorAll('a').forEach(function(a){ a.addEventListener('click', closeMenu); });
+  window.addEventListener('resize', function(){ if(window.innerWidth > 860) closeMenu(); });
+
+  /* ---------- Pricing billing toggle ---------- */
+  var sw = document.getElementById('billing-switch');
+  var lblM = document.getElementById('lbl-monthly');
+  var lblA = document.getElementById('lbl-annual');
+  var applyPrices = function(annual){
+    document.querySelectorAll('.amt').forEach(function(el){
+      var v = annual ? el.getAttribute('data-annual') : el.getAttribute('data-monthly');
+      el.textContent = v;
+    });
+    document.querySelectorAll('.per').forEach(function(el){
+      el.textContent = annual ? '/año' : '/mes';
+    });
+    document.querySelectorAll('.subprice').forEach(function(el){
+      el.textContent = annual ? el.getAttribute('data-sub-annual') : el.getAttribute('data-sub-monthly');
+    });
+    lblM.classList.toggle('on', !annual);
+    lblA.classList.toggle('on', annual);
+  };
+  sw.addEventListener('click', function(){
+    var next = sw.getAttribute('aria-checked') !== 'true';
+    sw.setAttribute('aria-checked', next ? 'true' : 'false');
+    applyPrices(next);
+  });
+
+  /* ---------- Reveal on scroll ---------- */
+  var reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  var reveals = document.querySelectorAll('.reveal');
+  if(reduce || !('IntersectionObserver' in window)){
+    reveals.forEach(function(el){ el.classList.add('in'); });
+  } else {
+    var io = new IntersectionObserver(function(entries){
+      entries.forEach(function(e){
+        if(e.isIntersecting){ e.target.classList.add('in'); io.unobserve(e.target); }
+      });
+    }, {rootMargin:'0px 0px -10% 0px', threshold:0.08});
+    reveals.forEach(function(el){ io.observe(el); });
+  }
+})();
+</script>
+</body>
+</html>

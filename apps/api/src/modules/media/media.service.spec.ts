@@ -44,7 +44,13 @@ function makeService(seed: Asset[] = [], folderIds: string[] = ["f1"]) {
     },
   };
   const audit = { record: vi.fn() };
-  const service = new MediaService(prisma as unknown as PrismaService, audit as never, {} as never);
+  const credentials = { get: vi.fn(async () => ({})) } as never;
+  const service = new MediaService(
+    prisma as unknown as PrismaService,
+    audit as never,
+    {} as never,
+    credentials,
+  );
   return { service, rows };
 }
 

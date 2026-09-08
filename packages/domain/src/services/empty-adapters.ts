@@ -252,6 +252,9 @@ export const emptyAdapters: Services = {
     googleStatus: () => delay({ configured: false, connected: false, email: null }),
     googleAuthUrl: () => notAvailable(),
     googleDisconnect: () => notAvailable(),
+    credentials: () => delay({}),
+    saveCredential: () => notAvailable(),
+    removeCredential: () => notAvailable(),
   },
   notifications: {
     list: () => delay([]),

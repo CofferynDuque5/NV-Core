@@ -413,6 +413,23 @@ model Connection {
   @@index([workspaceSlug])
 }
 
+// Per-workspace API keys / tokens for integrations (OpenAI, Telegram, ImgBB…),
+// entered from the app UI instead of server env vars. `data` is an ENCRYPTED
+// JSON blob of that provider's fields (e.g. {"apiKey":"…"} or {"apiId","apiHash"}).
+// Read with an env-var fallback, so existing server-configured deployments keep
+// working. Never returned to the client in plaintext (only a masked preview).
+model IntegrationCredential {
+  id            String   @id @default(cuid())
+  workspaceSlug String
+  provider      String
+  data          String
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@unique([workspaceSlug, provider])
+  @@index([workspaceSlug])
+}
+
 model MediaFolder {
   id            String       @id @default(cuid())
   workspaceSlug String

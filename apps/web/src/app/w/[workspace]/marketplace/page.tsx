@@ -1,4 +1,3 @@
-
 import * as React from "react";
 import { Link } from "react-router-dom";
 import { ArrowUpRight, CheckCircle2, Circle, Plug } from "lucide-react";
@@ -12,10 +11,12 @@ import { EmptyState } from "@/components/common/empty-state";
 import { CardGridSkeleton } from "@/components/common/skeletons";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { CredentialDialog } from "@/components/entities/credential-dialog";
 
 export default function IntegrationsPage() {
   const integrations = useIntegrations();
   const ws = useWorkspace();
+  const [credsFor, setCredsFor] = React.useState<Integration | null>(null);
 
   const [query, setQuery] = React.useState("");
   const [category, setCategory] = React.useState("");
@@ -80,10 +81,23 @@ export default function IntegrationsPage() {
       ) : (
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {filtered.map((it) => (
-            <IntegrationCard key={it.id} integration={it} workspaceSlug={ws.slug} />
+            <IntegrationCard
+              key={it.id}
+              integration={it}
+              workspaceSlug={ws.slug}
+              onConfigure={setCredsFor}
+            />
           ))}
         </div>
       )}
+
+      <CredentialDialog
+        integration={credsFor}
+        open={credsFor !== null}
+        onOpenChange={(v) => {
+          if (!v) setCredsFor(null);
+        }}
+      />
     </div>
   );
 }
@@ -104,8 +118,8 @@ function CategoryChip({
       aria-pressed={active}
       className={
         active
-          ? "rounded-full border border-brand bg-brand/10 px-3 py-1 text-xs font-medium text-brand"
-          : "rounded-full border border-line-soft bg-panel px-3 py-1 text-xs font-medium text-ink-muted transition-colors hover:border-line-bright hover:text-ink"
+          ? "border-brand bg-brand/10 text-brand rounded-full border px-3 py-1 text-xs font-medium"
+          : "border-line-soft bg-panel text-ink-muted hover:border-line-bright hover:text-ink rounded-full border px-3 py-1 text-xs font-medium transition-colors"
       }
     >
       {label}
@@ -116,15 +130,21 @@ function CategoryChip({
 function IntegrationCard({
   integration,
   workspaceSlug,
+  onConfigure,
 }: {
   integration: Integration;
   workspaceSlug: string;
+  onConfigure: (integration: Integration) => void;
 }) {
-  const { name, category, description, hue, connected, module, setupHint } = integration;
-  const href = module ? `/w/${workspaceSlug}/${module}` : undefined;
+  const { name, category, description, hue, connected, module, setupHint, provider, fields } =
+    integration;
+  // Providers with in-app credential fields open a dialog to paste the key;
+  // everything else deep-links to the module where it's configured.
+  const inApp = Boolean(provider && fields && fields.length > 0);
+  const href = !inApp && module ? `/w/${workspaceSlug}/${module}` : undefined;
 
   return (
-    <div className="group flex flex-col gap-3 rounded-xl border border-line-soft bg-panel p-4 transition-colors hover:border-line-bright">
+    <div className="border-line-soft bg-panel hover:border-line-bright group flex flex-col gap-3 rounded-xl border p-4 transition-colors">
       <div className="flex items-start justify-between gap-2">
         <div
           className="grid size-10 place-items-center rounded-lg text-sm font-bold text-white"
@@ -134,29 +154,43 @@ function IntegrationCard({
           {name.slice(0, 2)}
         </div>
         {connected ? (
-          <span className="inline-flex items-center gap-1 rounded-full bg-state-success/10 px-2 py-0.5 text-[11px] font-medium text-state-success">
+          <span className="bg-state-success/10 text-state-success inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium">
             <CheckCircle2 className="size-3" /> Conectada
           </span>
         ) : (
-          <span className="inline-flex items-center gap-1 rounded-full bg-line-strong/50 px-2 py-0.5 text-[11px] font-medium text-ink-faint">
+          <span className="bg-line-strong/50 text-ink-faint inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium">
             <Circle className="size-3" /> Sin conectar
           </span>
         )}
       </div>
 
       <div>
-        <div className="text-sm font-semibold text-ink-bright">{name}</div>
-        <div className="text-[11px] uppercase tracking-wide text-ink-faint">{category}</div>
+        <div className="text-ink-bright text-sm font-semibold">{name}</div>
+        <div className="text-ink-faint text-[11px] uppercase tracking-wide">{category}</div>
       </div>
 
-      <p className="text-xs leading-relaxed text-ink-muted">{description}</p>
-      {!connected && setupHint ? (
-        <p className="text-[11px] text-ink-faint">{setupHint}</p>
-      ) : null}
+      <p className="text-ink-muted text-xs leading-relaxed">{description}</p>
+      {!connected && setupHint ? <p className="text-ink-faint text-[11px]">{setupHint}</p> : null}
 
       <div className="mt-auto pt-1">
-        {href ? (
-          <Button asChild variant={connected ? "secondary" : "default"} size="sm" className="w-full">
+        {inApp ? (
+          <Button
+            type="button"
+            variant={connected ? "secondary" : "default"}
+            size="sm"
+            className="w-full"
+            onClick={() => onConfigure(integration)}
+          >
+            {connected ? "Gestionar" : "Configurar"}
+            <ArrowUpRight className="size-4" />
+          </Button>
+        ) : href ? (
+          <Button
+            asChild
+            variant={connected ? "secondary" : "default"}
+            size="sm"
+            className="w-full"
+          >
             <Link to={href}>
               {connected ? "Gestionar" : "Configurar"}
               <ArrowUpRight className="size-4" />

@@ -1,7 +1,7 @@
 {
   "name": "NV Core — Business OS",
   "short_name": "NV Core",
-  "description": "Marketing, CRM y automatización omnicanal. Publica campañas y mensajes por WhatsApp desde tu teléfono.",
+  "description": "Marketing, CRM y automatización para tu negocio. Gestiona campañas, contactos y contenido desde tu teléfono o computadora.",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",

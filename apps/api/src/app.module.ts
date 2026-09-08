@@ -37,6 +37,7 @@ import { AutomationsModule } from "./modules/automations/automations.module";
 import { DesignsModule } from "./modules/designs/designs.module";
 import { AnalyticsModule } from "./modules/analytics/analytics.module";
 import { ConnectionsModule } from "./modules/connections/connections.module";
+import { CredentialsModule } from "./modules/credentials/credentials.module";
 import { IntegrationsModule } from "./modules/integrations/integrations.module";
 import { GoogleModule } from "./modules/integrations/google/google.module";
 import { NotificationsModule } from "./modules/notifications/notifications.module";
@@ -91,6 +92,7 @@ import { ProvidersModule } from "./providers/providers.module";
     DesignsModule,
     AnalyticsModule,
     ConnectionsModule,
+    CredentialsModule,
     IntegrationsModule,
     GoogleModule,
     NotificationsModule,

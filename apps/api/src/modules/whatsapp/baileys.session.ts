@@ -28,6 +28,8 @@ export class BaileysSession {
   private status: WhatsappStatusValue = "disconnected";
   private starting = false;
   private manualStop = false;
+  /** Terminal close (another session took over / blocked): don't auto-resume. */
+  private giveUp = false;
   /** Consecutive failed reconnects; reset to 0 on a successful open. */
   private reconnectAttempts = 0;
   /** Pending reconnect timer, so we never stack overlapping retries. */
@@ -52,6 +54,19 @@ export class BaileysSession {
     return this.status === "connected";
   }
 
+  /**
+   * Watchdog hook: relaunch a session that dropped and is safe to resume. Only
+   * acts on a fully "disconnected" session with stored credentials (never while
+   * showing a QR, connecting, backing off, manually stopped, or after a terminal
+   * close). This is what keeps WhatsApp alive on a host that restarts the process
+   * or after transient retries were exhausted.
+   */
+  ensureAlive(): void {
+    if (this.status !== "disconnected") return;
+    if (this.starting || this.reconnectTimer || this.manualStop || this.giveUp) return;
+    void this.start();
+  }
+
   private setStatus(status: WhatsappStatusValue): void {
     this.status = status;
     this.events.onStatus(this.workspaceSlug, status);
@@ -67,6 +82,7 @@ export class BaileysSession {
     }
     this.starting = true;
     this.manualStop = false;
+    this.giveUp = false;
     try {
       const baileys = await loadBaileys();
       const makeWASocket = (baileys.default ?? (baileys as any).makeWASocket) as any;
@@ -171,7 +187,8 @@ export class BaileysSession {
 
     if (decision.action === "stop") {
       // Retrying would be harmful (another session active / blocked). Wait for a
-      // manual reconnect and tell the user why.
+      // manual reconnect and tell the user why. The watchdog must not resume it.
+      this.giveUp = true;
       this.reconnectAttempts = 0;
       this.lastError = decision.reason;
       this.setStatus("disconnected");
@@ -221,7 +238,11 @@ export class BaileysSession {
         if (!text.trim()) continue;
         const handle = numberFromJid(jid) ?? jid.split("@")[0];
         const name = String(m?.pushName || handle);
-        this.events.onInbound(this.workspaceSlug, { contactHandle: handle, contactName: name, text });
+        this.events.onInbound(this.workspaceSlug, {
+          contactHandle: handle,
+          contactName: name,
+          text,
+        });
       } catch (err) {
         this.logger.warn(`Mensaje entrante ignorado: ${(err as Error).message}`);
       }
@@ -319,7 +340,11 @@ export class BaileysSession {
    * Send to a group JID, optionally with media (delivered by public URL). Text
    * becomes the caption for image/video, or a separate message for documents.
    */
-  async sendToGroup(remoteJid: string, text: string, attachment?: WhatsappAttachment | null): Promise<{ id: string }> {
+  async sendToGroup(
+    remoteJid: string,
+    text: string,
+    attachment?: WhatsappAttachment | null,
+  ): Promise<{ id: string }> {
     if (!this.isConnected || !this.sock) {
       throw new Error("WhatsApp no está conectado en este workspace.");
     }
@@ -347,7 +372,11 @@ export class BaileysSession {
    * Send media (or text) to any target — a group JID (`…@g.us`), a full JID, or
    * a bare phone number (routed to `…@s.whatsapp.net`).
    */
-  async sendMedia(to: string, text: string, attachment?: WhatsappAttachment | null): Promise<{ id: string }> {
+  async sendMedia(
+    to: string,
+    text: string,
+    attachment?: WhatsappAttachment | null,
+  ): Promise<{ id: string }> {
     // toJid keeps group/full JIDs as-is and maps a bare number to s.whatsapp.net.
     return this.sendToGroup(toJid(to), text, attachment);
   }

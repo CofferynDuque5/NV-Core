@@ -1,11 +1,16 @@
 import { Controller, Get, Injectable, Module, UseGuards } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { ApiBearerAuth, ApiTags } from "@nestjs/swagger";
-import type { Integration, ModuleId } from "@nv/domain";
+import type { Integration, IntegrationField, ModuleId } from "@nv/domain";
 
 import type { AppConfig } from "../../config/configuration";
 import { WorkspaceId } from "../../common/tenant/workspace.decorator";
 import { WorkspaceGuard } from "../../common/tenant/workspace.guard";
+import {
+  CredentialsModule,
+  CredentialsService,
+  PROVIDER_FIELDS,
+} from "../credentials/credentials.module";
 
 /** Static capability catalog; `connected` is filled from real config at runtime. */
 interface CatalogEntry {
@@ -19,6 +24,9 @@ interface CatalogEntry {
   /** How to enable it (env var / OAuth), shown when not connected. */
   setupHint: string;
   configured: (c: AppConfig["integrations"]) => boolean;
+  /** Credential provider id + fields when the key can be pasted in-app. */
+  provider?: string;
+  fields?: IntegrationField[];
 }
 
 const CATALOG: CatalogEntry[] = [
@@ -28,9 +36,11 @@ const CATALOG: CatalogEntry[] = [
     category: "Inteligencia Artificial",
     description: "Genera captions y variantes A/B con GPT.",
     hue: 158,
-    module: "ai",
-    setupHint: "Define OPENAI_API_KEY en el servidor.",
+    module: "marketplace",
+    setupHint: "Pega tu API key de OpenAI (platform.openai.com).",
     configured: (c) => Boolean(c.ai.openai),
+    provider: "openai",
+    fields: [{ key: "apiKey", label: "API Key", type: "password", placeholder: "sk-…" }],
   },
   {
     id: "anthropic",
@@ -38,9 +48,11 @@ const CATALOG: CatalogEntry[] = [
     category: "Inteligencia Artificial",
     description: "Contenido y asistencia con los modelos Claude.",
     hue: 25,
-    module: "ai",
-    setupHint: "Define ANTHROPIC_API_KEY en el servidor.",
+    module: "marketplace",
+    setupHint: "Pega tu API key de Anthropic (console.anthropic.com).",
     configured: (c) => Boolean(c.ai.anthropic),
+    provider: "anthropic",
+    fields: [{ key: "apiKey", label: "API Key", type: "password", placeholder: "sk-ant-…" }],
   },
   {
     id: "gemini",
@@ -48,9 +60,11 @@ const CATALOG: CatalogEntry[] = [
     category: "Inteligencia Artificial",
     description: "Generación multimodal con Gemini.",
     hue: 217,
-    module: "ai",
-    setupHint: "Define GEMINI_API_KEY en el servidor.",
+    module: "marketplace",
+    setupHint: "Pega tu API key de Gemini (aistudio.google.com).",
     configured: (c) => Boolean(c.ai.gemini),
+    provider: "gemini",
+    fields: [{ key: "apiKey", label: "API Key", type: "password", placeholder: "AIza…" }],
   },
   {
     id: "whatsapp",
@@ -66,11 +80,22 @@ const CATALOG: CatalogEntry[] = [
     id: "telegram",
     name: "Telegram",
     category: "Mensajería",
-    description: "Automatiza conversaciones con un bot de Telegram.",
+    description: "Conecta tu cuenta de Telegram con API ID y API Hash.",
     hue: 200,
-    module: "conexiones",
-    setupHint: "Define TELEGRAM_BOT_TOKEN y su webhook.",
-    configured: (c) => Boolean(c.telegram.botToken),
+    module: "marketplace",
+    setupHint: "Pega tu API ID y API Hash (gratis en my.telegram.org).",
+    configured: (c) => Boolean(c.telegram.apiId && c.telegram.apiHash),
+    provider: "telegram",
+    fields: [
+      { key: "apiId", label: "API ID", type: "text", placeholder: "1234567" },
+      {
+        key: "apiHash",
+        label: "API Hash",
+        type: "password",
+        placeholder: "0123456789abcdef…",
+        help: "Consíguelos gratis en my.telegram.org → API development tools.",
+      },
+    ],
   },
   {
     id: "meta",
@@ -91,6 +116,18 @@ const CATALOG: CatalogEntry[] = [
     module: "configuracion",
     setupHint: "Define STRIPE_SECRET_KEY y el webhook.",
     configured: (c) => Boolean(c.stripe.secretKey),
+  },
+  {
+    id: "imgbb",
+    name: "ImgBB",
+    category: "Media",
+    description: "Aloja las imágenes de tus campañas y publicaciones.",
+    hue: 168,
+    module: "marketplace",
+    setupHint: "Pega tu API key de ImgBB (api.imgbb.com).",
+    configured: (c) => Boolean(c.imgbb.apiKey),
+    provider: "imgbb",
+    fields: [{ key: "apiKey", label: "API Key", type: "password", placeholder: "abcdef0123…" }],
   },
   {
     id: "cloudinary",
@@ -145,16 +182,34 @@ export function buildCatalog(integrations: AppConfig["integrations"]): Integrati
     module: entry.module,
     setupHint: entry.setupHint,
     connected: entry.configured(integrations),
+    ...(entry.provider ? { provider: entry.provider } : {}),
+    ...(entry.fields ? { fields: entry.fields } : {}),
   }));
 }
 
 @Injectable()
 export class IntegrationsService {
-  constructor(private readonly config: ConfigService<AppConfig, true>) {}
+  constructor(
+    private readonly config: ConfigService<AppConfig, true>,
+    private readonly credentials: CredentialsService,
+  ) {}
 
-  /** Real capability catalog; `connected` reflects actual configuration. */
-  async catalog(_workspaceId: string): Promise<Integration[]> {
-    return buildCatalog(this.config.get("integrations", { infer: true }));
+  /**
+   * Real capability catalog; `connected` reflects actual configuration — env
+   * config OR credentials the user pasted in-app (DB). So a card flips to
+   * "conectada" right after saving its key, without a server restart.
+   */
+  async catalog(workspaceId: string): Promise<Integration[]> {
+    const base = buildCatalog(this.config.get("integrations", { infer: true }));
+    return Promise.all(
+      base.map(async (item) => {
+        if (item.connected || !item.provider) return item;
+        const keys = (PROVIDER_FIELDS[item.provider] ?? []).map((f) => f.key);
+        const connected =
+          keys.length > 0 && (await this.credentials.has(workspaceId, item.provider, keys));
+        return connected ? { ...item, connected: true } : item;
+      }),
+    );
   }
 }
 
@@ -171,5 +226,9 @@ export class IntegrationsController {
   }
 }
 
-@Module({ controllers: [IntegrationsController], providers: [IntegrationsService] })
+@Module({
+  imports: [CredentialsModule],
+  controllers: [IntegrationsController],
+  providers: [IntegrationsService],
+})
 export class IntegrationsModule {}

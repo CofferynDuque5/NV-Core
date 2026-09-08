@@ -18,7 +18,15 @@ function makeService(apiId?: number, apiHash?: string) {
   const gateway = { emitQr: () => undefined, emitStatus: () => undefined } as never;
   const events = { emit: () => undefined } as never;
   const notifications = { create: async () => undefined } as never;
-  return new TelegramUserService(config as never, prisma, gateway, events, notifications);
+  const credentials = { get: async () => ({}) } as never;
+  return new TelegramUserService(
+    config as never,
+    prisma,
+    gateway,
+    events,
+    notifications,
+    credentials,
+  );
 }
 
 afterAll(() => rmSync(DIR, { recursive: true, force: true }));

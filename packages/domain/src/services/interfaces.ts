@@ -528,12 +528,28 @@ export interface GoogleStatus {
   email: string | null;
 }
 
+/** Masked view of stored integration credentials (never the raw secret). */
+export interface CredentialStatus {
+  configured: boolean;
+  preview: Record<string, string>;
+}
+
 export interface IntegrationService {
   catalog(workspaceId: string): Promise<Integration[]>;
   googleStatus(workspaceId: string): Promise<GoogleStatus>;
   /** Returns the Google consent URL to redirect the browser to. */
   googleAuthUrl(workspaceId: string): Promise<string>;
   googleDisconnect(workspaceId: string): Promise<void>;
+  /** Which providers have credentials stored (masked previews only). */
+  credentials(workspaceId: string): Promise<Record<string, CredentialStatus>>;
+  /** Save (encrypted) the API keys/tokens the user pasted for a provider. */
+  saveCredential(
+    workspaceId: string,
+    provider: string,
+    data: Record<string, string>,
+  ): Promise<void>;
+  /** Remove a provider's stored credentials. */
+  removeCredential(workspaceId: string, provider: string): Promise<void>;
 }
 
 export interface NotificationService {

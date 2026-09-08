@@ -58,6 +58,18 @@ export class TelegramUserSession {
     return this.status === "connected";
   }
 
+  /**
+   * Watchdog hook: resume a session that dropped and is safe to resume. Only
+   * acts when fully "disconnected" (never mid-QR, mid-login, awaiting 2FA, or
+   * already reconnecting). Keeps Telegram alive on a host that restarts the
+   * process without prompting for a new QR when the account is still authorized.
+   */
+  ensureAlive(): void {
+    if (this.status !== "disconnected") return;
+    if (this.starting || this.reconnecting) return;
+    void this.start().catch(() => undefined);
+  }
+
   private setStatus(status: TelegramStatusValue): void {
     this.status = status;
     this.events.onStatus(this.workspaceSlug, status);
@@ -122,7 +134,8 @@ export class TelegramUserSession {
           // user for their password via the panel and wait for it here. GramJS
           // calls this again on a wrong password, so each call arms a new prompt.
           password: async () => {
-            this.lastError = "La cuenta tiene verificación en dos pasos (2FA). Ingresa tu contraseña.";
+            this.lastError =
+              "La cuenta tiene verificación en dos pasos (2FA). Ingresa tu contraseña.";
             this.setStatus("password");
             return new Promise<string>((resolve) => {
               this.passwordResolver = resolve;
@@ -172,7 +185,10 @@ export class TelegramUserSession {
   /** Periodically verify the connection; reconnect once if GramJS dropped it. */
   private startHeartbeat(): void {
     this.stopHeartbeat();
-    this.heartbeat = setInterval(() => void this.checkConnection(), TelegramUserSession.HEARTBEAT_MS);
+    this.heartbeat = setInterval(
+      () => void this.checkConnection(),
+      TelegramUserSession.HEARTBEAT_MS,
+    );
   }
 
   private stopHeartbeat(): void {
@@ -235,9 +251,14 @@ export class TelegramUserSession {
       const id = String(msg.senderId ?? sender?.id ?? "");
       if (!id) return;
       const name =
-        (sender && ([sender.firstName, sender.lastName].filter(Boolean).join(" ") || sender.username)) ||
+        (sender &&
+          ([sender.firstName, sender.lastName].filter(Boolean).join(" ") || sender.username)) ||
         id;
-      this.events.onInbound(this.workspaceSlug, { contactHandle: id, contactName: String(name), text });
+      this.events.onInbound(this.workspaceSlug, {
+        contactHandle: id,
+        contactName: String(name),
+        text,
+      });
     } catch (err) {
       this.logger.warn(`Mensaje entrante ignorado: ${(err as Error).message}`);
     }
@@ -297,7 +318,11 @@ export class TelegramUserSession {
     return { id: String(res?.id ?? "") };
   }
 
-  async sendMedia(to: string, text: string, attachment?: TelegramAttachment | null): Promise<{ id: string }> {
+  async sendMedia(
+    to: string,
+    text: string,
+    attachment?: TelegramAttachment | null,
+  ): Promise<{ id: string }> {
     if (!this.client || !this.isConnected) throw new Error("Telegram no está conectado.");
     if (!attachment?.url) return this.sendText(to, text);
     const entity = await this.resolve(to);

@@ -36,6 +36,7 @@ import { RolesGuard } from "../../auth/guards/roles.guard";
 import { Roles } from "../../auth/decorators/roles.decorator";
 import { CurrentUser } from "../../auth/decorators/current-user.decorator";
 import type { AuthenticatedUser } from "../../auth/auth.types";
+import { CredentialsModule, CredentialsService } from "../credentials/credentials.module";
 import { buildUploadSignature, parseCloudinaryUrl } from "./cloudinary";
 import { LIST_CAP } from "../../common/query-limits";
 
@@ -79,24 +80,31 @@ export class MediaService {
     private readonly prisma: PrismaService,
     private readonly audit: AuditLogger,
     private readonly config: ConfigService<AppConfig, true>,
+    private readonly credentials: CredentialsService,
   ) {}
 
+  /** ImgBB key for a workspace: pasted-in-app (DB) first, then server env. */
+  private async imgbbKey(workspaceSlug: string): Promise<string | undefined> {
+    const db = await this.credentials.get(workspaceSlug, "imgbb");
+    return db.apiKey || this.config.get("integrations", { infer: true }).imgbb.apiKey;
+  }
+
   private db() {
-    if (!this.prisma.enabled) throw new ServiceUnavailableException("Base de datos no configurada.");
+    if (!this.prisma.enabled)
+      throw new ServiceUnavailableException("Base de datos no configurada.");
     return this.prisma;
   }
 
   /** Signed params for a direct browser→Cloudinary upload; null when unconfigured. */
   uploadSignature(workspaceId: string, folder?: string): MediaUploadSignature | null {
-    const creds = parseCloudinaryUrl(this.config.get("integrations", { infer: true }).cloudinary.url);
+    const creds = parseCloudinaryUrl(
+      this.config.get("integrations", { infer: true }).cloudinary.url,
+    );
     if (!creds) return null;
     // Scope uploads to the workspace to keep tenants' media separate.
     const targetFolder = folder ? `nv-core/${workspaceId}/${folder}` : `nv-core/${workspaceId}`;
     const timestamp = Math.floor(Date.now() / 1000);
-    const signature = buildUploadSignature(
-      { folder: targetFolder, timestamp },
-      creds.apiSecret,
-    );
+    const signature = buildUploadSignature({ folder: targetFolder, timestamp }, creds.apiSecret);
     return {
       cloudName: creds.cloudName,
       apiKey: creds.apiKey,
@@ -115,11 +123,11 @@ export class MediaService {
    * Upload a base64 image to ImgBB (server-side, key never leaves the backend)
    * and return its public URL. Images only — ImgBB does not host video.
    */
-  async uploadImage(base64: string): Promise<{ url: string }> {
-    const apiKey = this.config.get("integrations", { infer: true }).imgbb.apiKey;
+  async uploadImage(workspaceSlug: string, base64: string): Promise<{ url: string }> {
+    const apiKey = await this.imgbbKey(workspaceSlug);
     if (!apiKey) {
       throw new ServiceUnavailableException(
-        "Hosting de imágenes no configurado. Define IMGBB_API_KEY (o CLOUDINARY_URL).",
+        "Hosting de imágenes no configurado. Añade tu clave de ImgBB en Integraciones (o define IMGBB_API_KEY / CLOUDINARY_URL).",
       );
     }
     // Accept a data: URL or a raw base64 payload.
@@ -139,7 +147,9 @@ export class MediaService {
       error?: { message?: string };
     };
     if (!res.ok || !data.data?.url) {
-      throw new ServiceUnavailableException(`ImgBB: ${data.error?.message ?? `HTTP ${res.status}`}`);
+      throw new ServiceUnavailableException(
+        `ImgBB: ${data.error?.message ?? `HTTP ${res.status}`}`,
+      );
     }
     return { url: data.data.display_url || data.data.url };
   }
@@ -184,7 +194,11 @@ export class MediaService {
     return rows.map((r) => r.tag).filter((t): t is string => Boolean(t));
   }
 
-  async createFolder(workspaceId: string, actor: string, dto: CreateFolderDto): Promise<MediaFolder> {
+  async createFolder(
+    workspaceId: string,
+    actor: string,
+    dto: CreateFolderDto,
+  ): Promise<MediaFolder> {
     const row = await this.db().mediaFolder.create({
       data: { workspaceSlug: workspaceId, label: dto.label },
       include: { _count: { select: { assets: true } } },
@@ -226,7 +240,9 @@ export class MediaService {
     id: string,
     dto: UpdateAssetDto,
   ): Promise<MediaAsset> {
-    const existing = await this.db().mediaAsset.findFirst({ where: { id, workspaceSlug: workspaceId } });
+    const existing = await this.db().mediaAsset.findFirst({
+      where: { id, workspaceSlug: workspaceId },
+    });
     if (!existing) throw new NotFoundException("Archivo no encontrado.");
     if (dto.folderId) await this.assertOwnedFolder(workspaceId, dto.folderId);
     const data: Record<string, unknown> = {};
@@ -285,8 +301,8 @@ export class MediaController {
   @Roles("Owner", "Admin", "Editor")
   @UseGuards(RolesGuard)
   @HttpCode(200)
-  uploadImage(@WorkspaceId() _workspaceId: string, @Body() dto: UploadImageDto) {
-    return this.service.uploadImage(dto.image);
+  uploadImage(@WorkspaceId() workspaceId: string, @Body() dto: UploadImageDto) {
+    return this.service.uploadImage(workspaceId, dto.image);
   }
 
   @Post("folders")
@@ -336,5 +352,9 @@ export class MediaController {
   }
 }
 
-@Module({ controllers: [MediaController], providers: [MediaService] })
+@Module({
+  imports: [CredentialsModule],
+  controllers: [MediaController],
+  providers: [MediaService],
+})
 export class MediaModule {}

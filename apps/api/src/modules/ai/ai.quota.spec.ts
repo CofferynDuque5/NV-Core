@@ -48,7 +48,8 @@ function makeService(opts: {
   const plans = {
     resolvePlan: vi.fn(async () => getPlan(opts.planId ?? "free")),
   } as unknown as PlanService;
-  return new AiService(config, prisma, plans);
+  const credentials = { get: vi.fn(async () => ({})) } as never;
+  return new AiService(config, prisma, plans, credentials);
 }
 
 describe("AiService.usage (plan-tiered quota)", () => {
