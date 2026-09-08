@@ -57,6 +57,36 @@ async function stopEmbedded() {
 }
 
 /**
+ * Garantiza que la base `name` exista y esté en UTF-8. En Windows en español el
+ * clúster puede crearse en WIN1252, que NO puede guardar acentos/emoji ni el
+ * carácter `→` de algunas migraciones (error 22P05). Si la base existe con otra
+ * codificación, la recreamos en UTF-8 (son datos de desarrollo). Usa template0
+ * + locale C para poder forzar UTF-8 sea cual sea la config del clúster.
+ */
+async function embeddedEnsureUtf8Db(pg, name) {
+  const admin = pg.getPgClient("postgres");
+  await admin.connect();
+  try {
+    const { rows } = await admin.query(
+      "SELECT pg_encoding_to_char(encoding) AS enc FROM pg_database WHERE datname = $1",
+      [name],
+    );
+    const enc = rows[0]?.enc ?? null;
+    if (enc && enc !== "UTF8") {
+      warn(`La base '${name}' estaba en ${enc}; la recreo en UTF-8 (datos de desarrollo)…`);
+      await admin.query(`DROP DATABASE IF EXISTS "${name}" WITH (FORCE)`);
+    }
+    if (!enc || enc !== "UTF8") {
+      await admin.query(
+        `CREATE DATABASE "${name}" ENCODING 'UTF8' LC_COLLATE 'C' LC_CTYPE 'C' TEMPLATE template0`,
+      );
+    }
+  } finally {
+    await admin.end().catch(() => {});
+  }
+}
+
+/**
  * Levanta un PostgreSQL EMBEBIDO (paquete `embedded-postgres`, sin Docker):
  * descarga un binario de Postgres la primera vez y guarda los datos en
  * `.nvcore-db/` (persisten entre arranques, como un volumen). Alinea
@@ -103,6 +133,9 @@ async function startEmbeddedPostgres({ apiEnv, dbUser, dbPass, dbName }) {
     port,
     persistent: true,
     createPostgresUser: asRoot,
+    // Fuerza UTF-8 al crear el clúster (la 1ª vez). Sin esto, en Windows en
+    // español initdb usaría WIN1252 y fallarían acentos/emoji y migraciones.
+    initdbFlags: ["--encoding=UTF8", "--no-locale"],
   });
 
   if (firstRun) await pg.initialise();
@@ -113,11 +146,17 @@ async function startEmbeddedPostgres({ apiEnv, dbUser, dbPass, dbName }) {
   process.once("SIGINT", bye);
   process.once("SIGTERM", bye);
 
-  // Crear la base si no existe (idempotente).
+  // Crear la base si no existe, garantizando UTF-8 (idempotente). Esto además
+  // repara un clúster viejo que hubiera quedado en WIN1252 de un arranque previo.
   try {
-    await pg.createDatabase(dbName);
+    await embeddedEnsureUtf8Db(pg, dbName);
   } catch {
-    /* ya existe */
+    // Último recurso: crearla con los valores por defecto del clúster.
+    try {
+      await pg.createDatabase(dbName);
+    } catch {
+      /* ya existe */
+    }
   }
 
   const url = `postgresql://${dbUser}:${dbPass}@localhost:${port}/${dbName}?schema=public`;
@@ -135,14 +174,18 @@ async function startEmbeddedPostgres({ apiEnv, dbUser, dbPass, dbName }) {
  * directo con Postgres para soltar y volver a crear la BD. Devuelve true si pudo.
  */
 async function recreateDatabase({ dbName, dbUser, dbPass, containerName }) {
-  // Caso 1: Postgres embebido → tenemos el cliente a mano.
+  // Caso 1: Postgres embebido → tenemos el cliente a mano. Recreamos en UTF-8.
   if (embeddedPg) {
+    const admin = embeddedPg.getPgClient("postgres");
+    await admin.connect();
     try {
-      await embeddedPg.dropDatabase(dbName);
-    } catch {
-      /* puede no existir */
+      await admin.query(`DROP DATABASE IF EXISTS "${dbName}" WITH (FORCE)`);
+      await admin.query(
+        `CREATE DATABASE "${dbName}" ENCODING 'UTF8' LC_COLLATE 'C' LC_CTYPE 'C' TEMPLATE template0`,
+      );
+    } finally {
+      await admin.end().catch(() => {});
     }
-    await embeddedPg.createDatabase(dbName);
     return true;
   }
   // Caso 2: contenedor Docker propio → psql dentro del contenedor.
@@ -152,7 +195,9 @@ async function recreateDatabase({ dbName, dbUser, dbPass, containerName }) {
         `psql -U ${dbUser} -d postgres -v ON_ERROR_STOP=1 -c ${JSON.stringify(sql)}`,
     );
   psql(`DROP DATABASE IF EXISTS "${dbName}" WITH (FORCE)`);
-  return psql(`CREATE DATABASE "${dbName}"`);
+  return psql(
+    `CREATE DATABASE "${dbName}" ENCODING 'UTF8' LC_COLLATE 'C' LC_CTYPE 'C' TEMPLATE template0`,
+  );
 }
 
 // ── Log helpers ──────────────────────────────────────────────────────────────
