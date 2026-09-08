@@ -127,6 +127,34 @@ async function startEmbeddedPostgres({ apiEnv, dbUser, dbPass, dbName }) {
   return true;
 }
 
+/**
+ * Recrea desde cero la base de datos de desarrollo que gestionamos (embebida o
+ * contenedor Docker propio). Se usa para auto-repararla cuando quedó en un estado
+ * inconsistente (p.ej. migración fallida P3009). NO usa `prisma migrate reset`
+ * (que además de destructivo dispara avisos si lo ejecuta un agente): habla
+ * directo con Postgres para soltar y volver a crear la BD. Devuelve true si pudo.
+ */
+async function recreateDatabase({ dbName, dbUser, dbPass, containerName }) {
+  // Caso 1: Postgres embebido → tenemos el cliente a mano.
+  if (embeddedPg) {
+    try {
+      await embeddedPg.dropDatabase(dbName);
+    } catch {
+      /* puede no existir */
+    }
+    await embeddedPg.createDatabase(dbName);
+    return true;
+  }
+  // Caso 2: contenedor Docker propio → psql dentro del contenedor.
+  const psql = (sql) =>
+    run(
+      `docker exec -e PGPASSWORD=${JSON.stringify(dbPass)} ${containerName} ` +
+        `psql -U ${dbUser} -d postgres -v ON_ERROR_STOP=1 -c ${JSON.stringify(sql)}`,
+    );
+  psql(`DROP DATABASE IF EXISTS "${dbName}" WITH (FORCE)`);
+  return psql(`CREATE DATABASE "${dbName}"`);
+}
+
 // ── Log helpers ──────────────────────────────────────────────────────────────
 const color = process.stdout.isTTY;
 const c = (n, s) => (color ? `\x1b[${n}m${s}\x1b[0m` : s);
@@ -270,6 +298,12 @@ const isLocalDb = dbHost === "localhost" || dbHost === "127.0.0.1";
 // ── Paso 2: PostgreSQL de desarrollo ─────────────────────────────────────────
 step("Paso 2 · Base de datos PostgreSQL");
 
+// ¿La BD la gestionamos nosotros (Docker propio o Postgres embebido)? Si sí,
+// ante una migración en estado "fallido" (P3009) podemos reiniciarla sin riesgo,
+// porque son datos de desarrollo desechables. Nunca haremos esto con una BD
+// remota o gestionada por el usuario (--no-db).
+let managedLocalDb = false;
+
 const NAME = "nvcore-dev-db"; // contenedor gestionado por este script
 
 /** pg_isready dentro del contenedor gestionado (auth-capable, no solo TCP). */
@@ -293,6 +327,7 @@ if (NO_DB) {
   // Modo automático: gestionamos NUESTRO propio contenedor Docker. No asumimos
   // que "el puerto está abierto" signifique credenciales válidas — por eso no
   // reutilizamos un Postgres ajeno que ya escuche en el 5432.
+  managedLocalDb = true;
   const dockerOk = Boolean(capture("docker --version")) && Boolean(capture("docker info"));
   if (!dockerOk) {
     // Sin Docker → Postgres embebido (no requiere nada instalado aparte).
@@ -371,18 +406,35 @@ step("Paso 4 · Preparar la base de datos (Prisma)");
 if (!run("pnpm --filter @nv/api exec prisma generate")) die("Falló prisma generate.");
 ok("Cliente Prisma generado");
 
+const MIGRATE = "pnpm --filter @nv/api exec prisma migrate deploy";
 let migrated = false;
 for (let i = 1; i <= 3 && !migrated; i++) {
-  migrated = run("pnpm --filter @nv/api exec prisma migrate deploy");
+  migrated = run(MIGRATE);
   if (!migrated && i < 3) {
     warn(`Migración falló (intento ${i}/3); reintento en 3s…`);
     await sleep(3000);
   }
 }
+
+// Auto-reparación: si la BD es NUESTRA (Docker propio o Postgres embebido) y las
+// migraciones no aplican —p.ej. quedó una migración en estado "fallido" (P3009)
+// tras un arranque interrumpido—, la recreamos desde cero: son datos de
+// desarrollo desechables. Luego re-aplicamos TODAS las migraciones.
+if (!migrated && managedLocalDb) {
+  warn("La base de datos local quedó en un estado inconsistente; la recreo (datos de desarrollo)…");
+  const recreated = await recreateDatabase({ dbName, dbUser, dbPass, containerName: NAME });
+  if (recreated) {
+    ok("Base de datos recreada limpia");
+    migrated = run(MIGRATE);
+  }
+}
+
 if (!migrated) {
   die(
     "No se pudieron aplicar las migraciones.\n" +
-      "  Revisa que Postgres esté arriba y que DATABASE_URL en apps/api/.env sea correcto.",
+      "  Revisa que Postgres esté arriba y que DATABASE_URL en apps/api/.env sea correcto.\n" +
+      "  Si gestionas tu propia BD, arregla la migración fallida con:\n" +
+      "    pnpm --filter @nv/api exec prisma migrate reset --force",
   );
 }
 ok("Migraciones aplicadas");
