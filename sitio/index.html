@@ -116,9 +116,7 @@
   }
   .nav-links a:hover{color:var(--text);background:rgba(255,255,255,.05)}
   .nav-cta{display:flex;align-items:center;gap:12px}
-  .nav-login{color:var(--muted);font-weight:600;font-size:15px;padding:9px 12px;border-radius:10px;transition:color .2s ease,background .2s ease}
-  .nav-login:hover{color:var(--text);background:rgba(255,255,255,.05)}
-  @media (max-width:860px){.nav-login{display:none}}
+  .btn-ingresar{padding:9px 18px;font-size:14.5px}
   .hamburger{
     display:none;width:44px;height:44px;border-radius:11px;
     background:rgba(255,255,255,.05);border:1px solid var(--line);
@@ -349,15 +347,14 @@
   .cta-inner .btn{position:relative}
 
   /* ==================== FOOTER ==================== */
-  footer.site{border-top:1px solid var(--line);padding:64px 0 34px;background:var(--bg-2)}
-  .foot-grid{display:grid;grid-template-columns:1.6fr 1fr 1fr 1fr 1fr;gap:32px;margin-bottom:44px}
-  .foot-brand .brand{margin-bottom:16px}
-  .foot-brand p{color:var(--muted);font-size:14px;max-width:34ch}
-  .foot-col h4{font-size:13px;text-transform:uppercase;letter-spacing:.1em;color:var(--muted-2);margin-bottom:16px;font-weight:700}
-  .foot-col a{display:block;color:var(--muted);font-size:14.5px;padding:6px 0;transition:color .2s}
-  .foot-col a:hover{color:var(--text)}
-  .foot-bottom{display:flex;align-items:center;justify-content:space-between;padding-top:26px;border-top:1px solid var(--line);flex-wrap:wrap;gap:12px}
-  .foot-bottom p{color:var(--muted-2);font-size:13px}
+  footer.site{border-top:1px solid var(--line);padding:26px 0;background:var(--bg-2)}
+  .foot-top{display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap}
+  .foot-links{display:flex;flex-wrap:wrap;gap:8px 22px}
+  .foot-links a{color:var(--muted);font-size:14px;transition:color .2s}
+  .foot-links a:hover{color:var(--text)}
+  .foot-bottom{margin-top:16px;padding-top:14px;border-top:1px solid var(--line)}
+  .foot-bottom p{color:var(--muted-2);font-size:13px;margin:0}
+  @media(max-width:620px){.foot-top{flex-direction:column;align-items:flex-start;gap:12px}}
 
   /* ==================== REVEAL ON SCROLL ==================== */
   .reveal{opacity:0;transform:translateY(30px);transition:opacity .7s cubic-bezier(.22,.61,.36,1),transform .7s cubic-bezier(.22,.61,.36,1)}
@@ -370,24 +367,28 @@
   }
   @media(max-width:860px){
     .nav-links{display:none}
-    .nav-cta .btn{display:none}
+    .nav-cta .hide-sm{display:none}
     .hamburger{display:flex}
     .app{grid-template-columns:1fr}
     .sidebar{display:none}
     .stats{grid-template-columns:repeat(3,1fr)}
     .steps{grid-template-columns:1fr}
-    .foot-grid{grid-template-columns:1fr 1fr;gap:26px}
-    .foot-brand{grid-column:1 / -1}
   }
   @media(max-width:620px){
     .grid-feat{grid-template-columns:1fr}
     .grid-price{grid-template-columns:1fr}
     .dl-grid{grid-template-columns:1fr}
-    .stats{grid-template-columns:1fr}
+    /* Mockup compacto en móvil (que no se vea enorme ni vacío) */
+    .stats{grid-template-columns:repeat(3,1fr);gap:8px}
+    .stat{padding:10px}
+    .stat .k{font-size:10px}
+    .stat .v{font-size:16px;margin-top:3px}
+    .stat .t{font-size:10px}
+    .bars{height:96px}
+    .canvas{padding:16px}
     .chips{gap:10px}
     .chip{padding:12px 15px}
     .cta-inner{padding:44px 24px}
-    .foot-grid{grid-template-columns:1fr}
   }
 
   @media(prefers-reduced-motion:reduce){
@@ -433,8 +434,8 @@
         <a href="#faq">FAQ</a>
       </div>
       <div class="nav-cta">
-        <a class="nav-login" data-app data-path="/login" href="#">Iniciar sesión</a>
-        <a class="btn btn-primary" data-app data-path="/register" href="#">Empezar gratis</a>
+        <a class="btn btn-ghost btn-ingresar" data-app data-path="/login" href="#">Ingresar</a>
+        <a class="btn btn-primary hide-sm" data-app data-path="/register" href="#">Empezar gratis</a>
         <button class="hamburger" id="hamburger" aria-label="Abrir menú" aria-expanded="false" aria-controls="mobile-menu">
           <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round"><path d="M3 6h18M3 12h18M3 18h18"/></svg>
         </button>
@@ -476,7 +477,7 @@
         <div class="window" role="img" aria-label="Vista previa del panel de NV Core con estadísticas y un gráfico de rendimiento de campañas">
           <div class="titlebar">
             <div class="dots"><i></i><i></i><i></i></div>
-            <div class="urlbar">app.nvcore.io/workspace</div>
+            <div class="urlbar">app.nvcorx.com</div>
           </div>
           <div class="app">
             <aside class="sidebar">
@@ -823,44 +824,21 @@
 <!-- ============ FOOTER ============ -->
 <footer class="site">
   <div class="container">
-    <div class="foot-grid">
-      <div class="foot-brand">
-        <a class="brand" href="#top" aria-label="NV Core inicio">
-          <svg class="logo" viewBox="0 0 40 40" fill="none" aria-hidden="true"><rect x="1.5" y="1.5" width="37" height="37" rx="11" fill="url(#lg)" opacity=".16"/><rect x="1.5" y="1.5" width="37" height="37" rx="11" stroke="url(#lg)" stroke-width="1.5"/><path d="M12 28V12l16 16V12" stroke="url(#lg)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>
-          <span>NV Core</span>
-        </a>
-        <p>El sistema operativo de tu negocio. Campañas, CRM, automatizaciones, IA y analítica en un solo espacio.</p>
-      </div>
-      <div class="foot-col">
-        <h4>Producto</h4>
+    <div class="foot-top">
+      <a class="brand" href="#top" aria-label="NV Core inicio">
+        <svg class="logo" viewBox="0 0 40 40" fill="none" aria-hidden="true"><rect x="1.5" y="1.5" width="37" height="37" rx="11" fill="url(#lg)" opacity=".16"/><rect x="1.5" y="1.5" width="37" height="37" rx="11" stroke="url(#lg)" stroke-width="1.5"/><path d="M12 28V12l16 16V12" stroke="url(#lg)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <span>NV Core</span>
+      </a>
+      <nav class="foot-links" aria-label="Pie de página">
         <a href="#features">Características</a>
-        <a href="#how">Cómo funciona</a>
-        <a href="#features">Automatizaciones</a>
-        <a href="#features">AI Content Studio</a>
-      </div>
-      <div class="foot-col">
-        <h4>Precios</h4>
-        <a href="#pricing">Planes</a>
-        <a href="#pricing">Free</a>
-        <a href="#pricing">Pro</a>
-        <a href="#pricing">Business</a>
-      </div>
-      <div class="foot-col">
-        <h4>Descargar</h4>
-        <a href="#download">En tu teléfono</a>
-        <a href="#download">En tu computadora</a>
-        <a href="#download">Instalar app (PWA)</a>
-      </div>
-      <div class="foot-col">
-        <h4>Soporte</h4>
-        <a href="#faq">Preguntas frecuentes</a>
-        <a href="#">Centro de ayuda</a>
-        <a href="#">Contacto</a>
-      </div>
+        <a href="#pricing">Precios</a>
+        <a href="#download">Descargar</a>
+        <a href="#faq">FAQ</a>
+        <a data-app data-path="/login" href="#">Ingresar</a>
+      </nav>
     </div>
     <div class="foot-bottom">
       <p>© 2026 NV Core. Todos los derechos reservados.</p>
-      <p>Hecho para equipos que quieren crecer.</p>
     </div>
   </div>
 </footer>
