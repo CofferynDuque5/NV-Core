@@ -116,6 +116,9 @@
   }
   .nav-links a:hover{color:var(--text);background:rgba(255,255,255,.05)}
   .nav-cta{display:flex;align-items:center;gap:12px}
+  .nav-login{color:var(--muted);font-weight:600;font-size:15px;padding:9px 12px;border-radius:10px;transition:color .2s ease,background .2s ease}
+  .nav-login:hover{color:var(--text);background:rgba(255,255,255,.05)}
+  @media (max-width:860px){.nav-login{display:none}}
   .hamburger{
     display:none;width:44px;height:44px;border-radius:11px;
     background:rgba(255,255,255,.05);border:1px solid var(--line);
@@ -397,6 +400,15 @@
 </head>
 <body>
 
+<!-- ===================================================================== -->
+<!--  ⬇⬇⬇  CONFIGURA AQUÍ LA URL DE TU APLICACIÓN NV CORE  ⬇⬇⬇             -->
+<!--  Pon el dominio donde instalaste el software (Setup Node.js App).      -->
+<!--  Ejemplo: "https://app.nvcorx.com"  — deja "" si aún no la tienes.     -->
+<!-- ===================================================================== -->
+<script>
+  window.NV_APP_URL = "https://app.nvcorx.com";
+</script>
+
 <!-- ============ HEADER ============ -->
 <header class="site" id="site-header">
   <div class="container">
@@ -421,7 +433,8 @@
         <a href="#faq">FAQ</a>
       </div>
       <div class="nav-cta">
-        <a class="btn btn-primary" href="#pricing">Empezar gratis</a>
+        <a class="nav-login" data-app data-path="/login" href="#">Iniciar sesión</a>
+        <a class="btn btn-primary" data-app data-path="/register" href="#">Empezar gratis</a>
         <button class="hamburger" id="hamburger" aria-label="Abrir menú" aria-expanded="false" aria-controls="mobile-menu">
           <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round"><path d="M3 6h18M3 12h18M3 18h18"/></svg>
         </button>
@@ -436,7 +449,8 @@
   <a href="#pricing">Precios</a>
   <a href="#download">Descargar</a>
   <a href="#faq">FAQ</a>
-  <a class="btn btn-primary btn-lg" href="#pricing">Empezar gratis</a>
+  <a data-app data-path="/login" href="#">Iniciar sesión</a>
+  <a class="btn btn-primary btn-lg" data-app data-path="/register" href="#">Empezar gratis</a>
 </div>
 
 <main id="top">
@@ -451,7 +465,7 @@
       <h1 class="fade-up d2">Todo tu negocio, <span class="grad-text">en un solo lugar.</span></h1>
       <p class="subhead fade-up d3">NV Core unifica campañas, CRM, automatizaciones, contenido con IA y analítica en un espacio de trabajo colaborativo. Menos herramientas dispersas, más resultados.</p>
       <div class="hero-cta fade-up d4">
-        <a class="btn btn-primary btn-lg" href="#pricing">Empezar gratis</a>
+        <a class="btn btn-primary btn-lg" data-app data-path="/register" href="#">Empezar gratis</a>
         <a class="btn btn-ghost btn-lg" href="#pricing">Ver planes</a>
       </div>
       <p class="hero-note fade-up d4">Sin tarjeta de crédito · Configúralo en minutos</p>
@@ -650,7 +664,7 @@
             <li><svg viewBox="0 0 24 24"><path d="M5 13l4 4L19 7"/></svg>Campañas básicas</li>
             <li><svg viewBox="0 0 24 24"><path d="M5 13l4 4L19 7"/></svg>Plantillas esenciales</li>
           </ul>
-          <a class="btn btn-ghost btn-block" href="#">Empezar gratis</a>
+          <a class="btn btn-ghost btn-block" data-app data-path="/register" data-plan="free" href="#">Empezar gratis</a>
         </div>
 
         <!-- STARTER -->
@@ -668,7 +682,7 @@
             <li><svg viewBox="0 0 24 24"><path d="M5 13l4 4L19 7"/></svg>AI Content (límite mensual)</li>
             <li><svg viewBox="0 0 24 24"><path d="M5 13l4 4L19 7"/></svg>Reportes estándar</li>
           </ul>
-          <a class="btn btn-ghost btn-block" href="#">Elegir Starter</a>
+          <a class="btn btn-ghost btn-block" data-app data-path="/register" data-plan="starter" href="#">Elegir Starter</a>
         </div>
 
         <!-- PRO (featured) -->
@@ -688,7 +702,7 @@
             <li><svg viewBox="0 0 24 24"><path d="M5 13l4 4L19 7"/></svg>Analytics y reportes avanzados</li>
             <li><svg viewBox="0 0 24 24"><path d="M5 13l4 4L19 7"/></svg>Roles y permisos</li>
           </ul>
-          <a class="btn btn-primary btn-block" href="#">Elegir Pro</a>
+          <a class="btn btn-primary btn-block" data-app data-path="/register" data-plan="pro" href="#">Elegir Pro</a>
         </div>
 
         <!-- BUSINESS -->
@@ -706,7 +720,7 @@
             <li><svg viewBox="0 0 24 24"><path d="M5 13l4 4L19 7"/></svg>Soporte prioritario</li>
             <li><svg viewBox="0 0 24 24"><path d="M5 13l4 4L19 7"/></svg>Gestión avanzada de equipos</li>
           </ul>
-          <a class="btn btn-ghost btn-block" href="#">Elegir Business</a>
+          <a class="btn btn-ghost btn-block" data-app data-path="/register" data-plan="business" href="#">Elegir Business</a>
         </div>
 
       </div>
@@ -746,7 +760,7 @@
 
       </div>
       <div class="dl-cta reveal">
-        <a class="btn btn-primary btn-lg" id="app-link" href="#">Abrir NV Core</a>
+        <a class="btn btn-primary btn-lg" id="app-link" data-app data-path="/login" href="#">Abrir NV Core</a>
         <span class="offline">
           <svg viewBox="0 0 24 24"><path d="M5 12.5l4 4 10-10"/><path d="M3 8a9 9 0 0114-2"/></svg>
           Funciona sin conexión una vez instalada (PWA)
@@ -799,7 +813,7 @@
         <div class="glow" aria-hidden="true"></div>
         <h2>Empieza gratis hoy</h2>
         <p>Centraliza tu operación, automatiza lo repetitivo y crece con datos. Todo tu negocio, en un solo lugar.</p>
-        <a class="btn btn-primary btn-lg" href="#pricing">Empezar gratis</a>
+        <a class="btn btn-primary btn-lg" data-app data-path="/register" href="#">Empezar gratis</a>
       </div>
     </div>
   </section>
@@ -917,6 +931,29 @@
     }, {rootMargin:'0px 0px -10% 0px', threshold:0.08});
     reveals.forEach(function(el){ io.observe(el); });
   }
+
+  /* ---------- Enlaces a la aplicación (login / registro / planes) ----------
+     Todos los botones con [data-app] apuntan a tu app (window.NV_APP_URL).
+     data-path define la ruta (/login, /register) y data-plan el plan elegido.
+     Si no has configurado la URL, el clic avisa en vez de "no hacer nada". */
+  var appBase = (window.NV_APP_URL || "").trim().replace(/\/+$/, "");
+  var appLinks = document.querySelectorAll("[data-app]");
+  appLinks.forEach(function(a){
+    var path = a.getAttribute("data-path") || "/register";
+    var plan = a.getAttribute("data-plan");
+    if(appBase){
+      var url = appBase + path + (plan ? "?plan=" + encodeURIComponent(plan) : "");
+      a.setAttribute("href", url);
+      a.setAttribute("target", "_blank");
+      a.setAttribute("rel", "noopener");
+    } else {
+      a.setAttribute("href", "#");
+      a.addEventListener("click", function(e){
+        e.preventDefault();
+        alert("Aún no has conectado tu aplicación.\n\nAbre este archivo (index.html) y pon la URL de tu NV Core en window.NV_APP_URL, por ejemplo:\n  https://app.nvcorx.com");
+      });
+    }
+  });
 })();
 </script>
 </body>

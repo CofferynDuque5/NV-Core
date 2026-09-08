@@ -26,8 +26,27 @@ Opción B (sin mover archivos):
   2) Cambia el "Document Root" (Raíz del documento) a:  .../NV-Core/sitio
   3) Guarda y recarga. El servidor servirá esta carpeta directamente.
 
+CONECTAR LA PÁGINA CON TU APLICACIÓN (¡IMPORTANTE!)
+---------------------------------------------------
+Todos los botones (Iniciar sesión, Empezar gratis y Elegir plan) llevan a tu
+aplicación. Solo tienes que poner UNA vez la URL de tu app:
+
+  1) Abre index.html.
+  2) Arriba del todo verás:
+        window.NV_APP_URL = "https://app.nvcorx.com";
+     Cambia esa URL por la de TU aplicación (donde instalaste NV Core, por
+     ejemplo el subdominio app.tudominio.com). Deja "" si aún no la tienes
+     (los botones avisarán con un mensaje en vez de no hacer nada).
+  3) Guarda. Listo: "Iniciar sesión" abre /login y los planes abren /register.
+
 PERSONALIZAR
 ------------
-- Botón "Abrir NV Core": abre index.html y busca  id="app-link"  para poner la
-  URL real de tu aplicación (donde corre el software).
 - Precios: busca  data-monthly  /  data-annual  y cámbialos a tu gusto.
+
+COBRAR A TUS CLIENTES (pagos reales)
+------------------------------------
+Los botones de plan llevan a tu app a registrarse. Para COBRAR con tarjeta
+necesitas configurar Stripe DENTRO de la aplicación (variable STRIPE_SECRET_KEY
+y su webhook). Sin Stripe, el registro funciona igual pero no cobra: los
+usuarios entran con el plan por defecto. Tú, como dueño del servidor, no pagas
+nada por usar tu propio software.
