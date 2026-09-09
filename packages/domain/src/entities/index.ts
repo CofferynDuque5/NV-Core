@@ -511,6 +511,10 @@ export interface Integration {
   provider?: string;
   /** Fields to render in the in-app "Configurar" dialog (when `provider` set). */
   fields?: IntegrationField[];
+  /** Where to obtain the API key/token (shown in the "Configurar" dialog). */
+  helpText?: string;
+  /** Link to the platform where the key is created (opens in a new tab). */
+  helpUrl?: string;
 }
 
 export interface Conversation {

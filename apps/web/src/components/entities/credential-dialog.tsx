@@ -74,6 +74,27 @@ export function CredentialDialog({
       error={error}
       submitLabel="Guardar"
     >
+      {integration?.helpText || integration?.helpUrl ? (
+        <div className="space-y-1.5 rounded-lg border border-brand/25 bg-brand/5 px-3 py-2.5">
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-brand">
+            ¿De dónde saco esta clave?
+          </p>
+          {integration?.helpText ? (
+            <p className="text-xs leading-relaxed text-ink-muted">{integration.helpText}</p>
+          ) : null}
+          {integration?.helpUrl ? (
+            <a
+              href={integration.helpUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex items-center gap-1 text-xs font-medium text-brand hover:underline"
+            >
+              Abrir {new URL(integration.helpUrl).host} ↗
+            </a>
+          ) : null}
+        </div>
+      ) : null}
+
       {fields.map((f) => (
         <div key={f.key} className="space-y-1.5">
           <Label htmlFor={`cred-${f.key}`}>{f.label}</Label>

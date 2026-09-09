@@ -27,6 +27,9 @@ interface CatalogEntry {
   /** Credential provider id + fields when the key can be pasted in-app. */
   provider?: string;
   fields?: IntegrationField[];
+  /** Where to obtain the key + link to the platform (shown in the dialog). */
+  helpText?: string;
+  helpUrl?: string;
 }
 
 const CATALOG: CatalogEntry[] = [
@@ -41,6 +44,10 @@ const CATALOG: CatalogEntry[] = [
     configured: (c) => Boolean(c.ai.openai),
     provider: "openai",
     fields: [{ key: "apiKey", label: "API Key", type: "password", placeholder: "sk-…" }],
+    helpText:
+      "Entra a OpenAI Platform con tu cuenta de ChatGPT, ve a “API keys” y crea una " +
+      "(necesitas saldo/créditos en la cuenta). Copia la clave que empieza por “sk-”.",
+    helpUrl: "https://platform.openai.com/api-keys",
   },
   {
     id: "anthropic",
@@ -53,6 +60,10 @@ const CATALOG: CatalogEntry[] = [
     configured: (c) => Boolean(c.ai.anthropic),
     provider: "anthropic",
     fields: [{ key: "apiKey", label: "API Key", type: "password", placeholder: "sk-ant-…" }],
+    helpText:
+      "En la consola de Anthropic ve a “API Keys” → “Create Key”. Copia la clave que " +
+      "empieza por “sk-ant-”.",
+    helpUrl: "https://console.anthropic.com/settings/keys",
   },
   {
     id: "gemini",
@@ -65,6 +76,10 @@ const CATALOG: CatalogEntry[] = [
     configured: (c) => Boolean(c.ai.gemini),
     provider: "gemini",
     fields: [{ key: "apiKey", label: "API Key", type: "password", placeholder: "AIza…" }],
+    helpText:
+      "En Google AI Studio pulsa “Get API key” → “Create API key”. Es gratis con tu " +
+      "cuenta de Google. Copia la clave que empieza por “AIza”.",
+    helpUrl: "https://aistudio.google.com/app/apikey",
   },
   {
     id: "whatsapp",
@@ -93,9 +108,12 @@ const CATALOG: CatalogEntry[] = [
         label: "API Hash",
         type: "password",
         placeholder: "0123456789abcdef…",
-        help: "Consíguelos gratis en my.telegram.org → API development tools.",
       },
     ],
+    helpText:
+      "Entra a my.telegram.org con tu número de teléfono, abre “API development tools” y " +
+      "crea una app. Ahí verás tu “App api_id” (API ID) y tu “App api_hash” (API Hash). Es gratis.",
+    helpUrl: "https://my.telegram.org/apps",
   },
   {
     id: "meta",
@@ -128,6 +146,10 @@ const CATALOG: CatalogEntry[] = [
     configured: (c) => Boolean(c.imgbb.apiKey),
     provider: "imgbb",
     fields: [{ key: "apiKey", label: "API Key", type: "password", placeholder: "abcdef0123…" }],
+    helpText:
+      "Regístrate gratis en ImgBB y entra a “About → API” para copiar tu clave. Sirve para " +
+      "alojar las imágenes de tus campañas y publicaciones.",
+    helpUrl: "https://api.imgbb.com/",
   },
   {
     id: "cloudinary",
@@ -184,6 +206,8 @@ export function buildCatalog(integrations: AppConfig["integrations"]): Integrati
     connected: entry.configured(integrations),
     ...(entry.provider ? { provider: entry.provider } : {}),
     ...(entry.fields ? { fields: entry.fields } : {}),
+    ...(entry.helpText ? { helpText: entry.helpText } : {}),
+    ...(entry.helpUrl ? { helpUrl: entry.helpUrl } : {}),
   }));
 }
 
