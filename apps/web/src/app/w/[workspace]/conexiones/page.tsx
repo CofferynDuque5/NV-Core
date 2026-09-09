@@ -17,6 +17,7 @@ import { GoogleConnectCard } from "@/components/entities/google-connect-card";
 import { WhatsAppPanel } from "@/components/entities/whatsapp-panel";
 import { TelegramPanel } from "@/components/entities/telegram-panel";
 import { ProvidersAdapters } from "@/components/entities/providers-adapters";
+import { CHANNEL_ICON } from "@/components/common/channel-icons";
 import { SocialPublishForm } from "@/components/entities/social-publish";
 import { GruposContent } from "@/components/whatsapp/grupos-content";
 import { CampanasContent } from "@/components/whatsapp/campanas-content";
@@ -131,13 +132,14 @@ function ConexionTab() {
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
         {CHANNEL_LIST.map((ch) => {
           const conn = byChannel.get(ch.id);
+          const Icon = CHANNEL_ICON[ch.id];
           return (
             <div key={ch.id} className="nv-panel flex items-center gap-3 p-4">
               <span
                 className="grid size-10 shrink-0 place-items-center rounded-lg text-sm font-bold"
                 style={{ background: `${ch.color}22`, color: ch.color }}
               >
-                {ch.name.slice(0, 1)}
+                {Icon ? <Icon className="size-5" /> : ch.name.slice(0, 1)}
               </span>
               <div className="min-w-0 flex-1">
                 <div className="text-sm font-semibold text-ink-bright">{ch.name}</div>

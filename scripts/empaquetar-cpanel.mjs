@@ -241,6 +241,44 @@ NV_ADMIN_EMAIL=tucorreo@ejemplo.com
 # RESEND_API_KEY=
 `,
 );
+
+// 4b) .htaccess de Passenger. cPanel lo genera al crear la app; pero si el
+// usuario vacía la carpeta al subir, se pierde y LiteSpeed muestra "Index of /".
+// Para que el paquete quede autosuficiente, escribimos:
+//   - un .htaccess REAL cuando se pasan las rutas del hosting por variables
+//     (CPANEL_APP_ROOT + CPANEL_NODE_BIN), y
+//   - siempre un .htaccess.EJEMPLO con instrucciones.
+const passengerBlock = (appRoot, nodeBin) =>
+  `# DO NOT REMOVE. CLOUDLINUX PASSENGER CONFIGURATION BEGIN
+PassengerAppRoot "${appRoot}"
+PassengerBaseURI "/"
+PassengerNodejs "${nodeBin}"
+PassengerAppType node
+PassengerStartupFile passenger-start.js
+# DO NOT REMOVE. CLOUDLINUX PASSENGER CONFIGURATION END
+
+# Evita el listado de carpeta si Passenger no estuviera activo.
+Options -Indexes
+`;
+const cpAppRoot = process.env.CPANEL_APP_ROOT;
+const cpNodeBin = process.env.CPANEL_NODE_BIN;
+if (cpAppRoot && cpNodeBin) {
+  writeFileSync(join(out, ".htaccess"), passengerBlock(cpAppRoot, cpNodeBin));
+  console.log(`✔ .htaccess generado para ${cpAppRoot}`);
+}
+writeFileSync(
+  join(out, ".htaccess.EJEMPLO"),
+  `Este es el .htaccess que activa tu app Node en cPanel (Passenger/LiteSpeed).
+Normalmente cPanel lo crea solo al "Create Application"; si vaciaste la carpeta
+y desapareció, verás "Index of /". Crea un archivo llamado .htaccess (con el
+punto) en la carpeta de la app y pega esto, cambiando las DOS rutas por las de
+tu hosting (las ves en "Setup Node.js App", en la línea "source .../bin/activate"):
+
+${passengerBlock(
+  "/home/USUARIO/public_html/tu-subdominio.com",
+  "/home/USUARIO/nodevenv/public_html/tu-subdominio.com/20/bin/node",
+)}`,
+);
 writeFileSync(
   join(out, "LEEME-CPANEL.txt"),
   `NV Marketing — despliegue en cPanel (Setup Node.js App)
