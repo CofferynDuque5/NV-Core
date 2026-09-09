@@ -109,6 +109,38 @@ process.env.NODE_ENV = process.env.NODE_ENV || "production";
 // El mismo proceso sirve la web (SPA) en la misma URL que la API.
 process.env.WEB_DIST = process.env.WEB_DIST || path.join(__dirname, "web");
 
+// Autocorrige DATABASE_URL: tolera errores comunes al pegarla en el panel
+// (sslmode duplicado, un segundo '?', channel_binding, falta de sslmode).
+function sanitizeDbUrl(raw) {
+  if (!raw) return raw;
+  const s = String(raw).trim();
+  const isLocal = s.includes("localhost") || s.includes("127.0.0.1");
+  const i = s.indexOf("?");
+  if (i === -1) return isLocal ? s : s + "?sslmode=require";
+  const base = s.slice(0, i);
+  const query = s.slice(i + 1).replace(/\\?/g, "&");
+  const params = [];
+  const seen = new Set();
+  for (const pair of query.split("&")) {
+    if (!pair) continue;
+    const eq = pair.indexOf("=");
+    const k = eq === -1 ? pair : pair.slice(0, eq);
+    const v = eq === -1 ? "" : pair.slice(eq + 1);
+    if (k === "channel_binding") continue;
+    if (seen.has(k)) continue;
+    seen.add(k);
+    params.push([k, v]);
+  }
+  if (!isLocal && !seen.has("sslmode")) params.push(["sslmode", "require"]);
+  const qs = params.map(([k, v]) => (v === "" ? k : k + "=" + v)).join("&");
+  return qs ? base + "?" + qs : base;
+}
+if (process.env.DATABASE_URL) {
+  process.env.DATABASE_URL = sanitizeDbUrl(process.env.DATABASE_URL);
+}
+// Para MIGRAR, Neon recomienda la conexión DIRECTA (sin "-pooler").
+const migrateUrl = (process.env.DATABASE_URL || "").replace("-pooler.", ".");
+
 const prisma = path.join(__dirname, "node_modules", ".bin", "prisma");
 const schema = path.join(__dirname, "prisma", "schema.prisma");
 const q = (s) => JSON.stringify(s);
@@ -121,11 +153,19 @@ try {
   console.error("[nvcore] 'prisma generate' falló:", e.message);
 }
 
-// 2) Aplica las migraciones de la base de datos al arrancar (idempotente).
-try {
-  execSync(q(prisma) + " migrate deploy --schema=" + q(schema), { cwd: __dirname, stdio: "inherit" });
-} catch (e) {
-  console.error("[nvcore] 'prisma migrate deploy' falló (revisa DATABASE_URL):", e.message);
+// 2) Aplica las migraciones al arrancar (idempotente), con reintentos y usando
+//    la conexión directa para migrar. Si falla, la app arranca igual y lo avisa.
+for (let intento = 1; intento <= 3; intento++) {
+  try {
+    execSync(q(prisma) + " migrate deploy --schema=" + q(schema), {
+      cwd: __dirname,
+      stdio: "inherit",
+      env: Object.assign({}, process.env, { DATABASE_URL: migrateUrl }),
+    });
+    break;
+  } catch (e) {
+    console.error("[nvcore] 'prisma migrate deploy' intento " + intento + " falló:", e.message);
+  }
 }
 
 require("./dist/main.js");

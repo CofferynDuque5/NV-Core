@@ -45,3 +45,7 @@ scratch/
 
 # PostgreSQL embebido de desarrollo (datos locales de 'pnpm arrancar' sin Docker)
 .nvcore-db/
+
+# archivos de prueba locales (no versionar)
+.e2e-db/
+_pg.mjs

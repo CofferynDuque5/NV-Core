@@ -10,6 +10,7 @@ import cookieParser from "cookie-parser";
 import helmet from "helmet";
 
 import { AppModule } from "./app.module";
+import { applyDatabaseUrlFixups } from "./config/database-url";
 import type { AppConfig } from "./config/configuration";
 import { AllExceptionsFilter } from "./common/filters/all-exceptions.filter";
 import { requestIdMiddleware } from "./common/middleware/request-id";
@@ -18,6 +19,9 @@ import { JsonLogger } from "./common/observability/json-logger";
 import { HttpLoggerInterceptor } from "./common/observability/http-logger.interceptor";
 
 async function bootstrap(): Promise<void> {
+  // Autocorrige DATABASE_URL antes de que Prisma la lea (tolera errores comunes
+  // al pegarla en el panel del hosting: sslmode duplicado, channel_binding, etc.).
+  applyDatabaseUrlFixups();
   // Structured JSON logs in production (or when LOG_FORMAT=json) so aggregators
   // can parse them; pretty console logs in dev. Decided from env before the app
   // exists, so the very first boot lines already use the chosen format.
