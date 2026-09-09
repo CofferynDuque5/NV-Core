@@ -8,6 +8,7 @@ import {
   Module,
   Post,
   ServiceUnavailableException,
+  UnprocessableEntityException,
   UseGuards,
 } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
@@ -40,6 +41,7 @@ import {
   createProvider,
   type AiProvider,
   type ChatMessage,
+  type CompletionOptions,
   type ImageProvider,
 } from "./ai.providers";
 import { estimateTokens, usagePeriod } from "./ai.usage";
@@ -174,6 +176,45 @@ export class AiService {
     return provider;
   }
 
+  /**
+   * Traduce un fallo del proveedor (clave inválida, sin créditos, límite, red)
+   * en un mensaje claro para el usuario, en vez de un 500 opaco. Así, cuando la
+   * clave está mal o sin saldo, el panel dice exactamente qué pasó.
+   */
+  private explainAiError(err: unknown): never {
+    const msg = err instanceof Error ? err.message : String(err);
+    const low = msg.toLowerCase();
+    if (low.includes("401") || low.includes("invalid api key") || low.includes("incorrect api key")) {
+      throw new UnprocessableEntityException(
+        "Tu clave de IA parece inválida o revocada. Revísala en Integraciones.",
+      );
+    }
+    if (low.includes("429") || low.includes("insufficient_quota") || low.includes("quota") || low.includes("billing")) {
+      throw new HttpException(
+        "El proveedor de IA rechazó la petición por límite o falta de créditos. " +
+          "Revisa el saldo/límites de tu cuenta (OpenAI, Anthropic o Gemini).",
+        HttpStatus.TOO_MANY_REQUESTS,
+      );
+    }
+    throw new ServiceUnavailableException(
+      "No se pudo contactar al proveedor de IA. Inténtalo de nuevo en un momento. " +
+        `(Detalle: ${msg.slice(0, 160)})`,
+    );
+  }
+
+  /** Ejecuta una completación traduciendo cualquier error del proveedor. */
+  private async complete(
+    provider: AiProvider,
+    messages: ChatMessage[],
+    opts?: CompletionOptions,
+  ): Promise<string> {
+    try {
+      return await provider.complete(messages, opts);
+    } catch (err) {
+      this.explainAiError(err);
+    }
+  }
+
   /** The workspace's effective AI plan + monthly quota (plan limit capped by env override). */
   private async resolveQuota(workspaceId: string): Promise<{
     planId: PlanId;
@@ -192,7 +233,12 @@ export class AiService {
   async generateImage(workspaceId: string, dto: GenerateImageDto): Promise<{ url: string }> {
     const provider = await this.resolveImageProvider(workspaceId);
     await this.assertWithinQuota(workspaceId);
-    const url = await provider.generateImage(dto.prompt.trim(), dto.size ?? "1024x1024");
+    let url: string;
+    try {
+      url = await provider.generateImage(dto.prompt.trim(), dto.size ?? "1024x1024");
+    } catch (err) {
+      this.explainAiError(err);
+    }
     // Images cost more than a text call; record a nominal token weight.
     await this.record(workspaceId, 1000);
     return { url };
@@ -274,7 +320,7 @@ export class AiService {
           .join("\n"),
       },
     ];
-    const raw = await provider.complete(messages, { temperature: 0.9 });
+    const raw = await this.complete(provider, messages, { temperature: 0.9 });
     await this.record(workspaceId, estimateTokens(dto.prompt, raw));
     const parsed = extractJson<AiVariant[]>(raw);
     if (!Array.isArray(parsed)) {
@@ -318,7 +364,7 @@ export class AiService {
           .join("\n"),
       },
     ];
-    const raw = await provider.complete(messages, { temperature: 0.85, maxTokens: 1800 });
+    const raw = await this.complete(provider, messages, { temperature: 0.85, maxTokens: 1800 });
     await this.record(workspaceId, estimateTokens(dto.topic, raw));
     const parsed = extractJson<AiContentPlanItem[]>(raw);
     if (!Array.isArray(parsed)) {
@@ -352,7 +398,7 @@ export class AiService {
       },
       { role: "user", content: dto.prompt },
     ];
-    const raw = await provider.complete(messages, { temperature: 0.7, maxTokens: 300 });
+    const raw = await this.complete(provider, messages, { temperature: 0.7, maxTokens: 300 });
     await this.record(workspaceId, estimateTokens(dto.prompt, raw));
     const parsed = extractJson<string[]>(raw);
     if (!Array.isArray(parsed)) return [];
@@ -376,7 +422,7 @@ export class AiService {
       },
       { role: "user", content: dto.message },
     ];
-    const raw = await provider.complete(messages, { temperature: 0.7 });
+    const raw = await this.complete(provider, messages, { temperature: 0.7 });
     await this.record(workspaceId, estimateTokens(dto.message, raw));
     return { text: raw.trim() };
   }
@@ -424,53 +470,60 @@ export class AiService {
     const times = await this.bestSendTimes(workspaceId);
     const provider = createProvider(await this.resolveAiConfig(workspaceId));
     if (!provider) return { recommendations: [], times, aiConfigured: false };
-    await this.assertWithinQuota(workspaceId);
 
-    const [groups, logs, templates] = this.prisma.enabled
-      ? await Promise.all([
-          this.prisma.group.findMany({ where: { workspaceSlug: workspaceId }, take: 40 }),
-          this.prisma.sendLog.findMany({
-            where: { workspaceSlug: workspaceId },
-            orderBy: { createdAt: "desc" },
-            take: 40,
-          }),
-          this.prisma.template.findMany({ where: { workspaceSlug: workspaceId }, take: 40 }),
-        ])
-      : [[], [], []];
+    // Es un panel (GET del dashboard): si la IA falla (clave inválida, sin
+    // créditos, red o cuota), degrada limpio a solo horarios en vez de romper.
+    try {
+      await this.assertWithinQuota(workspaceId);
 
-    const context = {
-      grupos: groups.map((g) => ({ nombre: g.name, miembros: g.members })),
-      envios_recientes: logs.map((l) => ({
-        campaña: l.campaignName,
-        destino: l.groupName,
-        ok: l.ok,
-      })),
-      plantillas: templates.map((t) => t.name),
-    };
-    const messages: ChatMessage[] = [
-      {
-        role: "system",
-        content:
-          "Eres estratega de marketing por WhatsApp y redes. Analiza el contexto y da " +
-          "recomendaciones accionables para mejorar alcance, engagement y conversión. " +
-          "Responde EXCLUSIVAMENTE con un array JSON (máx 6) de objetos " +
-          '{"titulo","detalle","categoria"} donde categoria es uno de ' +
-          '"campaña"|"mensaje"|"segmentacion"|"horario"|"otro". En español, concreto.',
-      },
-      { role: "user", content: `Contexto (JSON):\n${JSON.stringify(context)}` },
-    ];
-    const raw = await provider.complete(messages, { temperature: 0.8 });
-    await this.record(workspaceId, estimateTokens(JSON.stringify(context), raw));
-    const parsed = extractJson<AiRecommendation[]>(raw) ?? [];
-    const recommendations = (Array.isArray(parsed) ? parsed : [])
-      .filter((r) => r && (r.titulo || r.detalle))
-      .slice(0, 6)
-      .map((r) => ({
-        titulo: String(r.titulo ?? "Sugerencia"),
-        detalle: String(r.detalle ?? ""),
-        categoria: String(r.categoria ?? "otro"),
-      }));
-    return { recommendations, times, aiConfigured: true };
+      const [groups, logs, templates] = this.prisma.enabled
+        ? await Promise.all([
+            this.prisma.group.findMany({ where: { workspaceSlug: workspaceId }, take: 40 }),
+            this.prisma.sendLog.findMany({
+              where: { workspaceSlug: workspaceId },
+              orderBy: { createdAt: "desc" },
+              take: 40,
+            }),
+            this.prisma.template.findMany({ where: { workspaceSlug: workspaceId }, take: 40 }),
+          ])
+        : [[], [], []];
+
+      const context = {
+        grupos: groups.map((g) => ({ nombre: g.name, miembros: g.members })),
+        envios_recientes: logs.map((l) => ({
+          campaña: l.campaignName,
+          destino: l.groupName,
+          ok: l.ok,
+        })),
+        plantillas: templates.map((t) => t.name),
+      };
+      const messages: ChatMessage[] = [
+        {
+          role: "system",
+          content:
+            "Eres estratega de marketing por WhatsApp y redes. Analiza el contexto y da " +
+            "recomendaciones accionables para mejorar alcance, engagement y conversión. " +
+            "Responde EXCLUSIVAMENTE con un array JSON (máx 6) de objetos " +
+            '{"titulo","detalle","categoria"} donde categoria es uno de ' +
+            '"campaña"|"mensaje"|"segmentacion"|"horario"|"otro". En español, concreto.',
+        },
+        { role: "user", content: `Contexto (JSON):\n${JSON.stringify(context)}` },
+      ];
+      const raw = await this.complete(provider, messages, { temperature: 0.8 });
+      await this.record(workspaceId, estimateTokens(JSON.stringify(context), raw));
+      const parsed = extractJson<AiRecommendation[]>(raw) ?? [];
+      const recommendations = (Array.isArray(parsed) ? parsed : [])
+        .filter((r) => r && (r.titulo || r.detalle))
+        .slice(0, 6)
+        .map((r) => ({
+          titulo: String(r.titulo ?? "Sugerencia"),
+          detalle: String(r.detalle ?? ""),
+          categoria: String(r.categoria ?? "otro"),
+        }));
+      return { recommendations, times, aiConfigured: true };
+    } catch {
+      return { recommendations: [], times, aiConfigured: false };
+    }
   }
 }
 

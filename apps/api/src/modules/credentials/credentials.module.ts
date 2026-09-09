@@ -12,6 +12,7 @@ import {
   UseGuards,
 } from "@nestjs/common";
 import { ApiBearerAuth, ApiTags } from "@nestjs/swagger";
+import { IsObject } from "class-validator";
 
 import { WorkspaceId } from "../../common/tenant/workspace.decorator";
 import { WorkspaceGuard } from "../../common/tenant/workspace.guard";
@@ -99,6 +100,10 @@ export class CredentialsService {
 }
 
 class SaveCredentialDto {
+  // El ValidationPipe global usa whitelist+forbidNonWhitelisted; sin este
+  // decorador la propiedad se descarta y la petición se rechaza (400). Con él,
+  // el panel puede guardar las claves de API (OpenAI, Telegram, ImgBB…).
+  @IsObject()
   data!: Record<string, unknown>;
 }
 

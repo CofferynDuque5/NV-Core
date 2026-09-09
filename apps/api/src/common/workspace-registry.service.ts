@@ -90,6 +90,13 @@ export class WorkspaceRegistry {
     return [...WORKSPACES, ...rows.map((r) => this.mapDb(r))];
   }
 
+  /** Only the REAL (DB-created) workspaces — excludes the built-in demos. */
+  async listDbWorkspaces(): Promise<Workspace[]> {
+    if (!this.prisma.enabled) return [];
+    const rows = await this.prisma.workspace.findMany({ orderBy: { createdAt: "asc" } });
+    return rows.map((r) => this.mapDb(r));
+  }
+
   /**
    * Workspaces the given user can actually access (their memberships resolved to
    * workspace objects). This is what the API exposes — never the full tenant
