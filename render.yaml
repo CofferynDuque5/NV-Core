@@ -47,8 +47,10 @@ services:
       # ejemplo, así nadie ve workspaces que no son suyos.
       - key: ALLOW_OPEN_WORKSPACE_CLAIM
         value: "false"
-      # Tu correo de administrador (opcional, para el bootstrap de admin).
+      # Admin inicial: con estos dos, tu cuenta Owner se crea sola al arrancar.
       - key: NV_ADMIN_EMAIL
+        sync: false
+      - key: NV_ADMIN_PASSWORD
         sync: false
 
       # ── Integraciones opcionales (rellénalas en el panel cuando las tengas) ──
