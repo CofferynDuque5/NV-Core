@@ -21,7 +21,7 @@ const run = (cmd, env = {}) => {
   execSync(cmd, { cwd: root, stdio: "inherit", env: { ...process.env, ...env } });
 };
 
-console.log("── NV Core · paquete para cPanel (Node.js App) ──────────────");
+console.log("── NV Marketing · paquete para cPanel (Node.js App) ─────────");
 
 // 1) Compilar dominio, API y web (web habla con la MISMA URL que la sirve).
 run("pnpm --filter @nv/domain build");
@@ -63,7 +63,7 @@ const apiPkg = JSON.parse(readFileSync(join(root, "apps/api/package.json"), "utf
 const deps = { ...apiPkg.dependencies };
 delete deps["@nv/domain"];
 const pkg = {
-  name: "nvcore-app",
+  name: "nvmarketing-app",
   version: "1.0.0",
   private: true,
   engines: { node: ">=20" },
@@ -101,13 +101,52 @@ writeFileSync(join(out, "package.json"), JSON.stringify(pkg, null, 2) + "\n");
 // 4) Arranque para Passenger: aplica migraciones y levanta la API (que sirve la web).
 writeFileSync(
   join(out, "passenger-start.js"),
-  `// Arranque de NV Core bajo Passenger (cPanel "Setup Node.js App").
+  `// Arranque de NV Marketing bajo Passenger (cPanel "Setup Node.js App").
 const path = require("node:path");
+const fs = require("node:fs");
+const Module = require("node:module");
 const { execSync } = require("node:child_process");
 
 process.env.NODE_ENV = process.env.NODE_ENV || "production";
 // El mismo proceso sirve la web (SPA) en la misma URL que la API.
 process.env.WEB_DIST = process.env.WEB_DIST || path.join(__dirname, "web");
+
+// ── Resolver @nv/domain SIN depender de cómo cPanel instale los paquetes ──
+// En CloudLinux, npm instala en un venv aparte y node_modules del app-root es un
+// symlink; el paquete local "file:./vendor/domain" a veces no queda resoluble.
+// Lo aliaseamos a mano contra ./vendor/domain para que require("@nv/domain")
+// siempre funcione, se haya instalado como se haya instalado.
+(function aliasDomain() {
+  const domainRoot = path.join(__dirname, "vendor", "domain");
+  const domainMain = path.join(domainRoot, "dist", "index.js");
+  if (!fs.existsSync(domainMain)) return;
+  const orig = Module._resolveFilename;
+  Module._resolveFilename = function (request, parent, isMain, options) {
+    if (request === "@nv/domain") return domainMain;
+    if (request.startsWith("@nv/domain/")) {
+      const sub = request.slice("@nv/domain/".length);
+      const cand = path.join(domainRoot, "dist", sub);
+      for (const p of [cand, cand + ".js", path.join(cand, "index.js")]) {
+        if (fs.existsSync(p)) return p;
+      }
+    }
+    return orig.call(this, request, parent, isMain, options);
+  };
+})();
+
+// Localiza el CLI de Prisma de forma robusta: primero el paquete instalado
+// (donde sea que cPanel lo haya puesto), y como respaldo el .bin clásico.
+function resolvePrismaCli() {
+  try {
+    const pkg = require.resolve("prisma/package.json", { paths: [__dirname] });
+    const cli = path.join(path.dirname(pkg), "build", "index.js");
+    if (fs.existsSync(cli)) return { file: cli, viaNode: true };
+  } catch (_) {
+    /* seguimos con el respaldo */
+  }
+  const bin = path.join(__dirname, "node_modules", ".bin", "prisma");
+  return { file: bin, viaNode: false };
+}
 
 // Autocorrige DATABASE_URL: tolera errores comunes al pegarla en el panel
 // (sslmode duplicado, un segundo '?', channel_binding, falta de sslmode).
@@ -141,30 +180,39 @@ if (process.env.DATABASE_URL) {
 // Para MIGRAR, Neon recomienda la conexión DIRECTA (sin "-pooler").
 const migrateUrl = (process.env.DATABASE_URL || "").replace("-pooler.", ".");
 
-const prisma = path.join(__dirname, "node_modules", ".bin", "prisma");
+const cli = resolvePrismaCli();
 const schema = path.join(__dirname, "prisma", "schema.prisma");
 const q = (s) => JSON.stringify(s);
+// Ejecuta prisma con el MISMO node que arranca la app (no dependemos de que el
+// shell encuentre el binario ni de permisos de ejecución en .bin).
+const prismaCmd = (args) =>
+  cli.viaNode
+    ? q(process.execPath) + " " + q(cli.file) + " " + args
+    : q(cli.file) + " " + args;
 
 // 1) Genera el cliente de Prisma con ruta ABSOLUTA (cPanel corre el install en
 //    otra carpeta, por eso no se hace en postinstall). Idempotente.
 try {
-  execSync(q(prisma) + " generate --schema=" + q(schema), { cwd: __dirname, stdio: "inherit" });
+  execSync(prismaCmd("generate --schema=" + q(schema)), { cwd: __dirname, stdio: "inherit" });
 } catch (e) {
-  console.error("[nvcore] 'prisma generate' falló:", e.message);
+  console.error("[nvmarketing] 'prisma generate' falló:", e.message);
 }
 
 // 2) Aplica las migraciones al arrancar (idempotente), con reintentos y usando
 //    la conexión directa para migrar. Si falla, la app arranca igual y lo avisa.
 for (let intento = 1; intento <= 3; intento++) {
   try {
-    execSync(q(prisma) + " migrate deploy --schema=" + q(schema), {
+    execSync(prismaCmd("migrate deploy --schema=" + q(schema)), {
       cwd: __dirname,
       stdio: "inherit",
       env: Object.assign({}, process.env, { DATABASE_URL: migrateUrl }),
     });
     break;
   } catch (e) {
-    console.error("[nvcore] 'prisma migrate deploy' intento " + intento + " falló:", e.message);
+    console.error(
+      "[nvmarketing] 'prisma migrate deploy' intento " + intento + " falló:",
+      e.message,
+    );
   }
 }
 
@@ -195,19 +243,19 @@ NV_ADMIN_EMAIL=tucorreo@ejemplo.com
 );
 writeFileSync(
   join(out, "LEEME-CPANEL.txt"),
-  `NV Core — despliegue en cPanel (Setup Node.js App)
-==================================================
+  `NV Marketing — despliegue en cPanel (Setup Node.js App)
+=======================================================
 
 Requisitos: una base de datos PostgreSQL (gratis en neon.tech o supabase.com).
 
 PASOS
-1) Sube el CONTENIDO de esta carpeta a una carpeta del hosting, p.ej. /home/USUARIO/nvcore
-   (NO a public_html). Puedes subir el zip y extraerlo ahí.
+1) Sube el CONTENIDO de esta carpeta a la carpeta de tu subdominio, p.ej.
+   /home/USUARIO/nvmarketingpanel.tudominio.com. Puedes subir el zip y extraerlo ahí.
 2) cPanel → "Setup Node.js App" → Create Application:
       - Node.js version: 20 o 22
       - Application mode: Production
-      - Application root: nvcore   (la carpeta donde subiste esto)
-      - Application URL: tu dominio o subdominio
+      - Application root: la carpeta donde subiste esto (la del subdominio)
+      - Application URL: tu subdominio
       - Application startup file: passenger-start.js
 3) En esa misma pantalla, sección "Environment variables", agrega:
       DATABASE_URL, JWT_SECRET, ENCRYPTION_KEY, NODE_ENV=production, NV_ADMIN_EMAIL
@@ -225,7 +273,7 @@ Notas:
 // 6) Zip para subir fácil.
 const scratch = process.env.NV_SCRATCH || join(root, "scratch");
 mkdirSync(scratch, { recursive: true });
-const zip = join(scratch, "nvcore-cpanel-app.zip");
+const zip = join(scratch, "NV-Marketing-PANEL-cpanel.zip");
 rmSync(zip, { force: true });
 execSync(`cd ${JSON.stringify(out)} && zip -rq ${JSON.stringify(zip)} .`, { stdio: "inherit" });
 
