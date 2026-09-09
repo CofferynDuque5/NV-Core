@@ -61,6 +61,11 @@ writeFileSync(
 // 3) package.json autónomo (instalable con npm, sin workspaces).
 const apiPkg = JSON.parse(readFileSync(join(root, "apps/api/package.json"), "utf8"));
 const deps = { ...apiPkg.dependencies };
+// IMPORTANTE: NO declaramos @nv/domain como dependencia. El protocolo "file:"
+// rompe el "npm install" de cPanel (EUNSUPPORTEDPROTOCOL) y aborta la instalación
+// a la mitad (quedan sin instalar rxjs, reflect-metadata, prisma…). No hace falta:
+// passenger-start.js resuelve @nv/domain con un alias hacia ./vendor/domain, así
+// que el require funciona igual sin que esté en node_modules.
 delete deps["@nv/domain"];
 const pkg = {
   name: "nvmarketing-app",
@@ -75,7 +80,6 @@ const pkg = {
   },
   dependencies: {
     ...deps,
-    "@nv/domain": "file:./vendor/domain",
     prisma: "6.19.3", // CLI a juego con @prisma/client (para generate + migrate)
   },
   // cPanel usa npm (que sí ejecuta los scripts). Esto es por si alguien instala
