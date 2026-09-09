@@ -64,7 +64,7 @@ export default function AyudaPage() {
       <PageHeader
         eyebrow="Soporte"
         title="Centro de ayuda"
-        description="Guías y respuestas para sacar el máximo partido a NV Core."
+        description="Guías y respuestas para sacar el máximo partido a NV Marketing."
       />
 
       {/* Search + category filter */}

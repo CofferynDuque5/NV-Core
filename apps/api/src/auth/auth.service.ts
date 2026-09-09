@@ -97,7 +97,7 @@ export class AuthService {
     const url = `${this.config.get("appUrl", { infer: true })}/verify-email?token=${raw}`;
     await this.mail.send({
       to: email,
-      subject: "Verifica tu email · NV Core",
+      subject: "Verifica tu email · NV Marketing",
       html:
         `<p>Hola ${name},</p><p>Confirma tu email para activar tu cuenta:</p>` +
         `<p><a href="${url}">Verificar email</a></p>` +
@@ -126,7 +126,7 @@ export class AuthService {
     const url = `${this.config.get("appUrl", { infer: true })}/reset-password?token=${raw}`;
     await this.mail.send({
       to: user.email,
-      subject: "Restablece tu contraseña · NV Core",
+      subject: "Restablece tu contraseña · NV Marketing",
       html:
         `<p>Hola ${user.name},</p><p>Solicitaste restablecer tu contraseña:</p>` +
         `<p><a href="${url}">Crear nueva contraseña</a></p>` +
@@ -259,11 +259,11 @@ export class AuthService {
       const url = `${this.config.get("appUrl", { infer: true })}/register?invite=${token}&email=${encodeURIComponent(email)}`;
       void this.mail.send({
         to: email,
-        subject: `Te invitaron a ${workspace?.name ?? workspaceSlug} en NV Core`,
+        subject: `Te invitaron a ${workspace?.name ?? workspaceSlug} en NV Marketing`,
         html:
           `<p>¡Hola!</p>` +
           `<p>Te invitaron a colaborar como <strong>${role}</strong> en el workspace ` +
-          `<strong>${workspace?.name ?? workspaceSlug}</strong> de NV Core.</p>` +
+          `<strong>${workspace?.name ?? workspaceSlug}</strong> de NV Marketing.</p>` +
           `<p><a href="${url}">Crea tu cuenta para unirte</a>. Al registrarte con este ` +
           `correo (${email}) entrarás automáticamente al workspace.</p>` +
           `<p>La invitación caduca en 7 días.</p>`,
@@ -287,11 +287,11 @@ export class AuthService {
     // Best-effort notification — never blocks the membership change.
     void this.mail.send({
       to: user.email,
-      subject: `Te añadieron a ${workspace?.name ?? workspaceSlug} en NV Core`,
+      subject: `Te añadieron a ${workspace?.name ?? workspaceSlug} en NV Marketing`,
       html:
         `<p>Hola ${user.name ?? ""},</p>` +
         `<p>Ahora eres <strong>${role}</strong> en el workspace ` +
-        `<strong>${workspace?.name ?? workspaceSlug}</strong> de NV Core.</p>` +
+        `<strong>${workspace?.name ?? workspaceSlug}</strong> de NV Marketing.</p>` +
         `<p>Inicia sesión para empezar a colaborar.</p>`,
     });
 

@@ -45,7 +45,7 @@ export default function NovedadesPage() {
       <PageHeader
         eyebrow="Producto"
         title="Novedades"
-        description="Todo lo que hemos lanzado y mejorado en NV Core."
+        description="Todo lo que hemos lanzado y mejorado en NV Marketing."
       />
 
       <ol className="relative space-y-4 border-l border-line pl-6">
@@ -103,7 +103,7 @@ export default function NovedadesPage() {
       </ol>
 
       <p className="flex items-center gap-1.5 pl-6 text-xs text-ink-faint">
-        <Wrench className="size-3.5" /> Seguimos mejorando NV Core cada semana.
+        <Wrench className="size-3.5" /> Seguimos mejorando NV Marketing cada semana.
       </p>
     </div>
   );

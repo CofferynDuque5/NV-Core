@@ -13,7 +13,7 @@ export default function NotFound() {
       </div>
       <div>
         <h1 className="font-display text-2xl font-semibold text-ink-bright">Página no encontrada</h1>
-        <p className="mt-1 text-sm text-ink-muted">La ruta que buscas no existe en NV Core.</p>
+        <p className="mt-1 text-sm text-ink-muted">La ruta que buscas no existe en NV Marketing.</p>
       </div>
       <Button asChild>
         <Link to={`/w/${DEFAULT_WORKSPACE_SLUG}/dashboard`}>Volver al Dashboard</Link>

@@ -1,5 +1,5 @@
 /*
- * NV Core service worker — minimal, install-friendly.
+ * NV Marketing service worker — minimal, install-friendly.
  *
  * Strategy:
  *  - Navigations (HTML): network-first, falling back to the cached app shell

@@ -28,7 +28,7 @@ export class ResendAdapter extends BaseAdapter {
   override async sendMessage(_ctx: AdapterContext, input: SendMessageInput): Promise<SendResult> {
     const res = await this.mail.send({
       to: input.to,
-      subject: "Mensaje de NV Core",
+      subject: "Mensaje de NV Marketing",
       html: input.body,
     });
     if (!res.sent) throw new Error("Email no enviado: proveedor no configurado o error de Resend.");

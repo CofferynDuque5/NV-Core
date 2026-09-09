@@ -1,4 +1,4 @@
-# NV Core — sitio de ventas (estático). Colócalo junto a index.html en la raíz
+# NV Marketing — sitio de ventas (estático). Colócalo junto a index.html en la raíz
 # del dominio/subdominio. Hace que la web cargue directa (sin "Index of /").
 
 # Servir index.html por defecto (evita el listado de carpetas).

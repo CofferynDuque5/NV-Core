@@ -71,8 +71,8 @@ async function bootstrap(): Promise<void> {
   const isProd = config.get("env", { infer: true }) === "production";
   if (!isProd) {
     const swaggerConfig = new DocumentBuilder()
-      .setTitle("NV Core API")
-      .setDescription("Backend multi-workspace de NV Core (Business OS).")
+      .setTitle("NV Marketing API")
+      .setDescription("Backend multi-workspace de NV Marketing (Business OS).")
       .setVersion("0.1.0")
       .addBearerAuth()
       .build();
@@ -106,7 +106,7 @@ async function bootstrap(): Promise<void> {
   await app.listen(port);
 
   const logger = new Logger("Bootstrap");
-  logger.log(`NV Core API escuchando en http://localhost:${port}/api`);
+  logger.log(`NV Marketing API escuchando en http://localhost:${port}/api`);
   if (!isProd) logger.log(`Swagger en http://localhost:${port}/api/docs`);
 }
 

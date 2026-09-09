@@ -24,7 +24,7 @@ export function MobileNav({ onOpenSwitcher }: { onOpenSwitcher: () => void }) {
                 <path d="M4 12h6l2-3 3 6 2-3h3" />
               </svg>
             </span>
-            <SheetTitle className="font-display">NV Core</SheetTitle>
+            <SheetTitle className="font-display">NV Marketing</SheetTitle>
           </div>
         </SheetHeader>
 

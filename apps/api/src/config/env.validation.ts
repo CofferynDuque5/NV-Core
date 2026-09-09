@@ -96,7 +96,7 @@ export const envSchema = z.object({
   // Alternativa de hosting de imágenes (https://api.imgbb.com). Solo imágenes.
   IMGBB_API_KEY: z.string().optional(),
   RESEND_API_KEY: z.string().optional(),
-  MAIL_FROM: z.string().default("NV Core <onboarding@resend.dev>"),
+  MAIL_FROM: z.string().default("NV Marketing <onboarding@resend.dev>"),
 });
 
 export type Env = z.infer<typeof envSchema>;

@@ -1,4 +1,4 @@
-// NV Core — configuración en tiempo de ejecución (se puede editar SIN recompilar).
+// NV Marketing — configuración en tiempo de ejecución (se puede editar SIN recompilar).
 //
 // Pon la URL pública de tu API (por ejemplo, tu servicio de Render) para conectar
 // el front con el backend:

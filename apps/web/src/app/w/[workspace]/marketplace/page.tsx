@@ -37,7 +37,7 @@ export default function IntegrationsPage() {
         description={
           all.length > 0
             ? `${connected} de ${all.length} conectadas. Enlaza tus herramientas y ve dónde configurarlas.`
-            : "Conecta NV Core con las herramientas que ya usas."
+            : "Conecta NV Marketing con las herramientas que ya usas."
         }
       />
 

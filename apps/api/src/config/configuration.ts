@@ -80,7 +80,7 @@ export function buildConfig(env: Env): AppConfig {
   // Redis powers the distributed job queue (BullMQ) with retries. It's optional:
   // without it, jobs run in-process and the campaign runner still fires on its own
   // 30s tick (scheduled campaigns work). Redis only adds distribution + retries,
-  // so we warn instead of crashing — this lets NV Core run on any host with just
+  // so we warn instead of crashing — this lets NV Marketing run on any host with just
   // PostgreSQL (Render, a VPS, a cPanel Node app, etc.).
   if (env.NODE_ENV === "production" && !env.REDIS_URL) {
     // eslint-disable-next-line no-console

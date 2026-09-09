@@ -86,7 +86,7 @@ export function AuthShell({
               <Logo />
             </span>
             <div>
-              <div className="font-display text-ink-bright text-xl font-semibold">NV Core</div>
+              <div className="font-display text-ink-bright text-xl font-semibold">NV Marketing</div>
               <div className="text-ink-faint text-[9px] font-semibold tracking-[0.22em]">
                 BUSINESS OS
               </div>
@@ -118,7 +118,7 @@ export function AuthShell({
           </div>
 
           <p className="text-ink-faint text-[11px]">
-            © {new Date().getFullYear()} NV Core · Business Operating System
+            © {new Date().getFullYear()} NV Marketing · Business Operating System
           </p>
         </div>
 
@@ -131,7 +131,7 @@ export function AuthShell({
                 <Logo />
               </span>
               <div>
-                <div className="font-display text-ink-bright text-xl font-semibold">NV Core</div>
+                <div className="font-display text-ink-bright text-xl font-semibold">NV Marketing</div>
                 <div className="text-ink-faint text-[9px] font-semibold tracking-[0.22em]">
                   BUSINESS OS
                 </div>

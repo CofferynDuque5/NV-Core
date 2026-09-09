@@ -57,7 +57,7 @@ export function Sidebar({ onOpenSwitcher }: { onOpenSwitcher: () => void }) {
           <>
             <div className="min-w-0 flex-1 leading-none">
               <div className="font-display text-lg font-semibold tracking-tight nv-gradient-text">
-                NV Core
+                NV Marketing
               </div>
               <div className="mt-0.5 text-[8.5px] font-semibold tracking-[0.22em] text-ink-faint">
                 BUSINESS OS

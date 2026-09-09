@@ -28,10 +28,10 @@ export const TOURS: TourDef[] = [
   {
     id: "primeros-pasos",
     name: "Recorrido inicial",
-    description: "Un paseo de un minuto por las áreas clave de NV Core.",
+    description: "Un paseo de un minuto por las áreas clave de NV Marketing.",
     steps: [
       {
-        title: "Bienvenido a NV Core 👋",
+        title: "Bienvenido a NV Marketing 👋",
         body: "Te mostramos en un minuto las áreas clave para empezar. Puedes salir cuando quieras.",
       },
       {

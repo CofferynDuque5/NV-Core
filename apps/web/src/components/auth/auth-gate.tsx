@@ -9,7 +9,7 @@ function FullScreenLoader() {
     <div className="grid min-h-screen place-items-center bg-canvas">
       <div className="flex items-center gap-3 text-sm text-ink-muted">
         <span className="size-4 animate-spin rounded-full border-2 border-line-strong border-t-brand" />
-        Cargando NV Core…
+        Cargando NV Marketing…
       </div>
     </div>
   );

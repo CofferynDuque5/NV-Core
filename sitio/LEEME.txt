@@ -1,4 +1,4 @@
-NV Core — Página de ventas (sitio web estático)
+NV Marketing — Página de ventas (sitio web estático)
 ================================================
 
 Esta carpeta ES tu página de ventas. Es estática (solo HTML), NO necesita Node
@@ -34,7 +34,7 @@ aplicación. Solo tienes que poner UNA vez la URL de tu app:
   1) Abre index.html.
   2) Arriba del todo verás:
         window.NV_APP_URL = "https://app.nvcorx.com";
-     Cambia esa URL por la de TU aplicación (donde instalaste NV Core, por
+     Cambia esa URL por la de TU aplicación (donde instalaste NV Marketing, por
      ejemplo el subdominio app.tudominio.com). Deja "" si aún no la tienes
      (los botones avisarán con un mensaje en vez de no hacer nada).
   3) Guarda. Listo: "Iniciar sesión" abre /login y los planes abren /register.

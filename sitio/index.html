@@ -4,8 +4,8 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <meta name="theme-color" content="#0B0D10" />
-<title>NV Core — Business Operating System</title>
-<meta name="description" content="NV Core es el sistema operativo de tu negocio: campañas, CRM, automatizaciones, contenido con IA y analítica en un solo espacio multi-workspace." />
+<title>NV Marketing — Business Operating System</title>
+<meta name="description" content="NV Marketing es el sistema operativo de tu negocio: campañas, CRM, automatizaciones, contenido con IA y analítica en un solo espacio multi-workspace." />
 <style>
   /* ==================== TOKENS ==================== */
   :root{
@@ -348,13 +348,15 @@
 
   /* ==================== FOOTER ==================== */
   footer.site{border-top:1px solid var(--line);padding:26px 0;background:var(--bg-2)}
-  .foot-top{display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap}
-  .foot-links{display:flex;flex-wrap:wrap;gap:8px 22px}
-  .foot-links a{color:var(--muted);font-size:14px;transition:color .2s}
-  .foot-links a:hover{color:var(--text)}
-  .foot-bottom{margin-top:16px;padding-top:14px;border-top:1px solid var(--line)}
+  .foot-grid{display:grid;grid-template-columns:2fr 1fr 1fr 1fr;gap:28px}
+  .foot-brand .brand{margin-bottom:12px}
+  .foot-brand p{color:var(--muted);font-size:13.5px;max-width:38ch;line-height:1.5}
+  .foot-col h4{font-size:12px;text-transform:uppercase;letter-spacing:.1em;color:var(--muted-2);margin-bottom:12px;font-weight:700}
+  .foot-col a{display:block;color:var(--muted);font-size:14px;padding:4px 0;transition:color .2s}
+  .foot-col a:hover{color:var(--text)}
+  .foot-bottom{margin-top:26px;padding-top:16px;border-top:1px solid var(--line)}
   .foot-bottom p{color:var(--muted-2);font-size:13px;margin:0}
-  @media(max-width:620px){.foot-top{flex-direction:column;align-items:flex-start;gap:12px}}
+  @media(max-width:720px){.foot-grid{grid-template-columns:1fr 1fr;gap:18px 22px}.foot-brand{grid-column:1 / -1}}
 
   /* ==================== REVEAL ON SCROLL ==================== */
   .reveal{opacity:0;transform:translateY(30px);transition:opacity .7s cubic-bezier(.22,.61,.36,1),transform .7s cubic-bezier(.22,.61,.36,1)}
@@ -414,7 +416,7 @@
 <header class="site" id="site-header">
   <div class="container">
     <nav class="nav" aria-label="Principal">
-      <a class="brand" href="#top" aria-label="NV Core inicio">
+      <a class="brand" href="#top" aria-label="NV Marketing inicio">
         <svg class="logo" viewBox="0 0 40 40" fill="none" aria-hidden="true">
           <defs>
             <linearGradient id="lg" x1="0" y1="0" x2="40" y2="40" gradientUnits="userSpaceOnUse">
@@ -425,7 +427,7 @@
           <rect x="1.5" y="1.5" width="37" height="37" rx="11" stroke="url(#lg)" stroke-width="1.5"/>
           <path d="M12 28V12l16 16V12" stroke="url(#lg)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
         </svg>
-        <span>NV Core</span>
+        <span>NV Marketing</span>
       </a>
       <div class="nav-links">
         <a href="#features">Características</a>
@@ -464,7 +466,7 @@
     <div class="container">
       <span class="eyebrow fade-up d1"><span class="dot"></span>BUSINESS OPERATING SYSTEM</span>
       <h1 class="fade-up d2">Todo tu negocio, <span class="grad-text">en un solo lugar.</span></h1>
-      <p class="subhead fade-up d3">NV Core unifica campañas, CRM, automatizaciones, contenido con IA y analítica en un espacio de trabajo colaborativo. Menos herramientas dispersas, más resultados.</p>
+      <p class="subhead fade-up d3">NV Marketing unifica campañas, CRM, automatizaciones, contenido con IA y analítica en un espacio de trabajo colaborativo. Menos herramientas dispersas, más resultados.</p>
       <div class="hero-cta fade-up d4">
         <a class="btn btn-primary btn-lg" data-app data-path="/register" href="#">Empezar gratis</a>
         <a class="btn btn-ghost btn-lg" href="#pricing">Ver planes</a>
@@ -474,7 +476,7 @@
       <!-- Dashboard mockup -->
       <div class="mock-wrap fade-up d5">
         <div class="mock-glow" aria-hidden="true"></div>
-        <div class="window" role="img" aria-label="Vista previa del panel de NV Core con estadísticas y un gráfico de rendimiento de campañas">
+        <div class="window" role="img" aria-label="Vista previa del panel de NV Marketing con estadísticas y un gráfico de rendimiento de campañas">
           <div class="titlebar">
             <div class="dots"><i></i><i></i><i></i></div>
             <div class="urlbar">app.nvcorx.com</div>
@@ -483,7 +485,7 @@
             <aside class="sidebar">
               <div class="side-brand">
                 <svg class="logo" viewBox="0 0 40 40" fill="none" aria-hidden="true"><rect x="1.5" y="1.5" width="37" height="37" rx="11" fill="url(#lg)" opacity=".16"/><path d="M12 28V12l16 16V12" stroke="url(#lg)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>
-                NV Core
+                NV Marketing
               </div>
               <div class="side-item active"><svg viewBox="0 0 24 24" fill="none" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/></svg>Panel</div>
               <div class="side-item"><svg viewBox="0 0 24 24" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16v14H8l-4 3z"/></svg>Campañas</div>
@@ -608,7 +610,7 @@
       <div class="section-head reveal">
         <span class="eyebrow"><span class="dot"></span>Cómo funciona</span>
         <h2 style="margin-top:18px">De la idea al resultado en tres pasos</h2>
-        <p>Empieza hoy mismo. NV Core está diseñado para que veas valor desde el primer día.</p>
+        <p>Empieza hoy mismo. NV Marketing está diseñado para que veas valor desde el primer día.</p>
       </div>
       <div class="steps">
         <div class="step reveal">
@@ -734,8 +736,8 @@
     <div class="container">
       <div class="section-head reveal">
         <span class="eyebrow"><span class="dot"></span>Descargar</span>
-        <h2 style="margin-top:18px">Lleva NV Core contigo</h2>
-        <p>NV Core se instala como aplicación en teléfonos y computadoras. La misma experiencia, en cualquier dispositivo.</p>
+        <h2 style="margin-top:18px">Lleva NV Marketing contigo</h2>
+        <p>NV Marketing se instala como aplicación en teléfonos y computadoras. La misma experiencia, en cualquier dispositivo.</p>
       </div>
       <div class="dl-grid">
 
@@ -743,9 +745,9 @@
           <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="2.5" width="12" height="19" rx="3"/><path d="M10.5 5.5h3"/><path d="M12 18h.01"/></svg></div>
           <h3>En tu teléfono</h3>
           <ol>
-            <li>Abre NV Core en el navegador de tu teléfono.</li>
+            <li>Abre NV Marketing en el navegador de tu teléfono.</li>
             <li>Pulsa el menú del navegador y elige "Añadir a pantalla de inicio" o "Instalar app".</li>
-            <li>Confirma y abre NV Core como una app nativa.</li>
+            <li>Confirma y abre NV Marketing como una app nativa.</li>
           </ol>
         </div>
 
@@ -753,15 +755,15 @@
           <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="4" width="19" height="13" rx="2"/><path d="M8 21h8M12 17v4"/></svg></div>
           <h3>En tu computadora</h3>
           <ol>
-            <li>Abre NV Core en Chrome o Edge.</li>
+            <li>Abre NV Marketing en Chrome o Edge.</li>
             <li>Haz clic en el icono de instalar de la barra de direcciones.</li>
-            <li>Confirma la instalación y NV Core se abrirá en su propia ventana.</li>
+            <li>Confirma la instalación y NV Marketing se abrirá en su propia ventana.</li>
           </ol>
         </div>
 
       </div>
       <div class="dl-cta reveal">
-        <a class="btn btn-primary btn-lg" id="app-link" data-app data-path="/login" href="#">Abrir NV Core</a>
+        <a class="btn btn-primary btn-lg" id="app-link" data-app data-path="/login" href="#">Abrir NV Marketing</a>
         <span class="offline">
           <svg viewBox="0 0 24 24"><path d="M5 12.5l4 4 10-10"/><path d="M3 8a9 9 0 0114-2"/></svg>
           Funciona sin conexión una vez instalada (PWA)
@@ -776,16 +778,16 @@
       <div class="section-head reveal">
         <span class="eyebrow"><span class="dot"></span>FAQ</span>
         <h2 style="margin-top:18px">Preguntas frecuentes</h2>
-        <p>Lo que necesitas saber antes de empezar con NV Core.</p>
+        <p>Lo que necesitas saber antes de empezar con NV Marketing.</p>
       </div>
       <div class="faq-list">
         <details class="qa reveal">
-          <summary>¿Qué es exactamente NV Core?<span class="plus" aria-hidden="true"></span></summary>
-          <div class="ans">NV Core es un "Business Operating System": una plataforma que reúne campañas, CRM, automatizaciones, contenido con IA, plantillas, biblioteca de medios y analítica en un mismo espacio de trabajo, con soporte para múltiples workspaces y equipos.</div>
+          <summary>¿Qué es exactamente NV Marketing?<span class="plus" aria-hidden="true"></span></summary>
+          <div class="ans">NV Marketing es un "Business Operating System": una plataforma que reúne campañas, CRM, automatizaciones, contenido con IA, plantillas, biblioteca de medios y analítica en un mismo espacio de trabajo, con soporte para múltiples workspaces y equipos.</div>
         </details>
         <details class="qa reveal">
           <summary>¿Necesito conocimientos técnicos para usarlo?<span class="plus" aria-hidden="true"></span></summary>
-          <div class="ans">No. NV Core está pensado para equipos de marketing y negocio. Los editores visuales, las plantillas y las automatizaciones guiadas te permiten empezar sin escribir una sola línea de código.</div>
+          <div class="ans">No. NV Marketing está pensado para equipos de marketing y negocio. Los editores visuales, las plantillas y las automatizaciones guiadas te permiten empezar sin escribir una sola línea de código.</div>
         </details>
         <details class="qa reveal">
           <summary>¿Puedo empezar gratis?<span class="plus" aria-hidden="true"></span></summary>
@@ -796,8 +798,8 @@
           <div class="ans">Cada workspace es un espacio independiente con sus propios contactos, campañas y datos. Puedes gestionar varios espacios, invitar a tu equipo y asignar roles y permisos según el plan que elijas.</div>
         </details>
         <details class="qa reveal">
-          <summary>¿NV Core se instala como aplicación?<span class="plus" aria-hidden="true"></span></summary>
-          <div class="ans">Sí. NV Core es una PWA: puedes instalarla en teléfonos y computadoras desde el navegador y usarla como una app nativa. Una vez instalada, sigue funcionando incluso sin conexión.</div>
+          <summary>¿NV Marketing se instala como aplicación?<span class="plus" aria-hidden="true"></span></summary>
+          <div class="ans">Sí. NV Marketing es una PWA: puedes instalarla en teléfonos y computadoras desde el navegador y usarla como una app nativa. Una vez instalada, sigue funcionando incluso sin conexión.</div>
         </details>
         <details class="qa reveal">
           <summary>¿Puedo cambiar o cancelar mi plan cuando quiera?<span class="plus" aria-hidden="true"></span></summary>
@@ -824,21 +826,35 @@
 <!-- ============ FOOTER ============ -->
 <footer class="site">
   <div class="container">
-    <div class="foot-top">
-      <a class="brand" href="#top" aria-label="NV Core inicio">
-        <svg class="logo" viewBox="0 0 40 40" fill="none" aria-hidden="true"><rect x="1.5" y="1.5" width="37" height="37" rx="11" fill="url(#lg)" opacity=".16"/><rect x="1.5" y="1.5" width="37" height="37" rx="11" stroke="url(#lg)" stroke-width="1.5"/><path d="M12 28V12l16 16V12" stroke="url(#lg)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>
-        <span>NV Core</span>
-      </a>
-      <nav class="foot-links" aria-label="Pie de página">
+    <div class="foot-grid">
+      <div class="foot-brand">
+        <a class="brand" href="#top" aria-label="NV Marketing inicio">
+          <svg class="logo" viewBox="0 0 40 40" fill="none" aria-hidden="true"><rect x="1.5" y="1.5" width="37" height="37" rx="11" fill="url(#lg)" opacity=".16"/><rect x="1.5" y="1.5" width="37" height="37" rx="11" stroke="url(#lg)" stroke-width="1.5"/><path d="M12 28V12l16 16V12" stroke="url(#lg)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          <span>NV Marketing</span>
+        </a>
+        <p>El sistema operativo de tu negocio: campañas, CRM, automatizaciones, IA y analítica en un solo lugar.</p>
+      </div>
+      <nav class="foot-col" aria-label="Producto">
+        <h4>Producto</h4>
         <a href="#features">Características</a>
-        <a href="#pricing">Precios</a>
+        <a href="#how">Cómo funciona</a>
         <a href="#download">Descargar</a>
-        <a href="#faq">FAQ</a>
+      </nav>
+      <nav class="foot-col" aria-label="Precios">
+        <h4>Precios</h4>
+        <a href="#pricing">Planes</a>
+        <a href="#pricing">Free</a>
+        <a href="#pricing">Pro</a>
+      </nav>
+      <nav class="foot-col" aria-label="Cuenta">
+        <h4>Cuenta</h4>
         <a data-app data-path="/login" href="#">Ingresar</a>
+        <a data-app data-path="/register" href="#">Crear cuenta</a>
+        <a href="#faq">FAQ</a>
       </nav>
     </div>
     <div class="foot-bottom">
-      <p>© 2026 NV Core. Todos los derechos reservados.</p>
+      <p>© 2026 NV Marketing. Todos los derechos reservados.</p>
     </div>
   </div>
 </footer>
@@ -928,7 +944,7 @@
       a.setAttribute("href", "#");
       a.addEventListener("click", function(e){
         e.preventDefault();
-        alert("Aún no has conectado tu aplicación.\n\nAbre este archivo (index.html) y pon la URL de tu NV Core en window.NV_APP_URL, por ejemplo:\n  https://app.nvcorx.com");
+        alert("Aún no has conectado tu aplicación.\n\nAbre este archivo (index.html) y pon la URL de tu NV Marketing en window.NV_APP_URL, por ejemplo:\n  https://app.nvcorx.com");
       });
     }
   });

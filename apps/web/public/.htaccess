@@ -1,4 +1,4 @@
-# NV Core SPA — Apache (hosting compartido tipo cPanel).
+# NV Marketing SPA — Apache (hosting compartido tipo cPanel).
 # Sirve index.html para las rutas del cliente (p.ej. /w/mi-workspace/dashboard)
 # para que los enlaces profundos no den 404. Los archivos que existen se sirven tal cual.
 <IfModule mod_rewrite.c>
