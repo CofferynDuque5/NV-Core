@@ -294,7 +294,104 @@ function migrateWithPrismaCli() {
   }
 }
 
+// ── Autoinstalación de dependencias (para hosting SIN terminal) ──
+// Si node_modules quedó incompleto (el botón "Run NPM Install" de cPanel a veces
+// no termina), instalamos las dependencias solas en segundo plano y mostramos una
+// página de "instalando" mientras tanto. Al terminar, la app arranca sola.
+function depsReady() {
+  // Comprobación por FILESYSTEM (no require.resolve): un proceso que arrancó sin
+  // node_modules cachea el "no existe" y no vería los paquetes recién instalados.
+  // fs.existsSync siempre mira el disco real (y sigue symlinks del venv).
+  const nm = path.join(__dirname, "node_modules");
+  return (
+    fs.existsSync(path.join(nm, "reflect-metadata", "package.json")) &&
+    fs.existsSync(path.join(nm, "@nestjs", "common", "package.json")) &&
+    fs.existsSync(path.join(nm, "@prisma", "client", "package.json"))
+  );
+}
+
+function findNpmCli() {
+  const base = path.dirname(process.execPath); // .../<ver>/bin
+  const cands = [
+    path.join(base, "..", "lib", "node_modules", "npm", "bin", "npm-cli.js"),
+    path.join(base, "node_modules", "npm", "bin", "npm-cli.js"),
+  ];
+  for (const c of cands) {
+    try {
+      if (fs.existsSync(c)) return c;
+    } catch (_) {
+      /* seguir */
+    }
+  }
+  return null;
+}
+
+function serveInstalling() {
+  const http = require("node:http");
+  const page =
+    "<!doctype html><meta charset=utf-8><title>Instalando NV Marketing…</title>" +
+    "<meta http-equiv=refresh content=15>" +
+    "<div style='font-family:system-ui,Segoe UI,Arial;max-width:560px;margin:12vh auto;text-align:center;color:#0B0D10'>" +
+    "<h1 style='font-size:22px;margin:0 0 8px'>Instalando NV Marketing…</h1>" +
+    "<p style='color:#555;line-height:1.5'>Estamos preparando la aplicación por primera vez " +
+    "(suele tardar 1–3 minutos). Esta página se recarga sola; no cierres la pestaña.</p></div>";
+  const server = http.createServer((_req, res) => {
+    res.writeHead(503, { "content-type": "text/html; charset=utf-8", "retry-after": "20" });
+    res.end(page);
+  });
+  server.listen(process.env.PORT || 3000);
+}
+
+function startAutoInstall() {
+  const npmCli = findNpmCli();
+  if (!npmCli) {
+    console.error("[nvmarketing] No encontré npm para autoinstalar. Sube el paquete con node_modules o instala por terminal.");
+    return;
+  }
+  const lock = path.join(__dirname, ".nv-installing.lock");
+  try {
+    const st = fs.existsSync(lock) ? fs.statSync(lock) : null;
+    if (st && Date.now() - st.mtimeMs < 10 * 60 * 1000) return; // ya hay una corriendo
+  } catch (_) {
+    /* seguir */
+  }
+  try {
+    fs.writeFileSync(lock, String(Date.now()));
+  } catch (_) {
+    /* seguir */
+  }
+  const { spawn } = require("node:child_process");
+  console.log("[nvmarketing] Instalando dependencias automáticamente (npm install)…");
+  // Detached + unref: sobrevive aunque Passenger reinicie este proceso.
+  const child = spawn(
+    process.execPath,
+    [npmCli, "install", "--omit=dev", "--no-audit", "--no-fund"],
+    { cwd: __dirname, detached: true, stdio: "inherit" },
+  );
+  child.on("exit", () => {
+    try {
+      fs.unlinkSync(lock);
+    } catch (_) {
+      /* seguir */
+    }
+  });
+  child.unref();
+}
+
 (async () => {
+  // Si faltan dependencias, autoinstalar y servir "instalando" hasta que estén.
+  if (!depsReady()) {
+    serveInstalling();
+    startAutoInstall();
+    const timer = setInterval(() => {
+      if (depsReady()) {
+        clearInterval(timer);
+        process.exit(0); // Passenger reinicia y ya carga la app real.
+      }
+    }, 5000);
+    return;
+  }
+
   ensurePrismaClient();
   try {
     const pgRun = migrateWithPg();
