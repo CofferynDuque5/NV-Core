@@ -65,6 +65,15 @@ function errText(err: unknown): string {
   return err instanceof Error ? err.message : "Ocurrió un error.";
 }
 
+/**
+ * Distingue "el proveedor no está configurado" (falta la clave → probar el
+ * siguiente) de "está configurado pero la subida falló" (clave inválida, sin
+ * red, etc. → mostrar ese error real en vez del genérico).
+ */
+function isNotConfigured(err: unknown): boolean {
+  return /no configurad/i.test(errText(err));
+}
+
 // ── Workspaces ──────────────────────────────────────────────────────────────
 export function useCreateWorkspace() {
   const svc = useServices();
@@ -1252,7 +1261,9 @@ export function useUploadMedia() {
       const folderId = arg instanceof File ? undefined : (arg.folderId ?? undefined);
       const isImage = file.type.startsWith("image/");
 
-      // Imágenes → ImgBB (preferido). Si no está configurado, cae a Cloudinary.
+      // Imágenes → ImgBB (preferido). Si no está configurado, cae a Cloudinary;
+      // si SÍ está configurado pero falla (clave inválida, etc.), se muestra ese
+      // error real en vez del genérico.
       if (isImage) {
         try {
           const base64 = await fileToBase64(file);
@@ -1263,7 +1274,8 @@ export function useUploadMedia() {
             url,
             folderId,
           });
-        } catch {
+        } catch (imgbbErr) {
+          if (!isNotConfigured(imgbbErr)) throw imgbbErr;
           /* ImgBB no configurado → intentar Cloudinary abajo */
         }
       }
@@ -1315,7 +1327,8 @@ export function useUploadCampaignAttachment() {
     mutationFn: async (file: File): Promise<CampaignAttachment> => {
       const isImage = file.type.startsWith("image/");
 
-      // Imágenes → ImgBB (preferido). Si no está configurado, cae a Cloudinary.
+      // Imágenes → ImgBB (preferido). Si no está configurado, cae a Cloudinary;
+      // si SÍ está configurado pero falla, se muestra ese error real.
       if (isImage) {
         try {
           const base64 = await fileToBase64(file);
@@ -1325,7 +1338,8 @@ export function useUploadCampaignAttachment() {
             .catch(() => undefined);
           void qc.invalidateQueries({ queryKey: [ws.id, "media"] });
           return { url, kind: "image", mime: file.type || "image/png", filename: file.name };
-        } catch {
+        } catch (imgbbErr) {
+          if (!isNotConfigured(imgbbErr)) throw imgbbErr;
           /* ImgBB no configurado → intentar Cloudinary abajo */
         }
       }
