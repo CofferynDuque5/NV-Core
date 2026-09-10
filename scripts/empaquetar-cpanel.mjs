@@ -343,11 +343,6 @@ function serveInstalling() {
 }
 
 function startAutoInstall() {
-  const npmCli = findNpmCli();
-  if (!npmCli) {
-    console.error("[nvmarketing] No encontré npm para autoinstalar. Sube el paquete con node_modules o instala por terminal.");
-    return;
-  }
   const lock = path.join(__dirname, ".nv-installing.lock");
   try {
     const st = fs.existsSync(lock) ? fs.statSync(lock) : null;
@@ -355,19 +350,39 @@ function startAutoInstall() {
   } catch (_) {
     /* seguir */
   }
+
+  // CloudLinux EXIGE que node_modules sea un symlink al entorno virtual. Correr
+  // "npm install" directo lo rompe. La forma correcta es instalar DENTRO del
+  // entorno virtual: sourcear el "activate" (lo mismo que se hace por terminal,
+  // que sí funciona) y correr npm ahí. El activate está junto al node del venv.
+  const activate = path.join(path.dirname(process.execPath), "activate");
+  const npmCli = findNpmCli();
+  if (!fs.existsSync(activate) && !npmCli) {
+    console.error("[nvmarketing] No pude autoinstalar (sin activate ni npm). Instala por terminal o usa Render.");
+    return;
+  }
   try {
     fs.writeFileSync(lock, String(Date.now()));
   } catch (_) {
     /* seguir */
   }
   const { spawn } = require("node:child_process");
-  console.log("[nvmarketing] Instalando dependencias automáticamente (npm install)…");
-  // Detached + unref: sobrevive aunque Passenger reinicie este proceso.
-  const child = spawn(
-    process.execPath,
-    [npmCli, "install", "--omit=dev", "--no-audit", "--no-fund"],
-    { cwd: __dirname, detached: true, stdio: "inherit" },
-  );
+  const npmArgs = "install --omit=dev --no-audit --no-fund";
+  let child;
+  if (fs.existsSync(activate)) {
+    console.log("[nvmarketing] Instalando dependencias vía entorno virtual (CloudLinux)…");
+    const cmd =
+      ". " + JSON.stringify(activate) + " && cd " + JSON.stringify(__dirname) + " && npm " + npmArgs;
+    // Detached + unref: sobrevive aunque Passenger reinicie este proceso.
+    child = spawn("/bin/bash", ["-lc", cmd], { cwd: __dirname, detached: true, stdio: "inherit" });
+  } else {
+    console.log("[nvmarketing] Instalando dependencias (npm directo)…");
+    child = spawn(process.execPath, [npmCli, "install", "--omit=dev", "--no-audit", "--no-fund"], {
+      cwd: __dirname,
+      detached: true,
+      stdio: "inherit",
+    });
+  }
   child.on("exit", () => {
     try {
       fs.unlinkSync(lock);
