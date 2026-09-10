@@ -81,6 +81,10 @@ const pkg = {
   dependencies: {
     ...deps,
     prisma: "6.19.3", // CLI a juego con @prisma/client (para generate + migrate)
+    // Cliente Postgres en JS puro: aplica las migraciones al arrancar sin depender
+    // del "schema engine" nativo de Prisma (que es específico de la plataforma y no
+    // se puede empaquetar de forma cruzada). Funciona en cualquier hosting.
+    pg: "8.13.1",
   },
   // cPanel usa npm (que sí ejecuta los scripts). Esto es por si alguien instala
   // con pnpm: le permite correr los build scripts que pnpm bloquea por defecto
@@ -184,43 +188,123 @@ if (process.env.DATABASE_URL) {
 // Para MIGRAR, Neon recomienda la conexión DIRECTA (sin "-pooler").
 const migrateUrl = (process.env.DATABASE_URL || "").replace("-pooler.", ".");
 
-const cli = resolvePrismaCli();
 const schema = path.join(__dirname, "prisma", "schema.prisma");
 const q = (s) => JSON.stringify(s);
-// Ejecuta prisma con el MISMO node que arranca la app (no dependemos de que el
-// shell encuentre el binario ni de permisos de ejecución en .bin).
-const prismaCmd = (args) =>
-  cli.viaNode
-    ? q(process.execPath) + " " + q(cli.file) + " " + args
-    : q(cli.file) + " " + args;
 
-// 1) Genera el cliente de Prisma con ruta ABSOLUTA (cPanel corre el install en
-//    otra carpeta, por eso no se hace en postinstall). Idempotente.
-try {
-  execSync(prismaCmd("generate --schema=" + q(schema)), { cwd: __dirname, stdio: "inherit" });
-} catch (e) {
-  console.error("[nvmarketing] 'prisma generate' falló:", e.message);
-}
-
-// 2) Aplica las migraciones al arrancar (idempotente), con reintentos y usando
-//    la conexión directa para migrar. Si falla, la app arranca igual y lo avisa.
-for (let intento = 1; intento <= 3; intento++) {
+// Genera el cliente de Prisma SOLO si no viene ya generado (el paquete con
+// node_modules incluido ya lo trae). Best-effort: si falla, la app igual arranca.
+function ensurePrismaClient() {
   try {
-    execSync(prismaCmd("migrate deploy --schema=" + q(schema)), {
+    require.resolve(".prisma/client/default", { paths: [__dirname] });
+    return; // ya está generado
+  } catch (_) {
+    /* hay que generarlo */
+  }
+  try {
+    const pkg = require.resolve("prisma/package.json", { paths: [__dirname] });
+    const cliFile = path.join(path.dirname(pkg), "build", "index.js");
+    execSync(q(process.execPath) + " " + q(cliFile) + " generate --schema=" + q(schema), {
       cwd: __dirname,
       stdio: "inherit",
-      env: Object.assign({}, process.env, { DATABASE_URL: migrateUrl }),
     });
-    break;
   } catch (e) {
-    console.error(
-      "[nvmarketing] 'prisma migrate deploy' intento " + intento + " falló:",
-      e.message,
-    );
+    console.error("[nvmarketing] 'prisma generate' omitido:", e.message);
   }
 }
 
-require("./dist/main.js");
+// Aplica las migraciones con pg (JavaScript puro): funciona en cualquier
+// plataforma, sin depender del motor nativo de Prisma (que es específico del SO
+// y no se puede empaquetar de forma cruzada). Devuelve promesa, o null si no hay pg.
+function migrateWithPg() {
+  let Client;
+  try {
+    Client = require("pg").Client;
+  } catch (_) {
+    return null;
+  }
+  const crypto = require("node:crypto");
+  const migDir = path.join(__dirname, "prisma", "migrations");
+  if (!fs.existsSync(migDir)) return null;
+  const folders = fs
+    .readdirSync(migDir)
+    .filter((f) => fs.existsSync(path.join(migDir, f, "migration.sql")))
+    .sort();
+  const isLocal = /localhost|127\\.0\\.0\\.1/.test(migrateUrl);
+  return (async () => {
+    const client = new Client({
+      connectionString: migrateUrl,
+      ssl: isLocal ? false : { rejectUnauthorized: false },
+    });
+    await client.connect();
+    await client.query(
+      'CREATE TABLE IF NOT EXISTS "_prisma_migrations" (id varchar(36) PRIMARY KEY NOT NULL, checksum varchar(64) NOT NULL, finished_at timestamptz, migration_name varchar(255) NOT NULL, logs text, rolled_back_at timestamptz, started_at timestamptz NOT NULL DEFAULT now(), applied_steps_count integer NOT NULL DEFAULT 0)',
+    );
+    const doneRes = await client.query(
+      'SELECT migration_name FROM "_prisma_migrations" WHERE finished_at IS NOT NULL',
+    );
+    const done = new Set(doneRes.rows.map((r) => r.migration_name));
+    for (const name of folders) {
+      if (done.has(name)) continue;
+      const sql = fs.readFileSync(path.join(migDir, name, "migration.sql"), "utf8");
+      const checksum = crypto.createHash("sha256").update(sql).digest("hex");
+      try {
+        await client.query("BEGIN");
+        await client.query(sql);
+        await client.query(
+          'INSERT INTO "_prisma_migrations"(id, checksum, migration_name, started_at, finished_at, applied_steps_count) VALUES ($1,$2,$3,now(),now(),1)',
+          [crypto.randomUUID(), checksum, name],
+        );
+        await client.query("COMMIT");
+        console.log("[nvmarketing] migración aplicada:", name);
+      } catch (e) {
+        await client.query("ROLLBACK").catch(() => {});
+        await client.end().catch(() => {});
+        throw new Error("Migración " + name + " falló: " + e.message);
+      }
+    }
+    await client.end();
+    console.log("[nvmarketing] base de datos al día.");
+  })();
+}
+
+// Fallback: prisma migrate deploy por CLI (cuando el motor nativo SÍ está,
+// p.ej. si el hosting instaló las dependencias por su cuenta).
+function migrateWithPrismaCli() {
+  let cliFile;
+  try {
+    const pkg = require.resolve("prisma/package.json", { paths: [__dirname] });
+    cliFile = path.join(path.dirname(pkg), "build", "index.js");
+  } catch (_) {
+    return;
+  }
+  for (let intento = 1; intento <= 3; intento++) {
+    try {
+      execSync(q(process.execPath) + " " + q(cliFile) + " migrate deploy --schema=" + q(schema), {
+        cwd: __dirname,
+        stdio: "inherit",
+        env: Object.assign({}, process.env, { DATABASE_URL: migrateUrl }),
+      });
+      return;
+    } catch (e) {
+      console.error(
+        "[nvmarketing] 'prisma migrate deploy' intento " + intento + " falló:",
+        e.message,
+      );
+    }
+  }
+}
+
+(async () => {
+  ensurePrismaClient();
+  try {
+    const pgRun = migrateWithPg();
+    if (pgRun) await pgRun;
+    else migrateWithPrismaCli();
+  } catch (e) {
+    console.error("[nvmarketing] migraciones:", e.message);
+  }
+  require("./dist/main.js");
+})();
 `,
 );
 
@@ -302,7 +386,9 @@ PASOS
 3) En esa misma pantalla, sección "Environment variables", agrega:
       DATABASE_URL, JWT_SECRET, ENCRYPTION_KEY, NODE_ENV=production, NV_ADMIN_EMAIL
    (ver .env.example). Guarda.
-4) Pulsa "Run NPM Install" (instala dependencias y genera Prisma para tu servidor).
+4) Si este paquete YA trae la carpeta "node_modules" (versión con dependencias
+   incluidas): NO pulses "Run NPM Install". Ve directo al paso 5.
+   Si NO trae node_modules: pulsa "Run NPM Install" y espera a que termine.
 5) Pulsa "Restart". Abre tu dominio: la web y el login ya funcionan de verdad.
 
 Notas:
@@ -311,6 +397,35 @@ Notas:
 - Para WhatsApp/Telegram e IA, añade sus claves como variables de entorno y reinicia.
 `,
 );
+
+// 5b) OPCIONAL: dejar node_modules YA INSTALADO dentro del paquete, para hostings
+// donde "Run NPM Install" falla o queda a medias. Se activa con CPANEL_BUNDLE_MODULES=1.
+// Instala solo dependencias de producción y genera el cliente de Prisma con los
+// motores de las plataformas típicas de cPanel (CloudLinux = RHEL; + Debian), para
+// que el binario del motor exista sin necesidad de generar en el servidor.
+if (process.env.CPANEL_BUNDLE_MODULES === "1") {
+  console.log("\n▶ Instalando dependencias de producción dentro del paquete…");
+  execSync("npm install --omit=dev --no-audit --no-fund --ignore-scripts", {
+    cwd: out,
+    stdio: "inherit",
+  });
+  // Añade binaryTargets al schema del paquete para cubrir CloudLinux (RHEL) y Debian.
+  const schemaPath = join(out, "prisma/schema.prisma");
+  let schema = readFileSync(schemaPath, "utf8");
+  if (!schema.includes("binaryTargets")) {
+    schema = schema.replace(
+      /generator\s+client\s*\{/,
+      `generator client {\n  binaryTargets = ["rhel-openssl-3.0.x", "rhel-openssl-1.1.x"]`,
+    );
+    writeFileSync(schemaPath, schema);
+  }
+  console.log("▶ Generando el cliente de Prisma (con motores de Linux para el hosting)…");
+  execSync(
+    `node ${JSON.stringify(join(out, "node_modules/prisma/build/index.js"))} generate --schema=${JSON.stringify(schemaPath)}`,
+    { cwd: out, stdio: "inherit" },
+  );
+  console.log("✔ node_modules incluido en el paquete (no hace falta 'Run NPM Install').");
+}
 
 // 6) Zip para subir fácil.
 const scratch = process.env.NV_SCRATCH || join(root, "scratch");
