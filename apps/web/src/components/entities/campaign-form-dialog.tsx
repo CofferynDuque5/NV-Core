@@ -368,7 +368,7 @@ export function CampaignFormDialog({
                 ref={fileInputRef}
                 type="file"
                 multiple
-                accept="image/*,video/*"
+                accept="image/*"
                 className="hidden"
                 onChange={onPickFiles}
               />
@@ -383,7 +383,7 @@ export function CampaignFormDialog({
                 ) : (
                   <Paperclip className="size-4" />
                 )}
-                {upload.isPending ? "Subiendo…" : "Subir imagen (ImgBB) o video (Cloudinary)"}
+                {upload.isPending ? "Subiendo…" : "Subir imagen (ImgBB)"}
               </button>
               <AiFlyerButton
                 defaultPrompt={message.trim() || name.trim()}

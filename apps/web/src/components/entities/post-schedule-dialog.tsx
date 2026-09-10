@@ -156,12 +156,12 @@ export function PostScheduleDialog({
       </div>
 
       <div className="space-y-1.5">
-        <Label>Imagen o video</Label>
+        <Label>Imagen</Label>
         <input
           ref={fileInputRef}
           type="file"
           multiple
-          accept="image/*,video/*"
+          accept="image/*"
           className="hidden"
           onChange={onPickFiles}
         />
@@ -176,7 +176,7 @@ export function PostScheduleDialog({
           ) : (
             <Paperclip className="size-4" />
           )}
-          {upload.isPending ? "Subiendo…" : "Subir imagen o video (Cloudinary)"}
+          {upload.isPending ? "Subiendo…" : "Subir imagen"}
         </button>
         <AiFlyerButton
           defaultPrompt={copy.trim() || title.trim()}

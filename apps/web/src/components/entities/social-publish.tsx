@@ -118,7 +118,7 @@ export function SocialPublishForm({
           ref={fileRef}
           type="file"
           multiple
-          accept="image/*,video/*"
+          accept="image/*"
           className="hidden"
           onChange={onPickFiles}
         />
@@ -129,7 +129,7 @@ export function SocialPublishForm({
           className="flex w-full items-center justify-center gap-2 rounded-lg border border-dashed border-line-soft bg-panel-raised px-3 py-2 text-xs text-ink-muted transition-colors hover:border-line-bright disabled:opacity-60"
         >
           {upload.isPending ? <Loader2 className="size-4 animate-spin" /> : <Paperclip className="size-4" />}
-          {upload.isPending ? "Subiendo…" : "Subir imagen o video (Cloudinary)"}
+          {upload.isPending ? "Subiendo…" : "Subir imagen"}
         </button>
         {attachments.length > 0 ? (
           <div className="space-y-0.5">
