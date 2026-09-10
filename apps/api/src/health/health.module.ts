@@ -90,6 +90,43 @@ export class HealthController {
     return { overall, components, timestamp: new Date().toISOString() };
   }
 
+  /**
+   * Diagnóstico de base de datos abrible desde el navegador (/api/health/db):
+   * dice si conecta y cuántas tablas hay, o el error EXACTO. Sirve para
+   * diagnosticar el login sin terminal.
+   */
+  @Get("db")
+  @HttpCode(200)
+  async db() {
+    if (!this.prisma.enabled) {
+      return { configured: false, connected: false, hint: "Falta DATABASE_URL." };
+    }
+    try {
+      const rows = (await this.prisma.$queryRawUnsafe(
+        "SELECT count(*)::int AS n FROM information_schema.tables WHERE table_schema='public'",
+      )) as Array<{ n: number }>;
+      const tables = Array.isArray(rows) && rows[0] ? Number(rows[0].n) : 0;
+      return {
+        configured: true,
+        connected: true,
+        tables,
+        hint:
+          tables === 0
+            ? "Conecta pero NO hay tablas: faltan las migraciones."
+            : "Base de datos OK.",
+      };
+    } catch (e) {
+      const err = e as { message?: unknown; code?: unknown };
+      return {
+        configured: true,
+        connected: false,
+        code: err?.code ? String(err.code) : undefined,
+        error: String(err?.message ?? e).slice(0, 400),
+        hint: "La app no puede conectar a la base (revisa DATABASE_URL o si Neon está activo).",
+      };
+    }
+  }
+
   private async pingDatabase(): Promise<"ok" | "down" | "not-configured"> {
     if (!this.prisma.enabled) return "not-configured";
     try {

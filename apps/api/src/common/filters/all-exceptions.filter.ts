@@ -30,8 +30,19 @@ export class AllExceptionsFilter implements ExceptionFilter {
         ? exception.getResponse()
         : "Internal server error";
 
-    const message =
+    let message =
       typeof payload === "string" ? payload : ((payload as { message?: unknown }).message ?? payload);
+
+    // Para errores 500 no controlados (típicamente de base de datos), exponer el
+    // mensaje y el código reales ayuda a diagnosticar en el propio panel (p. ej.
+    // "Can't reach database server" P1001, o "table ... does not exist" P2021),
+    // en vez de un opaco "Internal server error". No son datos sensibles.
+    let code: string | undefined;
+    if (!(exception instanceof HttpException)) {
+      const err = exception as { message?: unknown; code?: unknown };
+      if (err?.message) message = String(err.message).slice(0, 400);
+      if (err?.code) code = String(err.code);
+    }
 
     const requestId = (request.headers["x-request-id"] as string | undefined) ?? undefined;
 
@@ -54,6 +65,7 @@ export class AllExceptionsFilter implements ExceptionFilter {
       timestamp: new Date().toISOString(),
       requestId,
       message,
+      ...(code ? { code } : {}),
     });
   }
 }
