@@ -152,6 +152,17 @@ export class InboxService implements OnModuleInit {
           contactHandle: msg.contactHandle,
         },
       });
+    } else if (
+      // Mejora el nombre si el chat se creó con el número (sin pushName todavía)
+      // y ahora llega el nombre real del contacto. Así deja de verse el número.
+      msg.contactName &&
+      msg.contactName !== msg.contactHandle &&
+      (!conversation.contactName || conversation.contactName === conversation.contactHandle)
+    ) {
+      conversation = await this.prisma.conversation.update({
+        where: { id: conversation.id },
+        data: { contactName: msg.contactName },
+      });
     }
     await this.prisma.message.create({
       data: { conversationId: conversation.id, direction: "in", text: msg.text },

@@ -34,6 +34,13 @@ async function bootstrap(): Promise<void> {
     rawBody: true,
     ...(logFormat === "json" ? { logger: new JsonLogger() } : {}),
   });
+  // Las imágenes (biblioteca, adjuntos, flyers de IA) viajan como base64 en el
+  // body JSON. El límite por defecto de Express (~100kb) las rechaza y devuelve
+  // 500/413 al subir una foto. Lo subimos a 25mb (el DTO ya topa la imagen a
+  // ~15MB). urlencoded también, por si acaso.
+  app.useBodyParser("json", { limit: "25mb" });
+  app.useBodyParser("urlencoded", { limit: "25mb", extended: true });
+
   const config = app.get(ConfigService<AppConfig, true>);
 
   // Error monitoring (no-op unless SENTRY_DSN is set).
