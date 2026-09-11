@@ -29,6 +29,22 @@ function initialsOf(s: string): string {
   return s.split(/[@\s.]+/).filter(Boolean).slice(0, 2).map((p) => p[0]!.toUpperCase()).join("");
 }
 
+const timeOf = (iso: string) =>
+  new Date(iso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+
+/** "Hoy" / "Ayer" / "lun 3 sep" separators between message groups. */
+function dayLabel(iso: string): string {
+  const d = new Date(iso);
+  const today = new Date();
+  const yesterday = new Date(today);
+  yesterday.setDate(today.getDate() - 1);
+  const same = (a: Date, b: Date) =>
+    a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
+  if (same(d, today)) return "Hoy";
+  if (same(d, yesterday)) return "Ayer";
+  return d.toLocaleDateString("es", { weekday: "short", day: "numeric", month: "short" });
+}
+
 const STATUSES: { v: InboxStatus; label: string }[] = [
   { v: "open", label: "Abiertas" },
   { v: "resolved", label: "Resueltas" },
@@ -63,6 +79,16 @@ export default function InboxPage() {
   );
   const filtered = filterConversations(all, { q, channel, status, assignee });
   const active = all.find((c) => c.id === selected) ?? null;
+
+  // Chronological thread (oldest → newest) so it reads like a real chat.
+  const thread = React.useMemo(
+    () => [...(messages.data ?? [])].sort((a, b) => new Date(a.at).getTime() - new Date(b.at).getTime()),
+    [messages.data],
+  );
+  const bottomRef = React.useRef<HTMLDivElement>(null);
+  React.useEffect(() => {
+    bottomRef.current?.scrollIntoView({ block: "end" });
+  }, [thread.length, selected]);
 
   function submitMessage(e: React.FormEvent) {
     e.preventDefault();
@@ -147,11 +173,27 @@ export default function InboxPage() {
                         selected === c.id ? "bg-brand/12" : "hover:bg-panel-raised",
                       )}
                     >
-                      <ChannelChip id={c.channel} />
+                      <span className="relative shrink-0">
+                        <span className="grid size-9 place-items-center rounded-full bg-panel-high text-xs font-bold text-ink-muted">
+                          {c.contactInitials || initialsOf(c.contactName)}
+                        </span>
+                        <ChannelChip id={c.channel} className="absolute -bottom-1 -right-1 size-4 ring-2 ring-panel" />
+                      </span>
                       <span className="min-w-0 flex-1">
                         <span className="flex items-center gap-1.5">
                           <span className="min-w-0 flex-1 truncate text-sm font-medium text-ink">{c.contactName}</span>
+                          {c.lastMessageAt ? (
+                            <span className="shrink-0 text-[10px] tabular-nums text-ink-faint">{timeOf(c.lastMessageAt)}</span>
+                          ) : null}
                           {c.resolved ? <CheckCircle2 className="size-3.5 shrink-0 text-state-success" /> : null}
+                        </span>
+                        <span className="flex items-center gap-1.5">
+                          <span className="min-w-0 flex-1 truncate text-xs text-ink-faint">{c.preview}</span>
+                          {c.unread > 0 ? (
+                            <span className="grid min-w-[18px] shrink-0 place-items-center rounded-full bg-brand px-1 text-[10px] font-bold text-white">
+                              {c.unread}
+                            </span>
+                          ) : null}
                         </span>
                         {(c.labels ?? []).length > 0 ? (
                           <span className="mt-1 flex flex-wrap gap-1">
@@ -187,7 +229,7 @@ export default function InboxPage() {
             <>
               <PanelHeader
                 title={active.contactName}
-                description={CHANNELS[active.channel].name}
+                description={`${CHANNELS[active.channel].name}${active.contactHandle ? ` · ${active.contactHandle}` : ""}`}
                 action={
                   <div className="flex items-center gap-2">
                     <label className="flex items-center gap-1 text-xs text-ink-faint">
@@ -240,25 +282,63 @@ export default function InboxPage() {
                 />
               </div>
 
-              <div className="flex-1 space-y-2 overflow-y-auto p-4">
+              <div className="flex-1 space-y-1.5 overflow-y-auto bg-panel-raised/40 p-4">
                 {messages.isLoading ? (
                   <ListSkeleton rows={3} />
-                ) : (messages.data ?? []).length === 0 ? (
+                ) : thread.length === 0 ? (
                   <p className="py-8 text-center text-sm text-ink-muted">No hay mensajes todavía. Escribe el primero.</p>
                 ) : (
-                  (messages.data ?? []).map((m) => (
-                    <div key={m.id} className={cn("flex", m.direction === "out" ? "justify-end" : "justify-start")}>
-                      <div className={cn("max-w-[75%] rounded-2xl px-3 py-2 text-sm", m.direction === "out" ? "bg-brand text-white" : "bg-panel-raised text-ink")}>
-                        {m.text}
-                      </div>
-                    </div>
-                  ))
+                  thread.map((m, i) => {
+                    const prev = thread[i - 1];
+                    const newDay = !prev || dayLabel(prev.at) !== dayLabel(m.at);
+                    const out = m.direction === "out";
+                    return (
+                      <React.Fragment key={m.id}>
+                        {newDay ? (
+                          <div className="flex items-center gap-3 py-2">
+                            <span className="h-px flex-1 bg-line-soft" />
+                            <span className="rounded-full bg-panel px-2.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-ink-faint">
+                              {dayLabel(m.at)}
+                            </span>
+                            <span className="h-px flex-1 bg-line-soft" />
+                          </div>
+                        ) : null}
+                        <div className={cn("flex", out ? "justify-end" : "justify-start")}>
+                          <div
+                            className={cn(
+                              "max-w-[75%] rounded-2xl px-3 py-1.5 text-sm shadow-sm",
+                              out
+                                ? "rounded-br-md bg-brand text-white"
+                                : "rounded-bl-md border border-line-soft bg-panel text-ink",
+                            )}
+                          >
+                            <span className="whitespace-pre-wrap break-words">{m.text}</span>
+                            <span
+                              className={cn(
+                                "ml-2 inline-block translate-y-0.5 text-[10px] tabular-nums",
+                                out ? "text-white/70" : "text-ink-faint",
+                              )}
+                            >
+                              {timeOf(m.at)}
+                            </span>
+                          </div>
+                        </div>
+                      </React.Fragment>
+                    );
+                  })
                 )}
+                <div ref={bottomRef} />
               </div>
 
               <form onSubmit={submitMessage} className="flex items-center gap-2 border-t border-line p-3">
-                <Input value={draft} onChange={(e) => setDraft(e.target.value)} placeholder="Escribe una respuesta…" className="flex-1" />
-                <Button type="submit" size="icon" disabled={send.isPending || !draft.trim()}>
+                <Input
+                  value={draft}
+                  onChange={(e) => setDraft(e.target.value)}
+                  placeholder={`Responder a ${active.contactName}…`}
+                  className="flex-1"
+                  aria-label="Respuesta"
+                />
+                <Button type="submit" size="icon" disabled={send.isPending || !draft.trim()} aria-label="Enviar">
                   <Send className="size-4" />
                 </Button>
               </form>

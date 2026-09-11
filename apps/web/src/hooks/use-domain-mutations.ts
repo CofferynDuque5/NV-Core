@@ -1501,6 +1501,21 @@ export function useImproveMessage() {
   });
 }
 
+/** Sales-agent chat: sends the whole visible history, gets the next reply. */
+export function useAgentChat() {
+  const svc = useServices();
+  const ws = useWorkspace();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { messages: { role: "user" | "assistant"; content: string }[]; system?: string }) =>
+      svc.ai.chat(ws.id, input),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: [ws.id, "ai", "usage"] });
+    },
+    onError: (err) => toast.error(errText(err)),
+  });
+}
+
 // ── Team / members ────────────────────────────────────────────────────────────
 function invalidateTeam(qc: ReturnType<typeof useQueryClient>, wsId: string) {
   void qc.invalidateQueries({ queryKey: [wsId, "team"] });

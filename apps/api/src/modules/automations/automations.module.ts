@@ -51,6 +51,9 @@ import { planExecution } from "./workflow-executor";
 import { ProvidersModule } from "../../providers/providers.module";
 import { AutomationBridgeController, N8nSecretGuard } from "./n8n.bridge";
 import { N8nEventForwarder } from "./n8n.forwarder";
+import { AutomationRunnerService } from "./automation-runner.service";
+import { AiModule } from "../ai/ai.module";
+import { NotificationsModule } from "../notifications/notifications.module";
 
 // Nested DTOs for the flow graph. Explicit @ValidateNested + @Type is required
 // so the global ValidationPipe (whitelist + implicit conversion) validates the
@@ -369,8 +372,8 @@ export class AutomationsController {
 }
 
 @Module({
-  imports: [ProvidersModule],
+  imports: [ProvidersModule, AiModule, NotificationsModule],
   controllers: [AutomationsController, AutomationBridgeController],
-  providers: [AutomationsService, N8nSecretGuard, N8nEventForwarder],
+  providers: [AutomationsService, N8nSecretGuard, N8nEventForwarder, AutomationRunnerService],
 })
 export class AutomationsModule {}

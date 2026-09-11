@@ -26,12 +26,16 @@ abstract class AyrshareAdapter extends BaseAdapter {
     super();
   }
 
-  override async publish(_ctx: AdapterContext, input: PublishInput): Promise<PublishResult> {
-    const [result] = await this.ayrshare.publish([this.platform], {
-      message: input.message,
-      attachments: input.attachments,
-      format: input.format ?? null,
-    });
+  override async publish(ctx: AdapterContext, input: PublishInput): Promise<PublishResult> {
+    const [result] = await this.ayrshare.publish(
+      [this.platform],
+      {
+        message: input.message,
+        attachments: input.attachments,
+        format: input.format ?? null,
+      },
+      ctx.workspaceSlug,
+    );
     if (!result) return { ok: false, error: "Sin resultado de Ayrshare." };
     return {
       ok: result.ok,
@@ -51,20 +55,20 @@ abstract class AyrshareAdapter extends BaseAdapter {
     return this.getStatus(ctx);
   }
 
-  override async getStatus(_ctx: AdapterContext): Promise<AdapterStatus> {
-    const ok = this.ayrshare.configured();
+  override async getStatus(ctx: AdapterContext): Promise<AdapterStatus> {
+    const ok = await this.ayrshare.configured(ctx.workspaceSlug);
     return {
       provider: this.provider,
       adapter: this.id,
       state: ok ? "connected" : "unconfigured",
       detail: ok
-        ? "Ayrshare configurado. Vincula tus cuentas en el panel de Ayrshare."
-        : "Falta AYRSHARE_API_KEY (pnpm ayrshare <API_KEY>).",
+        ? "Ayrshare configurado. Vincula tus cuentas de Facebook/Instagram en app.ayrshare.com."
+        : "Pega tu API key de Ayrshare en Marketplace → “Facebook e Instagram”.",
     };
   }
 
-  override async healthCheck(_ctx: AdapterContext): Promise<HealthResult> {
-    const h = await this.ayrshare.health();
+  override async healthCheck(ctx: AdapterContext): Promise<HealthResult> {
+    const h = await this.ayrshare.health(ctx.workspaceSlug);
     return {
       provider: this.provider,
       adapter: this.id,

@@ -1,4 +1,6 @@
-import { Injectable, Logger } from "@nestjs/common";
+import { Injectable, Logger, Optional } from "@nestjs/common";
+
+import { CredentialsService } from "../credentials/credentials.module";
 
 /**
  * Ayrshare transport — the "easy path" for Facebook / Instagram (and more).
@@ -9,9 +11,10 @@ import { Injectable, Logger } from "@nestjs/common";
  * Ayrshare dashboard, then publish through one REST endpoint. This is the
  * closest thing to the "just works" experience we get with WhatsApp/Telegram.
  *
- * The key is read from the environment ONLY (`AYRSHARE_API_KEY`), never stored
- * in the repo. Optional `AYRSHARE_PROFILE_KEY` targets a specific user profile
- * on the Business plan (multi-account).
+ * The key is read per workspace from the in-app credential store (Marketplace →
+ * "Facebook e Instagram"), with `AYRSHARE_API_KEY` as a server-wide fallback.
+ * Optional `profileKey` / `AYRSHARE_PROFILE_KEY` targets a specific user
+ * profile on the Business plan (multi-account). Never stored in the repo.
  */
 
 const AYRSHARE_API = process.env.AYRSHARE_API_URL || "https://api.ayrshare.com/api";
@@ -57,29 +60,45 @@ interface AyrshareResponse {
   id?: string;
 }
 
+const NOT_CONFIGURED =
+  "Facebook/Instagram no configurado: pega tu API key de Ayrshare en Marketplace → “Facebook e Instagram”.";
+
 @Injectable()
 export class AyrshareService {
   private readonly logger = new Logger(AyrshareService.name);
 
-  apiKey(): string | null {
-    return process.env.AYRSHARE_API_KEY?.trim() || null;
+  constructor(@Optional() private readonly credentials?: CredentialsService) {}
+
+  /** Workspace key (pasted in-app) first, then server env. */
+  async apiKey(workspaceSlug?: string): Promise<string | null> {
+    const db = workspaceSlug ? await this.stored(workspaceSlug) : {};
+    return db.apiKey?.trim() || process.env.AYRSHARE_API_KEY?.trim() || null;
   }
 
-  private profileKey(): string | null {
-    return process.env.AYRSHARE_PROFILE_KEY?.trim() || null;
+  private async profileKey(workspaceSlug?: string): Promise<string | null> {
+    const db = workspaceSlug ? await this.stored(workspaceSlug) : {};
+    return db.profileKey?.trim() || process.env.AYRSHARE_PROFILE_KEY?.trim() || null;
+  }
+
+  private async stored(workspaceSlug: string): Promise<Record<string, string>> {
+    if (!this.credentials) return {};
+    try {
+      return await this.credentials.get(workspaceSlug, "ayrshare");
+    } catch {
+      return {};
+    }
   }
 
   /** Whether an API key is present (nothing about which accounts are linked). */
-  configured(): boolean {
-    return Boolean(this.apiKey());
+  async configured(workspaceSlug?: string): Promise<boolean> {
+    return Boolean(await this.apiKey(workspaceSlug));
   }
 
-  private headers(key: string): Record<string, string> {
+  private headers(key: string, profile: string | null): Record<string, string> {
     const h: Record<string, string> = {
       authorization: `Bearer ${key}`,
       "content-type": "application/json",
     };
-    const profile = this.profileKey();
     if (profile) h["Profile-Key"] = profile;
     return h;
   }
@@ -88,14 +107,14 @@ export class AyrshareService {
    * Publish to the given platforms. Returns one result per platform and never
    * throws — the caller maps each result to its provider adapter.
    */
-  async publish(platforms: AyrsharePlatform[], post: AyrsharePost): Promise<AyrshareResult[]> {
-    const key = this.apiKey();
+  async publish(
+    platforms: AyrsharePlatform[],
+    post: AyrsharePost,
+    workspaceSlug?: string,
+  ): Promise<AyrshareResult[]> {
+    const key = await this.apiKey(workspaceSlug);
     if (!key) {
-      return platforms.map((p) => ({
-        target: p,
-        ok: false,
-        error: "Ayrshare no configurado. Ejecuta: pnpm ayrshare <API_KEY>.",
-      }));
+      return platforms.map((p) => ({ target: p, ok: false, error: NOT_CONFIGURED }));
     }
 
     const mediaUrls = (post.attachments ?? [])
@@ -124,7 +143,7 @@ export class AyrshareService {
     try {
       res = await fetch(`${AYRSHARE_API}/post`, {
         method: "POST",
-        headers: this.headers(key),
+        headers: this.headers(key, await this.profileKey(workspaceSlug)),
         body: JSON.stringify(body),
       });
     } catch (e) {
@@ -163,13 +182,11 @@ export class AyrshareService {
   }
 
   /** Lightweight reachability/credential check for health surfaces. */
-  async health(): Promise<{ configured: boolean; healthy: boolean; message: string }> {
-    if (!this.configured()) {
-      return {
-        configured: false,
-        healthy: false,
-        message: "Falta AYRSHARE_API_KEY. Ejecuta: pnpm ayrshare <API_KEY>.",
-      };
+  async health(
+    workspaceSlug?: string,
+  ): Promise<{ configured: boolean; healthy: boolean; message: string }> {
+    if (!(await this.configured(workspaceSlug))) {
+      return { configured: false, healthy: false, message: NOT_CONFIGURED };
     }
     return { configured: true, healthy: true, message: "Ayrshare configurado." };
   }

@@ -116,14 +116,25 @@ const CATALOG: CatalogEntry[] = [
     helpUrl: "https://my.telegram.org/apps",
   },
   {
-    id: "meta",
-    name: "Meta Graph",
+    id: "ayrshare",
+    name: "Facebook e Instagram",
     category: "Mensajería",
-    description: "Publica en Facebook e Instagram vía Graph API.",
+    description: "Publica en Facebook e Instagram con una sola API key (Ayrshare), sin app de Meta.",
     hue: 221,
-    module: "conexiones",
-    setupHint: "Conecta Facebook/Instagram en Conexiones.",
-    configured: (c) => Boolean(c.meta.appId && c.meta.appSecret),
+    module: "marketplace",
+    setupHint: "Pega tu API key de Ayrshare (app.ayrshare.com).",
+    configured: () => Boolean(process.env.AYRSHARE_API_KEY?.trim()),
+    provider: "ayrshare",
+    fields: [
+      { key: "apiKey", label: "API Key de Ayrshare", type: "password", placeholder: "XXXXXXXX-XXXXXXXX-…" },
+      { key: "profileKey", label: "Profile Key (opcional)", type: "text", placeholder: "Solo plan Business" },
+    ],
+    helpText:
+      "1) Crea una cuenta en Ayrshare. 2) En su panel pulsa “Link social accounts” y conecta tu " +
+      "página de Facebook y tu cuenta de Instagram (te pide iniciar sesión, nada de apps ni revisión " +
+      "de Meta). 3) Copia la “API Key” del panel y pégala aquí. Después, en Conexiones, elige " +
+      "el adaptador “Ayrshare” para Facebook e Instagram y ya puedes publicar desde el calendario.",
+    helpUrl: "https://app.ayrshare.com/api",
   },
   {
     id: "stripe",

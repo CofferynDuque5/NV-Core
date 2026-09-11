@@ -13,7 +13,8 @@ import {
 } from "@/lib/calendar";
 import { EmptyState } from "@/components/common/empty-state";
 import { Button } from "@/components/ui/button";
-import { CalendarPlus, Sparkles } from "lucide-react";
+import { ChannelChip } from "@/components/common/channel-badge";
+import { CalendarPlus, Clock, Image as ImageIcon, Plus, Sparkles } from "lucide-react";
 import { PostChip } from "./post-chip";
 import { DropZone, useCalendarDnD } from "./dnd-context";
 
@@ -314,10 +315,19 @@ export function TimelineView({ cursor, byDay, onCreate, onSelect, selectedId }: 
 }
 
 // ── Agenda (chronological list, the fastest "what's next" scan) ──────────────
+const STATUS_STYLE: Record<string, { label: string; cls: string }> = {
+  scheduled: { label: "Programado", cls: "bg-brand/10 text-brand" },
+  publishing: { label: "Publicando", cls: "bg-brand-violet/10 text-brand-violet" },
+  sent: { label: "Publicado", cls: "bg-state-success/15 text-state-success" },
+  draft: { label: "Borrador", cls: "bg-panel-high text-ink-muted" },
+  error: { label: "Error", cls: "bg-state-danger/15 text-state-danger" },
+};
+
 export function AgendaView({ cursor, byDay, onCreate, onSelect, selectedId }: ViewProps) {
   const days = React.useMemo(() => agendaDays(cursor, 14), [cursor]);
   const today = new Date();
   const withPosts = days.filter((d) => (byDay.get(ymd(d)) ?? []).length > 0);
+  const total = withPosts.reduce((n, d) => n + (byDay.get(ymd(d)) ?? []).length, 0);
 
   if (withPosts.length === 0) {
     return (
@@ -337,45 +347,107 @@ export function AgendaView({ cursor, byDay, onCreate, onSelect, selectedId }: Vi
   }
 
   return (
-    <div className="divide-y divide-line-soft">
-      {withPosts.map((d) => {
-        const dayPosts = byDay.get(ymd(d)) ?? [];
-        const isToday = sameDay(d, today);
-        return (
-          <div key={ymd(d)} className="flex gap-3 px-4 py-3">
-            <div className="w-20 shrink-0 pt-0.5">
-              <div className={cn("text-sm font-semibold", isToday ? "text-brand" : "text-ink-bright")}>
-                {isToday ? "Hoy" : `${WEEKDAYS_ES[(d.getDay() + 6) % 7]} ${d.getDate()}`}
+    <div>
+      <div className="flex items-center justify-between gap-3 border-b border-line px-4 py-2.5">
+        <p className="text-xs text-ink-muted">
+          <span className="font-semibold text-ink-bright">{total}</span> publicación{total === 1 ? "" : "es"} en{" "}
+          <span className="font-semibold text-ink-bright">{withPosts.length}</span> día{withPosts.length === 1 ? "" : "s"} · próximas dos semanas
+        </p>
+        <Button size="sm" variant="secondary" onClick={() => onCreate(cursor)}>
+          <Plus className="size-4" /> Programar
+        </Button>
+      </div>
+
+      <div className="divide-y divide-line-soft">
+        {withPosts.map((d) => {
+          const dayPosts = [...(byDay.get(ymd(d)) ?? [])].sort((a, b) =>
+            (a.scheduledAt ?? "").localeCompare(b.scheduledAt ?? ""),
+          );
+          const isToday = sameDay(d, today);
+          return (
+            <div key={ymd(d)} className="flex gap-4 px-4 py-4">
+              {/* Day badge */}
+              <div className="w-16 shrink-0">
+                <div
+                  className={cn(
+                    "flex flex-col items-center rounded-xl border py-2",
+                    isToday ? "border-brand/50 bg-brand/10" : "border-line-soft bg-panel",
+                  )}
+                >
+                  <span className={cn("text-[10px] font-medium uppercase tracking-wide", isToday ? "text-brand" : "text-ink-faint")}>
+                    {isToday ? "Hoy" : WEEKDAYS_ES[(d.getDay() + 6) % 7]}
+                  </span>
+                  <span className={cn("text-2xl font-bold leading-none", isToday ? "text-brand" : "text-ink-bright")}>
+                    {d.getDate()}
+                  </span>
+                  <span className="text-[10px] text-ink-faint">{(MONTHS_ES[d.getMonth()] ?? "").slice(0, 3)}</span>
+                </div>
+                <button
+                  onClick={() => onCreate(d)}
+                  className="mt-1.5 flex w-full items-center justify-center gap-1 rounded-md py-1 text-[11px] text-ink-faint transition-colors hover:bg-panel-raised hover:text-ink"
+                  title="Programar este día"
+                >
+                  <Plus className="size-3" /> Añadir
+                </button>
               </div>
-              <div className="text-[11px] text-ink-faint">{(MONTHS_ES[d.getMonth()] ?? "").slice(0, 3)}</div>
+
+              {/* Cards */}
+              <div className="flex min-w-0 flex-1 flex-col gap-2">
+                {dayPosts.map((p) => {
+                  const ch = CHANNELS[p.channel];
+                  const st = STATUS_STYLE[p.status] ?? { label: p.status, cls: "bg-panel-high text-ink-muted" };
+                  const cover = p.attachments?.find((a) => a.url)?.url;
+                  return (
+                    <button
+                      key={p.id}
+                      onClick={() => onSelect?.(p)}
+                      className={cn(
+                        "group flex items-stretch gap-3 overflow-hidden rounded-xl border text-left transition-all hover:-translate-y-px hover:shadow-md",
+                        p.id === selectedId
+                          ? "border-brand bg-brand/5 shadow-md"
+                          : "border-line-soft bg-panel hover:border-line-bright",
+                      )}
+                    >
+                      <span className="w-1 shrink-0" style={{ background: ch.color }} />
+                      <span className="flex min-w-0 flex-1 items-center gap-3 py-2.5 pr-3">
+                        {cover ? (
+                          <img src={cover} alt="" className="size-12 shrink-0 rounded-lg object-cover" />
+                        ) : (
+                          <span className="grid size-12 shrink-0 place-items-center rounded-lg bg-panel-raised text-ink-faint">
+                            <ImageIcon className="size-4" />
+                          </span>
+                        )}
+                        <span className="min-w-0 flex-1">
+                          <span className="flex items-center gap-2">
+                            <span className="inline-flex items-center gap-1 text-xs tabular-nums text-ink-muted">
+                              <Clock className="size-3" />
+                              {p.scheduledAt
+                                ? new Date(p.scheduledAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+                                : "—"}
+                            </span>
+                            <span className={cn("rounded-full px-1.5 py-px text-[10px] font-medium", st.cls)}>{st.label}</span>
+                            {p.campaignName ? (
+                              <span className="truncate rounded-full bg-brand-violet/10 px-1.5 py-px text-[10px] font-medium text-brand-violet">
+                                {p.campaignName}
+                              </span>
+                            ) : null}
+                          </span>
+                          <span className="mt-0.5 block truncate text-sm font-medium text-ink-bright">{p.title}</span>
+                          {p.copy ? <span className="block truncate text-xs text-ink-faint">{p.copy}</span> : null}
+                        </span>
+                        <span className="flex shrink-0 items-center gap-1.5 text-[11px] text-ink-muted">
+                          <ChannelChip id={p.channel} />
+                          <span className="hidden sm:inline">{ch.name}</span>
+                        </span>
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
             </div>
-            <div className="flex min-w-0 flex-1 flex-col gap-1">
-              {dayPosts.map((p) => {
-                const ch = CHANNELS[p.channel];
-                return (
-                  <button
-                    key={p.id}
-                    onClick={() => onSelect?.(p)}
-                    className={cn(
-                      "flex items-center gap-2 rounded-lg border px-2.5 py-1.5 text-left transition-colors",
-                      p.id === selectedId
-                        ? "border-brand bg-brand/5"
-                        : "border-line-soft bg-panel hover:border-line-bright",
-                    )}
-                  >
-                    <span className="w-10 shrink-0 text-xs tabular-nums text-ink-muted">
-                      {p.scheduledAt ? new Date(p.scheduledAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : ""}
-                    </span>
-                    <span className="size-2 shrink-0 rounded-full" style={{ background: ch.color }} />
-                    <span className="min-w-0 flex-1 truncate text-sm text-ink">{p.title}</span>
-                    <span className="shrink-0 text-[11px] text-ink-faint">{ch.name}</span>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        );
-      })}
+          );
+        })}
+      </div>
     </div>
   );
 }

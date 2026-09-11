@@ -35,6 +35,8 @@ export const PROVIDER_FIELDS: Record<string, { key: string; secret: boolean }[]>
     { key: "apiHash", secret: true },
   ],
   imgbb: [{ key: "apiKey", secret: true }],
+  // Facebook / Instagram sin Meta Graph: una sola API key de Ayrshare.
+  ayrshare: [{ key: "apiKey", secret: true }],
 };
 
 export type ProviderId = keyof typeof PROVIDER_FIELDS | string;

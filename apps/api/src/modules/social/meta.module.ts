@@ -1,5 +1,6 @@
 import { Module } from "@nestjs/common";
 
+import { CredentialsModule } from "../credentials/credentials.module";
 import { MetaService } from "./meta.service";
 import { AyrshareService } from "./ayrshare.service";
 
@@ -10,6 +11,7 @@ import { AyrshareService } from "./ayrshare.service";
  * without a circular module dependency.
  */
 @Module({
+  imports: [CredentialsModule],
   providers: [MetaService, AyrshareService],
   exports: [MetaService, AyrshareService],
 })

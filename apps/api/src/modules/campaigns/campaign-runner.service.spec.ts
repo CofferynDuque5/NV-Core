@@ -30,6 +30,8 @@ function makeRunner(
         return data;
       }),
       findMany: vi.fn(async () => []),
+      // Reserva atómica del turno (seguro de envío único): por defecto la gana.
+      updateMany: vi.fn(async () => ({ count: 1 })),
     },
     sendLog: {
       create: vi.fn(async ({ data }: { data: AnyRec }) => {

@@ -182,10 +182,19 @@ export class InboxService implements OnModuleInit {
     if (!this.prisma.enabled) return ListResultDto.empty<Conversation>();
     const where = { workspaceSlug: workspaceId };
     const [rows, total] = await Promise.all([
-      this.prisma.conversation.findMany({ where, orderBy: { createdAt: "desc" }, take: LIST_CAP }),
+      this.prisma.conversation.findMany({
+        where,
+        orderBy: { createdAt: "desc" },
+        take: LIST_CAP,
+        // Newest message per thread → preview + real "last activity" ordering.
+        include: { messages: { orderBy: { createdAt: "desc" }, take: 1 } },
+      }),
       this.prisma.conversation.count({ where }),
     ]);
-    return new ListResultDto(rows.map(mapConversation), total);
+    const items = rows
+      .map((r) => mapConversation(r, r.messages[0]))
+      .sort((a, b) => b.lastMessageAt.localeCompare(a.lastMessageAt));
+    return new ListResultDto(items, total);
   }
 
   async messages(workspaceId: string, conversationId: string): Promise<Message[]> {

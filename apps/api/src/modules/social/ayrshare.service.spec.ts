@@ -21,10 +21,10 @@ describe("AyrshareService", () => {
   it("is unconfigured without an API key and does not hit the network", async () => {
     const svc = new AyrshareService();
     const fetchSpy = vi.spyOn(globalThis, "fetch");
-    expect(svc.configured()).toBe(false);
+    expect(await svc.configured()).toBe(false);
     const [r] = await svc.publish(["facebook"], { message: "hola" });
     expect(r.ok).toBe(false);
-    expect(r.error).toMatch(/pnpm ayrshare/);
+    expect(r.error).toMatch(/Ayrshare/);
     expect(fetchSpy).not.toHaveBeenCalled();
   });
 

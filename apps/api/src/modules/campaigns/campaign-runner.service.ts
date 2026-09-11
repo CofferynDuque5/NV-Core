@@ -154,12 +154,23 @@ export class CampaignRunner implements OnModuleInit, OnModuleDestroy {
     for (const c of candidates) {
       const slot = this.dueSlot(c, now);
       if (!slot) continue;
+      // SEGURO DE ENVÍO ÚNICO (atómico): en hosting con varias copias de la app
+      // (Passenger levanta varios procesos) todas evaluaban la misma campaña a la
+      // vez y la lanzaban por duplicado en el mismo instante. Aquí solo UN proceso
+      // gana la "reserva" del turno (updateMany condicional); los demás ven
+      // count=0 y no envían nada.
+      const claim =
+        slot === "once"
+          ? await this.prisma.campaign.updateMany({
+              where: { id: c.id, status: "programada" },
+              data: { status: "activa", lastRunDay: todayKey() },
+            })
+          : await this.prisma.campaign.updateMany({
+              where: { id: c.id, NOT: { lastRunSlot: slot } },
+              data: { lastRunSlot: slot },
+            });
+      if (claim.count !== 1) continue; // otro proceso ya la reservó
       this.logger.log(`Encolando campaña "${c.name}" (${c.workspaceSlug}) — franja ${slot}.`);
-      // Mark the slot now so the next tick doesn't re-enqueue the same run.
-      const dedupe = slot === "once" ? { lastRunDay: todayKey() } : { lastRunSlot: slot };
-      await this.prisma.campaign
-        .update({ where: { id: c.id }, data: dedupe })
-        .catch(() => undefined);
       await this.jobs.dispatch("campaign.run", c.workspaceSlug, {
         workspaceSlug: c.workspaceSlug,
         campaignId: c.id,

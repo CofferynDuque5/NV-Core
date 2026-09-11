@@ -679,6 +679,11 @@ export interface AiService {
   usage(workspaceId: string): Promise<AiUsage>;
   improve(workspaceId: string, input: { message: string }): Promise<{ text: string }>;
   recommendations(workspaceId: string): Promise<AiRecommendationsResult>;
+  /** Conversational sales agent: full chat history in, next assistant reply out. */
+  chat(
+    workspaceId: string,
+    input: { messages: { role: "user" | "assistant"; content: string }[]; system?: string },
+  ): Promise<{ reply: string }>;
 }
 
 export interface SendMessageExternalInput {

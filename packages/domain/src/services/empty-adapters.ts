@@ -277,6 +277,7 @@ export const emptyAdapters: Services = {
     generateContentPlan: () => delay([]),
     suggestHashtags: () => delay([]),
     generateImage: () => notAvailable(),
+    chat: () => notAvailable(),
     usage: () =>
       delay({
         period: "",

@@ -26,7 +26,9 @@ import {
   MaxLength,
   Min,
   MinLength,
+  ValidateNested,
 } from "class-validator";
+import { Type } from "class-transformer";
 
 import type { AppConfig } from "../../config/configuration";
 import { WorkspaceId } from "../../common/tenant/workspace.decorator";
@@ -81,6 +83,16 @@ export class SuggestHashtagsDto {
 
 export class ImproveMessageDto {
   @IsString() @MinLength(2) message!: string;
+}
+
+export class ChatTurnDto {
+  @IsIn(["user", "assistant"]) role!: "user" | "assistant";
+  @IsString() @MinLength(1) @MaxLength(4000) content!: string;
+}
+
+export class AgentChatDto {
+  @IsArray() @ValidateNested({ each: true }) @Type(() => ChatTurnDto) messages!: ChatTurnDto[];
+  @IsOptional() @IsString() @MaxLength(4000) system?: string;
 }
 
 const IMAGE_SIZES = ["1024x1024", "1024x1536", "1536x1024"] as const;
@@ -158,7 +170,7 @@ export class AiService {
     const provider = createProvider(await this.resolveAiConfig(workspaceId));
     if (!provider) {
       throw new ServiceUnavailableException(
-        "Proveedor de IA no configurado. Añade tu clave de OpenAI, Anthropic o Gemini en " +
+        "Proveedor de IA no configurado. Pega tu clave de OpenAI, Anthropic o Gemini en Marketplace " +
           "Integraciones (o define OPENAI_API_KEY / ANTHROPIC_API_KEY / GEMINI_API_KEY en el servidor).",
       );
     }
@@ -427,6 +439,40 @@ export class AiService {
     return { text: raw.trim() };
   }
 
+  /**
+   * Chat libre con el asistente (agente de ventas/soporte). Recibe el historial
+   * corto de la conversación y responde con el proveedor de IA del workspace.
+   * Lo usan la página "Agente" (chat) y el runner de automatizaciones.
+   */
+  async chat(
+    workspaceId: string,
+    input: { messages: { role: "user" | "assistant"; content: string }[]; system?: string },
+  ): Promise<{ reply: string }> {
+    const provider = await this.resolveProvider(workspaceId);
+    await this.assertWithinQuota(workspaceId);
+    const system =
+      input.system?.trim() ||
+      "Eres el agente de ventas y soporte de un negocio que vende cuentas de streaming " +
+        "(Netflix, Disney+, HBO Max, Prime Video, Spotify, Crunchyroll y combos). Responde en " +
+        "español, breve, amable y orientado a cerrar la venta: da precios/combos si te los " +
+        "preguntan, resuelve dudas de acceso (pantalla en uso, PIN, país) y pide los datos " +
+        "necesarios para entregar la cuenta. Si no sabes algo, ofrece pasar con una persona.";
+    // Solo los últimos 12 turnos: suficiente contexto sin disparar el costo.
+    const recent = input.messages.slice(-12);
+    // El contrato del proveedor es system+user; aplanamos el historial en un solo
+    // turno de usuario con etiquetas, que los modelos siguen sin problema.
+    const transcript = recent
+      .map((m) => `${m.role === "user" ? "Cliente" : "Agente"}: ${m.content}`)
+      .join("\n");
+    const messages: ChatMessage[] = [
+      { role: "system", content: system },
+      { role: "user", content: `${transcript}\nAgente:` },
+    ];
+    const raw = await this.complete(provider, messages, { temperature: 0.7, maxTokens: 600 });
+    await this.record(workspaceId, estimateTokens(transcript, raw));
+    return { reply: raw.trim() };
+  }
+
   /** Mejores horarios de envío (heurístico desde el historial; no usa IA). */
   async bestSendTimes(workspaceId: string): Promise<BestTimes> {
     const DAYS = ["Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb"];
@@ -583,7 +629,21 @@ export class AiController {
   recommendations(@WorkspaceId() workspaceId: string) {
     return this.service.recommendations(workspaceId);
   }
+
+  /** Chat con el agente de ventas/soporte (historial corto → respuesta). */
+  @Post("chat")
+  @Throttle(AI_THROTTLE)
+  @RequiresActivePlan()
+  chat(@WorkspaceId() workspaceId: string, @Body() dto: AgentChatDto) {
+    return this.service.chat(workspaceId, dto);
+  }
 }
 
-@Module({ imports: [CredentialsModule], controllers: [AiController], providers: [AiService] })
+@Module({
+  imports: [CredentialsModule],
+  controllers: [AiController],
+  providers: [AiService],
+  // Exportado para que las automatizaciones (agente de ventas/soporte) usen la IA.
+  exports: [AiService],
+})
 export class AiModule {}

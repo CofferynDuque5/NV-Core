@@ -34,6 +34,7 @@ import {
   useSuggestHashtags,
 } from "@/hooks/use-domain-mutations";
 import { ContentPlanner } from "@/components/entities/content-planner";
+import { SalesAgentChat } from "@/components/entities/sales-agent-chat";
 
 const FLYER_SIZES: { id: string; label: string }[] = [
   { id: "1024x1024", label: "Cuadrado" },
@@ -227,6 +228,9 @@ export default function AiStudioPage() {
         </div>
       ) : null}
 
+      {/* Agente de ventas conversacional (mismo motor que las automatizaciones) */}
+      <SalesAgentChat />
+
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,380px)_1fr]">
         {/* Input */}
         <Panel className="h-fit">
@@ -349,7 +353,7 @@ export default function AiStudioPage() {
               <EmptyState
                 icon={Sparkles}
                 title="Sin variantes todavía"
-                description="Describe tu campaña, elige tipo y tono, y pulsa «Generar variantes». Requiere un proveedor de IA configurado (OpenAI, Anthropic o Gemini)."
+                description="Describe tu campaña, elige tipo y tono, y pulsa «Generar variantes». Requiere una clave de IA en Marketplace (OpenAI, Anthropic o Gemini)."
                 compact
               />
             )}
@@ -378,8 +382,11 @@ export default function AiStudioPage() {
               Generar flyer
             </Button>
             <p className="text-[11px] text-ink-faint">
-              La generación de imágenes usa la API de OpenAI. Configura{" "}
-              <code className="text-ink-muted">OPENAI_API_KEY</code> en el backend para activarla.
+              La generación de imágenes usa la API de OpenAI. Pega tu clave en{" "}
+              <Link to={`/w/${ws.slug}/marketplace`} className="text-brand hover:underline">
+                Marketplace → OpenAI
+              </Link>{" "}
+              (necesita saldo en tu cuenta de OpenAI).
             </p>
           </div>
         </Panel>
@@ -408,7 +415,7 @@ export default function AiStudioPage() {
               <EmptyState
                 icon={ImageIcon}
                 title="Sin flyer todavía"
-                description="Describe el flyer y pulsa «Generar flyer». Requiere OPENAI_API_KEY en el backend."
+                description="Describe el flyer y pulsa «Generar flyer». Requiere tu clave de OpenAI en Marketplace."
                 compact
               />
             )}

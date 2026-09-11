@@ -95,8 +95,19 @@ function createClient(opts: HttpAdapterOptions) {
   }
 
   async function parse<T>(res: Response, path: string): Promise<T> {
-    if (!res.ok) throw new Error(`API ${res.status} on ${path}`);
     const text = await res.text();
+    if (!res.ok) {
+      // Surface the server's real message ("Proveedor de IA no configurado…",
+      // validation errors…) instead of an opaque status code.
+      let message = "";
+      try {
+        const body = JSON.parse(text) as { message?: string | string[] };
+        message = Array.isArray(body?.message) ? body.message.join(" · ") : (body?.message ?? "");
+      } catch {
+        /* non-JSON body */
+      }
+      throw new Error(message || `API ${res.status} on ${path}`);
+    }
     return (text ? JSON.parse(text) : null) as T;
   }
 
@@ -380,6 +391,7 @@ export function createHttpAdapters(opts: HttpAdapterOptions): Services {
       improve: (id, input) => post<{ text: string }>(`${ws(id)}/ai/improve`, input),
       generateImage: (id, input) => post<{ url: string }>(`${ws(id)}/ai/image`, input),
       recommendations: (id) => get<AiRecommendationsResult>(`${ws(id)}/ai/recommendations`),
+      chat: (id, input) => post<{ reply: string }>(`${ws(id)}/ai/chat`, input),
     },
     messaging: {
       send: (id, input) => post<{ id: string }>(`${ws(id)}/messaging/send`, input),
