@@ -116,25 +116,14 @@ const CATALOG: CatalogEntry[] = [
     helpUrl: "https://my.telegram.org/apps",
   },
   {
-    id: "ayrshare",
+    id: "pc-agent",
     name: "Facebook e Instagram",
     category: "Mensajería",
-    description: "Publica en Facebook e Instagram con una sola API key (Ayrshare), sin app de Meta.",
+    description: "Publica con tu propio inicio de sesión desde “NV Agente PC” (navegador en tu computadora).",
     hue: 221,
-    module: "marketplace",
-    setupHint: "Pega tu API key de Ayrshare (app.ayrshare.com).",
-    configured: () => Boolean(process.env.AYRSHARE_API_KEY?.trim()),
-    provider: "ayrshare",
-    fields: [
-      { key: "apiKey", label: "API Key de Ayrshare", type: "password", placeholder: "XXXXXXXX-XXXXXXXX-…" },
-      { key: "profileKey", label: "Profile Key (opcional)", type: "text", placeholder: "Solo plan Business" },
-    ],
-    helpText:
-      "1) Crea una cuenta en Ayrshare. 2) En su panel pulsa “Link social accounts” y conecta tu " +
-      "página de Facebook y tu cuenta de Instagram (te pide iniciar sesión, nada de apps ni revisión " +
-      "de Meta). 3) Copia la “API Key” del panel y pégala aquí. Después, en Conexiones, elige " +
-      "el adaptador “Ayrshare” para Facebook e Instagram y ya puedes publicar desde el calendario.",
-    helpUrl: "https://app.ayrshare.com/api",
+    module: "conexiones",
+    setupHint: "Descarga NV Agente PC en Conexiones, inicia sesión en Facebook/Instagram y déjalo abierto.",
+    configured: () => false,
   },
   {
     id: "stripe",

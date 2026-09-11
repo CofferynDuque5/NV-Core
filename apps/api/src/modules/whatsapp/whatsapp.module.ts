@@ -54,6 +54,15 @@ export class WhatsappController {
   sync(@WorkspaceId() workspaceId: string) {
     return this.service.sync(workspaceId);
   }
+
+  /** Active checks for "the QR does not appear" — readable lines for the panel. */
+  @Post("diagnose")
+  @Roles("Owner", "Admin")
+  @UseGuards(RolesGuard)
+  @HttpCode(200)
+  diagnose(@WorkspaceId() workspaceId: string) {
+    return this.service.diagnose(workspaceId);
+  }
 }
 
 @Module({

@@ -56,6 +56,7 @@ import type {
   Workspace,
   WhatsappStatus,
   TelegramStatus,
+  PcAgentStatus,
 } from "@nv/domain";
 
 /**
@@ -163,6 +164,10 @@ export function createHttpAdapters(opts: HttpAdapterOptions): Services {
       reconnect: (id) => post<WhatsappStatus>(`${ws(id)}/whatsapp/reconnect`, {}),
       disconnect: (id) => post<WhatsappStatus>(`${ws(id)}/whatsapp/disconnect`, {}),
       sync: (id) => post<WhatsappStatus>(`${ws(id)}/whatsapp/sync`, {}),
+      diagnose: (id) => post<{ lines: string[] }>(`${ws(id)}/whatsapp/diagnose`, {}),
+    },
+    pcAgent: {
+      status: (id) => get<PcAgentStatus>(`${ws(id)}/pc-agent/status`),
     },
     telegram: {
       status: (id) => get<TelegramStatus>(`${ws(id)}/telegram/status`),

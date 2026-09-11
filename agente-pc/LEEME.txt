@@ -1,0 +1,23 @@
+NV AGENTE PC — Facebook e Instagram con tu propio inicio de sesión
+===================================================================
+
+Qué hace: se queda abierto en tu computadora y, cada minuto, revisa el panel
+NV Marketing. Todo lo que tengas programado para Facebook/Instagram (calendario,
+"Publicar ahora", campañas) lo publica abriendo un navegador con TU cuenta,
+como si lo hicieras a mano. No usa la API de Meta ni servicios de terceros.
+
+Pasos (Windows):
+  1) INSTALAR.bat          → instala lo necesario (necesita Node.js LTS de nodejs.org).
+  2) INICIAR SESION.bat    → te pide la URL del panel, tu email/contraseña del
+                             panel y el workspace; abre el navegador para que
+                             entres en Facebook e Instagram. Pulsa Enter al terminar.
+  3) INICIAR.bat           → déjalo abierto. Verás en el panel (Conexiones →
+                             "Facebook e Instagram desde tu PC") que está en línea.
+
+Notas:
+  - Instagram exige imagen: una publicación sin imagen queda como error.
+  - Si Facebook/Instagram cambian su pantalla y falla, en la carpeta "errores"
+    queda una captura: envíala a soporte para ajustar el agente.
+  - La sesión del navegador se guarda en la carpeta "perfil". Si cierras sesión
+    en Facebook/Instagram, repite INICIAR SESION.bat.
+  - Tu contraseña del panel queda en config.json en tu PC (no se sube a ningún lado).

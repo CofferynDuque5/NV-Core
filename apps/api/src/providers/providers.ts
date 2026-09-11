@@ -11,6 +11,7 @@ import {
   FacebookBrowserAutomationAdapter,
   InstagramBrowserAutomationAdapter,
 } from "./adapters/browser-automation.adapter";
+import { FacebookPcAgentAdapter, InstagramPcAgentAdapter } from "./adapters/pc-agent.adapter";
 import {
   FacebookAyrshareAdapter,
   InstagramAyrshareAdapter,
@@ -66,18 +67,19 @@ export class TelegramProvider extends BaseProvider {
 export class FacebookProvider extends BaseProvider {
   readonly id: ProviderId = "facebook";
   readonly label = "Facebook";
-  // Meta Graph stays the default so existing token-based connections keep
-  // working untouched. Ayrshare (single API key, no Meta app review) is offered
-  // as the easy alternative — pick it per workspace in Conexiones.
-  readonly defaultAdapterId = "meta-graph";
+  // "Agente PC" is the default: it publishes with the operator's own login from
+  // their computer (no Meta app review, no third-party API). Meta Graph and
+  // Ayrshare stay available — pick them per workspace in Conexiones.
+  readonly defaultAdapterId = "agente-pc";
   readonly adapters: ChannelAdapter[];
   constructor(
     graph: FacebookMetaGraphAdapter,
     ayrshare: FacebookAyrshareAdapter,
     browser: FacebookBrowserAutomationAdapter,
+    pcAgent: FacebookPcAgentAdapter,
   ) {
     super();
-    this.adapters = [graph, ayrshare, browser];
+    this.adapters = [pcAgent, graph, ayrshare, browser];
   }
 }
 
@@ -85,15 +87,16 @@ export class FacebookProvider extends BaseProvider {
 export class InstagramProvider extends BaseProvider {
   readonly id: ProviderId = "instagram";
   readonly label = "Instagram";
-  readonly defaultAdapterId = "meta-graph";
+  readonly defaultAdapterId = "agente-pc";
   readonly adapters: ChannelAdapter[];
   constructor(
     graph: InstagramMetaGraphAdapter,
     ayrshare: InstagramAyrshareAdapter,
     browser: InstagramBrowserAutomationAdapter,
+    pcAgent: InstagramPcAgentAdapter,
   ) {
     super();
-    this.adapters = [graph, ayrshare, browser];
+    this.adapters = [pcAgent, graph, ayrshare, browser];
   }
 }
 

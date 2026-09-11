@@ -11,6 +11,17 @@ export interface WhatsappStatus {
   error?: string | null;
   /** QR (data URL) when status is "qr", for HTTP polling (no WebSocket needed). */
   qr?: string | null;
+  /** Cross-process facts + last events, for the panel's "Diagnóstico". */
+  diagnostics?: WhatsappDiagnostics;
+}
+
+export interface WhatsappDiagnostics {
+  pid: number;
+  node: string;
+  sessionDir: string;
+  hasCreds: boolean;
+  owner: { pid: number; fresh: boolean; mine: boolean } | null;
+  events: string[];
 }
 
 /** A connection alert worth surfacing to the user (panel + notifications). */

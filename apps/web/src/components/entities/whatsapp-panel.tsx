@@ -1,7 +1,7 @@
 
 import * as React from "react";
 import { io, type Socket } from "socket.io-client";
-import { Loader2, Plug, QrCode, RefreshCw, Smartphone, Unplug } from "lucide-react";
+import { Loader2, Plug, QrCode, RefreshCw, Smartphone, Stethoscope, Unplug } from "lucide-react";
 import type { WhatsappStatus } from "@nv/domain";
 
 import { API_URL } from "@/lib/env";
@@ -11,6 +11,7 @@ import { useAuthStore } from "@/stores/auth-store";
 import { useWhatsappStatus } from "@/hooks/use-domain-data";
 import {
   useWhatsappConnect,
+  useWhatsappDiagnose,
   useWhatsappDisconnect,
   useWhatsappReconnect,
   useWhatsappSync,
@@ -37,7 +38,9 @@ export function WhatsAppPanel() {
   const disconnect = useWhatsappDisconnect();
   const sync = useWhatsappSync();
   const confirm = useConfirm();
+  const diagnose = useWhatsappDiagnose();
   const [qr, setQr] = React.useState<string | null>(null);
+  const [showDiag, setShowDiag] = React.useState(false);
 
   const status = statusQuery.data;
   const state = status?.status ?? "disconnected";
@@ -140,6 +143,57 @@ export function WhatsAppPanel() {
                 </Button>
               </>
             )}
+          </div>
+
+          {/* Diagnóstico: qué está pasando de verdad en el servidor */}
+          <div className="pt-1">
+            <button
+              type="button"
+              onClick={() => setShowDiag((v) => !v)}
+              className="text-[11px] text-ink-faint underline-offset-2 hover:text-ink hover:underline"
+            >
+              {showDiag ? "Ocultar diagnóstico" : "Ver diagnóstico"}
+            </button>
+            {showDiag ? (
+              <div className="mt-2 space-y-2 rounded-lg border border-line-soft bg-panel-raised p-3">
+                <div className="flex flex-wrap items-center gap-2">
+                  <Button size="sm" variant="outline" onClick={() => diagnose.mutate()} disabled={diagnose.isPending}>
+                    {diagnose.isPending ? <Loader2 className="size-4 animate-spin" /> : <Stethoscope className="size-4" />}
+                    Comprobar servidor
+                  </Button>
+                  {status?.diagnostics ? (
+                    <span className="text-[11px] text-ink-faint">
+                      pid {status.diagnostics.pid} · {status.diagnostics.node} · credenciales:{" "}
+                      {status.diagnostics.hasCreds ? "sí" : "no"} · dueño:{" "}
+                      {status.diagnostics.owner
+                        ? `pid ${status.diagnostics.owner.pid} (${status.diagnostics.owner.fresh ? "vivo" : "caído"})`
+                        : "nadie"}
+                    </span>
+                  ) : null}
+                </div>
+                {diagnose.data?.lines?.length ? (
+                  <ul className="space-y-0.5 font-mono text-[11px] leading-snug text-ink">
+                    {diagnose.data.lines.map((l, i) => (
+                      <li key={i} className={l.startsWith("✖") ? "text-state-danger" : l.startsWith("✔") ? "text-state-success" : "text-ink-muted"}>
+                        {l}
+                      </li>
+                    ))}
+                  </ul>
+                ) : null}
+                <div>
+                  <div className="mb-1 text-[10px] font-medium uppercase tracking-wide text-ink-faint">Últimos eventos</div>
+                  {status?.diagnostics?.events?.length ? (
+                    <ul className="max-h-48 space-y-0.5 overflow-y-auto font-mono text-[11px] leading-snug text-ink-muted">
+                      {status.diagnostics.events.map((e, i) => (
+                        <li key={i}>{e}</li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p className="text-[11px] text-ink-faint">Sin eventos todavía. Pulsa «Conectar» y vuelve a mirar.</p>
+                  )}
+                </div>
+              </div>
+            ) : null}
           </div>
         </div>
 

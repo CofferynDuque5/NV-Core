@@ -37,6 +37,8 @@ import {
   FacebookAyrshareAdapter,
   InstagramAyrshareAdapter,
 } from "./adapters/ayrshare.adapter";
+import { FacebookPcAgentAdapter, InstagramPcAgentAdapter } from "./adapters/pc-agent.adapter";
+import { PcAgentModule } from "../modules/pc-agent/pc-agent.module";
 import { ResendAdapter } from "./adapters/resend.adapter";
 import { TiktokOfficialApiAdapter } from "./adapters/tiktok-official-api.adapter";
 
@@ -87,7 +89,7 @@ export class ProvidersController {
 }
 
 @Module({
-  imports: [WhatsappModule, TelegramUserModule, MetaModule],
+  imports: [WhatsappModule, TelegramUserModule, MetaModule, PcAgentModule],
   controllers: [ProvidersController],
   providers: [
     ProviderManager,
@@ -110,6 +112,8 @@ export class ProvidersController {
     InstagramAyrshareAdapter,
     FacebookBrowserAutomationAdapter,
     InstagramBrowserAutomationAdapter,
+    FacebookPcAgentAdapter,
+    InstagramPcAgentAdapter,
     ResendAdapter,
     TiktokOfficialApiAdapter,
   ],

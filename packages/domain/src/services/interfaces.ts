@@ -743,6 +743,15 @@ export interface WhatsappStatus {
   error?: string | null;
   /** QR (data URL) when status is "qr"; lets the panel show it via HTTP polling. */
   qr?: string | null;
+  /** Cross-process facts + last events, for the panel's "Diagnóstico". */
+  diagnostics?: {
+    pid: number;
+    node: string;
+    sessionDir: string;
+    hasCreds: boolean;
+    owner: { pid: number; fresh: boolean; mine: boolean } | null;
+    events: string[];
+  };
 }
 
 export interface WhatsappService {
@@ -751,6 +760,23 @@ export interface WhatsappService {
   reconnect(workspaceId: string): Promise<WhatsappStatus>;
   disconnect(workspaceId: string): Promise<WhatsappStatus>;
   sync(workspaceId: string): Promise<WhatsappStatus>;
+  /** Active checks (Baileys load, WhatsApp reachability, writable dir…) as readable lines. */
+  diagnose(workspaceId: string): Promise<{ lines: string[] }>;
+}
+
+/** Health of the "NV Agente PC" companion that publishes to Facebook/Instagram from the operator's computer. */
+export interface PcAgentStatus {
+  online: boolean;
+  lastSeenAt: string | null;
+  hostname: string | null;
+  facebook: boolean;
+  instagram: boolean;
+  /** Posts waiting for the agent (scheduled/publishing on fb/ig). */
+  pending: number;
+}
+
+export interface PcAgentService {
+  status(workspaceId: string): Promise<PcAgentStatus>;
 }
 
 export interface TelegramStatus {
@@ -860,6 +886,7 @@ export interface Services {
   team: TeamService;
   audit: AuditService;
   ai: AiService;
+  pcAgent: PcAgentService;
   messaging: MessagingService;
   billing: BillingService;
 }

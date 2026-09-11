@@ -16,6 +16,7 @@ import { ConnectionDialog } from "@/components/entities/connection-dialog";
 import { GoogleConnectCard } from "@/components/entities/google-connect-card";
 import { WhatsAppPanel } from "@/components/entities/whatsapp-panel";
 import { TelegramPanel } from "@/components/entities/telegram-panel";
+import { PcAgentCard } from "@/components/entities/pc-agent-card";
 import { ProvidersAdapters } from "@/components/entities/providers-adapters";
 import { CHANNEL_ICON } from "@/components/common/channel-icons";
 import { SocialPublishForm } from "@/components/entities/social-publish";
@@ -181,11 +182,13 @@ function ConexionTab() {
         })}
       </div>
 
+      <PcAgentCard />
+
       <Panel>
         <PanelHeader title="Publicar ahora" />
         <div className="space-y-3 p-4">
           <p className="text-xs text-ink-faint">
-            Publica directo en Facebook / Instagram vía Meta Graph API.
+            Publica en Facebook / Instagram con el adaptador activo (por defecto, tu PC con NV Agente).
           </p>
           <SocialPublishForm />
         </div>

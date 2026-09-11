@@ -87,6 +87,11 @@ export const emptyAdapters: Services = {
     reconnect: () => notAvailable(),
     disconnect: () => notAvailable(),
     sync: () => notAvailable(),
+    diagnose: () => notAvailable(),
+  },
+  pcAgent: {
+    status: () =>
+      delay({ online: false, lastSeenAt: null, hostname: null, facebook: false, instagram: false, pending: 0 }),
   },
   telegram: {
     status: () =>

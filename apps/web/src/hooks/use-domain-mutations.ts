@@ -1167,6 +1167,15 @@ function useWhatsappAction(action: "connect" | "reconnect" | "disconnect" | "syn
     onError: (err) => toast.error(errText(err)),
   });
 }
+/** Runs the server-side WhatsApp checks and returns readable lines. */
+export function useWhatsappDiagnose() {
+  const svc = useServices();
+  const ws = useWorkspace();
+  return useMutation({
+    mutationFn: () => svc.whatsapp.diagnose(ws.id),
+    onError: (err) => toast.error(errText(err)),
+  });
+}
 export const useWhatsappConnect = () => useWhatsappAction("connect");
 export const useWhatsappReconnect = () => useWhatsappAction("reconnect");
 export const useWhatsappDisconnect = () => useWhatsappAction("disconnect");

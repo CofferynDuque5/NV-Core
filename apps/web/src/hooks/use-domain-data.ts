@@ -294,6 +294,17 @@ export function useWhatsappStatus() {
   });
 }
 
+/** Health of the PC companion that publishes to Facebook/Instagram (polls every 10 s). */
+export function usePcAgentStatus() {
+  const svc = useServices();
+  const ws = useWorkspace();
+  return useQuery({
+    queryKey: [ws.id, "pc-agent", "status"],
+    queryFn: () => svc.pcAgent.status(ws.id),
+    refetchInterval: 10_000,
+  });
+}
+
 export function useTelegramStatus() {
   const svc = useServices();
   const ws = useWorkspace();

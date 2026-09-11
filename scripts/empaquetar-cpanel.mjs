@@ -35,6 +35,20 @@ mkdirSync(out, { recursive: true });
 cpSync(join(root, "apps/api/dist"), join(out, "dist"), { recursive: true });
 cpSync(join(root, "apps/api/prisma"), join(out, "prisma"), { recursive: true });
 cpSync(join(root, "apps/web/dist"), join(out, "web"), { recursive: true });
+// "NV Agente PC" (Facebook/Instagram desde la computadora del usuario) se sirve
+// como descarga desde el propio panel: /agente/NV-Agente-PC.zip.
+{
+  const agentSrc = join(root, "agente-pc");
+  const agentOut = join(out, "web", "agente");
+  mkdirSync(agentOut, { recursive: true });
+  const agentZip = join(agentOut, "NV-Agente-PC.zip");
+  execSync(
+    `cd ${JSON.stringify(agentSrc)} && zip -rq ${JSON.stringify(agentZip)} . -x "node_modules/*" "perfil/*" "errores/*" "config.json" "package-lock.json" ".gitignore"`,
+    { stdio: "inherit" },
+  );
+  console.log("✔ NV Agente PC empaquetado en web/agente/NV-Agente-PC.zip");
+}
+
 // Motores de Prisma para las plataformas típicas de hosting (CloudLinux = RHEL,
 // Debian/Ubuntu; OpenSSL 1.1 y 3.0) además del detectado ("native"). Así el
 // "Run NPM Install" de cPanel ya deja el motor correcto y el login no falla con
@@ -394,6 +408,15 @@ function migrateWithPrismaCli() {
   } catch (e) {
     console.error("[nvmarketing] migraciones:", e.message);
   }
+  // Red de seguridad: un rechazo de promesa sin capturar (p. ej. dentro de una
+  // librería de WhatsApp/Telegram) NO debe tumbar el proceso entero en el
+  // hosting; se registra en stderr (visible en el log de la app en cPanel).
+  process.on("unhandledRejection", (reason) => {
+    console.error("[nvmarketing] unhandledRejection:", reason && reason.stack ? reason.stack : reason);
+  });
+  process.on("uncaughtException", (err) => {
+    console.error("[nvmarketing] uncaughtException:", err && err.stack ? err.stack : err);
+  });
   require("./dist/main.js");
 })();
 `,

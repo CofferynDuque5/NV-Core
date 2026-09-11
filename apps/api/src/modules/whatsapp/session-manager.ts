@@ -56,8 +56,40 @@ export class SessionManager {
     const dir = join(this.base, sanitize(workspaceSlug));
     if (!existsSync(dir)) return;
     for (const name of readdirSync(dir)) {
-      if (name === LOCK_FILE) continue;
+      if (name === LOCK_FILE || name === EVENTS_FILE) continue;
       rmSync(join(dir, name), { recursive: true, force: true });
+    }
+  }
+
+  /** Base directory (for diagnostics). */
+  get baseDir(): string {
+    return this.base;
+  }
+
+  // ── Event log (diagnostics, shared across processes) ──────────────────────
+  /** Append one line to the workspace's event log (kept to the last ~200 lines). */
+  appendEvent(workspaceSlug: string, message: string): void {
+    try {
+      const file = join(this.dirFor(workspaceSlug), EVENTS_FILE);
+      const line = `${new Date().toISOString()} [pid ${process.pid}] ${message}\n`;
+      let current = existsSync(file) ? readFileSync(file, "utf8") : "";
+      if (current.length > 64_000) {
+        current = current.split("\n").slice(-200).join("\n");
+      }
+      writeFileSync(file, current + line, "utf8");
+    } catch {
+      /* best-effort */
+    }
+  }
+
+  /** Last `limit` event lines (newest last). */
+  readEvents(workspaceSlug: string, limit = 30): string[] {
+    try {
+      const file = join(this.base, sanitize(workspaceSlug), EVENTS_FILE);
+      if (!existsSync(file)) return [];
+      return readFileSync(file, "utf8").split("\n").filter(Boolean).slice(-limit);
+    } catch {
+      return [];
     }
   }
 
@@ -145,6 +177,7 @@ export interface LockOwner {
 
 const QR_FILE = "qr.txt";
 const LOCK_FILE = "owner.json";
+const EVENTS_FILE = "events.log";
 /** Heartbeat interval is 20 s; a lock older than this is considered abandoned. */
 export const LOCK_TTL_MS = 60_000;
 const QR_TTL_MS = 3 * 60_000;

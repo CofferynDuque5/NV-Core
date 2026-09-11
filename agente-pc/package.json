@@ -1,0 +1,16 @@
+{
+  "name": "nv-agente-pc",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "NV Agente PC: publica en Facebook e Instagram desde tu computadora con tu propio inicio de sesión.",
+  "engines": { "node": ">=18" },
+  "scripts": {
+    "login": "node agente.mjs login",
+    "start": "node agente.mjs run",
+    "probar": "node agente.mjs probar"
+  },
+  "dependencies": {
+    "playwright": "1.49.1"
+  }
+}

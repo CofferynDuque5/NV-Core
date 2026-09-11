@@ -54,6 +54,12 @@ export class BaileysSession {
     return this.status;
   }
 
+  /** Log + persist to the shared event log (visible in the panel's diagnostics). */
+  private note(message: string, level: "log" | "warn" | "error" = "log"): void {
+    this.logger[level](message);
+    this.sessions.appendEvent(this.workspaceSlug, message);
+  }
+
   get isConnected(): boolean {
     return this.status === "connected";
   }
@@ -91,7 +97,7 @@ export class BaileysSession {
     // Only one process may run a workspace's socket (hostings like Passenger
     // spawn several copies of the app). If another live process owns it, let it.
     if (!this.sessions.acquireLock(this.workspaceSlug)) {
-      this.logger.log("Otro proceso ya gestiona esta sesión de WhatsApp; no se duplica.");
+      this.note("Otro proceso ya gestiona esta sesión de WhatsApp; no se duplica.");
       return;
     }
     // A fresh start supersedes any pending backoff retry.
@@ -107,8 +113,12 @@ export class BaileysSession {
     // Show "connecting" right away — before any network lookup — so the panel
     // never sits on "desconectado" while we wait for a slow/blocked host.
     if (this.status === "disconnected") this.setStatus("connecting");
+    this.note(
+      `Iniciando (${opts.userInitiated ? "pulsó Conectar" : "automático"}; credenciales guardadas: ${this.sessions.hasSession(this.workspaceSlug) ? "sí" : "no"}; node ${process.version}).`,
+    );
     try {
       const baileys = await loadBaileys();
+      this.note("Baileys cargado.");
       const makeWASocket = (baileys.default ?? (baileys as any).makeWASocket) as any;
       const { useMultiFileAuthState, fetchLatestBaileysVersion } = baileys as any;
 
@@ -127,10 +137,11 @@ export class BaileysSession {
           | { version?: number[] }
           | undefined;
         version = res?.version;
-        if (version) this.logger.log(`WhatsApp Web v${version.join(".")}`);
+        if (version) this.note(`WhatsApp Web v${version.join(".")}`);
       } catch (err) {
-        this.logger.warn(
+        this.note(
           `No se pudo obtener la versión de WhatsApp Web; uso la incluida: ${(err as Error).message}`,
+          "warn",
         );
       }
 
@@ -151,8 +162,9 @@ export class BaileysSession {
       });
       this.sock.ev.on("messages.upsert", (u: any) => this.onIncomingMessages(u));
       this.sock.ev.on("connection.update", (u: any) => this.onConnectionUpdate(u));
+      this.note("Socket abierto; esperando QR o sesión…");
     } catch (err) {
-      this.logger.error(`No se pudo iniciar Baileys: ${(err as Error).message}`);
+      this.note(`No se pudo iniciar Baileys: ${(err as Error).message}`, "error");
       this.lastError = `No se pudo iniciar WhatsApp: ${(err as Error).message}`;
       this.stopHeartbeat();
       this.setStatus("disconnected");
@@ -183,8 +195,9 @@ export class BaileysSession {
         const dataUrl = await toDataURL(qr);
         this.setStatus("qr");
         this.events.onQr(this.workspaceSlug, dataUrl);
+        this.note("QR generado (escanéalo desde WhatsApp → Dispositivos vinculados).");
       } catch (err) {
-        this.logger.warn(`No se pudo generar el QR: ${(err as Error).message}`);
+        this.note(`No se pudo generar el QR: ${(err as Error).message}`, "warn");
       }
     }
 
@@ -196,7 +209,7 @@ export class BaileysSession {
       this.userInitiated = false;
       this.setStatus("connected");
       this.events.onMeta(this.workspaceSlug, { number, connectedAt: new Date() });
-      this.logger.log(`Conectado${number ? ` (${number})` : ""}.`);
+      this.note(`Conectado${number ? ` (${number})` : ""}.`);
       void this.sync();
     } else if (connection === "close") {
       this.handleClose(lastDisconnect?.error?.output?.statusCode);
@@ -206,6 +219,7 @@ export class BaileysSession {
   /** Decide what to do when the socket closes: clear, stop, or retry w/ backoff. */
   private handleClose(statusCode: number | undefined): void {
     this.sock = null;
+    this.note(`Conexión cerrada (código ${statusCode ?? "desconocido"}).`, "warn");
 
     // A user-initiated stop is never an error and never auto-reconnects.
     if (this.manualStop) {
@@ -220,14 +234,14 @@ export class BaileysSession {
       // Credentials are dead — drop them so the next connect shows a fresh QR.
       this.sessions.deleteSession(this.workspaceSlug);
       this.reconnectAttempts = 0;
-      this.logger.warn(`Sesión cerrada: ${decision.reason}`);
+      this.note(`Sesión cerrada: ${decision.reason}`, "warn");
       if (this.userInitiated) {
         // The operator is waiting in front of the panel: don't stop at
         // "desconectado" and make them click again — open a fresh QR now.
         this.userInitiated = false;
         this.lastError = null;
         this.setStatus("connecting");
-        this.logger.log("Credenciales descartadas; generando un QR nuevo.");
+        this.note("Credenciales descartadas; generando un QR nuevo.");
         this.reconnectTimer = setTimeout(() => {
           this.reconnectTimer = null;
           void this.start();
@@ -249,7 +263,7 @@ export class BaileysSession {
       this.lastError = decision.reason;
       this.stopHeartbeat();
       this.setStatus("disconnected");
-      this.logger.error(`Reconexión detenida: ${decision.reason}`);
+      this.note(`Reconexión detenida: ${decision.reason}`, "error");
       this.events.onAlert(this.workspaceSlug, { level: "error", reason: decision.reason });
       return;
     }
@@ -262,7 +276,7 @@ export class BaileysSession {
       this.lastError = reason;
       this.stopHeartbeat();
       this.setStatus("disconnected");
-      this.logger.error(reason);
+      this.note(reason, "error");
       this.events.onAlert(this.workspaceSlug, { level: "error", reason });
       return;
     }
@@ -270,8 +284,9 @@ export class BaileysSession {
     const delay = backoffDelay(this.reconnectAttempts);
     this.lastError = decision.expected ? null : decision.reason;
     this.setStatus("connecting");
-    this.logger.warn(
+    this.note(
       `${decision.reason} Reintento ${this.reconnectAttempts}/${MAX_RECONNECT_ATTEMPTS} en ${Math.round(delay / 1000)}s.`,
+      "warn",
     );
     if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
     this.reconnectTimer = setTimeout(() => {
@@ -487,6 +502,7 @@ export class BaileysSession {
   /** Log out: closes the socket and clears stored credentials. */
   async logout(): Promise<void> {
     this.manualStop = true;
+    this.note("Desconectar pulsado: cerrando sesión y borrando credenciales.");
     // Cancel any pending backoff retry so we don't reconnect after logout.
     if (this.reconnectTimer) {
       clearTimeout(this.reconnectTimer);

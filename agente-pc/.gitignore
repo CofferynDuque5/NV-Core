@@ -1,0 +1,5 @@
+node_modules/
+perfil/
+errores/
+config.json
+package-lock.json
