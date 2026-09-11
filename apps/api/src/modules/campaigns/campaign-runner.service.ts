@@ -203,6 +203,23 @@ export class CampaignRunner implements OnModuleInit, OnModuleDestroy {
       // validated on write, but this guarantees the historial never shows sends
       // to groups that don't belong to this workspace's WhatsApp/Telegram.
       if (!group || group.workspaceSlug !== workspaceSlug) continue;
+      // ANTI-SPAM / ANTI-BAN: si este chat YA recibió este mensaje con éxito en
+      // las últimas 20 h, NO se reenvía. Evita mensajes duplicados en el mismo
+      // chat si la campaña corre de nuevo (reinicios, reintentos, etc.).
+      const dup = await this.prisma.sendLog.findFirst({
+        where: {
+          workspaceSlug,
+          campaignId: campaign.id,
+          groupId: group.id,
+          ok: true,
+          createdAt: { gte: new Date(Date.now() - 20 * 60 * 60 * 1000) },
+        },
+        select: { id: true },
+      });
+      if (dup) {
+        sent += 1;
+        continue; // ya enviado a este chat; no duplicar
+      }
       // Group.channel defaults to "wa"; only Telegram routes elsewhere.
       const ch = group.channel === "tg" ? "tg" : "wa";
       const provider = ch === "tg" ? "telegram" : "whatsapp";
@@ -240,7 +257,11 @@ export class CampaignRunner implements OnModuleInit, OnModuleDestroy {
     await this.prisma.campaign.update({
       where: { id: campaignId },
       data: {
-        status: recurring ? "activa" : allOk ? "completada" : "programada",
+        // ANTI-SPAM: una campaña de una sola vez ("once") queda COMPLETADA tras
+        // correr, aunque algún envío falle. Antes, si algún destino fallaba (p.ej.
+        // "rate-overlimit"), se quedaba "programada" y se REENVIABA en cada tick,
+        // mandando el mensaje varias veces al mismo chat (riesgo de ban).
+        status: recurring ? "activa" : "completada",
         progress: 100,
         lastRunAt: new Date(),
         lastRunDay: todayKey(),

@@ -36,6 +36,8 @@ function makeRunner(
         sendLogs.push(data);
         return data;
       }),
+      // Anti-duplicado: por defecto, ningún envío previo (no hay duplicados).
+      findFirst: vi.fn(async () => null),
     },
     groupVariable: { findMany: vi.fn(async () => []) },
   };
@@ -336,7 +338,7 @@ describe("CampaignRunner.run", () => {
     expect(sendLogs[0]!.groupName).toBe("Propio");
   });
 
-  it("logs a failed send and re-arms the campaign as 'programada' (not completed)", async () => {
+  it("logs a failed send and marks a 'once' campaign 'completada' (anti-spam, no re-send)", async () => {
     const c = campaign({ targets: [{ group: { id: "g1", name: "A", remoteJid: "1@g.us" } }] });
     const send = vi.fn(async () => {
       throw new Error("proveedor caído");
@@ -348,7 +350,9 @@ describe("CampaignRunner.run", () => {
     expect(sendLogs).toHaveLength(1);
     expect(sendLogs[0]!.ok).toBe(false);
     expect(sendLogs[0]!.error).toMatch(/caído/);
-    expect(updates[0]!.status).toBe("programada"); // not completed → retriable
+    // ANTI-SPAM: aunque falle, una campaña "once" NO se re-arma; queda completada
+    // para no reenviar al mismo chat en cada tick (evita ban).
+    expect(updates[0]!.status).toBe("completada");
   });
 
   it("keeps a recurring campaign 'activa' after a run", async () => {
