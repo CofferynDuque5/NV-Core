@@ -98,7 +98,7 @@ export function ComposeWizard() {
           {step === 2 ? (
             <EmptyState
               title="Adjuntar contenido"
-              description="Arrastra imágenes o videos desde la Biblioteca. Aún no hay archivos cargados."
+              description="Arrastra imágenes desde la Biblioteca. Aún no hay archivos cargados."
               compact
             />
           ) : null}

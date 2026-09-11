@@ -83,7 +83,7 @@ export default function BibliotecaPage() {
       <input
         ref={inputRef}
         type="file"
-        accept="image/*,video/*"
+        accept="image/*"
         multiple
         className="hidden"
         onChange={onFiles}
@@ -91,7 +91,7 @@ export default function BibliotecaPage() {
       <PageHeader
         eyebrow="Media Manager"
         title="Biblioteca"
-        description="Gestiona, busca y organiza imágenes y videos para reutilizarlos."
+        description="Gestiona, busca y organiza imágenes para reutilizarlas."
         actions={
           <Button size="sm" onClick={pickFiles} disabled={upload.isPending}>
             {upload.isPending ? (
@@ -222,7 +222,7 @@ export default function BibliotecaPage() {
               description={
                 hasFilters
                   ? "Ningún archivo coincide con los filtros. Prueba a limpiarlos."
-                  : "Sube tus primeras imágenes o videos para reutilizarlos en campañas y publicaciones."
+                  : "Sube tus primeras imágenes para reutilizarlas en campañas y publicaciones."
               }
               action={
                 hasFilters ? (
