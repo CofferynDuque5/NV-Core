@@ -106,7 +106,15 @@ export class CampaignRunner implements OnModuleInit, OnModuleDestroy {
       this.logger.log("CampaignRunner inactivo (sin base de datos).");
       return;
     }
-    this.timer = setInterval(() => void this.tick(), TICK_MS);
+    // Un fallo puntual (p. ej. la base de datos no responde un instante) no debe
+    // tumbar el proceso entero: se registra y se reintenta en el siguiente tick.
+    this.timer = setInterval(
+      () =>
+        void this.tick().catch((err: unknown) =>
+          this.logger.warn(`Tick del runner falló: ${(err as Error).message}`),
+        ),
+      TICK_MS,
+    );
     this.logger.log(`CampaignRunner activo (cada ${TICK_MS / 1000}s).`);
   }
 

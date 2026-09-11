@@ -79,12 +79,16 @@ export class WhatsappService implements SessionEvents, OnModuleInit, OnModuleDes
   // ── SessionEvents (called by BaileysSession) ──────────────────────────────
   onQr(workspaceSlug: string, dataUrl: string): void {
     this.qrs.set(workspaceSlug, dataUrl); // disponible por HTTP (status)
+    this.sessions.saveQr(workspaceSlug, dataUrl); // …también desde otros procesos
     this.gateway.emitQr(workspaceSlug, dataUrl);
   }
 
   onStatus(workspaceSlug: string, status: WhatsappStatusValue): void {
     // Al conectar o desconectar, el QR ya no sirve: se descarta.
-    if (status === "connected" || status === "disconnected") this.qrs.delete(workspaceSlug);
+    if (status === "connected" || status === "disconnected") {
+      this.qrs.delete(workspaceSlug);
+      this.sessions.clearQr(workspaceSlug);
+    }
     void this.persist(workspaceSlug, { status }).then(() => this.emit(workspaceSlug));
   }
 
@@ -184,8 +188,20 @@ export class WhatsappService implements SessionEvents, OnModuleInit, OnModuleDes
       ? await this.prisma.whatsappSession.findUnique({ where: { workspaceSlug } })
       : null;
     const session = this.live.get(workspaceSlug);
-    const statusValue =
-      session?.currentStatus ?? (row?.status as WhatsappStatusValue) ?? "disconnected";
+    const owner = this.sessions.lockOwner(workspaceSlug);
+    // Fuente de verdad del estado:
+    //  - si ESTE proceso corre el socket → su estado en memoria;
+    //  - si lo corre OTRO proceso vivo (hosting con varias copias de la app) →
+    //    el estado que ese proceso persistió en la base de datos;
+    //  - si nadie lo corre (proceso reiniciado por el hosting) → "disconnected",
+    //    aunque la fila de la BD se quedara en "connected".
+    const runsHere = Boolean(session?.active || (owner?.fresh && owner.mine));
+    const runsElsewhere = Boolean(owner?.fresh && !owner.mine);
+    const statusValue: WhatsappStatusValue = runsHere
+      ? session!.currentStatus
+      : runsElsewhere
+        ? ((row?.status as WhatsappStatusValue) ?? "disconnected")
+        : "disconnected";
     return {
       status: statusValue,
       provider: "baileys",
@@ -195,13 +211,17 @@ export class WhatsappService implements SessionEvents, OnModuleInit, OnModuleDes
       contactsCount: row?.contactsCount ?? 0,
       error: session?.lastError ?? null,
       // El QR viaja también por HTTP para que el panel lo muestre aunque no haya
-      // WebSocket (cPanel/LiteSpeed). Solo cuando el estado es "qr".
-      qr: statusValue === "qr" ? (this.qrs.get(workspaceSlug) ?? null) : null,
+      // WebSocket (cPanel/LiteSpeed). Solo cuando el estado es "qr". Si el QR lo
+      // generó otro proceso, se lee del archivo compartido.
+      qr:
+        statusValue === "qr"
+          ? (this.qrs.get(workspaceSlug) ?? this.sessions.readQr(workspaceSlug))
+          : null,
     };
   }
 
   async connect(workspaceSlug: string): Promise<WhatsappStatus> {
-    await this.getOrCreate(workspaceSlug).start();
+    await this.getOrCreate(workspaceSlug).start({ userInitiated: true });
     return this.status(workspaceSlug);
   }
 

@@ -436,6 +436,10 @@ PassengerAppType node
 PassengerStartupFile passenger-start.js
 # DO NOT REMOVE. CLOUDLINUX PASSENGER CONFIGURATION END
 
+# Mantén siempre un proceso vivo: si el hosting apaga la app por inactividad,
+# la sesión de WhatsApp se cae y hay que esperar a que arranque otra vez.
+PassengerMinInstances 1
+
 # Evita el listado de carpeta si Passenger no estuviera activo.
 Options -Indexes
 `;

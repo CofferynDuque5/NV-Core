@@ -37,6 +37,10 @@ export class BaileysSession {
   /** Last failure reason, surfaced in the panel (null when healthy). */
   lastError: string | null = null;
   private readonly contacts = new Set<string>();
+  /** The user pressed "Conectar": if the stored creds turn out dead, go straight to a fresh QR. */
+  private userInitiated = false;
+  /** Keeps the cross-process owner lock fresh while this process runs the socket. */
+  private heartbeat: ReturnType<typeof setInterval> | null = null;
 
   constructor(
     private readonly workspaceSlug: string,
@@ -52,6 +56,11 @@ export class BaileysSession {
 
   get isConnected(): boolean {
     return this.status === "connected";
+  }
+
+  /** This process is (or is becoming) the one running the socket. */
+  get active(): boolean {
+    return this.starting || this.sock !== null || this.reconnectTimer !== null;
   }
 
   /**
@@ -72,9 +81,19 @@ export class BaileysSession {
     this.events.onStatus(this.workspaceSlug, status);
   }
 
-  /** Open the socket. Safe to call repeatedly (no-ops while already starting/connected). */
-  async start(): Promise<void> {
+  /**
+   * Open the socket. Safe to call repeatedly (no-ops while already starting/connected).
+   * `userInitiated` = the operator pressed "Conectar": dead stored credentials
+   * then fall through to a fresh QR instead of stopping at "desconectado".
+   */
+  async start(opts: { userInitiated?: boolean } = {}): Promise<void> {
     if (this.starting || this.isConnected) return;
+    // Only one process may run a workspace's socket (hostings like Passenger
+    // spawn several copies of the app). If another live process owns it, let it.
+    if (!this.sessions.acquireLock(this.workspaceSlug)) {
+      this.logger.log("Otro proceso ya gestiona esta sesión de WhatsApp; no se duplica.");
+      return;
+    }
     // A fresh start supersedes any pending backoff retry.
     if (this.reconnectTimer) {
       clearTimeout(this.reconnectTimer);
@@ -83,6 +102,11 @@ export class BaileysSession {
     this.starting = true;
     this.manualStop = false;
     this.giveUp = false;
+    if (opts.userInitiated) this.userInitiated = true;
+    this.startHeartbeat();
+    // Show "connecting" right away — before any network lookup — so the panel
+    // never sits on "desconectado" while we wait for a slow/blocked host.
+    if (this.status === "disconnected") this.setStatus("connecting");
     try {
       const baileys = await loadBaileys();
       const makeWASocket = (baileys.default ?? (baileys as any).makeWASocket) as any;
@@ -95,10 +119,13 @@ export class BaileysSession {
       // socket. Without this Baileys uses the version bundled at build time,
       // which WhatsApp rejects once it drifts — the connection closes instantly
       // in a reconnect loop and the QR is never emitted. Falls back to the
-      // bundled version if the lookup fails (offline / blocked).
+      // bundled version if the lookup fails or hangs (offline / blocked host):
+      // the fetch has no timeout of its own, so we cap it here.
       let version: number[] | undefined;
       try {
-        const res = await fetchLatestBaileysVersion?.();
+        const res = (await withTimeout(fetchLatestBaileysVersion?.(), VERSION_LOOKUP_TIMEOUT_MS)) as
+          | { version?: number[] }
+          | undefined;
         version = res?.version;
         if (version) this.logger.log(`WhatsApp Web v${version.join(".")}`);
       } catch (err) {
@@ -106,8 +133,6 @@ export class BaileysSession {
           `No se pudo obtener la versión de WhatsApp Web; uso la incluida: ${(err as Error).message}`,
         );
       }
-
-      if (this.status === "disconnected") this.setStatus("connecting");
 
       this.sock = makeWASocket({
         auth: state,
@@ -128,10 +153,25 @@ export class BaileysSession {
       this.sock.ev.on("connection.update", (u: any) => this.onConnectionUpdate(u));
     } catch (err) {
       this.logger.error(`No se pudo iniciar Baileys: ${(err as Error).message}`);
+      this.lastError = `No se pudo iniciar WhatsApp: ${(err as Error).message}`;
+      this.stopHeartbeat();
       this.setStatus("disconnected");
     } finally {
       this.starting = false;
     }
+  }
+
+  private startHeartbeat(): void {
+    if (this.heartbeat) return;
+    this.heartbeat = setInterval(() => this.sessions.touchLock(this.workspaceSlug), HEARTBEAT_MS);
+    this.heartbeat.unref?.();
+  }
+
+  /** Stop owning the session in this process (terminal states only). */
+  private stopHeartbeat(): void {
+    if (this.heartbeat) clearInterval(this.heartbeat);
+    this.heartbeat = null;
+    this.sessions.releaseLock(this.workspaceSlug);
   }
 
   private async onConnectionUpdate(u: any): Promise<void> {
@@ -153,6 +193,7 @@ export class BaileysSession {
       // Healthy again: clear the backoff counter and any surfaced error.
       this.reconnectAttempts = 0;
       this.lastError = null;
+      this.userInitiated = false;
       this.setStatus("connected");
       this.events.onMeta(this.workspaceSlug, { number, connectedAt: new Date() });
       this.logger.log(`Conectado${number ? ` (${number})` : ""}.`);
@@ -168,6 +209,7 @@ export class BaileysSession {
 
     // A user-initiated stop is never an error and never auto-reconnects.
     if (this.manualStop) {
+      this.stopHeartbeat();
       this.setStatus("disconnected");
       return;
     }
@@ -178,9 +220,23 @@ export class BaileysSession {
       // Credentials are dead — drop them so the next connect shows a fresh QR.
       this.sessions.deleteSession(this.workspaceSlug);
       this.reconnectAttempts = 0;
-      this.lastError = decision.reason;
-      this.setStatus("disconnected");
       this.logger.warn(`Sesión cerrada: ${decision.reason}`);
+      if (this.userInitiated) {
+        // The operator is waiting in front of the panel: don't stop at
+        // "desconectado" and make them click again — open a fresh QR now.
+        this.userInitiated = false;
+        this.lastError = null;
+        this.setStatus("connecting");
+        this.logger.log("Credenciales descartadas; generando un QR nuevo.");
+        this.reconnectTimer = setTimeout(() => {
+          this.reconnectTimer = null;
+          void this.start();
+        }, 500);
+        return;
+      }
+      this.lastError = decision.reason;
+      this.stopHeartbeat();
+      this.setStatus("disconnected");
       this.events.onAlert(this.workspaceSlug, { level: "warning", reason: decision.reason });
       return;
     }
@@ -191,6 +247,7 @@ export class BaileysSession {
       this.giveUp = true;
       this.reconnectAttempts = 0;
       this.lastError = decision.reason;
+      this.stopHeartbeat();
       this.setStatus("disconnected");
       this.logger.error(`Reconexión detenida: ${decision.reason}`);
       this.events.onAlert(this.workspaceSlug, { level: "error", reason: decision.reason });
@@ -203,6 +260,7 @@ export class BaileysSession {
       const reason = `No se pudo reconectar tras ${MAX_RECONNECT_ATTEMPTS} intentos. Reconecta manualmente.`;
       this.reconnectAttempts = 0;
       this.lastError = reason;
+      this.stopHeartbeat();
       this.setStatus("disconnected");
       this.logger.error(reason);
       this.events.onAlert(this.workspaceSlug, { level: "error", reason });
@@ -444,6 +502,29 @@ export class BaileysSession {
     this.sessions.deleteSession(this.workspaceSlug);
     this.sock = null;
     this.contacts.clear();
+    this.stopHeartbeat();
     this.setStatus("disconnected");
   }
+}
+
+/** Lock heartbeat cadence (must stay well under the lock TTL). */
+const HEARTBEAT_MS = 20_000;
+/** Cap on the WhatsApp Web version lookup (the fetch itself has no timeout). */
+const VERSION_LOOKUP_TIMEOUT_MS = 6_000;
+
+function withTimeout<T>(p: Promise<T> | undefined, ms: number): Promise<T | undefined> {
+  if (!p) return Promise.resolve(undefined);
+  return new Promise<T | undefined>((resolve, reject) => {
+    const t = setTimeout(() => reject(new Error(`timeout tras ${ms} ms`)), ms);
+    p.then(
+      (v) => {
+        clearTimeout(t);
+        resolve(v);
+      },
+      (e) => {
+        clearTimeout(t);
+        reject(e);
+      },
+    );
+  });
 }
