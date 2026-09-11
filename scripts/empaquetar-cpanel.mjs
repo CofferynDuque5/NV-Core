@@ -35,6 +35,23 @@ mkdirSync(out, { recursive: true });
 cpSync(join(root, "apps/api/dist"), join(out, "dist"), { recursive: true });
 cpSync(join(root, "apps/api/prisma"), join(out, "prisma"), { recursive: true });
 cpSync(join(root, "apps/web/dist"), join(out, "web"), { recursive: true });
+// Motores de Prisma para las plataformas típicas de hosting (CloudLinux = RHEL,
+// Debian/Ubuntu; OpenSSL 1.1 y 3.0) además del detectado ("native"). Así el
+// "Run NPM Install" de cPanel ya deja el motor correcto y el login no falla con
+// "could not locate the Query Engine for runtime debian-openssl-1.1.x".
+{
+  const schemaPath = join(out, "prisma/schema.prisma");
+  const text = readFileSync(schemaPath, "utf8");
+  if (!text.includes("binaryTargets")) {
+    writeFileSync(
+      schemaPath,
+      text.replace(
+        /generator\s+client\s*\{/,
+        `generator client {\n  binaryTargets = ["native", "debian-openssl-1.1.x", "debian-openssl-3.0.x", "rhel-openssl-1.1.x", "rhel-openssl-3.0.x"]`,
+      ),
+    );
+  }
+}
 // @nv/domain como dependencia local (file:./vendor/domain). Se escribe un
 // package.json MÍNIMO de runtime (sin scripts 'prepare'/build ni devDeps con
 // "workspace:*", que romperían el npm install de cPanel; el dist ya viene hecho).
@@ -191,24 +208,93 @@ const migrateUrl = (process.env.DATABASE_URL || "").replace("-pooler.", ".");
 const schema = path.join(__dirname, "prisma", "schema.prisma");
 const q = (s) => JSON.stringify(s);
 
-// Genera el cliente de Prisma SOLO si no viene ya generado (el paquete con
-// node_modules incluido ya lo trae). Best-effort: si falla, la app igual arranca.
+function prismaGenerate() {
+  const pkg = require.resolve("prisma/package.json", { paths: [__dirname] });
+  const cliFile = path.join(path.dirname(pkg), "build", "index.js");
+  execSync(q(process.execPath) + " " + q(cliFile) + " generate --schema=" + q(schema), {
+    cwd: __dirname,
+    stdio: "inherit",
+  });
+}
+
+// Motores nativos que declara el schema (binaryTargets) y que deben existir en
+// el cliente generado. Si falta alguno, el cliente se generó en otra máquina o
+// con otra versión de OpenSSL y hay que regenerarlo.
+function missingEngines() {
+  let targets = [];
+  try {
+    const m = fs.readFileSync(schema, "utf8").match(/binaryTargets\\s*=\\s*\\[([^\\]]*)\\]/);
+    if (m) targets = m[1].split(",").map((s) => s.trim().replace(/^"|"$/g, "")).filter((t) => t && t !== "native");
+  } catch (_) {
+    /* sin schema legible: no podemos comprobar */
+  }
+  let dir;
+  try {
+    dir = path.dirname(require.resolve(".prisma/client/default", { paths: [__dirname] }));
+  } catch (_) {
+    return targets.length ? targets : ["(cliente no generado)"];
+  }
+  return targets.filter((t) => !fs.existsSync(path.join(dir, "libquery_engine-" + t + ".so.node")));
+}
+
+// Genera el cliente de Prisma si no existe o si le falta el motor de esta
+// plataforma (p. ej. el hosting cambió de OpenSSL 1.0 a 1.1/3.0). Best-effort:
+// si falla, la app igual arranca.
 function ensurePrismaClient() {
+  let missing;
   try {
     require.resolve(".prisma/client/default", { paths: [__dirname] });
-    return; // ya está generado
+    missing = missingEngines();
+    if (missing.length === 0) return; // ya está generado y completo
   } catch (_) {
-    /* hay que generarlo */
+    missing = ["(cliente no generado)"];
   }
   try {
-    const pkg = require.resolve("prisma/package.json", { paths: [__dirname] });
-    const cliFile = path.join(path.dirname(pkg), "build", "index.js");
-    execSync(q(process.execPath) + " " + q(cliFile) + " generate --schema=" + q(schema), {
-      cwd: __dirname,
-      stdio: "inherit",
-    });
+    console.log("[nvmarketing] Generando cliente de Prisma (faltan: " + missing.join(", ") + ")…");
+    prismaGenerate();
   } catch (e) {
     console.error("[nvmarketing] 'prisma generate' omitido:", e.message);
+  }
+}
+
+// Última red de seguridad: una consulta de prueba. Si Prisma se queja de que no
+// encuentra el motor para ESTA plataforma ("could not locate the Query Engine
+// for runtime X"), añadimos X a binaryTargets y regeneramos, sin intervención.
+async function probePrismaEngine() {
+  if (!process.env.DATABASE_URL) return;
+  let PrismaClient;
+  try {
+    PrismaClient = require("@prisma/client").PrismaClient;
+  } catch (_) {
+    return;
+  }
+  const client = new PrismaClient();
+  try {
+    await client.$queryRawUnsafe("SELECT 1");
+  } catch (e) {
+    const msg = String((e && e.message) || e);
+    const m = msg.match(/Query Engine for runtime "([^"]+)"/);
+    if (!m) return; // otro error (p. ej. credenciales): lo verá la app
+    const target = m[1];
+    try {
+      let text = fs.readFileSync(schema, "utf8");
+      if (!text.includes(q(target))) {
+        text = text.includes("binaryTargets")
+          ? text.replace(/binaryTargets\\s*=\\s*\\[/, "binaryTargets = [" + q(target) + ", ")
+          : text.replace(/generator\\s+client\\s*\\{/, "generator client {\\n  binaryTargets = ['native', " + q(target) + "]");
+        fs.writeFileSync(schema, text);
+      }
+      console.log("[nvmarketing] Falta el motor de Prisma para " + target + "; regenerando…");
+      prismaGenerate();
+      // Limpia el require cache para que la app cargue el cliente regenerado.
+      for (const k of Object.keys(require.cache)) {
+        if (k.includes(".prisma") || k.includes("@prisma")) delete require.cache[k];
+      }
+    } catch (err) {
+      console.error("[nvmarketing] no se pudo regenerar el motor de Prisma:", err.message);
+    }
+  } finally {
+    await client.$disconnect().catch(() => {});
   }
 }
 
@@ -296,6 +382,11 @@ function migrateWithPrismaCli() {
 
 (async () => {
   ensurePrismaClient();
+  try {
+    await probePrismaEngine();
+  } catch (e) {
+    console.error("[nvmarketing] comprobación del motor de Prisma:", e.message);
+  }
   try {
     const pgRun = migrateWithPg();
     if (pgRun) await pgRun;
