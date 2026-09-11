@@ -87,6 +87,7 @@ export const emptyAdapters: Services = {
     reconnect: () => notAvailable(),
     disconnect: () => notAvailable(),
     sync: () => notAvailable(),
+    relink: () => notAvailable(),
     diagnose: () => notAvailable(),
   },
   pcAgent: {

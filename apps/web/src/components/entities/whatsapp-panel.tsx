@@ -14,6 +14,7 @@ import {
   useWhatsappDiagnose,
   useWhatsappDisconnect,
   useWhatsappReconnect,
+  useWhatsappRelink,
   useWhatsappSync,
 } from "@/hooks/use-domain-mutations";
 import { useConfirm } from "@/providers/confirm-provider";
@@ -39,6 +40,7 @@ export function WhatsAppPanel() {
   const sync = useWhatsappSync();
   const confirm = useConfirm();
   const diagnose = useWhatsappDiagnose();
+  const relink = useWhatsappRelink();
   const [qr, setQr] = React.useState<string | null>(null);
   const [showDiag, setShowDiag] = React.useState(false);
 
@@ -107,10 +109,22 @@ export function WhatsAppPanel() {
 
           <div className="flex flex-wrap gap-2 pt-1">
             {state === "disconnected" ? (
-              <Button size="sm" onClick={() => connect.mutate()} disabled={connect.isPending}>
-                {connect.isPending ? <Loader2 className="size-4 animate-spin" /> : <Plug className="size-4" />}
-                Conectar
-              </Button>
+              <>
+                <Button size="sm" onClick={() => connect.mutate()} disabled={connect.isPending}>
+                  {connect.isPending ? <Loader2 className="size-4 animate-spin" /> : <Plug className="size-4" />}
+                  Conectar
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => { setQr(null); relink.mutate(); }}
+                  disabled={relink.isPending}
+                  title="Olvida la vinculación guardada y genera un QR nuevo"
+                >
+                  {relink.isPending ? <Loader2 className="size-4 animate-spin" /> : <QrCode className="size-4" />}
+                  QR nuevo
+                </Button>
+              </>
             ) : (
               <>
                 <Button
@@ -131,6 +145,18 @@ export function WhatsAppPanel() {
                   {reconnect.isPending ? <Loader2 className="size-4 animate-spin" /> : <RefreshCw className="size-4" />}
                   Reconectar
                 </Button>
+                {state !== "connected" ? (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => { setQr(null); relink.mutate(); }}
+                    disabled={relink.isPending}
+                    title="Olvida la vinculación guardada y genera un QR nuevo"
+                  >
+                    {relink.isPending ? <Loader2 className="size-4 animate-spin" /> : <QrCode className="size-4" />}
+                    QR nuevo
+                  </Button>
+                ) : null}
                 <Button
                   size="sm"
                   variant="ghost"

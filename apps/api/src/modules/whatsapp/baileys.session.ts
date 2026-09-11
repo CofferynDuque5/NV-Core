@@ -41,6 +41,10 @@ export class BaileysSession {
   private userInitiated = false;
   /** Keeps the cross-process owner lock fresh while this process runs the socket. */
   private heartbeat: ReturnType<typeof setInterval> | null = null;
+  /** This start() is resuming STORED credentials (vs. a fresh QR pairing). */
+  private resumingStored = false;
+  /** Fires if stored credentials neither open nor get rejected in time → fresh QR. */
+  private resumeWatchdog: ReturnType<typeof setTimeout> | null = null;
 
   constructor(
     private readonly workspaceSlug: string,
@@ -105,11 +109,26 @@ export class BaileysSession {
       clearTimeout(this.reconnectTimer);
       this.reconnectTimer = null;
     }
+    // Never run two sockets for one account: a socket still trying to resume
+    // (e.g. the automatic boot-time resume) is torn down first, otherwise
+    // WhatsApp closes BOTH with "connection replaced" and the QR never shows.
+    if (this.sock) {
+      this.note("Cierro el intento anterior antes de abrir uno nuevo.");
+      try {
+        this.sock.ev?.removeAllListeners?.("connection.update");
+        this.sock.end?.(undefined);
+      } catch {
+        /* ignore */
+      }
+      this.sock = null;
+    }
     this.starting = true;
     this.manualStop = false;
     this.giveUp = false;
     if (opts.userInitiated) this.userInitiated = true;
+    this.resumingStored = this.sessions.hasSession(this.workspaceSlug);
     this.startHeartbeat();
+    this.armResumeWatchdog();
     // Show "connecting" right away — before any network lookup — so the panel
     // never sits on "desconectado" while we wait for a slow/blocked host.
     if (this.status === "disconnected") this.setStatus("connecting");
@@ -165,6 +184,12 @@ export class BaileysSession {
       this.note("Socket abierto; esperando QR o sesión…");
     } catch (err) {
       this.note(`No se pudo iniciar Baileys: ${(err as Error).message}`, "error");
+      this.starting = false;
+      if (this.resumingStored && this.userInitiated) {
+        // Corrupt/incompatible stored session: don't strand the operator — pair fresh.
+        this.dropCredsForFreshQr("Las credenciales guardadas están dañadas");
+        return;
+      }
       this.lastError = `No se pudo iniciar WhatsApp: ${(err as Error).message}`;
       this.stopHeartbeat();
       this.setStatus("disconnected");
@@ -183,7 +208,51 @@ export class BaileysSession {
   private stopHeartbeat(): void {
     if (this.heartbeat) clearInterval(this.heartbeat);
     this.heartbeat = null;
+    this.clearResumeWatchdog();
     this.sessions.releaseLock(this.workspaceSlug);
+  }
+
+  /**
+   * Resuming stored credentials must either open or be rejected quickly. If the
+   * socket just hangs (host blips, stale session) and the operator is waiting
+   * for a QR, drop the creds and pair fresh instead of sitting on "conectando".
+   */
+  private armResumeWatchdog(): void {
+    this.clearResumeWatchdog();
+    if (!this.resumingStored || !this.userInitiated) return;
+    this.resumeWatchdog = setTimeout(() => {
+      this.resumeWatchdog = null;
+      if (this.isConnected || this.status === "qr" || !this.resumingStored) return;
+      this.dropCredsForFreshQr(`Sin respuesta en ${RESUME_TIMEOUT_MS / 1000}s con las credenciales guardadas`);
+    }, RESUME_TIMEOUT_MS);
+    this.resumeWatchdog.unref?.();
+  }
+
+  private clearResumeWatchdog(): void {
+    if (this.resumeWatchdog) clearTimeout(this.resumeWatchdog);
+    this.resumeWatchdog = null;
+  }
+
+  /** Discard stored credentials and restart to pair with a fresh QR. */
+  private dropCredsForFreshQr(reason: string): void {
+    this.note(`${reason}; se descartan y se genera un QR nuevo.`, "warn");
+    try {
+      this.sock?.ev?.removeAllListeners?.("connection.update");
+      this.sock?.end?.(undefined);
+    } catch {
+      /* ignore */
+    }
+    this.sock = null;
+    this.sessions.deleteSession(this.workspaceSlug);
+    this.resumingStored = false;
+    this.reconnectAttempts = 0;
+    this.lastError = null;
+    if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
+    this.setStatus("connecting");
+    this.reconnectTimer = setTimeout(() => {
+      this.reconnectTimer = null;
+      void this.start({ userInitiated: true });
+    }, 500);
   }
 
   private async onConnectionUpdate(u: any): Promise<void> {
@@ -193,6 +262,8 @@ export class BaileysSession {
       try {
         const { toDataURL } = await import("qrcode");
         const dataUrl = await toDataURL(qr);
+        this.resumingStored = false;
+        this.clearResumeWatchdog();
         this.setStatus("qr");
         this.events.onQr(this.workspaceSlug, dataUrl);
         this.note("QR generado (escanéalo desde WhatsApp → Dispositivos vinculados).");
@@ -207,6 +278,8 @@ export class BaileysSession {
       this.reconnectAttempts = 0;
       this.lastError = null;
       this.userInitiated = false;
+      this.resumingStored = false;
+      this.clearResumeWatchdog();
       this.setStatus("connected");
       this.events.onMeta(this.workspaceSlug, { number, connectedAt: new Date() });
       this.note(`Conectado${number ? ` (${number})` : ""}.`);
@@ -265,6 +338,14 @@ export class BaileysSession {
       this.setStatus("disconnected");
       this.note(`Reconexión detenida: ${decision.reason}`, "error");
       this.events.onAlert(this.workspaceSlug, { level: "error", reason: decision.reason });
+      return;
+    }
+
+    // The operator pressed "Conectar" and the STORED credentials keep failing
+    // without WhatsApp rejecting them outright (timeouts, restart loops…):
+    // don't make them wait through ten retries — drop the creds and show a QR.
+    if (this.userInitiated && this.resumingStored && this.reconnectAttempts >= 1) {
+      this.dropCredsForFreshQr("Las credenciales guardadas no responden");
       return;
     }
 
@@ -525,6 +606,8 @@ export class BaileysSession {
 
 /** Lock heartbeat cadence (must stay well under the lock TTL). */
 const HEARTBEAT_MS = 20_000;
+/** Max wait for stored credentials to open before pairing fresh (user-initiated). */
+const RESUME_TIMEOUT_MS = 40_000;
 /** Cap on the WhatsApp Web version lookup (the fetch itself has no timeout). */
 const VERSION_LOOKUP_TIMEOUT_MS = 6_000;
 

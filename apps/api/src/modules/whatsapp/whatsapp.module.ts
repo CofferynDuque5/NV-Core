@@ -40,6 +40,15 @@ export class WhatsappController {
     return this.service.reconnect(workspaceId);
   }
 
+  /** Forget the stored pairing and show a fresh QR (the fix for "no me sale el QR"). */
+  @Post("relink")
+  @Roles("Owner", "Admin")
+  @UseGuards(RolesGuard)
+  @HttpCode(200)
+  relink(@WorkspaceId() workspaceId: string) {
+    return this.service.relink(workspaceId);
+  }
+
   @Post("disconnect")
   @Roles("Owner", "Admin")
   @UseGuards(RolesGuard)

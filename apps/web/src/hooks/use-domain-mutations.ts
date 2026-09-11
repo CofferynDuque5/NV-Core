@@ -1154,7 +1154,7 @@ export function useUpdateConversation() {
 }
 
 // ── WhatsApp (Baileys) ────────────────────────────────────────────────────────
-function useWhatsappAction(action: "connect" | "reconnect" | "disconnect" | "sync") {
+function useWhatsappAction(action: "connect" | "reconnect" | "disconnect" | "sync" | "relink") {
   const svc = useServices();
   const ws = useWorkspace();
   const qc = useQueryClient();
@@ -1180,6 +1180,7 @@ export const useWhatsappConnect = () => useWhatsappAction("connect");
 export const useWhatsappReconnect = () => useWhatsappAction("reconnect");
 export const useWhatsappDisconnect = () => useWhatsappAction("disconnect");
 export const useWhatsappSync = () => useWhatsappAction("sync");
+export const useWhatsappRelink = () => useWhatsappAction("relink");
 
 function useTelegramAction(action: "connect" | "reconnect" | "disconnect" | "sync") {
   const svc = useServices();

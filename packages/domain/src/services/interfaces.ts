@@ -760,6 +760,8 @@ export interface WhatsappService {
   reconnect(workspaceId: string): Promise<WhatsappStatus>;
   disconnect(workspaceId: string): Promise<WhatsappStatus>;
   sync(workspaceId: string): Promise<WhatsappStatus>;
+  /** Forget the stored pairing and start a fresh QR pairing. */
+  relink(workspaceId: string): Promise<WhatsappStatus>;
   /** Active checks (Baileys load, WhatsApp reachability, writable dir…) as readable lines. */
   diagnose(workspaceId: string): Promise<{ lines: string[] }>;
 }

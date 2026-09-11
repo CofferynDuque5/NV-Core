@@ -327,6 +327,16 @@ export class WhatsappService implements SessionEvents, OnModuleInit, OnModuleDes
     return this.connect(workspaceSlug);
   }
 
+  /** "QR nuevo": forget the stored pairing and start a fresh QR pairing right away. */
+  async relink(workspaceSlug: string): Promise<WhatsappStatus> {
+    this.sessions.appendEvent(workspaceSlug, "«QR nuevo» pulsado: se borran las credenciales y se vuelve a vincular.");
+    await this.live.get(workspaceSlug)?.logout();
+    this.live.delete(workspaceSlug);
+    this.sessions.deleteSession(workspaceSlug);
+    await this.persist(workspaceSlug, { status: "disconnected", groupsCount: 0, contactsCount: 0 });
+    return this.connect(workspaceSlug);
+  }
+
   async disconnect(workspaceSlug: string): Promise<WhatsappStatus> {
     await this.live.get(workspaceSlug)?.logout();
     this.live.delete(workspaceSlug);

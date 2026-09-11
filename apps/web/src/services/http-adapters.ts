@@ -164,6 +164,7 @@ export function createHttpAdapters(opts: HttpAdapterOptions): Services {
       reconnect: (id) => post<WhatsappStatus>(`${ws(id)}/whatsapp/reconnect`, {}),
       disconnect: (id) => post<WhatsappStatus>(`${ws(id)}/whatsapp/disconnect`, {}),
       sync: (id) => post<WhatsappStatus>(`${ws(id)}/whatsapp/sync`, {}),
+      relink: (id) => post<WhatsappStatus>(`${ws(id)}/whatsapp/relink`, {}),
       diagnose: (id) => post<{ lines: string[] }>(`${ws(id)}/whatsapp/diagnose`, {}),
     },
     pcAgent: {
