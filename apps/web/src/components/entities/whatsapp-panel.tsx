@@ -70,7 +70,10 @@ export function WhatsAppPanel() {
     }
   }
 
-  const showQr = state === "qr" && qr;
+  // El QR llega por Socket.IO (si funciona) o por HTTP en el status (fallback
+  // para cPanel/LiteSpeed, donde el WebSocket suele no funcionar).
+  const effectiveQr = qr ?? status?.qr ?? null;
+  const showQr = state === "qr" && effectiveQr;
 
   return (
     <Panel>
@@ -143,7 +146,11 @@ export function WhatsAppPanel() {
         {/* QR / illustration */}
         <div className="grid w-full place-items-center rounded-xl border border-line-soft bg-panel-raised p-4 md:w-56">
           {showQr ? (
-            <img src={qr} alt="Código QR de WhatsApp" className="size-44 rounded-lg bg-white p-1" />
+            <img
+              src={effectiveQr}
+              alt="Código QR de WhatsApp"
+              className="size-44 rounded-lg bg-white p-1"
+            />
           ) : state === "connected" ? (
             <div className="flex flex-col items-center gap-2 text-center text-ink-muted">
               <Smartphone className="size-10 text-state-success" />

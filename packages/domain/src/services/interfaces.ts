@@ -736,6 +736,8 @@ export interface WhatsappStatus {
   contactsCount: number;
   /** Last failure reason, surfaced in the panel (null when healthy). */
   error?: string | null;
+  /** QR (data URL) when status is "qr"; lets the panel show it via HTTP polling. */
+  qr?: string | null;
 }
 
 export interface WhatsappService {

@@ -288,6 +288,9 @@ export function useWhatsappStatus() {
   return useQuery({
     queryKey: [ws.id, "whatsapp", "status"],
     queryFn: () => svc.whatsapp.status(ws.id),
+    // Mientras no está conectado (esperando QR / conectando), refresca cada 3 s
+    // para que el QR aparezca por HTTP aunque el WebSocket no funcione (cPanel).
+    refetchInterval: (q) => (q.state.data?.status === "connected" ? false : 3000),
   });
 }
 

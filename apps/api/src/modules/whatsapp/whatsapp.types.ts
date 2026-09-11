@@ -9,6 +9,8 @@ export interface WhatsappStatus {
   contactsCount: number;
   /** Last failure reason, surfaced in the panel (null when healthy). */
   error?: string | null;
+  /** QR (data URL) when status is "qr", for HTTP polling (no WebSocket needed). */
+  qr?: string | null;
 }
 
 /** A connection alert worth surfacing to the user (panel + notifications). */

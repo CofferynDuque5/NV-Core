@@ -24,6 +24,10 @@ const WATCHDOG_INTERVAL_MS = 3 * 60_000;
 export class WhatsappService implements SessionEvents, OnModuleInit, OnModuleDestroy {
   private readonly sessions: SessionManager;
   private readonly live = new Map<string, BaileysSession>();
+  // Último QR (data URL) por workspace, para exponerlo también por HTTP (status).
+  // En cPanel/LiteSpeed los WebSockets no funcionan, así que el panel obtiene el
+  // QR haciendo polling a /whatsapp/status en vez de depender del socket.
+  private readonly qrs = new Map<string, string>();
   private watchdog: ReturnType<typeof setInterval> | null = null;
 
   constructor(
@@ -74,10 +78,13 @@ export class WhatsappService implements SessionEvents, OnModuleInit, OnModuleDes
 
   // ── SessionEvents (called by BaileysSession) ──────────────────────────────
   onQr(workspaceSlug: string, dataUrl: string): void {
+    this.qrs.set(workspaceSlug, dataUrl); // disponible por HTTP (status)
     this.gateway.emitQr(workspaceSlug, dataUrl);
   }
 
   onStatus(workspaceSlug: string, status: WhatsappStatusValue): void {
+    // Al conectar o desconectar, el QR ya no sirve: se descarta.
+    if (status === "connected" || status === "disconnected") this.qrs.delete(workspaceSlug);
     void this.persist(workspaceSlug, { status }).then(() => this.emit(workspaceSlug));
   }
 
@@ -177,14 +184,19 @@ export class WhatsappService implements SessionEvents, OnModuleInit, OnModuleDes
       ? await this.prisma.whatsappSession.findUnique({ where: { workspaceSlug } })
       : null;
     const session = this.live.get(workspaceSlug);
+    const statusValue =
+      session?.currentStatus ?? (row?.status as WhatsappStatusValue) ?? "disconnected";
     return {
-      status: session?.currentStatus ?? (row?.status as WhatsappStatusValue) ?? "disconnected",
+      status: statusValue,
       provider: "baileys",
       number: row?.number ?? null,
       lastConnectionAt: row?.lastConnectionAt?.toISOString() ?? null,
       groupsCount: row?.groupsCount ?? 0,
       contactsCount: row?.contactsCount ?? 0,
       error: session?.lastError ?? null,
+      // El QR viaja también por HTTP para que el panel lo muestre aunque no haya
+      // WebSocket (cPanel/LiteSpeed). Solo cuando el estado es "qr".
+      qr: statusValue === "qr" ? (this.qrs.get(workspaceSlug) ?? null) : null,
     };
   }
 
