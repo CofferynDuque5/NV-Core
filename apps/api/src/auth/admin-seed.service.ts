@@ -4,6 +4,7 @@ import { WORKSPACES } from "@nv/domain";
 
 import { PrismaService } from "../prisma/prisma.service";
 import { WorkspaceRegistry } from "../common/workspace-registry.service";
+import { SampleDataService } from "../common/sample-data.service";
 import { AuthStore } from "./auth.store";
 import { hashPassword } from "./password.util";
 
@@ -25,6 +26,7 @@ export class AdminSeedService implements OnModuleInit {
     private readonly prisma: PrismaService,
     private readonly store: AuthStore,
     private readonly registry: WorkspaceRegistry,
+    private readonly samples: SampleDataService,
   ) {}
 
   async onModuleInit(): Promise<void> {
@@ -67,6 +69,9 @@ export class AdminSeedService implements OnModuleInit {
       const workspaces = await this.registry.listDbWorkspaces();
       for (const w of workspaces) {
         await this.store.upsertMembership(user.id, w.slug, "Owner");
+        // Si el workspace real está vacío, cárgalo con datos de ejemplo editables
+        // (contactos, segmentos, embudos, secuencias, afiliados, automatizaciones).
+        await this.samples.seedIfEmpty(w.slug).catch(() => undefined);
       }
       this.logger.log(
         `Admin "${email}" listo. Owner de ${workspaces.length} workspace(s) real(es)` +

@@ -42,7 +42,7 @@ describe("WorkspaceRegistry.listForUser", () => {
         userId === "u1" ? [{ userId, workspaceSlug: "acme", role: "Owner" as const }] : [],
       ),
     };
-    const registry = new WorkspaceRegistry(prisma as unknown as PrismaService, store as unknown as AuthStore);
+    const registry = new WorkspaceRegistry(prisma as unknown as PrismaService, store as unknown as AuthStore, { seedIfEmpty: async () => undefined } as any);
 
     const list = await registry.listForUser("u1");
     expect(list.map((w) => w.slug)).toEqual(["acme"]);
@@ -52,7 +52,7 @@ describe("WorkspaceRegistry.listForUser", () => {
   it("returns nothing for a user with no memberships", async () => {
     const prisma = { enabled: true, workspace: { findUnique: vi.fn(async () => null) } };
     const store = { membershipsOf: vi.fn(async () => []) };
-    const registry = new WorkspaceRegistry(prisma as unknown as PrismaService, store as unknown as AuthStore);
+    const registry = new WorkspaceRegistry(prisma as unknown as PrismaService, store as unknown as AuthStore, { seedIfEmpty: async () => undefined } as any);
     expect(await registry.listForUser("nobody")).toEqual([]);
   });
 });

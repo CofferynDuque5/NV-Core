@@ -6,11 +6,28 @@ import { MailService } from "./mail.service";
 import { PlanGuard } from "./guards/plan.guard";
 import { WorkspaceRegistry } from "./workspace-registry.service";
 import { CryptoService } from "./crypto/crypto.service";
+import { SampleDataService } from "./sample-data.service";
 
 /** Cross-cutting providers available app-wide. */
 @Global()
 @Module({
-  providers: [WorkspaceGuard, AuditLogger, MailService, PlanGuard, WorkspaceRegistry, CryptoService],
-  exports: [WorkspaceGuard, AuditLogger, MailService, PlanGuard, WorkspaceRegistry, CryptoService],
+  providers: [
+    WorkspaceGuard,
+    AuditLogger,
+    MailService,
+    PlanGuard,
+    WorkspaceRegistry,
+    CryptoService,
+    SampleDataService,
+  ],
+  exports: [
+    WorkspaceGuard,
+    AuditLogger,
+    MailService,
+    PlanGuard,
+    WorkspaceRegistry,
+    CryptoService,
+    SampleDataService,
+  ],
 })
 export class CommonModule {}
