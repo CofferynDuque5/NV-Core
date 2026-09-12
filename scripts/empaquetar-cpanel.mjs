@@ -120,6 +120,10 @@ const pkg = {
     // En cPanel npm no siempre lo deja resoluble desde @whiskeysockets/baileys y
     // WhatsApp falla con "Cannot find package 'long'": lo declaramos nosotros.
     long: "5.3.2",
+    // Miniaturas de imágenes para WhatsApp: Baileys usa 'sharp' (binario nativo
+    // que en CloudLinux/glibc viejo puede no cargar) o 'jimp' (JS puro). Con
+    // jimp presente, las imágenes de campaña siempre salen.
+    jimp: "1.6.1",
   },
   // cPanel usa npm (que sí ejecuta los scripts). Esto es por si alguien instala
   // con pnpm: le permite correr los build scripts que pnpm bloquea por defecto

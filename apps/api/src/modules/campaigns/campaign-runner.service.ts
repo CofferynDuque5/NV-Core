@@ -246,16 +246,26 @@ export class CampaignRunner implements OnModuleInit, OnModuleDestroy {
       const text = renderTemplate(campaign.message, vars);
       const to = group.remoteJid ?? group.id;
       try {
-        const res = await this.withRetry(() =>
-          waAttachment
-            ? this.providers.sendMedia(workspaceSlug, provider, {
-                to,
-                body: text,
-                attachment: waAttachment,
-              })
-            : this.providers.sendMessage(workspaceSlug, provider, { to, body: text }),
-        );
-        results.push(await this.log(workspaceSlug, campaign, group, ch, text, true, null, res.id));
+        let mediaNote: string | null = null;
+        const res = await this.withRetry(async () => {
+          if (!waAttachment) return this.providers.sendMessage(workspaceSlug, provider, { to, body: text });
+          try {
+            return await this.providers.sendMedia(workspaceSlug, provider, {
+              to,
+              body: text,
+              attachment: waAttachment,
+            });
+          } catch (err) {
+            // Only the MEDIA failed (download / file rejected): deliver the text
+            // anyway and leave the reason in the Historial, instead of silently
+            // dropping the whole message or the image without a trace.
+            if (!(err as { mediaFailed?: boolean })?.mediaFailed) throw err;
+            mediaNote = `Imagen NO enviada, se envió solo el texto: ${(err as Error).message}`;
+            this.logger.warn(`[${workspaceSlug}] ${group.name}: ${mediaNote}`);
+            return this.providers.sendMessage(workspaceSlug, provider, { to, body: text });
+          }
+        });
+        results.push(await this.log(workspaceSlug, campaign, group, ch, text, true, mediaNote, res.id));
       } catch (err) {
         results.push(
           await this.log(workspaceSlug, campaign, group, ch, text, false, (err as Error).message),

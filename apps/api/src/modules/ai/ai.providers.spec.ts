@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import type { AppConfig } from "../../config/configuration";
 import { createProvider, selectProviderId } from "./ai.providers";
@@ -43,5 +43,37 @@ describe("createProvider", () => {
     const provider = createProvider(ai({ anthropic: "k", models: { openai: "o", anthropic: "claude-x", gemini: "g" } }));
     expect(provider?.id).toBe("anthropic");
     expect(provider?.model).toBe("claude-x");
+  });
+});
+
+describe("createProvider fallback", () => {
+  it("falls back to the next configured provider when the first has no credits", async () => {
+    const calls: string[] = [];
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockImplementation(async (url) => {
+      const u = String(url);
+      calls.push(u.includes("openai") ? "openai" : u.includes("googleapis") ? "gemini" : "other");
+      if (u.includes("openai")) {
+        return { ok: false, status: 429, statusText: "Too Many Requests", text: async () => '{"error":{"code":"insufficient_quota"}}' } as never;
+      }
+      return {
+        ok: true,
+        json: async () => ({ candidates: [{ content: { parts: [{ text: "desde gemini" }] } }] }),
+      } as never;
+    });
+    const p = createProvider(ai({ openai: "sk-sin-saldo", gemini: "AIza" }))!;
+    const out = await p.complete([{ role: "user", content: "hola" }]);
+    expect(out).toBe("desde gemini");
+    expect(calls).toEqual(["openai", "gemini"]);
+    fetchSpy.mockRestore();
+  });
+
+  it("does not swallow non-availability errors (e.g. a malformed request)", async () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue({
+      ok: false, status: 400, statusText: "Bad Request", text: async () => "bad",
+    } as never);
+    const p = createProvider(ai({ openai: "k", gemini: "k" }))!;
+    await expect(p.complete([{ role: "user", content: "x" }])).rejects.toThrow(/400/);
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+    fetchSpy.mockRestore();
   });
 });

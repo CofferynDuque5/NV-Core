@@ -139,9 +139,55 @@ class GeminiProvider implements AiProvider {
   }
 }
 
-/** Instantiate the active provider, or `null` when none is configured. */
+/** Every configured provider, the active one first (fallback order). */
+export function orderedProviderIds(ai: AppConfig["integrations"]["ai"]): AiProviderId[] {
+  const first = selectProviderId(ai);
+  if (!first) return [];
+  const rest: AiProviderId[] = ["anthropic", "openai", "gemini"];
+  const configured = { openai: Boolean(ai.openai), anthropic: Boolean(ai.anthropic), gemini: Boolean(ai.gemini) };
+  return [first, ...rest.filter((id) => id !== first && configured[id])];
+}
+
+/**
+ * Errors that mean "THIS provider can't serve right now" (no credits, bad key,
+ * rate limit, outage) — worth trying the next configured provider for.
+ */
+export function isProviderUnavailable(err: unknown): boolean {
+  const low = (err instanceof Error ? err.message : String(err)).toLowerCase();
+  return /\b(401|403|429|5\d\d)\b|quota|billing|invalid api key|incorrect api key|overloaded|unavailable/.test(low);
+}
+
+/**
+ * Instantiate the active provider, or `null` when none is configured. When
+ * several keys are configured, the returned provider falls back to the next
+ * one whenever the current fails for account/availability reasons (e.g. an
+ * OpenAI key without credits → Gemini), so "mejorar texto" keeps working.
+ */
 export function createProvider(ai: AppConfig["integrations"]["ai"]): AiProvider | null {
-  const id = selectProviderId(ai);
+  const ids = orderedProviderIds(ai);
+  const providers = ids.map((id) => instantiate(ai, id)).filter((p): p is AiProvider => Boolean(p));
+  if (providers.length === 0) return null;
+  if (providers.length === 1) return providers[0]!;
+  const primary = providers[0]!;
+  return {
+    id: primary.id,
+    model: primary.model,
+    async complete(messages, opts) {
+      let last: unknown;
+      for (const p of providers) {
+        try {
+          return await p.complete(messages, opts);
+        } catch (err) {
+          last = err;
+          if (!isProviderUnavailable(err)) throw err;
+        }
+      }
+      throw last;
+    },
+  };
+}
+
+function instantiate(ai: AppConfig["integrations"]["ai"], id: AiProviderId): AiProvider | null {
   switch (id) {
     case "openai":
       return new OpenAiProvider(ai.openai!, ai.models.openai);

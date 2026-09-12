@@ -203,8 +203,9 @@ export class AiService {
     }
     if (low.includes("429") || low.includes("insufficient_quota") || low.includes("quota") || low.includes("billing")) {
       throw new HttpException(
-        "El proveedor de IA rechazó la petición por límite o falta de créditos. " +
-          "Revisa el saldo/límites de tu cuenta (OpenAI, Anthropic o Gemini).",
+        "Tu cuenta de IA no tiene créditos o alcanzó su límite (no es un fallo del panel). " +
+          "Opciones: añade saldo en platform.openai.com → Billing, o pega en Marketplace una clave " +
+          "GRATIS de Google Gemini (aistudio.google.com) y el panel la usará automáticamente.",
         HttpStatus.TOO_MANY_REQUESTS,
       );
     }

@@ -506,18 +506,38 @@ export class BaileysSession {
     let content: any;
     if (attachment?.url) {
       const caption = text || undefined;
-      if (attachment.kind === "image") content = { image: { url: attachment.url }, caption };
-      else if (attachment.kind === "video") content = { video: { url: attachment.url }, caption };
+      // Download the media ourselves (with a timeout, data: URLs included) and
+      // hand Baileys a Buffer: its own URL fetch has no timeout and fails
+      // silently on some hosts, which showed up as "campaign sent without image".
+      let media: Buffer;
+      try {
+        media = await downloadMedia(attachment.url);
+      } catch (err) {
+        throw new MediaSendError(`No se pudo descargar la imagen (${(err as Error).message}).`);
+      }
+      const kind = attachment.kind ?? (attachment.mime?.startsWith("video/") ? "video" : "image");
+      if (kind === "image") content = { image: media, caption };
+      else if (kind === "video") content = { video: media, caption };
       else
         content = {
-          document: { url: attachment.url },
+          document: media,
           mimetype: attachment.mime ?? "application/octet-stream",
           fileName: attachment.filename ?? "archivo",
           caption,
         };
-    } else {
-      content = { text };
+      try {
+        const result = await this.sock.sendMessage(jid, content);
+        return { id: result?.key?.id ?? "" };
+      } catch (err) {
+        const msg = (err as Error).message ?? String(err);
+        const hint = /image processing library|sharp|jimp/i.test(msg)
+          ? " (falta la librería de imágenes en el servidor: vuelve a ejecutar 'Run NPM Install')"
+          : "";
+        this.note(`Envío de imagen falló: ${msg}${hint}`, "warn");
+        throw new MediaSendError(`La imagen no se pudo enviar: ${msg}${hint}`);
+      }
     }
+    content = { text };
     const result = await this.sock.sendMessage(jid, content);
     return { id: result?.key?.id ?? "" };
   }
@@ -601,6 +621,41 @@ export class BaileysSession {
     this.contacts.clear();
     this.stopHeartbeat();
     this.setStatus("disconnected");
+  }
+}
+
+/**
+ * Thrown when the MEDIA part of a send fails (download or WhatsApp rejecting
+ * the file). Callers can fall back to a text-only send and report the reason.
+ */
+export class MediaSendError extends Error {
+  readonly mediaFailed = true;
+  constructor(message: string) {
+    super(message);
+    this.name = "MediaSendError";
+  }
+}
+
+/** Fetch a media URL (or decode a data: URL) into a Buffer, with a timeout. */
+export async function downloadMedia(url: string, timeoutMs = 25_000): Promise<Buffer> {
+  if (url.startsWith("data:")) {
+    const comma = url.indexOf(",");
+    if (comma === -1) throw new Error("data URL inválida");
+    return Buffer.from(url.slice(comma + 1), "base64");
+  }
+  const ctrl = new AbortController();
+  const t = setTimeout(() => ctrl.abort(), timeoutMs);
+  try {
+    const res = await fetch(url, { signal: ctrl.signal, redirect: "follow" });
+    if (!res.ok) throw new Error(`HTTP ${res.status} al descargar ${url.slice(0, 80)}`);
+    const buf = Buffer.from(await res.arrayBuffer());
+    if (buf.length === 0) throw new Error("archivo vacío");
+    return buf;
+  } catch (err) {
+    if ((err as Error).name === "AbortError") throw new Error(`tiempo de espera agotado (${timeoutMs / 1000}s)`);
+    throw err;
+  } finally {
+    clearTimeout(t);
   }
 }
 
