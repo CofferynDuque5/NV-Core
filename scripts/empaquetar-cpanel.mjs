@@ -116,6 +116,10 @@ const pkg = {
     // del "schema engine" nativo de Prisma (que es específico de la plataforma y no
     // se puede empaquetar de forma cruzada). Funciona en cualquier hosting.
     pg: "8.13.1",
+    // Baileys importa 'long' sin declararlo (le llega "de rebote" por protobufjs).
+    // En cPanel npm no siempre lo deja resoluble desde @whiskeysockets/baileys y
+    // WhatsApp falla con "Cannot find package 'long'": lo declaramos nosotros.
+    long: "5.3.2",
   },
   // cPanel usa npm (que sí ejecuta los scripts). Esto es por si alguien instala
   // con pnpm: le permite correr los build scripts que pnpm bloquea por defecto
