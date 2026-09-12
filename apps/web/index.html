@@ -30,6 +30,48 @@
     <!-- Configuración en tiempo de ejecución (editable tras el build): pon aquí la
          URL de tu API. Se carga antes de la app para que no haya que recompilar. -->
     <script src="/config.js"></script>
+    <script>
+      // Auto-reparación: si en 6 s la app no arrancó (pantalla en negro), casi
+      // siempre es un service worker / caché con archivos de una versión
+      // anterior. Primer intento: limpiar SW + cachés y recargar una vez.
+      // Segundo: mostrar qué hacer en vez de dejar la pantalla vacía.
+      (function () {
+        var KEY = "nv-autoheal";
+        setTimeout(function () {
+          var root = document.getElementById("root");
+          if (root && root.childElementCount > 0) {
+            try { sessionStorage.removeItem(KEY); } catch (e) {}
+            return;
+          }
+          var tried = false;
+          try { tried = sessionStorage.getItem(KEY) === "1"; } catch (e) {}
+          var clean = Promise.resolve();
+          if ("serviceWorker" in navigator) {
+            clean = navigator.serviceWorker.getRegistrations()
+              .then(function (rs) { return Promise.all(rs.map(function (r) { return r.unregister(); })); })
+              .catch(function () {});
+          }
+          if (window.caches && caches.keys) {
+            clean = clean.then(function () {
+              return caches.keys().then(function (ks) { return Promise.all(ks.map(function (k) { return caches.delete(k); })); });
+            }).catch(function () {});
+          }
+          if (!tried) {
+            try { sessionStorage.setItem(KEY, "1"); } catch (e) {}
+            clean.then(function () { location.replace(location.pathname + "?r=" + Date.now()); });
+            return;
+          }
+          clean.then(function () {
+            root.innerHTML =
+              '<div style="font-family:system-ui,sans-serif;color:#e6e8ee;max-width:560px;margin:14vh auto;padding:0 20px;line-height:1.5">' +
+              '<h1 style="font-size:20px;margin:0 0 8px">NV Marketing no pudo cargar</h1>' +
+              '<p style="color:#9aa3b2;margin:0 0 14px">El navegador tiene archivos de una versión anterior o la subida al servidor quedó incompleta (faltan archivos en la carpeta <code>web/assets</code>).</p>' +
+              '<ol style="color:#9aa3b2;padding-left:18px;margin:0 0 16px"><li>Pulsa <b style="color:#e6e8ee">Ctrl + F5</b> (o abre la web en una ventana privada).</li><li>Si sigue igual: en cPanel vuelve a extraer el zip encima de la app y pulsa <b style="color:#e6e8ee">Restart</b>.</li></ol>' +
+              '<button onclick="location.replace(\'/?r=\'+Date.now())" style="background:#5b6cff;color:#fff;border:0;border-radius:8px;padding:10px 16px;font-size:14px;cursor:pointer">Reintentar</button></div>';
+          });
+        }, 6000);
+      })();
+    </script>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

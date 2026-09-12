@@ -1,6 +1,6 @@
 import "reflect-metadata";
 import { existsSync } from "node:fs";
-import { join } from "node:path";
+import { join, sep } from "node:path";
 import { Logger, ValidationPipe } from "@nestjs/common";
 import { NestFactory } from "@nestjs/core";
 import type { NestExpressApplication } from "@nestjs/platform-express";
@@ -97,16 +97,39 @@ async function bootstrap(): Promise<void> {
   // are left untouched; every other GET falls back to index.html for SPA routing.
   const webDist = process.env.WEB_DIST;
   if (webDist && existsSync(join(webDist, "index.html"))) {
-    app.useStaticAssets(webDist, { index: false });
+    app.useStaticAssets(webDist, {
+      index: false,
+      // Hashed /assets/* never change → cache hard. Everything else (index,
+      // sw.js, config.js, manifest) must always be re-validated so a new deploy
+      // is picked up immediately (shared hosts + service workers otherwise keep
+      // serving a stale shell that points at assets that no longer exist).
+      setHeaders: (res: { setHeader: (k: string, v: string) => void }, filePath: string) => {
+        if (filePath.includes(`${sep}assets${sep}`)) {
+          res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
+        } else {
+          res.setHeader("Cache-Control", "no-store");
+        }
+      },
+    });
     const indexHtml = join(webDist, "index.html");
     app.use(
       (
         req: { method: string; path: string },
-        res: { sendFile: (p: string) => void },
+        res: {
+          sendFile: (p: string) => void;
+          status: (c: number) => { type: (t: string) => { send: (b: string) => void } };
+          setHeader: (k: string, v: string) => void;
+        },
         next: () => void,
       ) => {
         if (req.method !== "GET" && req.method !== "HEAD") return next();
         if (req.path.startsWith("/api") || req.path.startsWith("/socket.io")) return next();
+        // A missing FILE (has an extension) must be a real 404, never index.html:
+        // answering HTML for a .js URL blanks the app and poisons browser caches.
+        if (/\.[a-z0-9]{1,8}$/i.test(req.path)) {
+          return res.status(404).type("text/plain").send(`No existe ${req.path}`);
+        }
+        res.setHeader("Cache-Control", "no-store");
         res.sendFile(indexHtml);
       },
     );
