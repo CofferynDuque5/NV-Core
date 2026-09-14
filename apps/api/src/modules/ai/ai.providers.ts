@@ -104,6 +104,88 @@ class AnthropicProvider implements AiProvider {
   }
 }
 
+
+// ── Gemini model discovery ────────────────────────────────────────────────────
+// Google retires model names regularly ("gemini-2.5-flash is no longer
+// available to new users"). Instead of hard-coding one, we ask the API which
+// models THIS key can use and pick the best current one. Cached per key.
+
+const GEMINI_API = "https://generativelanguage.googleapis.com/v1beta";
+const modelCache = new Map<string, { name: string; at: number }>();
+const MODEL_TTL_MS = 6 * 3600_000;
+
+/** Numeric version from a model name (gemini-2.5-flash → 2.5, gemini-3-pro → 3). */
+function geminiVersion(name: string): number {
+  const m = name.match(/gemini-(\d+(?:\.\d+)?)/);
+  return m ? Number(m[1]) : 0;
+}
+
+/** Rank candidates: newest version first, then flash over pro, stable over preview/lite. */
+function rankGemini(names: string[], kind: "text" | "image"): string | null {
+  const bad = /embedding|tts|live|audio|native|computer-use|robotics|learnlm|gemma|aqa|veo|imagen|nano|thinking|exp\b/i;
+  const list = names
+    .map((n) => n.replace(/^models\//, ""))
+    .filter((n) => n.startsWith("gemini-") && !bad.test(n))
+    .filter((n) => (kind === "image" ? /image/i.test(n) : !/image/i.test(n)));
+  if (list.length === 0) return null;
+  const score = (n: string) =>
+    geminiVersion(n) * 1000 +
+    (/flash/i.test(n) ? 100 : 0) +
+    (/lite/i.test(n) ? -50 : 0) +
+    (/preview|exp/i.test(n) ? -20 : 0) +
+    (/latest/i.test(n) ? 5 : 0) -
+    Math.min(n.length, 40) / 100;
+  return list.sort((a, b) => score(b) - score(a))[0] ?? null;
+}
+
+/**
+ * Resolve the Gemini model to call. An explicit configured name (anything but
+ * "auto") is used as-is; "auto" discovers the best available model for the
+ * key. The result is cached; call {@link invalidateGeminiModel} after a 404.
+ */
+export async function resolveGeminiModel(
+  apiKey: string,
+  configured: string | undefined,
+  kind: "text" | "image",
+): Promise<string> {
+  if (configured && configured !== "auto" && !(kind === "image" && !/image/i.test(configured))) {
+    return configured;
+  }
+  const key = `${kind}:${apiKey.slice(-8)}`;
+  const hit = modelCache.get(key);
+  if (hit && Date.now() - hit.at < MODEL_TTL_MS) return hit.name;
+  let names: string[] = [];
+  try {
+    const res = await fetch(`${GEMINI_API}/models?pageSize=200&key=${encodeURIComponent(apiKey)}`);
+    if (res.ok) {
+      const data = (await res.json()) as {
+        models?: { name?: string; supportedGenerationMethods?: string[] }[];
+      };
+      names = (data.models ?? [])
+        .filter((m) => (m.supportedGenerationMethods ?? []).includes("generateContent"))
+        .map((m) => String(m.name ?? ""));
+    }
+  } catch {
+    /* fall through to the static fallback */
+  }
+  const picked =
+    rankGemini(names, kind) ?? (kind === "image" ? "gemini-2.5-flash-image" : "gemini-2.5-flash");
+  modelCache.set(key, { name: picked, at: Date.now() });
+  return picked;
+}
+
+export function invalidateGeminiModel(apiKey: string, kind: "text" | "image"): void {
+  modelCache.delete(`${kind}:${apiKey.slice(-8)}`);
+}
+
+/** Gemini's "model not found / retired" answers, which warrant re-discovery. */
+export function isGeminiModelGone(message: string): boolean {
+  return /404|not found|no longer available|is not supported/i.test(message);
+}
+
+/** Exported for tests. */
+export const __rankGemini = rankGemini;
+
 class GeminiProvider implements AiProvider {
   readonly id = "gemini" as const;
   constructor(
@@ -112,10 +194,22 @@ class GeminiProvider implements AiProvider {
   ) {}
 
   async complete(messages: ChatMessage[], opts?: CompletionOptions): Promise<string> {
+    try {
+      return await this.callOnce(messages, opts);
+    } catch (err) {
+      // Model retired since we cached it → discover again and retry once.
+      if (!isGeminiModelGone((err as Error).message)) throw err;
+      invalidateGeminiModel(this.apiKey, "text");
+      return this.callOnce(messages, opts);
+    }
+  }
+
+  private async callOnce(messages: ChatMessage[], opts?: CompletionOptions): Promise<string> {
+    const model = await resolveGeminiModel(this.apiKey, this.model, "text");
     const system = messages.filter((m) => m.role === "system").map((m) => m.content).join("\n\n");
     const user = messages.filter((m) => m.role === "user").map((m) => m.content).join("\n\n");
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(
-      this.model,
+      model,
     )}:generateContent?key=${encodeURIComponent(this.apiKey)}`;
     const res = await fetch(url, {
       method: "POST",
@@ -241,10 +335,21 @@ class GeminiImageProvider implements ImageProvider {
   ) {}
 
   async generateImage(prompt: string, size: string): Promise<string> {
+    try {
+      return await this.generateOnce(prompt, size);
+    } catch (err) {
+      if (!isGeminiModelGone((err as Error).message)) throw err;
+      invalidateGeminiModel(this.apiKey, "image");
+      return this.generateOnce(prompt, size);
+    }
+  }
+
+  private async generateOnce(prompt: string, size: string): Promise<string> {
+    const model = await resolveGeminiModel(this.apiKey, this.model, "image");
     const orientation =
       size === "1024x1536" ? "formato vertical 2:3 (story)" : size === "1536x1024" ? "formato horizontal 3:2" : "formato cuadrado 1:1";
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(
-      this.model,
+      model,
     )}:generateContent?key=${encodeURIComponent(this.apiKey)}`;
     const res = await fetch(url, {
       method: "POST",
@@ -270,7 +375,7 @@ class GeminiImageProvider implements ImageProvider {
  * Returns null when neither is configured.
  */
 export function createImageProvider(ai: AppConfig["integrations"]["ai"]): ImageProvider | null {
-  if (ai.gemini) return new GeminiImageProvider(ai.gemini, "gemini-2.5-flash-image");
+  if (ai.gemini) return new GeminiImageProvider(ai.gemini, "auto");
   if (ai.openai) return new OpenAiImageProvider(ai.openai, "gpt-image-1");
   return null;
 }

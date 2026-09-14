@@ -47,6 +47,9 @@ import {
   type CompletionOptions,
   type ImageProvider,
   createGeminiProvider,
+  invalidateGeminiModel,
+  isGeminiModelGone,
+  resolveGeminiModel,
 } from "./ai.providers";
 import { AssistantService } from "./assistant.service";
 import { estimateTokens, usagePeriod } from "./ai.usage";
@@ -187,8 +190,8 @@ export class AiService {
     const provider = createImageProvider(await this.resolveAiConfig(workspaceId));
     if (!provider) {
       throw new ServiceUnavailableException(
-        "Generación de imágenes no configurada. Añade tu clave de OpenAI en Integraciones " +
-          "(los flyers usan la API de imágenes de OpenAI).",
+        "Generación de imágenes no configurada. Pega tu clave de Google Gemini en Marketplace " +
+          "(los flyers se generan con Gemini).",
       );
     }
     return provider;
@@ -461,7 +464,8 @@ export class AiService {
           "Get API key) en Marketplace → Google Gemini.",
       );
     }
-    return { provider, apiKey: ai.gemini, model: ai.models.gemini };
+    const model = await resolveGeminiModel(ai.gemini, ai.models.gemini, "text");
+    return { provider, apiKey: ai.gemini, model };
   }
 
   async chat(
@@ -476,7 +480,16 @@ export class AiService {
     await this.assertWithinQuota(workspaceId);
     if (input.mode === "asistente") {
       try {
-        const reply = await this.assistant.chat(workspaceId, gemini.apiKey, gemini.model, input.messages);
+        let reply: string;
+        try {
+          reply = await this.assistant.chat(workspaceId, gemini.apiKey, gemini.model, input.messages);
+        } catch (err) {
+          // Modelo retirado por Google: redescubrir el mejor disponible y reintentar.
+          if (!isGeminiModelGone((err as Error).message)) throw err;
+          invalidateGeminiModel(gemini.apiKey, "text");
+          const fresh = await resolveGeminiModel(gemini.apiKey, "auto", "text");
+          reply = await this.assistant.chat(workspaceId, gemini.apiKey, fresh, input.messages);
+        }
         await this.record(workspaceId, estimateTokens(input.messages.map((m) => m.content).join("\n"), reply));
         return { reply };
       } catch (err) {

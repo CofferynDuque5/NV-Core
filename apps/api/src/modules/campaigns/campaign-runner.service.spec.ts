@@ -463,7 +463,7 @@ describe("CampaignRunner.run — seguros contra duplicados y pausa", () => {
   it("no repite un chat que otra ejecución tiene «en curso»", async () => {
     const c = campaign({ targets: [g("g1", "Grupo 1")] });
     const { runner, prisma, providers } = makeRunner({ campaign: c });
-    prisma.sendLog.findFirst.mockResolvedValue({ id: "otro" });
+    prisma.sendLog.findFirst.mockResolvedValue({ id: "otro" } as never);
     await runner.run("w1", "c1");
     expect(providers.sendMessage).not.toHaveBeenCalled();
   });

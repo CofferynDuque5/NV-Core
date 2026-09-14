@@ -77,3 +77,32 @@ describe("createProvider fallback", () => {
     fetchSpy.mockRestore();
   });
 });
+
+describe("Gemini model discovery", () => {
+  it("picks the newest stable flash model for text and an image model for flyers", async () => {
+    const { __rankGemini, resolveGeminiModel } = await import("./ai.providers");
+    const names = [
+      "models/gemini-2.5-flash",
+      "models/gemini-2.5-pro",
+      "models/gemini-3-flash-preview",
+      "models/gemini-3.1-flash",
+      "models/gemini-3.1-flash-lite",
+      "models/gemini-3.1-pro",
+      "models/gemini-2.5-flash-image",
+      "models/gemini-3-pro-image-preview",
+      "models/gemini-embedding-001",
+      "models/gemini-2.5-flash-preview-tts",
+    ];
+    expect(__rankGemini(names, "text")).toBe("gemini-3.1-flash");
+    expect(__rankGemini(names, "image")).toBe("gemini-3-pro-image-preview");
+
+    vi.spyOn(globalThis, "fetch").mockResolvedValue({
+      ok: true,
+      json: async () => ({ models: names.map((n) => ({ name: n, supportedGenerationMethods: ["generateContent"] })) }),
+    } as never);
+    expect(await resolveGeminiModel("AIza-test-key", "auto", "text")).toBe("gemini-3.1-flash");
+    // An explicit model name is respected as-is.
+    expect(await resolveGeminiModel("AIza-test-key", "gemini-2.5-flash", "text")).toBe("gemini-2.5-flash");
+    vi.restoreAllMocks();
+  });
+});
