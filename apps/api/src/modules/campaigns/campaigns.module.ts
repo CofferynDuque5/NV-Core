@@ -37,8 +37,11 @@ import {
   MaxLength,
   Min,
   MinLength,
+  ValidateNested,
 } from "class-validator";
+import { Type } from "class-transformer";
 
+import { MediaAttachmentDto } from "../../common/dto/media-attachment.dto";
 import { parseCsv, toCsv } from "../../common/csv";
 import { ListResultDto } from "../../common/dto/list-result.dto";
 import { WorkspaceId } from "../../common/tenant/workspace.decorator";
@@ -121,9 +124,11 @@ export class CreateCampaignDto {
   @IsString({ each: true })
   scheduleTimes?: string[];
 
-  @ApiPropertyOptional({ isArray: true, type: Object })
+  @ApiPropertyOptional({ isArray: true, type: MediaAttachmentDto })
   @IsOptional()
   @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => MediaAttachmentDto)
   attachments?: CampaignAttachment[];
 
   @ApiPropertyOptional({ enum: ["feed", "reel", "story", "carousel"] })
@@ -169,7 +174,11 @@ export class UpdateCampaignDto {
   @Max(6, { each: true })
   scheduleDays?: number[];
   @IsOptional() @IsArray() @IsString({ each: true }) scheduleTimes?: string[];
-  @IsOptional() @IsArray() attachments?: CampaignAttachment[];
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => MediaAttachmentDto)
+  attachments?: CampaignAttachment[];
   @IsOptional() @IsIn(["feed", "reel", "story", "carousel"]) socialFormat?: string;
   @IsOptional() @IsBoolean() postToWaStatus?: boolean;
   @IsOptional() @IsBoolean() rotateAttachments?: boolean;

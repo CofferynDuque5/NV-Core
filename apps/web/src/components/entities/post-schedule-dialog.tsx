@@ -1,6 +1,6 @@
 
 import * as React from "react";
-import { Loader2, Paperclip, X } from "lucide-react";
+import { Loader2, Paperclip } from "lucide-react";
 import { CHANNEL_LIST, type CampaignAttachment, type ChannelId } from "@nv/domain";
 
 import { useCreatePost, useUploadCampaignAttachment } from "@/hooks/use-domain-mutations";
@@ -8,6 +8,7 @@ import { surfaceForChannel } from "@/lib/content-preview";
 import { FormDialog, errorMessage } from "./form-dialog";
 import { ContentPreview } from "./content-preview";
 import { AiFlyerButton } from "./ai-flyer-button";
+import { AttachmentRows, LibraryPickerButton } from "./attachment-tools";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -178,33 +179,12 @@ export function PostScheduleDialog({
           )}
           {upload.isPending ? "Subiendo…" : "Subir imagen"}
         </button>
+        <LibraryPickerButton onPick={(att) => setAttachments((prev) => [...prev, att])} />
         <AiFlyerButton
           defaultPrompt={copy.trim() || title.trim()}
           onGenerated={(att) => setAttachments((prev) => [...prev, att])}
         />
-        {attachments.length > 0 ? (
-          <div className="space-y-0.5">
-            {attachments.map((att, i) => (
-              <div
-                key={`${att.url}-${i}`}
-                className="flex items-center gap-2 rounded-md bg-panel-raised px-2 py-1.5 text-xs"
-              >
-                <span className="shrink-0 rounded bg-panel-high px-1.5 py-0.5 text-[10px] uppercase text-ink-faint">
-                  {att.kind}
-                </span>
-                <span className="min-w-0 flex-1 truncate text-ink">{att.filename ?? att.url}</span>
-                <button
-                  type="button"
-                  onClick={() => removeAttachment(i)}
-                  className="rounded p-0.5 text-ink-faint hover:text-state-danger"
-                  title="Quitar"
-                >
-                  <X className="size-3.5" />
-                </button>
-              </div>
-            ))}
-          </div>
-        ) : null}
+        <AttachmentRows attachments={attachments} onRemove={removeAttachment} />
       </div>
 
       <div className="space-y-1.5">

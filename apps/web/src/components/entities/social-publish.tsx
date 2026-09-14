@@ -1,6 +1,7 @@
 
 import * as React from "react";
-import { Loader2, Paperclip, Send, X } from "lucide-react";
+import { Loader2, Paperclip, Send } from "lucide-react";
+import { AttachmentRows, LibraryPickerButton } from "./attachment-tools";
 import type { CampaignAttachment, SocialResult } from "@nv/domain";
 
 import { cn } from "@/lib/utils";
@@ -131,29 +132,8 @@ export function SocialPublishForm({
           {upload.isPending ? <Loader2 className="size-4 animate-spin" /> : <Paperclip className="size-4" />}
           {upload.isPending ? "Subiendo…" : "Subir imagen"}
         </button>
-        {attachments.length > 0 ? (
-          <div className="space-y-0.5">
-            {attachments.map((att, i) => (
-              <div
-                key={`${att.url}-${i}`}
-                className="flex items-center gap-2 rounded-md bg-panel-raised px-2 py-1.5 text-xs"
-              >
-                <span className="shrink-0 rounded bg-panel-high px-1.5 py-0.5 text-[10px] uppercase text-ink-faint">
-                  {att.kind}
-                </span>
-                <span className="min-w-0 flex-1 truncate text-ink">{att.filename ?? att.url}</span>
-                <button
-                  type="button"
-                  onClick={() => setAttachments((prev) => prev.filter((_, j) => j !== i))}
-                  className="rounded p-0.5 text-ink-faint hover:text-state-danger"
-                  title="Quitar"
-                >
-                  <X className="size-3.5" />
-                </button>
-              </div>
-            ))}
-          </div>
-        ) : null}
+        <LibraryPickerButton onPick={(att) => setAttachments((prev) => [...prev, att])} />
+        <AttachmentRows attachments={attachments} onRemove={(i) => setAttachments((prev) => prev.filter((_, j) => j !== i))} />
       </div>
 
       <div className="space-y-1.5">

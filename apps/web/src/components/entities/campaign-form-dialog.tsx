@@ -21,6 +21,7 @@ import { useGroups, useTemplates } from "@/hooks/use-domain-data";
 import { FormDialog, errorMessage } from "./form-dialog";
 import { ContentPreview } from "./content-preview";
 import { AiFlyerButton } from "./ai-flyer-button";
+import { AttachmentRows, LibraryPickerButton } from "./attachment-tools";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -385,35 +386,12 @@ export function CampaignFormDialog({
                 )}
                 {upload.isPending ? "Subiendo…" : "Subir imagen (ImgBB)"}
               </button>
+              <LibraryPickerButton onPick={(att) => setAttachments((prev) => [...prev, att])} />
               <AiFlyerButton
                 defaultPrompt={message.trim() || name.trim()}
                 onGenerated={(att) => setAttachments((prev) => [...prev, att])}
               />
-              {attachments.length > 0 ? (
-                <div className="space-y-0.5">
-                  {attachments.map((att, i) => (
-                    <div
-                      key={`${att.url}-${i}`}
-                      className="bg-panel-raised flex items-center gap-2 rounded-md px-2 py-1.5 text-xs"
-                    >
-                      <span className="bg-panel-high text-ink-faint shrink-0 rounded px-1.5 py-0.5 text-[10px] uppercase">
-                        {att.kind}
-                      </span>
-                      <span className="text-ink min-w-0 flex-1 truncate">
-                        {att.filename ?? att.url}
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() => removeAttachment(i)}
-                        className="text-ink-faint hover:text-state-danger rounded p-0.5"
-                        title="Quitar"
-                      >
-                        <X className="size-3.5" />
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              ) : null}
+              <AttachmentRows attachments={attachments} onRemove={removeAttachment} />
               <p className="text-ink-faint text-[11px]">
                 El primero se envía por WhatsApp; para carrusel de Instagram sube varios.
               </p>

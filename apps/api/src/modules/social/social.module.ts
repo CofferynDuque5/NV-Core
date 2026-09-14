@@ -10,7 +10,9 @@ import {
   UseGuards,
 } from "@nestjs/common";
 import { ApiBearerAuth, ApiPropertyOptional, ApiTags } from "@nestjs/swagger";
-import { IsArray, IsIn, IsOptional, IsString } from "class-validator";
+import { IsArray, IsIn, IsOptional, IsString, ValidateNested } from "class-validator";
+import { Type } from "class-transformer";
+import { MediaAttachmentDto } from "../../common/dto/media-attachment.dto";
 
 import { WorkspaceId } from "../../common/tenant/workspace.decorator";
 import { WorkspaceGuard } from "../../common/tenant/workspace.guard";
@@ -26,10 +28,12 @@ import { MetaModule } from "./meta.module";
 class PublishDto {
   @IsArray() @IsIn(["facebook", "instagram"], { each: true }) targets!: ("facebook" | "instagram")[];
   @IsOptional() @IsString() message?: string;
-  @ApiPropertyOptional({ isArray: true, type: Object })
+  @ApiPropertyOptional({ isArray: true, type: MediaAttachmentDto })
   @IsOptional()
   @IsArray()
-  attachments?: { url?: string; kind?: string; mime?: string | null; filename?: string | null }[];
+  @ValidateNested({ each: true })
+  @Type(() => MediaAttachmentDto)
+  attachments?: MediaAttachmentDto[];
   @IsOptional() @IsIn(["feed", "reel", "story", "carousel"]) format?: string;
 }
 

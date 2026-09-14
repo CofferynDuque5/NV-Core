@@ -30,7 +30,10 @@ import {
   IsOptional,
   IsString,
   MinLength,
+  ValidateNested,
 } from "class-validator";
+import { Type } from "class-transformer";
+import { MediaAttachmentDto } from "../../common/dto/media-attachment.dto";
 
 import { ListResultDto } from "../../common/dto/list-result.dto";
 import { WorkspaceId } from "../../common/tenant/workspace.decorator";
@@ -57,9 +60,11 @@ export class CreatePostDto {
   @IsString({ each: true })
   hashtags?: string[];
 
-  @ApiPropertyOptional({ isArray: true, type: Object })
+  @ApiPropertyOptional({ isArray: true, type: MediaAttachmentDto })
   @IsOptional()
   @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => MediaAttachmentDto)
   attachments?: CampaignAttachment[];
 
   @ApiPropertyOptional({ enum: POST_STATUSES })
@@ -94,9 +99,11 @@ export class UpdatePostDto {
   @IsString({ each: true })
   hashtags?: string[];
 
-  @ApiPropertyOptional({ isArray: true, type: Object })
+  @ApiPropertyOptional({ isArray: true, type: MediaAttachmentDto })
   @IsOptional()
   @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => MediaAttachmentDto)
   attachments?: CampaignAttachment[];
 
   @ApiPropertyOptional({ enum: POST_STATUSES })
