@@ -682,7 +682,12 @@ export interface AiService {
   /** Conversational sales agent: full chat history in, next assistant reply out. */
   chat(
     workspaceId: string,
-    input: { messages: { role: "user" | "assistant"; content: string }[]; system?: string },
+    input: {
+      messages: { role: "user" | "assistant"; content: string }[];
+      system?: string;
+      /** "asistente" = panel assistant (sees every section, can act); default "ventas". */
+      mode?: "asistente" | "ventas";
+    },
   ): Promise<{ reply: string }>;
 }
 

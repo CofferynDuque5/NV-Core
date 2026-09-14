@@ -32,7 +32,8 @@ export function selectProviderId(ai: AppConfig["integrations"]["ai"]): AiProvide
     gemini: Boolean(ai.gemini),
   };
   if (ai.provider && configured[ai.provider]) return ai.provider;
-  const priority: AiProviderId[] = ["anthropic", "openai", "gemini"];
+  // Gemini primero: es el proveedor del asistente (y tiene capa gratuita).
+  const priority: AiProviderId[] = ["gemini", "openai", "anthropic"];
   return priority.find((id) => configured[id]) ?? null;
 }
 
@@ -143,7 +144,7 @@ class GeminiProvider implements AiProvider {
 export function orderedProviderIds(ai: AppConfig["integrations"]["ai"]): AiProviderId[] {
   const first = selectProviderId(ai);
   if (!first) return [];
-  const rest: AiProviderId[] = ["anthropic", "openai", "gemini"];
+  const rest: AiProviderId[] = ["gemini", "openai", "anthropic"];
   const configured = { openai: Boolean(ai.openai), anthropic: Boolean(ai.anthropic), gemini: Boolean(ai.gemini) };
   return [first, ...rest.filter((id) => id !== first && configured[id])];
 }
@@ -232,12 +233,49 @@ class OpenAiImageProvider implements ImageProvider {
   }
 }
 
+/** Gemini image generation ("Nano Banana"): returns the first inline PNG as a data: URL. */
+class GeminiImageProvider implements ImageProvider {
+  constructor(
+    private readonly apiKey: string,
+    readonly model: string,
+  ) {}
+
+  async generateImage(prompt: string, size: string): Promise<string> {
+    const orientation =
+      size === "1024x1536" ? "formato vertical 2:3 (story)" : size === "1536x1024" ? "formato horizontal 3:2" : "formato cuadrado 1:1";
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(
+      this.model,
+    )}:generateContent?key=${encodeURIComponent(this.apiKey)}`;
+    const res = await fetch(url, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        contents: [{ role: "user", parts: [{ text: `Genera un flyer publicitario, ${orientation}, sin texto ilegible: ${prompt}` }] }],
+        generationConfig: { responseModalities: ["IMAGE", "TEXT"] },
+      }),
+    });
+    if (!res.ok) throw new Error(`Gemini Images: ${await readError(res)}`);
+    const data = (await res.json()) as {
+      candidates?: { content?: { parts?: { inlineData?: { mimeType?: string; data?: string } }[] } }[];
+    };
+    const part = data.candidates?.[0]?.content?.parts?.find((p) => p.inlineData?.data);
+    if (!part?.inlineData?.data) throw new Error("Gemini Images: el modelo no devolvió imagen.");
+    return `data:${part.inlineData.mimeType || "image/png"};base64,${part.inlineData.data}`;
+  }
+}
+
 /**
- * Image generation for flyers. Uses OpenAI's images API (gpt-image-1), so it
- * needs OPENAI_API_KEY specifically — the text providers (Anthropic/Gemini) are
- * not used here. Returns null when no OpenAI key is configured.
+ * Image generation for flyers: Gemini (gemini-2.5-flash-image) when a Gemini
+ * key exists — the assistant runs on Gemini — otherwise OpenAI's gpt-image-1.
+ * Returns null when neither is configured.
  */
 export function createImageProvider(ai: AppConfig["integrations"]["ai"]): ImageProvider | null {
-  if (!ai.openai) return null;
-  return new OpenAiImageProvider(ai.openai, "gpt-image-1");
+  if (ai.gemini) return new GeminiImageProvider(ai.gemini, "gemini-2.5-flash-image");
+  if (ai.openai) return new OpenAiImageProvider(ai.openai, "gpt-image-1");
+  return null;
+}
+
+/** The Gemini text provider alone (the assistant must run ONLY on Gemini). */
+export function createGeminiProvider(ai: AppConfig["integrations"]["ai"]): AiProvider | null {
+  return ai.gemini ? new GeminiProvider(ai.gemini, ai.models.gemini) : null;
 }

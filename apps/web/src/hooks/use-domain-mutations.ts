@@ -408,7 +408,7 @@ export function useRunCampaign() {
     mutationFn: (id: string) => svc.campaigns.run(ws.id, id),
     onSuccess: () => {
       invalidateCampaigns(qc, ws.id);
-      toast.success("Campaña enviada");
+      toast.success("Campaña en marcha: los envíos van saliendo con ritmo anti-ban. Míralos en Historial.");
     },
     onError: (err) => toast.error(errText(err)),
   });
@@ -1517,8 +1517,11 @@ export function useAgentChat() {
   const ws = useWorkspace();
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (input: { messages: { role: "user" | "assistant"; content: string }[]; system?: string }) =>
-      svc.ai.chat(ws.id, input),
+    mutationFn: (input: {
+      messages: { role: "user" | "assistant"; content: string }[];
+      system?: string;
+      mode?: "asistente" | "ventas";
+    }) => svc.ai.chat(ws.id, input),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: [ws.id, "ai", "usage"] });
     },

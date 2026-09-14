@@ -32,11 +32,20 @@ function makeRunner(
       findMany: vi.fn(async () => []),
       // Reserva atómica del turno (seguro de envío único): por defecto la gana.
       updateMany: vi.fn(async () => ({ count: 1 })),
+      // Relectura del estado antes de cada envío («Pausar» detiene de verdad).
+      findUnique: vi.fn(async () => ({ status: overrides.campaign?.status ?? "programada" })),
     },
     sendLog: {
+      // La fila se crea como marca "en curso" y luego se actualiza con el resultado.
       create: vi.fn(async ({ data }: { data: AnyRec }) => {
-        sendLogs.push(data);
-        return data;
+        const row = { id: `log-${sendLogs.length + 1}`, ...data };
+        sendLogs.push(row);
+        return row;
+      }),
+      update: vi.fn(async ({ where, data }: { where: { id: string }; data: AnyRec }) => {
+        const row = sendLogs.find((l) => l.id === where.id);
+        if (row) Object.assign(row, data);
+        return row;
       }),
       // Anti-duplicado: por defecto, ningún envío previo (no hay duplicados).
       findFirst: vi.fn(async () => null),
@@ -411,5 +420,51 @@ describe("CampaignRunner.run", () => {
   it("throws when the campaign does not belong to the workspace", async () => {
     const { runner } = makeRunner({ campaign: null });
     await expect(runner.run("w1", "missing")).rejects.toThrow(/no encontrada/);
+  });
+});
+
+describe("CampaignRunner.run — seguros contra duplicados y pausa", () => {
+  beforeEach(() => {
+    process.env.WHATSAPP_GROUP_DELAY_MS = "0";
+    process.env.WHATSAPP_RETRY_BASE_MS = "0";
+  });
+  afterEach(() => {
+    delete process.env.WHATSAPP_GROUP_DELAY_MS;
+    delete process.env.WHATSAPP_RETRY_BASE_MS;
+  });
+  const g = (id: string, name: string) => ({ group: { id, name, remoteJid: `${id}@g.us` } });
+
+  it("no se ejecuta dos veces: si otra ejecución ganó la reserva, no envía nada", async () => {
+    const c = campaign({ targets: [g("g1", "Grupo 1")] });
+    const { runner, prisma, providers, sendLogs } = makeRunner({ campaign: c });
+    prisma.campaign.updateMany.mockResolvedValueOnce({ count: 0 });
+    await runner.run("w1", "c1");
+    expect(providers.sendMessage).not.toHaveBeenCalled();
+    expect(sendLogs).toHaveLength(0);
+  });
+
+  it("no se relanza si corrió hace menos de 90 s (doble clic / reintento del navegador)", async () => {
+    const c = campaign({ targets: [g("g1", "Grupo 1")], lastRunAt: new Date(Date.now() - 10_000) });
+    const { runner, providers } = makeRunner({ campaign: c });
+    await runner.run("w1", "c1");
+    expect(providers.sendMessage).not.toHaveBeenCalled();
+  });
+
+  it("«Pausar» detiene el envío a mitad de la lista y no marca la campaña como completada", async () => {
+    const c = campaign({ targets: [g("g1", "Grupo 1"), g("g2", "Grupo 2"), g("g3", "Grupo 3")] });
+    const { runner, prisma, providers, updates } = makeRunner({ campaign: c });
+    let reads = 0;
+    prisma.campaign.findUnique.mockImplementation(async () => ({ status: ++reads >= 2 ? "pausada" : "programada" }));
+    await runner.run("w1", "c1");
+    expect(providers.sendMessage).toHaveBeenCalledTimes(1);
+    expect(updates.some((u) => u.status === "completada")).toBe(false);
+  });
+
+  it("no repite un chat que otra ejecución tiene «en curso»", async () => {
+    const c = campaign({ targets: [g("g1", "Grupo 1")] });
+    const { runner, prisma, providers } = makeRunner({ campaign: c });
+    prisma.sendLog.findFirst.mockResolvedValue({ id: "otro" });
+    await runner.run("w1", "c1");
+    expect(providers.sendMessage).not.toHaveBeenCalled();
   });
 });

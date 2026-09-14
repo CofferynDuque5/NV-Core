@@ -13,6 +13,10 @@ import { builtinVars, renderTemplate } from "./render";
 import { resolvePacing, pacingDelay, type PacingOptions } from "./pacing";
 
 const TICK_MS = 30_000;
+/** Minimum spacing between two runs of the same campaign (double click / retries). */
+const RUN_GUARD_MS = 90_000;
+/** Historial marker while a send to a chat is in progress (replaced by the outcome). */
+const IN_FLIGHT = "en curso…";
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const todayKey = () => new Date().toISOString().slice(0, 10);
 
@@ -186,6 +190,11 @@ export class CampaignRunner implements OnModuleInit, OnModuleDestroy {
     }
   }
 
+  /** «Enviar ahora»: encola la ejecución y devuelve al instante (la petición HTTP no espera minutos). */
+  async enqueue(workspaceSlug: string, campaignId: string): Promise<void> {
+    await this.jobs.dispatch("campaign.run", workspaceSlug, { workspaceSlug, campaignId });
+  }
+
   /** Execute a campaign now: deliver to each target and log every result. */
   async run(workspaceSlug: string, campaignId: string): Promise<void> {
     if (!this.prisma.enabled) throw new Error("Base de datos no configurada.");
@@ -194,6 +203,24 @@ export class CampaignRunner implements OnModuleInit, OnModuleDestroy {
       include: { targets: { include: { group: true } } },
     });
     if (!campaign) throw new Error("Campaña no encontrada.");
+
+    // SEGURO 1 — una sola ejecución a la vez por campaña. Cubre el doble clic en
+    // «Enviar ahora», el reintento del navegador cuando la petición tarda, y dos
+    // procesos del hosting corriendo la misma campaña: solo gana quien logra la
+    // reserva atómica sobre lastRunAt; y nunca se relanza en menos de 90 s.
+    const startedAt = new Date();
+    if (campaign.lastRunAt && startedAt.getTime() - campaign.lastRunAt.getTime() < RUN_GUARD_MS) {
+      this.logger.warn(`Campaña "${campaign.name}" ya se ejecutó hace <${RUN_GUARD_MS / 1000}s; no se repite.`);
+      return;
+    }
+    const claim = await this.prisma.campaign.updateMany({
+      where: { id: campaignId, lastRunAt: campaign.lastRunAt },
+      data: { lastRunAt: startedAt },
+    });
+    if (claim.count !== 1) {
+      this.logger.warn(`Campaña "${campaign.name}" ya está en ejecución en otro proceso; no se duplica.`);
+      return;
+    }
 
     const attachments = (campaign.attachments as Attachment[]) ?? [];
     const withUrl = attachments.filter((a) => a.url);
@@ -214,9 +241,21 @@ export class CampaignRunner implements OnModuleInit, OnModuleDestroy {
     // Between sends we wait a randomized, human-like gap (anti-ban) instead of a
     // fixed cadence — with a longer cool-down after each batch.
     let sent = 0;
+    let paused = false;
     const total = campaign.targets.length;
     for (const target of campaign.targets) {
       const group = target.group;
+      // SEGURO 2 — «Pausar» detiene de verdad: se relee el estado antes de CADA
+      // envío y, si la campaña se pausó, se corta aquí (no al terminar la lista).
+      const fresh = await this.prisma.campaign.findUnique({
+        where: { id: campaignId },
+        select: { status: true },
+      });
+      if (fresh?.status === "pausada") {
+        paused = true;
+        this.logger.warn(`Campaña "${campaign.name}" pausada por el usuario: envío detenido.`);
+        break;
+      }
       // Defense-in-depth: never send to a group that isn't this workspace's own
       // (e.g. a stale target left after switching accounts). Targeting is already
       // validated on write, but this guarantees the historial never shows sends
@@ -239,12 +278,50 @@ export class CampaignRunner implements OnModuleInit, OnModuleDestroy {
         sent += 1;
         continue; // ya enviado a este chat; no duplicar
       }
+      // SEGURO 3 — marca "en curso" ANTES de enviar: si otra ejecución (otro
+      // proceso, otro clic) llega a este mismo chat mientras se envía, lo ve
+      // marcado y no lo repite. La marca se convierte en el resultado final.
+      const inFlight = await this.prisma.sendLog.findFirst({
+        where: {
+          workspaceSlug,
+          campaignId: campaign.id,
+          groupId: group.id,
+          error: IN_FLIGHT,
+          createdAt: { gte: new Date(Date.now() - 30 * 60 * 1000) },
+        },
+        select: { id: true },
+      });
+      if (inFlight) {
+        sent += 1;
+        continue;
+      }
       // Group.channel defaults to "wa"; only Telegram routes elsewhere.
       const ch = group.channel === "tg" ? "tg" : "wa";
       const provider = ch === "tg" ? "telegram" : "whatsapp";
       const vars = { ...builtinVars(group.name), ...(await this.groupVars(group.id)) };
       const text = renderTemplate(campaign.message, vars);
       const to = group.remoteJid ?? group.id;
+      const marker = await this.prisma.sendLog.create({
+        data: {
+          workspaceSlug,
+          campaignId: campaign.id,
+          campaignName: campaign.name,
+          groupId: group.id,
+          groupName: group.name,
+          target: ch,
+          format: campaign.socialFormat ?? null,
+          preview: text.slice(0, 140),
+          ok: false,
+          error: IN_FLIGHT,
+        },
+      });
+      const finish = async (ok: boolean, error: string | null, postId?: string) => {
+        await this.prisma.sendLog.update({
+          where: { id: marker.id },
+          data: { ok, error, postId: postId ?? null },
+        });
+        return { ok };
+      };
       try {
         let mediaNote: string | null = null;
         const res = await this.withRetry(async () => {
@@ -265,15 +342,18 @@ export class CampaignRunner implements OnModuleInit, OnModuleDestroy {
             return this.providers.sendMessage(workspaceSlug, provider, { to, body: text });
           }
         });
-        results.push(await this.log(workspaceSlug, campaign, group, ch, text, true, mediaNote, res.id));
+        results.push(await finish(true, mediaNote, res.id));
       } catch (err) {
-        results.push(
-          await this.log(workspaceSlug, campaign, group, ch, text, false, (err as Error).message),
-        );
+        results.push(await finish(false, (err as Error).message));
       }
       sent += 1;
       // No trailing wait after the final target.
       if (sent < total) await sleep(pacingDelay(sent, this.pacing));
+    }
+
+    if (paused) {
+      await this.audit.record(workspaceSlug, "system", "campaign.paused", campaignId);
+      return; // queda "pausada": nada de redes ni Estado, y no se marca completada
     }
 
     await this.publishSocial(workspaceSlug, campaign, channels, attachments, results);
@@ -388,31 +468,4 @@ export class CampaignRunner implements OnModuleInit, OnModuleDestroy {
     return Object.fromEntries(rows.map((r) => [r.key, r.value]));
   }
 
-  private async log(
-    workspaceSlug: string,
-    campaign: PCampaign,
-    group: { id: string; name: string } | null,
-    target: string,
-    text: string,
-    ok: boolean,
-    error: string | null,
-    postId?: string,
-  ): Promise<{ ok: boolean }> {
-    await this.prisma.sendLog.create({
-      data: {
-        workspaceSlug,
-        campaignId: campaign.id,
-        campaignName: campaign.name,
-        groupId: group?.id ?? null,
-        groupName: group?.name ?? (target === "wa" ? null : target),
-        target,
-        postId: postId ?? null,
-        format: campaign.socialFormat ?? null,
-        preview: text.slice(0, 140),
-        ok,
-        error,
-      },
-    });
-    return { ok };
-  }
 }

@@ -45,6 +45,10 @@ export class BaileysSession {
   private resumingStored = false;
   /** Fires if stored credentials neither open nor get rejected in time → fresh QR. */
   private resumeWatchdog: ReturnType<typeof setTimeout> | null = null;
+  /** Baileys media-upload cache (upload once, reuse across recipients). */
+  private readonly mediaCache = new MemoryCache(20 * 60_000);
+  /** Downloaded attachment bytes by URL (one download per campaign run). */
+  private readonly mediaBytes = new MemoryCache(10 * 60_000);
 
   constructor(
     private readonly workspaceSlug: string,
@@ -170,6 +174,11 @@ export class BaileysSession {
         printQRInTerminal: false,
         logger: silentLogger(),
         markOnlineOnConnect: false,
+        // Una campaña manda la MISMA imagen a muchos grupos: con esta caché
+        // Baileys la sube a WhatsApp una sola vez y la reutiliza (sin ella,
+        // re-subía en cada grupo y a partir del segundo solía fallar → solo texto).
+        mediaCache: this.mediaCache,
+        mediaUploadTimeoutMs: 120_000,
       });
 
       this.sock.ev.on("creds.update", saveCreds);
@@ -511,7 +520,9 @@ export class BaileysSession {
       // silently on some hosts, which showed up as "campaign sent without image".
       let media: Buffer;
       try {
-        media = await downloadMedia(attachment.url);
+        const cached = this.mediaBytes.get(attachment.url) as Buffer | undefined;
+        media = cached ?? (await downloadMedia(attachment.url));
+        if (!cached) this.mediaBytes.set(attachment.url, media);
       } catch (err) {
         throw new MediaSendError(`No se pudo descargar la imagen (${(err as Error).message}).`);
       }
@@ -621,6 +632,30 @@ export class BaileysSession {
     this.contacts.clear();
     this.stopHeartbeat();
     this.setStatus("disconnected");
+  }
+}
+
+/** Tiny TTL cache with the get/set/del/flushAll shape Baileys expects for `mediaCache`. */
+class MemoryCache {
+  private readonly items = new Map<string, { value: unknown; at: number }>();
+  constructor(private readonly ttlMs: number) {}
+  get<T = unknown>(key: string): T | undefined {
+    const hit = this.items.get(key);
+    if (!hit) return undefined;
+    if (Date.now() - hit.at > this.ttlMs) {
+      this.items.delete(key);
+      return undefined;
+    }
+    return hit.value as T;
+  }
+  set(key: string, value: unknown): void {
+    this.items.set(key, { value, at: Date.now() });
+  }
+  del(key: string): void {
+    this.items.delete(key);
+  }
+  flushAll(): void {
+    this.items.clear();
   }
 }
 

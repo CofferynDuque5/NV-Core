@@ -12,17 +12,19 @@ type Turn = { role: "user" | "assistant"; content: string; at: number };
 const WELCOME: Turn = {
   role: "assistant",
   content:
-    "¡Hola! Soy tu agente de ventas. Pruébame como si fueras un cliente: pregúntame precios, " +
-    "combos de streaming, formas de pago o qué hacer si una cuenta falla. Cada respuesta usa la " +
-    "misma IA que contesta en tus automatizaciones.",
+    "¡Hola! Soy el Asistente NV (Gemini). Veo todas las secciones de tu panel —campañas, grupos, " +
+    "contactos, inbox, calendario, historial, conexiones y automatizaciones— y puedo actuar: crear " +
+    "contactos, crear/programar/pausar/enviar campañas, programar publicaciones, resolver " +
+    "conversaciones o enviar un mensaje. Pregúntame o pídeme algo.",
   at: Date.now(),
 };
 
 const SUGGESTIONS = [
-  "¿Cuánto cuesta Netflix al mes?",
-  "Quiero un combo Netflix + Disney+",
-  "¿Cómo pago?",
-  "Mi cuenta de HBO no funciona",
+  "¿Qué campañas tengo activas y cuándo corren?",
+  "¿Cuántos envíos fallaron hoy y por qué?",
+  "Crea el contacto Ana Pérez +584121234567 etiqueta netflix",
+  "Pausa la campaña de Netflix",
+  "¿Qué conversaciones tengo sin responder?",
 ];
 
 const time = (t: number) =>
@@ -53,6 +55,7 @@ export function SalesAgentChat({ className }: { className?: string }) {
       {
         // The welcome bubble is UI only; the model gets the real exchange.
         messages: next.filter((t) => t !== WELCOME).map(({ role, content }) => ({ role, content })),
+        mode: "asistente",
       },
       {
         onSuccess: ({ reply }) =>
@@ -69,8 +72,8 @@ export function SalesAgentChat({ className }: { className?: string }) {
   return (
     <Panel className={cn("flex min-h-[520px] flex-col overflow-hidden", className)}>
       <PanelHeader
-        title="Agente de ventas (chat)"
-        description="Vende cuentas de streaming, resuelve dudas y escala a humano cuando toca."
+        title="Asistente NV (Gemini)"
+        description="Conectado a todas las secciones del panel: consulta datos reales y ejecuta acciones."
         action={
           <Button variant="ghost" size="sm" onClick={() => setTurns([WELCOME])} disabled={turns.length <= 1}>
             <RotateCcw className="size-4" /> Reiniciar
@@ -148,7 +151,7 @@ export function SalesAgentChat({ className }: { className?: string }) {
         <Input
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
-          placeholder="Escribe como lo haría un cliente…"
+          placeholder="Pregunta o pide algo al asistente…"
           className="flex-1"
           aria-label="Mensaje para el agente"
         />

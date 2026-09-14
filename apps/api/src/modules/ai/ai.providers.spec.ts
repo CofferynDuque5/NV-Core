@@ -17,8 +17,8 @@ describe("selectProviderId", () => {
     expect(selectProviderId(ai({}))).toBeNull();
   });
 
-  it("prefers anthropic in the default priority order", () => {
-    expect(selectProviderId(ai({ openai: "k", anthropic: "k", gemini: "k" }))).toBe("anthropic");
+  it("prefers gemini in the default priority order", () => {
+    expect(selectProviderId(ai({ openai: "k", anthropic: "k", gemini: "k" }))).toBe("gemini");
   });
 
   it("falls back to the only configured provider", () => {
@@ -52,18 +52,18 @@ describe("createProvider fallback", () => {
     const fetchSpy = vi.spyOn(globalThis, "fetch").mockImplementation(async (url) => {
       const u = String(url);
       calls.push(u.includes("openai") ? "openai" : u.includes("googleapis") ? "gemini" : "other");
-      if (u.includes("openai")) {
-        return { ok: false, status: 429, statusText: "Too Many Requests", text: async () => '{"error":{"code":"insufficient_quota"}}' } as never;
+      if (u.includes("googleapis")) {
+        return { ok: false, status: 429, statusText: "Too Many Requests", text: async () => '{"error":{"status":"RESOURCE_EXHAUSTED"}}' } as never;
       }
       return {
         ok: true,
-        json: async () => ({ candidates: [{ content: { parts: [{ text: "desde gemini" }] } }] }),
+        json: async () => ({ choices: [{ message: { content: "desde openai" } }] }),
       } as never;
     });
-    const p = createProvider(ai({ openai: "sk-sin-saldo", gemini: "AIza" }))!;
+    const p = createProvider(ai({ openai: "sk", gemini: "AIza-agotada" }))!;
     const out = await p.complete([{ role: "user", content: "hola" }]);
-    expect(out).toBe("desde gemini");
-    expect(calls).toEqual(["openai", "gemini"]);
+    expect(out).toBe("desde openai");
+    expect(calls).toEqual(["gemini", "openai"]);
     fetchSpy.mockRestore();
   });
 

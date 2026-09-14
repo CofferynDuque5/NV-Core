@@ -672,7 +672,11 @@ export class CampaignsController {
   @UseGuards(RolesGuard)
   @HttpCode(200)
   async run(@WorkspaceId() workspaceId: string, @Param("id") id: string) {
-    await this.runner.run(workspaceId, id);
+    // Encola y responde al instante: antes la petición esperaba toda la campaña
+    // (minutos, por el ritmo anti-ban) y el navegador/hosting la reintentaba,
+    // lo que lanzaba la misma campaña dos veces.
+    await this.service.get(workspaceId, id); // 404 si no existe
+    await this.runner.enqueue(workspaceId, id);
     return this.service.get(workspaceId, id);
   }
 

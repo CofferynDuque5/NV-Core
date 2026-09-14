@@ -167,6 +167,7 @@ export class AutomationRunnerService implements OnModuleInit, OnModuleDestroy {
         const { reply } = await this.ai.chat(p.workspaceSlug, {
           system: str(c.prompt) || undefined,
           messages: [{ role: "user", content: p.text }],
+          mode: "ventas",
         });
         if (!reply) return false;
         await this.deliver(p, reply);

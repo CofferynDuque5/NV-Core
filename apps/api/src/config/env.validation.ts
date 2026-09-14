@@ -60,7 +60,7 @@ export const envSchema = z.object({
   AI_MONTHLY_QUOTA: z.coerce.number().int().nonnegative().optional(),
   OPENAI_MODEL: z.string().default("gpt-4o-mini"),
   ANTHROPIC_MODEL: z.string().default("claude-haiku-4-5-20251001"),
-  GEMINI_MODEL: z.string().default("gemini-1.5-flash"),
+  GEMINI_MODEL: z.string().default("gemini-2.5-flash"),
 
   // Messaging
   WHATSAPP_TOKEN: z.string().optional(),

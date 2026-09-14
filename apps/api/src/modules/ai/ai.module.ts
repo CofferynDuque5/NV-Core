@@ -38,6 +38,7 @@ import { RequiresActivePlan } from "../../common/decorators/requires-plan.decora
 import { PlanService } from "../../common/plan/plan.service";
 import { PrismaService } from "../../prisma/prisma.service";
 import { CredentialsModule, CredentialsService } from "../credentials/credentials.module";
+import { ProvidersModule } from "../../providers/providers.module";
 import {
   createImageProvider,
   createProvider,
@@ -45,7 +46,9 @@ import {
   type ChatMessage,
   type CompletionOptions,
   type ImageProvider,
+  createGeminiProvider,
 } from "./ai.providers";
+import { AssistantService } from "./assistant.service";
 import { estimateTokens, usagePeriod } from "./ai.usage";
 
 /**
@@ -93,6 +96,8 @@ export class ChatTurnDto {
 export class AgentChatDto {
   @IsArray() @ValidateNested({ each: true }) @Type(() => ChatTurnDto) messages!: ChatTurnDto[];
   @IsOptional() @IsString() @MaxLength(4000) system?: string;
+  /** "asistente" = el asistente del panel (ve todas las secciones y actúa); "ventas" = respuesta a clientes. */
+  @IsOptional() @IsIn(["asistente", "ventas"]) mode?: "asistente" | "ventas";
 }
 
 const IMAGE_SIZES = ["1024x1024", "1024x1536", "1536x1024"] as const;
@@ -138,6 +143,7 @@ export class AiService {
     private readonly prisma: PrismaService,
     private readonly plans: PlanService,
     private readonly credentials: CredentialsService,
+    private readonly assistant: AssistantService,
   ) {
     this.aiConfig = config.get("integrations", { infer: true }).ai;
     this.monthlyQuota =
@@ -445,12 +451,39 @@ export class AiService {
    * corto de la conversación y responde con el proveedor de IA del workspace.
    * Lo usan la página "Agente" (chat) y el runner de automatizaciones.
    */
+  /** El agente/asistente corre SOLO con Gemini (clave en Marketplace → Google Gemini). */
+  private async resolveGemini(workspaceId: string): Promise<{ provider: AiProvider; apiKey: string; model: string }> {
+    const ai = await this.resolveAiConfig(workspaceId);
+    const provider = createGeminiProvider(ai);
+    if (!provider || !ai.gemini) {
+      throw new ServiceUnavailableException(
+        "El agente funciona con Google Gemini. Pega tu clave GRATIS de Gemini (aistudio.google.com → " +
+          "Get API key) en Marketplace → Google Gemini.",
+      );
+    }
+    return { provider, apiKey: ai.gemini, model: ai.models.gemini };
+  }
+
   async chat(
     workspaceId: string,
-    input: { messages: { role: "user" | "assistant"; content: string }[]; system?: string },
+    input: {
+      messages: { role: "user" | "assistant"; content: string }[];
+      system?: string;
+      mode?: "asistente" | "ventas";
+    },
   ): Promise<{ reply: string }> {
-    const provider = await this.resolveProvider(workspaceId);
+    const gemini = await this.resolveGemini(workspaceId);
     await this.assertWithinQuota(workspaceId);
+    if (input.mode === "asistente") {
+      try {
+        const reply = await this.assistant.chat(workspaceId, gemini.apiKey, gemini.model, input.messages);
+        await this.record(workspaceId, estimateTokens(input.messages.map((m) => m.content).join("\n"), reply));
+        return { reply };
+      } catch (err) {
+        this.explainAiError(err);
+      }
+    }
+    const provider = gemini.provider;
     const system =
       input.system?.trim() ||
       "Eres el agente de ventas y soporte de un negocio que vende cuentas de streaming " +
@@ -641,9 +674,9 @@ export class AiController {
 }
 
 @Module({
-  imports: [CredentialsModule],
+  imports: [CredentialsModule, ProvidersModule],
   controllers: [AiController],
-  providers: [AiService],
+  providers: [AiService, AssistantService],
   // Exportado para que las automatizaciones (agente de ventas/soporte) usen la IA.
   exports: [AiService],
 })
