@@ -94,7 +94,19 @@ se calcula sobre toda la ejecución. Detalle en `docs/whatsapp-campaigns.md`.
   500 creadas más recientemente.
 - **Marca**: logo del megáfono en toda la app, íconos PWA, favicon y página de ventas.
 
-## 6. Siguiente paso recomendado
+## 6. Automatizaciones: nodo «esperar»
 
-Consentimiento/bajas en contactos; búsqueda + paginación del Inbox en servidor; nodo «esperar» de
-las automatizaciones.
+Antes el nodo se ignoraba y el flujo seguía de inmediato. Ahora pausa el flujo para ese contacto y
+guarda la continuación en `AutomationWait` (migración `20261024020000_automation_waits`). Un tick
+cada 30 s reanuda las esperas vencidas desde el paso siguiente, sin Redis y tras reinicios:
+- reserva atómica `pending → running`: dos procesos nunca reanudan la misma espera;
+- una sola espera pendiente por flujo + contacto + nodo (sin seguimientos repetidos);
+- si el flujo se pausa, se borra o cambia, la espera se cancela sin enviar;
+- si el envío falla, queda `failed` con el motivo y aviso en notificaciones;
+- una reanudación cortada por un reinicio queda «sin confirmar» y no se repite;
+- duración máxima 30 días; la lista de automatizaciones muestra «N en espera».
+
+## 7. Siguiente paso recomendado
+
+Consentimiento/bajas en contactos (y respetarlos en campañas, secuencias y automatizaciones);
+búsqueda + paginación del Inbox en servidor.

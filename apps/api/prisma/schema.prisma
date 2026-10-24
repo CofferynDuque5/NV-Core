@@ -494,7 +494,34 @@ model Automation {
   // Optional n8n webhook (absolute URL or path resolved against N8N_BASE_URL).
   webhookUrl    String?
   createdAt     DateTime @default(now())
+  waits         AutomationWait[]
 
+  @@index([workspaceSlug])
+}
+
+/// A flow paused on a "wait" node for one contact. The runner resumes it from
+/// `nextNodeId` once `resumeAt` passes, so waits survive restarts (cPanel has
+/// no Redis). status: pending → running → done | failed | cancelled.
+model AutomationWait {
+  id            String     @id @default(cuid())
+  workspaceSlug String
+  automation    Automation @relation(fields: [automationId], references: [id], onDelete: Cascade)
+  automationId  String
+  /// The wait node that paused the flow (dedupes one pending wait per contact).
+  waitNodeId    String
+  nextNodeId    String
+  contactHandle String
+  /// Incoming message + evaluated context needed to continue the flow.
+  payload       Json
+  resumeAt      DateTime
+  status        String     @default("pending")
+  startedAt     DateTime?
+  error         String?
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
+
+  @@index([status, resumeAt])
+  @@index([automationId, contactHandle, status])
   @@index([workspaceSlug])
 }
 

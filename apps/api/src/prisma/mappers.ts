@@ -247,7 +247,7 @@ export const mapTemplate = (t: PTemplate): Template => ({
   uses: t.uses,
 });
 
-export const mapAutomation = (a: PAutomation): Automation => ({
+export const mapAutomation = (a: PAutomation & { _count?: { waits?: number } }): Automation => ({
   id: a.id,
   name: a.name,
   status: a.status === "activo" ? "activo" : "pausado",
@@ -256,6 +256,7 @@ export const mapAutomation = (a: PAutomation): Automation => ({
   nodes: (a.nodes as unknown as Automation["nodes"]) ?? [],
   edges: (a.edges as unknown as Automation["edges"]) ?? [],
   webhookUrl: a.webhookUrl ?? undefined,
+  waiting: a._count?.waits,
 });
 
 export const mapDesign = (d: PDesign): Design => ({
