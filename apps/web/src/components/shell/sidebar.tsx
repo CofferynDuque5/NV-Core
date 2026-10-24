@@ -12,6 +12,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { EXTRA_NAV_ITEMS, getNavIcon } from "./sidebar-icon";
+import { BrandMark } from "@/components/common/brand-mark";
 
 export function Sidebar({ onOpenSwitcher }: { onOpenSwitcher: () => void }) {
   const collapsed = useUiStore((s) => s.navCollapsed);
@@ -49,9 +50,7 @@ export function Sidebar({ onOpenSwitcher }: { onOpenSwitcher: () => void }) {
           title="Expandir / colapsar"
           className="grid size-8 shrink-0 place-items-center rounded-[9px] bg-gradient-to-br from-brand to-brand-violet shadow-brand"
         >
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M4 12h6l2-3 3 6 2-3h3" />
-          </svg>
+          <BrandMark size={18} />
         </button>
         {!collapsed ? (
           <>
