@@ -1,3 +1,5 @@
+import { randomUUID } from "node:crypto";
+
 import { Injectable, Logger, type OnModuleDestroy, type OnModuleInit } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import type { Campaign as PCampaign } from "@prisma/client";
@@ -17,10 +19,41 @@ const TICK_MS = 30_000;
 const RUN_GUARD_MS = 90_000;
 /** Historial marker while a send to a chat is in progress (replaced by the outcome). */
 const IN_FLIGHT = "en curso…";
+/**
+ * Outcome written over an "en curso" marker whose process died mid-send. The
+ * provider may or may not have delivered it, so it is NOT resent (a duplicate
+ * in a chat is worse than a gap) and NOT shown as a success.
+ */
+export const UNCONFIRMED =
+  "Sin confirmar: el servidor se reinició durante este envío. No se reenvió para evitar duplicados; revisa el chat.";
+/** An "en curso" marker older than this belongs to a dead process (a single send never takes this long). */
+const ORPHAN_MARKER_MS = 30 * 60 * 1000;
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const todayKey = () => new Date().toISOString().slice(0, 10);
 
 type Attachment = { url?: string; kind?: string; mime?: string | null; filename?: string | null };
+
+/** Payload of a `campaign.run` job. `runKey` is the idempotency key of the run. */
+export interface CampaignRunPayload {
+  workspaceSlug: string;
+  campaignId: string;
+  runKey?: string;
+  /** Set by the recovery sweep: continue an interrupted run instead of starting one. */
+  resume?: boolean;
+}
+
+/** What a run actually did — a skipped run is reported as such, never as a success. */
+export type CampaignRunOutcome =
+  | { status: "completed"; ok: boolean; sent: number; failed: number }
+  | { status: "paused" }
+  | { status: "skipped"; reason: string };
+
+/** Idempotency key of a scheduled slot: once → "once:<scheduleAt>", recurring → the slot itself. */
+export function slotRunKey(slot: string, scheduleAt: string | null | undefined): string {
+  return slot === "once" ? `once:${scheduleAt ?? ""}` : slot;
+}
+
+const isUniqueViolation = (err: unknown) => (err as { code?: string })?.code === "P2002";
 
 /**
  * Evaluates scheduled campaigns on a tick and dispatches each due campaign as a
@@ -43,6 +76,12 @@ export class CampaignRunner implements OnModuleInit, OnModuleDestroy {
   private readonly pacing: PacingOptions;
   private readonly retryBaseMs: number;
   private readonly maxAttempts: number;
+  /**
+   * A run whose heartbeat is older than this is considered dead (process
+   * restarted / crashed) and is resumed by the next tick. Must exceed the
+   * longest legit gap between heartbeats: pacing cool-down + a send with retries.
+   */
+  private readonly staleRunMs: number;
   private timer?: NodeJS.Timeout;
 
   constructor(
@@ -57,6 +96,7 @@ export class CampaignRunner implements OnModuleInit, OnModuleDestroy {
     // Retry policy for transient/rate-limited sends (exponential backoff).
     this.retryBaseMs = Number(process.env.WHATSAPP_RETRY_BASE_MS ?? 1000);
     this.maxAttempts = Math.max(1, Number(process.env.WHATSAPP_MAX_ATTEMPTS ?? 3));
+    this.staleRunMs = Math.max(60_000, Number(process.env.CAMPAIGN_RUN_STALE_MS ?? 10 * 60 * 1000));
     void config; // reserved for future tuning
   }
 
@@ -100,10 +140,15 @@ export class CampaignRunner implements OnModuleInit, OnModuleDestroy {
 
   onModuleInit(): void {
     // The actual execution runs as a job (async + retries + state).
-    this.jobs.register("campaign.run", async (payload) => {
-      const p = payload as { workspaceSlug: string; campaignId: string };
-      await this.run(p.workspaceSlug, p.campaignId);
-      return { ok: true };
+    this.jobs.register("campaign.run", async (payload, ctx) => {
+      const p = payload as CampaignRunPayload;
+      // A retry (attempt > 1) continues the same run key: chats already claimed
+      // by the failed attempt are skipped, the rest are sent.
+      return this.run(p.workspaceSlug, p.campaignId, {
+        runKey: p.runKey,
+        resume: p.resume,
+        attempt: ctx?.attempt,
+      });
     });
 
     if (!this.prisma.enabled) {
@@ -160,6 +205,7 @@ export class CampaignRunner implements OnModuleInit, OnModuleDestroy {
 
   private async tick(): Promise<void> {
     const now = new Date();
+    await this.recoverInterruptedRuns(now);
     const candidates = await this.prisma.campaign.findMany({
       where: { status: { in: ["programada", "activa"] } },
     });
@@ -183,20 +229,77 @@ export class CampaignRunner implements OnModuleInit, OnModuleDestroy {
             });
       if (claim.count !== 1) continue; // otro proceso ya la reservó
       this.logger.log(`Encolando campaña "${c.name}" (${c.workspaceSlug}) — franja ${slot}.`);
-      await this.jobs.dispatch("campaign.run", c.workspaceSlug, {
+      const payload: CampaignRunPayload = {
         workspaceSlug: c.workspaceSlug,
         campaignId: c.id,
-      });
+        runKey: slotRunKey(slot, c.scheduleAt),
+      };
+      await this.jobs.dispatch("campaign.run", c.workspaceSlug, payload);
     }
+  }
+
+  /**
+   * RECUPERACIÓN TRAS REINICIO. Sin Redis (cPanel) los jobs viven en memoria:
+   * si el proceso se reinicia a mitad de una campaña, la ejecución se perdía,
+   * la campaña "once" quedaba "activa" para siempre y los chats pendientes no
+   * recibían nada, sin rastro en el Historial. Aquí:
+   * 1. Las marcas «en curso» huérfanas pasan a «sin confirmar» (no éxito, no reenvío).
+   * 2. Las ejecuciones con latido vencido se reanudan con la MISMA clave: los
+   *    chats ya reclamados se saltan y solo se envía a los pendientes.
+   */
+  async recoverInterruptedRuns(now = new Date()): Promise<number> {
+    if (!this.prisma.enabled) return 0;
+    await this.prisma.sendLog.updateMany({
+      where: { error: IN_FLIGHT, createdAt: { lt: new Date(now.getTime() - ORPHAN_MARKER_MS) } },
+      data: { ok: false, error: UNCONFIRMED },
+    });
+    const stalled = await this.prisma.campaign.findMany({
+      where: { runKey: { not: null }, runHeartbeatAt: { lt: new Date(now.getTime() - this.staleRunMs) } },
+    });
+    let resumed = 0;
+    for (const c of stalled) {
+      const runKey = c.runKey!;
+      // Lo que estaba en curso cuando murió el proceso queda «sin confirmar».
+      await this.prisma.sendLog.updateMany({
+        where: { campaignId: c.id, runKey, error: IN_FLIGHT },
+        data: { ok: false, error: UNCONFIRMED },
+      });
+      if (c.status === "pausada") {
+        // Pausada por el usuario: no se reanuda; se libera la ejecución.
+        await this.prisma.campaign.updateMany({
+          where: { id: c.id, runKey },
+          data: { runKey: null, runHeartbeatAt: null },
+        });
+        continue;
+      }
+      // Reserva atómica de la reanudación (un solo proceso la gana).
+      const claim = await this.prisma.campaign.updateMany({
+        where: { id: c.id, runKey, runHeartbeatAt: c.runHeartbeatAt },
+        data: { runHeartbeatAt: now },
+      });
+      if (claim.count !== 1) continue;
+      this.logger.warn(`Campaña "${c.name}" (${c.workspaceSlug}) interrumpida: se reanuda la ejecución ${runKey}.`);
+      await this.audit.record(c.workspaceSlug, "system", "campaign.resumed", `${c.id} run=${runKey}`);
+      const payload: CampaignRunPayload = { workspaceSlug: c.workspaceSlug, campaignId: c.id, runKey, resume: true };
+      await this.jobs.dispatch("campaign.run", c.workspaceSlug, payload);
+      resumed += 1;
+    }
+    return resumed;
   }
 
   /** «Enviar ahora»: encola la ejecución y devuelve al instante (la petición HTTP no espera minutos). */
   async enqueue(workspaceSlug: string, campaignId: string): Promise<void> {
-    await this.jobs.dispatch("campaign.run", workspaceSlug, { workspaceSlug, campaignId });
+    // The key is fixed BEFORE dispatch so a job retry continues this same run.
+    const payload: CampaignRunPayload = { workspaceSlug, campaignId, runKey: `manual:${randomUUID()}` };
+    await this.jobs.dispatch("campaign.run", workspaceSlug, payload);
   }
 
   /** Execute a campaign now: deliver to each target and log every result. */
-  async run(workspaceSlug: string, campaignId: string): Promise<void> {
+  async run(
+    workspaceSlug: string,
+    campaignId: string,
+    opts: { runKey?: string; resume?: boolean; attempt?: number } = {},
+  ): Promise<CampaignRunOutcome> {
     if (!this.prisma.enabled) throw new Error("Base de datos no configurada.");
     const campaign = await this.prisma.campaign.findFirst({
       where: { id: campaignId, workspaceSlug },
@@ -204,22 +307,41 @@ export class CampaignRunner implements OnModuleInit, OnModuleDestroy {
     });
     if (!campaign) throw new Error("Campaña no encontrada.");
 
-    // SEGURO 1 — una sola ejecución a la vez por campaña. Cubre el doble clic en
-    // «Enviar ahora», el reintento del navegador cuando la petición tarda, y dos
-    // procesos del hosting corriendo la misma campaña: solo gana quien logra la
-    // reserva atómica sobre lastRunAt; y nunca se relanza en menos de 90 s.
+    const runKey = opts.runKey ?? `manual:${randomUUID()}`;
+    const manual = runKey.startsWith("manual:");
     const startedAt = new Date();
-    if (campaign.lastRunAt && startedAt.getTime() - campaign.lastRunAt.getTime() < RUN_GUARD_MS) {
-      this.logger.warn(`Campaña "${campaign.name}" ya se ejecutó hace <${RUN_GUARD_MS / 1000}s; no se repite.`);
-      return;
-    }
-    const claim = await this.prisma.campaign.updateMany({
-      where: { id: campaignId, lastRunAt: campaign.lastRunAt },
-      data: { lastRunAt: startedAt },
-    });
-    if (claim.count !== 1) {
-      this.logger.warn(`Campaña "${campaign.name}" ya está en ejecución en otro proceso; no se duplica.`);
-      return;
+    const skip = (reason: string): CampaignRunOutcome => {
+      this.logger.warn(`Campaña "${campaign.name}": ${reason}`);
+      return { status: "skipped", reason };
+    };
+    // Reanudar = continuar una ejecución que este mismo runKey dejó a medias
+    // (reinicio detectado por el barrido, o reintento del job tras un error).
+    const resuming = campaign.runKey === runKey && (opts.resume === true || (opts.attempt ?? 1) > 1);
+    if (opts.resume && !resuming) return skip("la ejecución a reanudar ya terminó; no se repite.");
+
+    if (resuming) {
+      const claim = await this.prisma.campaign.updateMany({
+        where: { id: campaignId, runKey, runHeartbeatAt: campaign.runHeartbeatAt },
+        data: { runHeartbeatAt: startedAt },
+      });
+      if (claim.count !== 1) return skip("otro proceso ya reanudó esta ejecución; no se duplica.");
+    } else {
+      // SEGURO 1 — una sola ejecución a la vez por campaña. Cubre el doble clic en
+      // «Enviar ahora», el reintento del navegador cuando la petición tarda, y dos
+      // procesos del hosting corriendo la misma campaña: solo gana quien logra la
+      // reserva atómica sobre lastRunAt/runKey; y nunca se relanza en menos de 90 s.
+      if (campaign.lastRunAt && startedAt.getTime() - campaign.lastRunAt.getTime() < RUN_GUARD_MS) {
+        return skip(`ya se ejecutó hace <${RUN_GUARD_MS / 1000}s; no se repite.`);
+      }
+      const heartbeat = campaign.runHeartbeatAt?.getTime() ?? 0;
+      if (campaign.runKey && startedAt.getTime() - heartbeat < this.staleRunMs) {
+        return skip("ya hay una ejecución en curso; no se duplica.");
+      }
+      const claim = await this.prisma.campaign.updateMany({
+        where: { id: campaignId, lastRunAt: campaign.lastRunAt, runKey: campaign.runKey },
+        data: { lastRunAt: startedAt, runKey, runHeartbeatAt: startedAt, progress: 0 },
+      });
+      if (claim.count !== 1) return skip("ya está en ejecución en otro proceso; no se duplica.");
     }
 
     const attachments = (campaign.attachments as Attachment[]) ?? [];
@@ -261,39 +383,36 @@ export class CampaignRunner implements OnModuleInit, OnModuleDestroy {
       // validated on write, but this guarantees the historial never shows sends
       // to groups that don't belong to this workspace's WhatsApp/Telegram.
       if (!group || group.workspaceSlug !== workspaceSlug) continue;
-      // ANTI-SPAM / ANTI-BAN: si este chat YA recibió este mensaje con éxito en
-      // las últimas 20 h, NO se reenvía. Evita mensajes duplicados en el mismo
-      // chat si la campaña corre de nuevo (reinicios, reintentos, etc.).
-      const dup = await this.prisma.sendLog.findFirst({
-        where: {
-          workspaceSlug,
-          campaignId: campaign.id,
-          groupId: group.id,
-          ok: true,
-          createdAt: { gte: new Date(Date.now() - 20 * 60 * 60 * 1000) },
-        },
-        select: { id: true },
+      // Latido: demuestra que esta ejecución sigue viva y publica el progreso.
+      // Si otro proceso tomó la ejecución (count=0), esta se detiene: nunca dos
+      // bucles de envío sobre la misma campaña.
+      const alive = await this.prisma.campaign.updateMany({
+        where: { id: campaignId, runKey },
+        data: { runHeartbeatAt: new Date(), progress: Math.floor((sent / Math.max(1, total)) * 100) },
       });
-      if (dup) {
-        sent += 1;
-        continue; // ya enviado a este chat; no duplicar
+      if (alive.count !== 1) {
+        this.logger.warn(`Campaña "${campaign.name}": otra ejecución tomó el relevo; este proceso se detiene.`);
+        return { status: "skipped", reason: "otra ejecución tomó el relevo." };
       }
-      // SEGURO 3 — marca "en curso" ANTES de enviar: si otra ejecución (otro
-      // proceso, otro clic) llega a este mismo chat mientras se envía, lo ve
-      // marcado y no lo repite. La marca se convierte en el resultado final.
-      const inFlight = await this.prisma.sendLog.findFirst({
-        where: {
-          workspaceSlug,
-          campaignId: campaign.id,
-          groupId: group.id,
-          error: IN_FLIGHT,
-          createdAt: { gte: new Date(Date.now() - 30 * 60 * 1000) },
-        },
-        select: { id: true },
-      });
-      if (inFlight) {
-        sent += 1;
-        continue;
+      // ANTI-SPAM (solo «Enviar ahora»): si este chat YA recibió este mensaje con
+      // éxito en las últimas 20 h, un envío manual no lo repite. Las franjas
+      // programadas no usan esta ventana: cada franja tiene su propia clave, así
+      // las campañas «varias veces al día» envían en TODAS sus horas.
+      if (manual) {
+        const dup = await this.prisma.sendLog.findFirst({
+          where: {
+            workspaceSlug,
+            campaignId: campaign.id,
+            groupId: group.id,
+            ok: true,
+            createdAt: { gte: new Date(Date.now() - 20 * 60 * 60 * 1000) },
+          },
+          select: { id: true },
+        });
+        if (dup) {
+          sent += 1;
+          continue; // ya enviado a este chat; no duplicar
+        }
       }
       // Group.channel defaults to "wa"; only Telegram routes elsewhere.
       const ch = group.channel === "tg" ? "tg" : "wa";
@@ -301,20 +420,32 @@ export class CampaignRunner implements OnModuleInit, OnModuleDestroy {
       const vars = { ...builtinVars(group.name), ...(await this.groupVars(group.id)) };
       const text = renderTemplate(campaign.message, vars);
       const to = group.remoteJid ?? group.id;
-      const marker = await this.prisma.sendLog.create({
-        data: {
-          workspaceSlug,
-          campaignId: campaign.id,
-          campaignName: campaign.name,
-          groupId: group.id,
-          groupName: group.name,
-          target: ch,
-          format: campaign.socialFormat ?? null,
-          preview: text.slice(0, 140),
-          ok: false,
-          error: IN_FLIGHT,
-        },
-      });
+      // SEGURO 3 — reserva del chat ANTES de enviar: la fila «en curso» es única
+      // por (campaña, chat, ejecución) en la base de datos. Si ya existe (otro
+      // proceso, un reintento o la reanudación tras un reinicio), este chat ya fue
+      // atendido en esta ejecución y NO se reenvía. La marca pasa a ser el resultado.
+      let marker: { id: string };
+      try {
+        marker = await this.prisma.sendLog.create({
+          data: {
+            workspaceSlug,
+            campaignId: campaign.id,
+            campaignName: campaign.name,
+            groupId: group.id,
+            groupName: group.name,
+            target: ch,
+            format: campaign.socialFormat ?? null,
+            preview: text.slice(0, 140),
+            ok: false,
+            error: IN_FLIGHT,
+            runKey,
+          },
+        });
+      } catch (err) {
+        if (!isUniqueViolation(err)) throw err;
+        sent += 1;
+        continue; // ya reclamado en esta ejecución; no duplicar
+      }
       const finish = async (ok: boolean, error: string | null, postId?: string) => {
         await this.prisma.sendLog.update({
           where: { id: marker.id },
@@ -352,17 +483,29 @@ export class CampaignRunner implements OnModuleInit, OnModuleDestroy {
     }
 
     if (paused) {
+      // Se libera la ejecución; al «Reanudar», una campaña "once" vuelve con la
+      // misma clave y solo envía a los chats que faltaban.
+      await this.prisma.campaign.updateMany({
+        where: { id: campaignId, runKey },
+        data: { runKey: null, runHeartbeatAt: null },
+      });
       await this.audit.record(workspaceSlug, "system", "campaign.paused", campaignId);
-      return; // queda "pausada": nada de redes ni Estado, y no se marca completada
+      return { status: "paused" }; // nada de redes ni Estado, y no se marca completada
     }
 
-    await this.publishSocial(workspaceSlug, campaign, channels, attachments, results);
+    await this.publishSocial(workspaceSlug, campaign, channels, attachments, results, runKey);
     if (campaign.postToWaStatus) {
-      await this.publishWaStatus(workspaceSlug, campaign, statusMedia, results);
+      await this.publishWaStatus(workspaceSlug, campaign, statusMedia, results, runKey);
     }
 
     const recurring = campaign.scheduleType === "daily" || campaign.scheduleType === "weekly";
-    const allOk = results.length > 0 && results.every((r) => r.ok);
+    // El resultado se calcula sobre TODA la ejecución (incluida la parte anterior
+    // a un reinicio), no solo sobre lo enviado por este proceso.
+    const [okCount, failedCount] = await Promise.all([
+      this.prisma.sendLog.count({ where: { campaignId, runKey, ok: true } }),
+      this.prisma.sendLog.count({ where: { campaignId, runKey, ok: false } }),
+    ]);
+    const allOk = okCount > 0 && failedCount === 0;
     await this.prisma.campaign.update({
       where: { id: campaignId },
       data: {
@@ -374,6 +517,8 @@ export class CampaignRunner implements OnModuleInit, OnModuleDestroy {
         progress: 100,
         lastRunAt: new Date(),
         lastRunDay: todayKey(),
+        runKey: null,
+        runHeartbeatAt: null,
         // Advance the rotation cursor so the next run picks the following image.
         ...(rotate ? { attachmentRotation: campaign.attachmentRotation + 1 } : {}),
       },
@@ -385,6 +530,19 @@ export class CampaignRunner implements OnModuleInit, OnModuleDestroy {
       campaignName: campaign.name,
       ok: allOk,
     });
+    return { status: "completed", ok: allOk, sent: okCount, failed: failedCount };
+  }
+
+  /**
+   * True when this run already logged a publish to `target` (FB/IG/Estado) —
+   * a resumed run must not publish the same post twice.
+   */
+  private async alreadyPublished(campaignId: string, runKey: string, target: string): Promise<boolean> {
+    const row = await this.prisma.sendLog.findFirst({
+      where: { campaignId, runKey, target },
+      select: { id: true },
+    });
+    return Boolean(row);
   }
 
   /** Publish the campaign to Facebook/Instagram via the ProviderManager. */
@@ -394,6 +552,7 @@ export class CampaignRunner implements OnModuleInit, OnModuleDestroy {
     channels: string[],
     attachments: Attachment[],
     results: { ok: boolean }[],
+    runKey: string,
   ): Promise<void> {
     const targets = (["facebook", "instagram"] as const).filter((t) =>
       channels.includes(t === "facebook" ? "fb" : "ig"),
@@ -401,6 +560,7 @@ export class CampaignRunner implements OnModuleInit, OnModuleDestroy {
     if (!targets.length) return;
     const text = renderTemplate(campaign.message, builtinVars(""));
     for (const target of targets) {
+      if (await this.alreadyPublished(campaign.id, runKey, target)) continue;
       const r = await this.publishWithRetry(workspaceSlug, target, {
         message: text,
         attachments: attachments.filter((a) => a.url) as MediaAttachment[],
@@ -418,6 +578,7 @@ export class CampaignRunner implements OnModuleInit, OnModuleDestroy {
           preview: text.slice(0, 140),
           ok: r.ok,
           error: r.error ?? null,
+          runKey,
         },
       });
       results.push({ ok: r.ok });
@@ -434,7 +595,9 @@ export class CampaignRunner implements OnModuleInit, OnModuleDestroy {
     campaign: PCampaign,
     media: Attachment[],
     results: { ok: boolean }[],
+    runKey: string,
   ): Promise<void> {
+    if (await this.alreadyPublished(campaign.id, runKey, "wa_status")) return;
     const text = renderTemplate(campaign.message, builtinVars(""));
     const input: PublishInput = {
       message: text,
@@ -458,6 +621,7 @@ export class CampaignRunner implements OnModuleInit, OnModuleDestroy {
         preview: text.slice(0, 140),
         ok: r.ok,
         error: r.error ?? null,
+        runKey,
       },
     });
     results.push({ ok: r.ok });

@@ -1,16 +1,12 @@
 import { expect, test, type Page } from "@playwright/test";
 
+import { registerInto } from "./helpers";
+
 const email = `e2e_media_${Date.now()}@nv.tv`;
 const WS = "codigo-creativo";
 
 async function register(page: Page) {
-  await page.goto("/register", { waitUntil: "networkidle" });
-  await page.fill("#name", "E2E Media");
-  await page.fill("#email", email);
-  await page.fill("#password", "password123");
-  await page.selectOption("#workspace", WS);
-  await page.click('button[type="submit"]');
-  await page.waitForURL(`**/w/${WS}/**`, { timeout: 20000 });
+  await registerInto(page, { name: "E2E Media", email, workspace: WS });
 }
 
 /**

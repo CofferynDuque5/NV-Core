@@ -37,6 +37,26 @@ pnpm dev                                            # o: pnpm --filter @nv/api s
 | `REDIS_URL` | Opcional; el scheduler de campañas funciona sin Redis (tick en proceso). |
 | `WHATSAPP_GROUP_DELAY_MS` | Retardo entre grupos al enviar (por defecto 4000). |
 | `META_GRAPH_VERSION` | Versión de la Graph API (por defecto v21.0). |
+| `CAMPAIGN_RUN_STALE_MS` | Tras cuánto tiempo sin latido se reanuda una ejecución interrumpida (por defecto 600000 = 10 min). |
+
+### Recuperación tras reinicios (sin envíos duplicados)
+Cada ejecución de campaña tiene una **clave** (`once:<fecha>`, la franja
+`AAAA-MM-DDTHH:MM`, o `manual:<id>` para «Enviar ahora») y un **latido** que se
+actualiza antes de cada chat (`Campaign.runKey` / `runHeartbeatAt`).
+
+- Antes de enviar a un chat se crea su fila del Historial «en curso…». Un índice
+  único `(campaignId, groupId, runKey)` garantiza que **un chat solo se reserva
+  una vez por ejecución**, aunque haya varios procesos, reintentos o reanudación.
+- Si el proceso se reinicia a mitad de campaña, el siguiente tick (30 s) ve el
+  latido vencido y **reanuda** la ejecución con la misma clave: solo envía a los
+  chats pendientes.
+- El chat que estaba a mitad de envío queda como **«Sin confirmar»** (no se
+  reenvía y no cuenta como éxito): revisa el chat. La campaña queda con
+  resultado no exitoso en el evento `campaign.completed`.
+- Una campaña pausada no se reanuda sola; al «Reanudar», una campaña de una sola
+  vez continúa con la misma clave y solo envía a los chats que faltaban.
+- Las franjas programadas (varias horas al día) envían en cada franja. El
+  anti-spam de 20 h se mantiene solo para «Enviar ahora».
 
 ### Credenciales de Facebook / Instagram
 Se resuelven **por workspace** desde las `Connection` (canal `fb`/`ig`:

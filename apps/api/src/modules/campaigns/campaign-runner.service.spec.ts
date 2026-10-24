@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { CampaignRunner } from "./campaign-runner.service";
+import { CampaignRunner, UNCONFIRMED, slotRunKey } from "./campaign-runner.service";
 
 /**
  * Covers the campaign send loop — a money path that had no test. Two angles:
@@ -29,7 +29,7 @@ function makeRunner(
         updates.push(data);
         return data;
       }),
-      findMany: vi.fn(async () => []),
+      findMany: vi.fn(async (): Promise<AnyRec[]> => []),
       // Reserva atómica del turno (seguro de envío único): por defecto la gana.
       updateMany: vi.fn(async () => ({ count: 1 })),
       // Relectura del estado antes de cada envío («Pausar» detiene de verdad).
@@ -37,7 +37,17 @@ function makeRunner(
     },
     sendLog: {
       // La fila se crea como marca "en curso" y luego se actualiza con el resultado.
+      // Igual que el índice único (campaignId, groupId, runKey) de la base de datos.
       create: vi.fn(async ({ data }: { data: AnyRec }) => {
+        const clash = sendLogs.some(
+          (l) =>
+            data.groupId != null &&
+            data.runKey != null &&
+            l.campaignId === data.campaignId &&
+            l.groupId === data.groupId &&
+            l.runKey === data.runKey,
+        );
+        if (clash) throw Object.assign(new Error("Unique constraint failed"), { code: "P2002" });
         const row = { id: `log-${sendLogs.length + 1}`, ...data };
         sendLogs.push(row);
         return row;
@@ -48,7 +58,21 @@ function makeRunner(
         return row;
       }),
       // Anti-duplicado: por defecto, ningún envío previo (no hay duplicados).
-      findFirst: vi.fn(async () => null),
+      findFirst: vi.fn(async (): Promise<AnyRec | null> => null),
+      updateMany: vi.fn(async ({ where, data }: { where: AnyRec; data: AnyRec }) => {
+        const rows = sendLogs.filter(
+          (l) =>
+            (where.campaignId === undefined || l.campaignId === where.campaignId) &&
+            (where.runKey === undefined || l.runKey === where.runKey) &&
+            (where.error === undefined || l.error === where.error),
+        );
+        rows.forEach((l) => Object.assign(l, data));
+        return { count: rows.length };
+      }),
+      count: vi.fn(
+        async ({ where }: { where: AnyRec }) =>
+          sendLogs.filter((l) => l.runKey === where.runKey && l.ok === where.ok).length,
+      ),
     },
     groupVariable: { findMany: vi.fn(async () => []) },
   };
@@ -460,11 +484,159 @@ describe("CampaignRunner.run — seguros contra duplicados y pausa", () => {
     expect(updates.some((u) => u.status === "completada")).toBe(false);
   });
 
-  it("no repite un chat que otra ejecución tiene «en curso»", async () => {
+  it("no repite un chat que otra ejecución ya reservó (índice único por chat y ejecución)", async () => {
+    const c = campaign({ targets: [g("g1", "Grupo 1")] });
+    const { runner, providers, sendLogs } = makeRunner({ campaign: c });
+    sendLogs.push({ id: "otro", campaignId: "c1", groupId: "g1", runKey: "k1", ok: false, error: "en curso…" });
+    await runner.run("w1", "c1", { runKey: "k1" });
+    expect(providers.sendMessage).not.toHaveBeenCalled();
+  });
+
+  it("«Enviar ahora» mantiene el anti-spam de 20 h: no repite un chat que ya lo recibió hoy", async () => {
     const c = campaign({ targets: [g("g1", "Grupo 1")] });
     const { runner, prisma, providers } = makeRunner({ campaign: c });
-    prisma.sendLog.findFirst.mockResolvedValue({ id: "otro" } as never);
-    await runner.run("w1", "c1");
+    prisma.sendLog.findFirst.mockResolvedValue({ id: "ya-enviado" });
+    await runner.run("w1", "c1", { runKey: "manual:abc" });
     expect(providers.sendMessage).not.toHaveBeenCalled();
+  });
+});
+
+describe("CampaignRunner — ejecuciones que sobreviven reinicios", () => {
+  beforeEach(() => {
+    process.env.WHATSAPP_GROUP_DELAY_MS = "0";
+    process.env.WHATSAPP_RETRY_BASE_MS = "0";
+  });
+  afterEach(() => {
+    delete process.env.WHATSAPP_GROUP_DELAY_MS;
+    delete process.env.WHATSAPP_RETRY_BASE_MS;
+  });
+  const g = (id: string, name: string) => ({ group: { id, name, remoteJid: `${id}@g.us` } });
+  const threeGroups = () => [g("g1", "Grupo 1"), g("g2", "Grupo 2"), g("g3", "Grupo 3")];
+  const longAgo = () => new Date(Date.now() - 60 * 60 * 1000);
+
+  it("la clave de una franja es estable: once → once:<fecha>, diaria → la franja", () => {
+    expect(slotRunKey("once", "2026-10-24T10:00:00.000Z")).toBe("once:2026-10-24T10:00:00.000Z");
+    expect(slotRunKey("2026-10-24T09:00", "09:00")).toBe("2026-10-24T09:00");
+  });
+
+  it("una franja programada envía aunque el chat recibió otra franja hoy (varias veces al día)", async () => {
+    const c = campaign({ scheduleType: "daily", status: "activa", targets: [g("g1", "Grupo 1")] });
+    const { runner, prisma, providers } = makeRunner({ campaign: c });
+    // Antes, la ventana de 20 h saltaba en silencio la 2.ª franja del día.
+    prisma.sendLog.findFirst.mockResolvedValue({ id: "franja-de-la-manana" });
+    const out = await runner.run("w1", "c1", { runKey: "2026-10-24T18:00" });
+    expect(providers.sendMessage).toHaveBeenCalledTimes(1);
+    expect(out).toMatchObject({ status: "completed", ok: true, sent: 1 });
+  });
+
+  it("reanuda tras un reinicio: no repite lo enviado, no reenvía lo dudoso y envía lo pendiente", async () => {
+    const c = campaign({
+      status: "activa",
+      runKey: "once:x",
+      runHeartbeatAt: longAgo(),
+      lastRunAt: longAgo(),
+      targets: threeGroups(),
+    });
+    const { runner, prisma, providers, sendLogs, updates, jobs } = makeRunner({ campaign: c });
+    // Estado que dejó el proceso muerto: g1 entregado, g2 a mitad de envío.
+    sendLogs.push(
+      { id: "a", campaignId: "c1", groupId: "g1", runKey: "once:x", ok: true, error: null },
+      { id: "b", campaignId: "c1", groupId: "g2", runKey: "once:x", ok: false, error: "en curso…" },
+    );
+    prisma.campaign.findMany.mockResolvedValueOnce([c]);
+
+    expect(await runner.recoverInterruptedRuns()).toBe(1);
+    expect(sendLogs.find((l) => l.id === "b")!.error).toBe(UNCONFIRMED);
+    expect(jobs.dispatch).toHaveBeenCalledWith("campaign.run", "w1", {
+      workspaceSlug: "w1",
+      campaignId: "c1",
+      runKey: "once:x",
+      resume: true,
+    });
+
+    const out = await runner.run("w1", "c1", { runKey: "once:x", resume: true });
+    expect(providers.sendMessage).toHaveBeenCalledTimes(1);
+    expect((providers.sendMessage.mock.calls[0] as unknown[])[2]).toMatchObject({ to: "g3@g.us" });
+    // g2 quedó sin confirmar → la ejecución NO se presenta como éxito total.
+    expect(out).toEqual({ status: "completed", ok: false, sent: 2, failed: 1 });
+    expect(updates.at(-1)).toMatchObject({ status: "completada", runKey: null, runHeartbeatAt: null });
+  });
+
+  it("el barrido no toca ejecuciones vivas y libera las pausadas sin reanudarlas", async () => {
+    const paused = campaign({ status: "pausada", runKey: "once:x", runHeartbeatAt: longAgo() });
+    const { runner, prisma, jobs } = makeRunner({ campaign: paused });
+    prisma.campaign.findMany.mockResolvedValueOnce([paused]);
+    expect(await runner.recoverInterruptedRuns()).toBe(0);
+    expect(jobs.dispatch).not.toHaveBeenCalled();
+    expect(prisma.campaign.updateMany).toHaveBeenCalledWith({
+      where: { id: "c1", runKey: "once:x" },
+      data: { runKey: null, runHeartbeatAt: null },
+    });
+    // La consulta solo pide latidos vencidos (> 10 min por defecto).
+    const where = (prisma.campaign.findMany.mock.calls[0] as unknown as [{ where: AnyRec }])[0].where;
+    expect((where.runHeartbeatAt as { lt: Date }).lt.getTime()).toBeLessThan(Date.now() - 9 * 60 * 1000);
+  });
+
+  it("si dos procesos intentan reanudar, solo uno lo hace", async () => {
+    const c = campaign({ status: "activa", runKey: "once:x", runHeartbeatAt: longAgo() });
+    const { runner, prisma, jobs } = makeRunner({ campaign: c });
+    prisma.campaign.findMany.mockResolvedValueOnce([c]);
+    prisma.campaign.updateMany.mockResolvedValueOnce({ count: 0 }); // otro proceso ganó
+    expect(await runner.recoverInterruptedRuns()).toBe(0);
+    expect(jobs.dispatch).not.toHaveBeenCalled();
+  });
+
+  it("el reintento de un job continúa la misma ejecución sin duplicar chats", async () => {
+    const c = campaign({ runKey: "manual:1", runHeartbeatAt: new Date(), lastRunAt: new Date(), targets: threeGroups() });
+    const { runner, providers, sendLogs } = makeRunner({ campaign: c });
+    sendLogs.push({ id: "a", campaignId: "c1", groupId: "g1", runKey: "manual:1", ok: true, error: null });
+    await runner.run("w1", "c1", { runKey: "manual:1", attempt: 2 });
+    expect(providers.sendMessage).toHaveBeenCalledTimes(2); // g2 y g3, nunca g1
+  });
+
+  it("no reanuda una ejecución que ya terminó (y no lo reporta como éxito)", async () => {
+    const c = campaign({ runKey: null, targets: [g("g1", "Grupo 1")] });
+    const { runner, providers } = makeRunner({ campaign: c });
+    const out = await runner.run("w1", "c1", { runKey: "once:x", resume: true });
+    expect(out.status).toBe("skipped");
+    expect(providers.sendMessage).not.toHaveBeenCalled();
+  });
+
+  it("no arranca otra ejecución mientras hay una viva (latido reciente)", async () => {
+    const c = campaign({ runKey: "manual:1", runHeartbeatAt: new Date(), lastRunAt: longAgo(), targets: [g("g1", "Grupo 1")] });
+    const { runner, providers } = makeRunner({ campaign: c });
+    const out = await runner.run("w1", "c1", { runKey: "manual:2" });
+    expect(out).toMatchObject({ status: "skipped" });
+    expect(providers.sendMessage).not.toHaveBeenCalled();
+  });
+
+  it("se detiene si otro proceso tomó el relevo de la ejecución (latido perdido)", async () => {
+    const c = campaign({ targets: threeGroups() });
+    const { runner, prisma, providers } = makeRunner({ campaign: c });
+    prisma.campaign.updateMany
+      .mockResolvedValueOnce({ count: 1 }) // reserva inicial
+      .mockResolvedValueOnce({ count: 1 }) // latido antes de g1
+      .mockResolvedValueOnce({ count: 0 }); // antes de g2: ya no es nuestra
+    const out = await runner.run("w1", "c1", { runKey: "k" });
+    expect(providers.sendMessage).toHaveBeenCalledTimes(1);
+    expect(out.status).toBe("skipped");
+  });
+
+  it("al reanudar no vuelve a publicar en Facebook lo ya publicado en esa ejecución", async () => {
+    const c = campaign({ channels: ["fb"], runKey: "k", runHeartbeatAt: longAgo(), targets: [] });
+    const publish = vi.fn(async () => ({ ok: true, id: "p1", format: null }));
+    const { runner, prisma } = makeRunner({ campaign: c, publish });
+    prisma.sendLog.findFirst.mockResolvedValue({ id: "ya-publicado" });
+    await runner.run("w1", "c1", { runKey: "k", resume: true });
+    expect(publish).not.toHaveBeenCalled();
+  });
+
+  it("marca como «sin confirmar» las marcas «en curso» huérfanas de más de 30 min", async () => {
+    const { runner, prisma } = makeRunner();
+    await runner.recoverInterruptedRuns(new Date("2026-10-24T12:00:00Z"));
+    expect(prisma.sendLog.updateMany).toHaveBeenCalledWith({
+      where: { error: "en curso…", createdAt: { lt: new Date("2026-10-24T11:30:00Z") } },
+      data: { ok: false, error: UNCONFIRMED },
+    });
   });
 });

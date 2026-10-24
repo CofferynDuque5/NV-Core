@@ -1,16 +1,12 @@
 import { expect, test, type Page } from "@playwright/test";
 
+import { registerInto } from "./helpers";
+
 const email = `e2e_cal_${Date.now()}@nv.tv`;
 const WS = "marketing-studio";
 
 async function register(page: Page) {
-  await page.goto("/register", { waitUntil: "networkidle" });
-  await page.fill("#name", "E2E Cal");
-  await page.fill("#email", email);
-  await page.fill("#password", "password123");
-  await page.selectOption("#workspace", WS);
-  await page.click('button[type="submit"]');
-  await page.waitForURL(`**/w/${WS}/**`, { timeout: 20000 });
+  await registerInto(page, { name: "E2E Cal", email, workspace: WS });
 }
 
 test.describe.serial("calendar", () => {
