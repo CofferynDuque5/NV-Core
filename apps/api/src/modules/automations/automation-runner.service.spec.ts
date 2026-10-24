@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { AutomationRunnerService } from "./automation-runner.service";
+import { AutomationRunnerService, WAIT_UNCONFIRMED, waitDurationMs } from "./automation-runner.service";
 
 /**
  * The native runner: an incoming WhatsApp/Telegram message must walk every
@@ -23,6 +23,15 @@ function build(flows: unknown[]) {
   const contacts: unknown[] = [];
   const outbox: { to: string; body: string }[] = [];
   const messages: unknown[] = [];
+  type Wait = Record<string, unknown>;
+  const waits: Wait[] = [];
+  let wseq = 0;
+  const match = (w: Wait, where: Record<string, unknown>) =>
+    Object.entries(where).every(([k, v]) =>
+      v && typeof v === "object" && "lte" in (v as object)
+        ? !!w[k] && (w[k] as Date).getTime() <= ((v as { lte: Date }).lte).getTime()
+        : w[k] === v,
+    );
   const prisma = {
     enabled: true,
     automation: {
@@ -30,7 +39,24 @@ function build(flows: unknown[]) {
       findMany: vi.fn(async ({ where }: { where: { status: string } }) =>
         flows.filter((f) => (f as { status: string }).status === where.status),
       ),
+      findUnique: vi.fn(async ({ where }: { where: { id: string } }) =>
+        flows.find((f) => (f as { id: string }).id === where.id) ?? null,
+      ),
       update: vi.fn(async () => ({})),
+    },
+    automationWait: {
+      findFirst: vi.fn(async ({ where }: { where: Record<string, unknown> }) => waits.find((w) => match(w, where)) ?? null),
+      findMany: vi.fn(async ({ where }: { where: Record<string, unknown> }) => waits.filter((w) => match(w, where))),
+      create: vi.fn(async ({ data }: { data: Wait }) => {
+        const row = { id: `w${++wseq}`, status: "pending", startedAt: null, error: null, ...data };
+        waits.push(row);
+        return row;
+      }),
+      updateMany: vi.fn(async ({ where, data }: { where: Record<string, unknown>; data: Wait }) => {
+        const hit = waits.filter((w) => match(w, where));
+        hit.forEach((w) => Object.assign(w, data));
+        return { count: hit.length };
+      }),
     },
     contact: {
       findFirst: vi.fn(async () => null),
@@ -49,7 +75,7 @@ function build(flows: unknown[]) {
   svc.onModuleInit();
   const fire = (text: string, handle = "+573001112233") =>
     handler!({ workspaceSlug: "ws", channel: "wa", contactHandle: handle, contactName: "Ana", text });
-  return { fire, prisma, providers, ai, notifications, outbox, contacts, messages };
+  return { svc, fire, prisma, providers, ai, notifications, outbox, contacts, messages, waits };
 }
 
 const salesFlow = {
@@ -143,5 +169,93 @@ describe("AutomationRunnerService", () => {
     const { fire, outbox } = build([flow]);
     await fire("hola");
     expect(outbox[0]?.body).toBe("Hola Ana, ya te atiendo.");
+  });
+
+  describe("nodo «esperar»", () => {
+    const followUp = (status = "activo") => ({
+      id: "f5",
+      name: "Seguimiento",
+      status,
+      workspaceSlug: "ws",
+      nodes: [
+        { id: "t", type: "trigger", label: "Mensaje", config: {} },
+        { id: "m1", type: "action", label: "Hola", config: { kind: "send_message", body: "Hola {{nombre}}" } },
+        { id: "w", type: "wait", label: "Esperar", config: { duration: "1h" } },
+        { id: "m2", type: "action", label: "Seguimiento", config: { kind: "send_message", body: "¿Pudiste verlo?" } },
+      ],
+      edges: [
+        { id: "e1", from: "t", to: "m1" },
+        { id: "e2", from: "m1", to: "w" },
+        { id: "e3", from: "w", to: "m2" },
+      ],
+    });
+    const later = (ms: number) => new Date(Date.now() + ms);
+
+    it("pausa el flujo y lo reanuda a su hora desde el paso siguiente", async () => {
+      const { svc, fire, outbox, waits } = build([followUp()]);
+      await fire("hola");
+      expect(outbox.map((o) => o.body)).toEqual(["Hola Ana"]);
+      expect(waits).toHaveLength(1);
+      expect(waits[0]).toMatchObject({ status: "pending", nextNodeId: "m2", contactHandle: "+573001112233" });
+
+      // Antes de la hora no pasa nada.
+      expect(await svc.resumeDue(later(30 * 60_000))).toBe(0);
+      expect(outbox).toHaveLength(1);
+
+      // Vencida: envía el seguimiento aunque el último envío fue hace < 30 s.
+      expect(await svc.resumeDue(later(61 * 60_000))).toBe(1);
+      expect(outbox.map((o) => o.body)).toEqual(["Hola Ana", "¿Pudiste verlo?"]);
+      expect(waits[0]!.status).toBe("done");
+
+      // Idempotente: no se reanuda dos veces.
+      expect(await svc.resumeDue(later(120 * 60_000))).toBe(0);
+      expect(outbox).toHaveLength(2);
+    });
+
+    it("una sola espera pendiente por contacto aunque escriba varias veces", async () => {
+      const { fire, waits } = build([followUp()]);
+      await fire("hola");
+      await fire("hola otra vez");
+      await fire("¿hay alguien?");
+      expect(waits).toHaveLength(1);
+    });
+
+    it("si el flujo se pausa durante la espera, se cancela sin enviar", async () => {
+      const flow = followUp();
+      const { svc, fire, outbox, waits } = build([flow]);
+      await fire("hola");
+      flow.status = "pausado";
+      await svc.resumeDue(later(2 * 3_600_000));
+      expect(outbox).toHaveLength(1);
+      expect(waits[0]!.status).toBe("cancelled");
+    });
+
+    it("si el envío falla al reanudar, queda como fallida y avisa", async () => {
+      const { svc, fire, providers, notifications, waits } = build([followUp()]);
+      await fire("hola");
+      providers.sendByChannel.mockRejectedValueOnce(new Error("WhatsApp desconectado"));
+      await svc.resumeDue(later(2 * 3_600_000));
+      expect(waits[0]).toMatchObject({ status: "failed", error: "WhatsApp desconectado" });
+      expect(notifications.create).toHaveBeenCalledWith("ws", expect.objectContaining({ type: "error" }));
+    });
+
+    it("una reanudación cortada por un reinicio se marca sin confirmar y no se repite", async () => {
+      const { svc, fire, outbox, waits } = build([followUp()]);
+      await fire("hola");
+      Object.assign(waits[0]!, { status: "running", startedAt: new Date(Date.now() - 20 * 60_000) });
+      await svc.resumeDue(later(2 * 3_600_000));
+      expect(waits[0]).toMatchObject({ status: "failed", error: WAIT_UNCONFIRMED });
+      expect(outbox).toHaveLength(1);
+    });
+
+    it("interpreta las duraciones del editor y rechaza las inválidas", () => {
+      expect(waitDurationMs({ duration: "5m" })).toBe(5 * 60_000);
+      expect(waitDurationMs({ duration: "1h" })).toBe(3_600_000);
+      expect(waitDurationMs({ duration: "3d" })).toBe(3 * 86_400_000);
+      expect(waitDurationMs({ hours: 2 })).toBe(2 * 3_600_000);
+      expect(waitDurationMs({ duration: "999d" })).toBe(30 * 86_400_000);
+      expect(waitDurationMs({ duration: "pronto" })).toBeNull();
+      expect(waitDurationMs({})).toBeNull();
+    });
   });
 });

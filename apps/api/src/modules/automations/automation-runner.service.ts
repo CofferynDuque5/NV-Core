@@ -14,11 +14,56 @@ import { NotificationsService } from "../notifications/notifications.module";
  * crear contacto, notificar y escalar a humano. Las condiciones se evalúan
  * contra el contexto del mensaje (intención, resuelto, canal…).
  *
- * Seguros anti-spam: nunca responde a mensajes propios, una sola respuesta por
- * chat cada 30 s (aunque haya varios flujos), y el "wait" se ignora en modo
- * reactivo (no encola envíos futuros a ciegas).
+ * Seguros anti-spam: nunca responde a mensajes propios y da una sola respuesta
+ * por chat cada 30 s (aunque haya varios flujos).
+ *
+ * Nodo «esperar»: el flujo se pausa y queda guardado en `AutomationWait` con la
+ * hora de reanudación. Un tick cada 30 s reanuda las esperas vencidas desde el
+ * nodo siguiente, así funciona sin Redis y tras un reinicio. Solo hay una espera
+ * pendiente por flujo + contacto + nodo (un cliente que escribe 5 veces no
+ * recibe 5 seguimientos), y una espera cortada por un reinicio a mitad de
+ * ejecución se marca como fallida «sin confirmar» en vez de repetirse.
  */
 const COOLDOWN_MS = 30_000;
+const TICK_MS = 30_000;
+/** Esperas reanudadas por tick, para no acaparar el proceso. */
+const RESUME_BATCH = 20;
+/** Una espera "running" más tiempo que esto fue interrumpida por un reinicio. */
+const STUCK_RUNNING_MS = 10 * 60_000;
+/** Tope de una espera, para que un valor erróneo no deje flujos colgados años. */
+const MAX_WAIT_MS = 30 * 86_400_000;
+export const WAIT_UNCONFIRMED =
+  "Sin confirmar: el servidor se reinició mientras se reanudaba el flujo. No se repite para no duplicar envíos.";
+
+interface IncomingMessage {
+  workspaceSlug: string;
+  channel: string;
+  contactHandle: string;
+  contactName: string;
+  text: string;
+}
+
+interface WaitPayload {
+  message: IncomingMessage;
+  context: Record<string, string>;
+}
+
+/** Duración del nodo «esperar»: "5m", "1h", "1d", "3d" o {minutes|hours|days}. */
+export function waitDurationMs(config: Record<string, unknown>): number | null {
+  const raw = config.duration;
+  const m = typeof raw === "string" ? /^\s*(\d+)\s*(m|h|d)\s*$/i.exec(raw) : null;
+  let ms: number | null = null;
+  if (m) {
+    const unit = { m: 60_000, h: 3_600_000, d: 86_400_000 }[m[2]!.toLowerCase() as "m" | "h" | "d"];
+    ms = Number(m[1]) * unit;
+  } else {
+    const n = (k: string) => (typeof config[k] === "number" ? (config[k] as number) : Number(config[k] ?? 0)) || 0;
+    const total = n("minutes") * 60_000 + n("hours") * 3_600_000 + n("days") * 86_400_000;
+    ms = total > 0 ? total : null;
+  }
+  if (ms == null || !Number.isFinite(ms) || ms <= 0) return null;
+  return Math.min(ms, MAX_WAIT_MS);
+}
 const str = (v: unknown): string => (v == null ? "" : String(v));
 const cfg = (n: AutomationNode): Record<string, unknown> => n.config ?? {};
 
@@ -30,6 +75,8 @@ const HELP_WORDS = ["no funciona", "ayuda", "error", "no me deja", "no puedo", "
 export class AutomationRunnerService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(AutomationRunnerService.name);
   private unsubscribe: (() => void) | null = null;
+  private timer: NodeJS.Timeout | null = null;
+  private ticking = false;
   /** Último auto-envío por (workspace|handle) para el cooldown anti-spam. */
   private readonly lastReply = new Map<string, number>();
 
@@ -44,19 +91,22 @@ export class AutomationRunnerService implements OnModuleInit, OnModuleDestroy {
   onModuleInit(): void {
     this.unsubscribe = this.events.on("message.received", (p) => this.onMessage(p));
     this.logger.log("Runner de automatizaciones activo (mensaje entrante → flujos).");
+    if (!this.prisma.enabled) return;
+    this.timer = setInterval(
+      () =>
+        void this.resumeDue().catch((err: unknown) =>
+          this.logger.warn(`Reanudar esperas falló: ${(err as Error).message}`),
+        ),
+      TICK_MS,
+    );
   }
 
   onModuleDestroy(): void {
     this.unsubscribe?.();
+    if (this.timer) clearInterval(this.timer);
   }
 
-  private async onMessage(p: {
-    workspaceSlug: string;
-    channel: string;
-    contactHandle: string;
-    contactName: string;
-    text: string;
-  }): Promise<void> {
+  private async onMessage(p: IncomingMessage): Promise<void> {
     if (!this.prisma.enabled || !p.text?.trim()) return;
     const flows = await this.prisma.automation.findMany({
       where: { workspaceSlug: p.workspaceSlug, status: "activo" },
@@ -83,7 +133,7 @@ export class AutomationRunnerService implements OnModuleInit, OnModuleDestroy {
       const trigger = nodes.find((n) => n.type === "trigger");
       if (!trigger || !this.triggerMatches(trigger, low)) continue;
       try {
-        const ran = await this.walk(flow.id, p, nodes, edges, trigger.id, { ...context });
+        const ran = await this.walk(flow.id, p, nodes, edges, trigger.id, { ...context }, false);
         if (ran) {
           await this.prisma.automation
             .update({ where: { id: flow.id }, data: { runs: { increment: 1 } } })
@@ -105,14 +155,18 @@ export class AutomationRunnerService implements OnModuleInit, OnModuleDestroy {
     return contains.some((w) => w && low.includes(w.toLowerCase()));
   }
 
-  /** Recorre el grafo desde el trigger ejecutando acciones; devuelve si hizo algo. */
+  /**
+   * Recorre el grafo desde `startId` ejecutando acciones; devuelve si hizo algo.
+   * Un nodo «esperar» guarda la continuación y detiene el recorrido.
+   */
   private async walk(
     flowId: string,
-    p: { workspaceSlug: string; channel: string; contactHandle: string; contactName: string; text: string },
+    p: IncomingMessage,
     nodes: AutomationNode[],
     edges: AutomationEdge[],
     startId: string,
     context: Record<string, string>,
+    resumed: boolean,
   ): Promise<boolean> {
     const byId = new Map(nodes.map((n) => [n.id, n]));
     const visited = new Set<string>();
@@ -124,12 +178,19 @@ export class AutomationRunnerService implements OnModuleInit, OnModuleDestroy {
       let branch: "true" | "false" | undefined;
 
       if (current.type === "action") {
-        didSomething = (await this.runAction(flowId, current, p, context)) || didSomething;
+        didSomething = (await this.runAction(flowId, current, p, context, resumed)) || didSomething;
       } else if (current.type === "cond") {
         branch = this.evalCond(current, context) ? "true" : "false";
       } else if (current.type === "wait") {
-        // Reactivo: no encolamos envíos futuros a ciegas (evita spam diferido).
-        this.logger.debug?.(`Nodo de espera omitido en modo reactivo (${current.label}).`);
+        const next = edges.find((e) => e.from === current!.id);
+        // Una espera al final del flujo no tiene nada que reanudar.
+        if (!next) break;
+        const ms = waitDurationMs(cfg(current));
+        if (ms == null) {
+          this.logger.warn(`Nodo de espera sin duración válida en flujo ${flowId} (${current.label}); se omite.`);
+        } else {
+          return (await this.scheduleWait(flowId, current.id, next.to, p, context, ms)) || didSomething;
+        }
       }
 
       const out = edges.filter((e) => e.from === current!.id);
@@ -156,14 +217,15 @@ export class AutomationRunnerService implements OnModuleInit, OnModuleDestroy {
   private async runAction(
     flowId: string,
     node: AutomationNode,
-    p: { workspaceSlug: string; channel: string; contactHandle: string; contactName: string; text: string },
+    p: IncomingMessage,
     ctx: Record<string, string>,
+    resumed = false,
   ): Promise<boolean> {
     const c = cfg(node);
     const kind = (str(c.kind) || str(c.action)).replace(/-/g, "_");
     switch (kind) {
       case "ai_reply": {
-        if (!this.cooldownOk(p)) return false;
+        if (!resumed && !this.cooldownOk(p)) return false;
         const { reply } = await this.ai.chat(p.workspaceSlug, {
           system: str(c.prompt) || undefined,
           messages: [{ role: "user", content: p.text }],
@@ -177,7 +239,7 @@ export class AutomationRunnerService implements OnModuleInit, OnModuleDestroy {
         return true;
       }
       case "send_message": {
-        if (!this.cooldownOk(p)) return false;
+        if (!resumed && !this.cooldownOk(p)) return false;
         const body = str(c.body).replace(/\{\{\s*nombre\s*\}\}/gi, p.contactName || "");
         if (!body.trim()) return false;
         await this.deliver(p, body);
@@ -226,6 +288,114 @@ export class AutomationRunnerService implements OnModuleInit, OnModuleDestroy {
         this.logger.debug?.(`Acción desconocida "${kind}" en flujo ${flowId}; se omite.`);
         return false;
     }
+  }
+
+  /** Guarda la continuación del flujo. Una sola espera pendiente por flujo + contacto + nodo. */
+  private async scheduleWait(
+    flowId: string,
+    waitNodeId: string,
+    nextNodeId: string,
+    p: IncomingMessage,
+    context: Record<string, string>,
+    ms: number,
+  ): Promise<boolean> {
+    const pending = await this.prisma.automationWait.findFirst({
+      where: { automationId: flowId, contactHandle: p.contactHandle, waitNodeId, status: "pending" },
+      select: { id: true },
+    });
+    if (pending) return false;
+    await this.prisma.automationWait.create({
+      data: {
+        workspaceSlug: p.workspaceSlug,
+        automationId: flowId,
+        waitNodeId,
+        nextNodeId,
+        contactHandle: p.contactHandle,
+        payload: { message: p, context } satisfies WaitPayload as object,
+        resumeAt: new Date(Date.now() + ms),
+      },
+    });
+    return true;
+  }
+
+  /**
+   * Reanuda las esperas vencidas. Cada una se reclama con un compare-and-set
+   * (pending → running), así dos procesos nunca reanudan la misma.
+   */
+  async resumeDue(now = new Date()): Promise<number> {
+    if (!this.prisma.enabled || this.ticking) return 0;
+    this.ticking = true;
+    try {
+      await this.failStuck(now);
+      const due = await this.prisma.automationWait.findMany({
+        where: { status: "pending", resumeAt: { lte: now } },
+        orderBy: { resumeAt: "asc" },
+        take: RESUME_BATCH,
+      });
+      let resumed = 0;
+      for (const w of due) {
+        const claim = await this.prisma.automationWait.updateMany({
+          where: { id: w.id, status: "pending" },
+          data: { status: "running", startedAt: new Date() },
+        });
+        if (claim.count === 0) continue;
+        resumed++;
+        await this.resumeOne(w);
+      }
+      return resumed;
+    } finally {
+      this.ticking = false;
+    }
+  }
+
+  private async resumeOne(w: {
+    id: string;
+    automationId: string;
+    nextNodeId: string;
+    workspaceSlug: string;
+    payload: unknown;
+  }): Promise<void> {
+    const flow = await this.prisma.automation.findUnique({ where: { id: w.automationId } });
+    // Pausar o borrar el flujo cancela sus esperas: no se envía nada.
+    if (!flow || flow.status !== "activo" || flow.workspaceSlug !== w.workspaceSlug) {
+      await this.finishWait(w.id, "cancelled", "El flujo ya no está activo.");
+      return;
+    }
+    const nodes = (flow.nodes as unknown as AutomationNode[]) ?? [];
+    const edges = (flow.edges as unknown as AutomationEdge[]) ?? [];
+    if (!nodes.some((n) => n.id === w.nextNodeId)) {
+      await this.finishWait(w.id, "cancelled", "El flujo cambió y el paso siguiente ya no existe.");
+      return;
+    }
+    const { message, context } = w.payload as WaitPayload;
+    try {
+      await this.walk(flow.id, message, nodes, edges, w.nextNodeId, { ...context }, true);
+      await this.finishWait(w.id, "done", null);
+    } catch (err) {
+      const reason = (err as Error).message || "Error al reanudar el flujo.";
+      await this.finishWait(w.id, "failed", reason);
+      await this.notifications.create(w.workspaceSlug, {
+        type: "error",
+        title: `Automatización "${flow.name}" falló tras la espera`,
+        meta: reason.slice(0, 140),
+      });
+      this.logger.warn(`Flujo "${flow.name}" falló al reanudar: ${reason}`);
+    }
+  }
+
+  private async finishWait(id: string, status: "done" | "failed" | "cancelled", error: string | null) {
+    await this.prisma.automationWait.updateMany({
+      where: { id, status: "running" },
+      data: { status, error },
+    });
+  }
+
+  /** Esperas que quedaron "running" por un reinicio: fallidas sin confirmar, sin repetir envíos. */
+  private async failStuck(now: Date): Promise<void> {
+    await this.prisma.automationWait.updateMany({
+      where: { status: "running", startedAt: { lte: new Date(now.getTime() - STUCK_RUNNING_MS) } },
+      data: { status: "failed", error: WAIT_UNCONFIRMED },
+    });
   }
 
   /** Un auto-envío por chat cada 30 s (entre TODOS los flujos). */

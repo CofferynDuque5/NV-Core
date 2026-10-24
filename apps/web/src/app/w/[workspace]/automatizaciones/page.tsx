@@ -95,6 +95,11 @@ export default function AutomatizacionesPage() {
                     <p className="truncate text-xs text-ink-muted">{a.description}</p>
                   ) : null}
                 </div>
+                {a.waiting ? (
+                  <span className="shrink-0 text-xs text-state-warning" title="Contactos pausados en un paso «Esperar»">
+                    {a.waiting} en espera
+                  </span>
+                ) : null}
                 <span className="shrink-0 text-xs text-ink-faint">{a.runs} ejecuciones</span>
                 {a.webhookUrl ? (
                   <button

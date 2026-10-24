@@ -477,6 +477,8 @@ export interface Automation {
   edges?: AutomationEdge[];
   /** Optional n8n webhook (absolute URL or path) triggered when the flow runs. */
   webhookUrl?: string;
+  /** Contacts currently paused on a "wait" step of this flow. */
+  waiting?: number;
 }
 
 export interface CalendarEvent {

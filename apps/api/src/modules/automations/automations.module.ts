@@ -179,7 +179,11 @@ export class AutomationsService {
     if (!this.prisma.enabled) return ListResultDto.empty<Automation>();
     const where = { workspaceSlug: workspaceId };
     const [rows, total] = await Promise.all([
-      this.prisma.automation.findMany({ where, orderBy: { createdAt: "desc" } }),
+      this.prisma.automation.findMany({
+        where,
+        orderBy: { createdAt: "desc" },
+        include: { _count: { select: { waits: { where: { status: "pending" } } } } },
+      }),
       this.prisma.automation.count({ where }),
     ]);
     return new ListResultDto(rows.map(mapAutomation), total);
