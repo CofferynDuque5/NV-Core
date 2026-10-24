@@ -228,6 +228,8 @@ export function createHttpAdapters(opts: HttpAdapterOptions): Services {
       notes: (id, cid) => get<ContactNote[]>(`${ws(id)}/contacts/${cid}/notes`),
       addNote: (id, cid, body) => post<ContactNote>(`${ws(id)}/contacts/${cid}/notes`, { body }),
       removeNote: (id, cid, noteId) => del<void>(`${ws(id)}/contacts/${cid}/notes/${noteId}`),
+      setOptOut: (id, cid, optedOut) =>
+        post<Contact>(`${ws(id)}/contacts/${cid}/${optedOut ? "opt-out" : "opt-in"}`, {}),
       exportCsv: (id) => get<{ csv: string }>(`${ws(id)}/contacts/export`).then((r) => r.csv),
       importCsv: (id, csv) => post<ContactImportResult>(`${ws(id)}/contacts/import`, { csv }),
     },

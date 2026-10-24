@@ -37,8 +37,11 @@ describe.skipIf(!url)("Publicaciones programadas e Inbox contra PostgreSQL real"
     const b = mk(async () => ({ ok: true, id: "fb_1" }));
     await Promise.all([a.scheduler.sweep(), b.scheduler.sweep()]);
 
-    const calls = a.providers.publish.mock.calls.length + b.providers.publish.mock.calls.length;
-    expect(calls).toBe(1);
+    // La base de pruebas puede tener posts de corridas anteriores ya vencidos: solo cuentan los de este workspace.
+    const mine = [...a.providers.publish.mock.calls, ...b.providers.publish.mock.calls].filter(
+      (c) => (c as unknown[])[0] === ws,
+    );
+    expect(mine).toHaveLength(1);
     const rows = await prisma.post.findMany({ where: { workspaceSlug: ws } });
     expect(rows.find((r) => r.id === ok.id)!.status).toBe("sent");
     expect(rows.find((r) => r.id === bad.id)!.status).toBe("error");

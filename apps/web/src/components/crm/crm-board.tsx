@@ -80,7 +80,14 @@ export function CrmBoard({
                     dragId === c.id && "opacity-50",
                   )}
                 >
-                  <p className="truncate text-sm font-medium text-ink">{c.name}</p>
+                  <p className="flex items-center gap-1.5 text-sm font-medium text-ink">
+                    <span className="truncate">{c.name}</span>
+                    {c.optOutAt ? (
+                      <Badge variant="danger" title="No recibe secuencias ni automatizaciones">
+                        Baja
+                      </Badge>
+                    ) : null}
+                  </p>
                   {c.company ? <p className="truncate text-[11px] text-ink-faint">{c.company}</p> : null}
                   {c.tags.length > 0 ? (
                     <span className="mt-1.5 flex flex-wrap gap-1">

@@ -32,6 +32,7 @@ import { PaginationQueryDto } from "../../common/dto/pagination.dto";
 import { WorkspaceId } from "../../common/tenant/workspace.decorator";
 import { WorkspaceGuard } from "../../common/tenant/workspace.guard";
 import { AuditLogger } from "../../common/audit-logger.service";
+import { ConsentService } from "../consent/consent.service";
 import { PlanService } from "../../common/plan/plan.service";
 import { PrismaService } from "../../prisma/prisma.service";
 import { mapContact, mapContactNote } from "../../prisma/mappers";
@@ -100,12 +101,21 @@ export class AddContactNoteDto {
   @IsString() @MinLength(1) body!: string;
 }
 
+export class ConsentDto {
+  @ApiPropertyOptional({ description: "Cómo se obtuvo: form, whatsapp, presencial, manual…" })
+  @IsString()
+  @MinLength(1)
+  @MaxLength(60)
+  source!: string;
+}
+
 @Injectable()
 export class ContactsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly audit: AuditLogger,
     private readonly plans: PlanService,
+    private readonly consent: ConsentService,
   ) {}
 
   private db() {
@@ -156,6 +166,8 @@ export class ContactsService {
     "tags",
     "stage",
     "createdAt",
+    "optOutAt",
+    "consentAt",
   ];
 
   /** Export every contact as CSV, paged internally so it scales to large tenants. */
@@ -181,6 +193,8 @@ export class ContactsService {
           tags: (c.tags ?? []).join(";"),
           stage: c.stage,
           createdAt: c.createdAt.toISOString(),
+          optOutAt: c.optOutAt?.toISOString() ?? "",
+          consentAt: c.consentAt?.toISOString() ?? "",
         });
       }
       cursor = batch[batch.length - 1]!.id;
@@ -309,6 +323,20 @@ export class ContactsService {
     await this.audit.record(workspaceId, actor, "contact.delete", id);
   }
 
+  /** Opt a contact out of (or back into) automated messages. */
+  async setOptOut(workspaceId: string, actor: string, id: string, optedOut: boolean): Promise<Contact> {
+    await this.ownedContact(workspaceId, id);
+    await this.consent.setOptOut(workspaceId, actor, id, optedOut);
+    return mapContact((await this.db().contact.findUnique({ where: { id } }))!);
+  }
+
+  /** Record that the contact agreed to receive messages, and how. */
+  async recordConsent(workspaceId: string, actor: string, id: string, source: string): Promise<Contact> {
+    await this.ownedContact(workspaceId, id);
+    await this.consent.setConsent(workspaceId, actor, id, source);
+    return mapContact((await this.db().contact.findUnique({ where: { id } }))!);
+  }
+
   private async ownedContact(workspaceId: string, contactId: string) {
     const contact = await this.db().contact.findFirst({ where: { id: contactId, workspaceSlug: workspaceId } });
     if (!contact) throw new NotFoundException("Contacto no encontrado.");
@@ -403,6 +431,35 @@ export class ContactsController {
     @Param("id") id: string,
   ) {
     return this.service.remove(workspaceId, user.email, id);
+  }
+
+  @Post(":id/opt-out")
+  @Roles("Owner", "Admin", "Editor")
+  @UseGuards(RolesGuard)
+  @HttpCode(200)
+  optOut(@WorkspaceId() workspaceId: string, @CurrentUser() user: AuthenticatedUser, @Param("id") id: string) {
+    return this.service.setOptOut(workspaceId, user.email, id, true);
+  }
+
+  @Post(":id/opt-in")
+  @Roles("Owner", "Admin")
+  @UseGuards(RolesGuard)
+  @HttpCode(200)
+  optIn(@WorkspaceId() workspaceId: string, @CurrentUser() user: AuthenticatedUser, @Param("id") id: string) {
+    return this.service.setOptOut(workspaceId, user.email, id, false);
+  }
+
+  @Post(":id/consent")
+  @Roles("Owner", "Admin", "Editor")
+  @UseGuards(RolesGuard)
+  @HttpCode(200)
+  consent(
+    @WorkspaceId() workspaceId: string,
+    @CurrentUser() user: AuthenticatedUser,
+    @Param("id") id: string,
+    @Body() dto: ConsentDto,
+  ) {
+    return this.service.recordConsent(workspaceId, user.email, id, dto.source);
   }
 
   @Get(":id/notes")

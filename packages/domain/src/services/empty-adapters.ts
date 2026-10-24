@@ -149,6 +149,7 @@ export const emptyAdapters: Services = {
     notes: () => delay([]),
     addNote: () => notAvailable(),
     removeNote: () => notAvailable(),
+    setOptOut: () => notAvailable(),
     exportCsv: () => delay(""),
     importCsv: () => notAvailable(),
   },

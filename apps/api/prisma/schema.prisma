@@ -121,6 +121,14 @@ model Contact {
   tags          String[]
   stage         String    @default("Lead")
   lastContactAt DateTime?
+  /// When the contact asked not to receive automated messages (null = active).
+  /// Sequences and automations never message an opted-out contact.
+  optOutAt      DateTime?
+  /// How the opt-out was recorded: "keyword" (they wrote BAJA/STOP) or "manual".
+  optOutSource  String?
+  /// When / how consent to receive messages was recorded (e.g. "form", "manual").
+  consentAt     DateTime?
+  consentSource String?
   createdAt     DateTime  @default(now())
 
   @@index([workspaceSlug])
