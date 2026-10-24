@@ -7,6 +7,7 @@ import { useUiStore } from "@/stores/ui-store";
 import { useWorkspace } from "@/hooks/use-workspace";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { EXTRA_NAV_ITEMS, getNavIcon } from "./sidebar-icon";
+import { BrandTile } from "./brand-mark";
 
 export function MobileNav({ onOpenSwitcher }: { onOpenSwitcher: () => void }) {
   const open = useUiStore((s) => s.mobileNavOpen);
@@ -19,11 +20,7 @@ export function MobileNav({ onOpenSwitcher }: { onOpenSwitcher: () => void }) {
       <SheetContent side="left" className="w-72 bg-nav p-0 sm:max-w-72">
         <SheetHeader>
           <div className="flex items-center gap-2.5">
-            <span className="grid size-8 place-items-center rounded-[9px] bg-gradient-to-br from-brand to-brand-violet shadow-brand">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M4 12h6l2-3 3 6 2-3h3" />
-              </svg>
-            </span>
+            <BrandTile size={32} />
             <SheetTitle className="font-display">NV Marketing</SheetTitle>
           </div>
         </SheetHeader>

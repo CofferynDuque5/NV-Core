@@ -3,6 +3,7 @@ import { NAV_SECTIONS } from "@nv/domain";
 import { ChevronLeft, ChevronsUpDown } from "lucide-react";
 
 import { cn } from "@/lib/utils";
+import { BrandMark } from "./brand-mark";
 import { useUiStore } from "@/stores/ui-store";
 import { useAuthStore } from "@/stores/auth-store";
 import { useWorkspace } from "@/hooks/use-workspace";
@@ -49,9 +50,7 @@ export function Sidebar({ onOpenSwitcher }: { onOpenSwitcher: () => void }) {
           title="Expandir / colapsar"
           className="grid size-8 shrink-0 place-items-center rounded-[9px] bg-gradient-to-br from-brand to-brand-violet shadow-brand"
         >
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M4 12h6l2-3 3 6 2-3h3" />
-          </svg>
+          <BrandMark size={19} />
         </button>
         {!collapsed ? (
           <>

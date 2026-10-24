@@ -1,30 +1,14 @@
 import { Link } from "react-router-dom";
 import { CalendarClock, MessageCircle, Sparkles, Users } from "lucide-react";
 
+import { BrandMark } from "@/components/shell/brand-mark";
+
 const FEATURES = [
   { icon: MessageCircle, text: "Difunde a WhatsApp, Telegram, Facebook e Instagram" },
   { icon: CalendarClock, text: "Campañas programadas con rotación de imágenes" },
   { icon: Users, text: "CRM, embudos y automatizaciones en un solo lugar" },
   { icon: Sparkles, text: "IA que crea tu contenido y tus flyers" },
 ];
-
-function Logo({ className }: { className?: string }) {
-  return (
-    <svg
-      width="22"
-      height="22"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="#fff"
-      strokeWidth="2.2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      className={className}
-    >
-      <path d="M4 12h6l2-3 3 6 2-3h3" />
-    </svg>
-  );
-}
 
 export function AuthShell({
   title,
@@ -83,7 +67,7 @@ export function AuthShell({
         <div className="hidden flex-col justify-between p-12 lg:flex">
           <div className="flex items-center gap-3">
             <span className="from-brand to-brand-violet shadow-brand grid size-11 place-items-center rounded-xl bg-gradient-to-br">
-              <Logo />
+              <BrandMark size={26} />
             </span>
             <div>
               <div className="font-display text-ink-bright text-xl font-semibold">NV Marketing</div>
@@ -128,7 +112,7 @@ export function AuthShell({
             {/* Brand (mobile / small screens) */}
             <div className="mb-8 flex flex-col items-center gap-3 text-center lg:hidden">
               <span className="from-brand to-brand-violet shadow-brand grid size-11 place-items-center rounded-xl bg-gradient-to-br">
-                <Logo />
+                <BrandMark size={26} />
               </span>
               <div>
                 <div className="font-display text-ink-bright text-xl font-semibold">NV Marketing</div>
