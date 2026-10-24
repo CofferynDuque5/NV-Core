@@ -325,6 +325,12 @@ model Campaign {
   lastRunDay    String?
   /// Last executed time-slot ("YYYY-MM-DDTHH:MM") to dedupe multi-time runs.
   lastRunSlot   String?
+  /// Run in flight: idempotency key of the current execution ("once:<at>",
+  /// "<YYYY-MM-DD>T<HH:MM>" or "manual:<id>"). NULL when no run is in flight.
+  /// Lets a run interrupted by a restart be resumed without resending.
+  runKey        String?
+  /// Heartbeat of the in-flight run; a stale heartbeat means the process died.
+  runHeartbeatAt DateTime?
   createdAt     DateTime       @default(now())
 
   posts    Post[]
@@ -370,8 +376,12 @@ model SendLog {
   preview       String?
   ok            Boolean   @default(false)
   error         String?
+  /// Campaign run this send belongs to (Campaign.runKey). Unique per chat and
+  /// run, so a retried or resumed run can never deliver twice to the same chat.
+  runKey        String?
   createdAt     DateTime  @default(now())
 
+  @@unique([campaignId, groupId, runKey])
   @@index([workspaceSlug])
   @@index([campaignId])
   @@index([workspaceSlug, createdAt])
@@ -391,10 +401,14 @@ model Post {
   attachments   Json       @default("[]")
   status        PostStatus @default(draft)
   scheduledAt   DateTime?
+  /// When the scheduler claimed the post (status "publishing"); lets the sweep
+  /// tell an interrupted publish from one still in flight.
+  publishStartedAt DateTime?
   createdAt     DateTime   @default(now())
 
   @@index([workspaceSlug])
   @@index([workspaceSlug, scheduledAt])
+  @@index([status, scheduledAt])
 }
 
 model Connection {

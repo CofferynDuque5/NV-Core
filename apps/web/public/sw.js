@@ -12,7 +12,7 @@
  * asset URL with the SPA's index.html (200, text/html); caching that would
  * poison the cache-first path and leave the app blank forever.
  */
-const CACHE = "nvcore-v2";
+const CACHE = "nvcore-v3";
 const SHELL = ["/", "/index.html", "/manifest.webmanifest"];
 
 function cacheable(res, kind) {

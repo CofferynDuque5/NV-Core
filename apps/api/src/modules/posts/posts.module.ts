@@ -17,7 +17,6 @@ import {
 import { ApiBearerAuth, ApiPropertyOptional, ApiTags } from "@nestjs/swagger";
 import {
   CHANNEL_IDS,
-  POST_STATUSES,
   type CampaignAttachment,
   type ChannelId,
   type Post,
@@ -48,6 +47,13 @@ import type { AuthenticatedUser } from "../../auth/auth.types";
 import { PostScheduler } from "../scheduler/post-scheduler.service";
 import { LIST_CAP } from "../../common/query-limits";
 
+/**
+ * Statuses a user may set. "publishing", "sent" and "error" are set only by the
+ * scheduler after a real provider call, so a post can't be marked as published
+ * by hand (it would count as a success in analytics without having gone out).
+ */
+const EDITABLE_POST_STATUSES = ["draft", "scheduled"] as const;
+
 export class CreatePostDto {
   @IsIn(CHANNEL_IDS) channel!: ChannelId;
   @IsString() @MinLength(1) title!: string;
@@ -67,9 +73,11 @@ export class CreatePostDto {
   @Type(() => MediaAttachmentDto)
   attachments?: CampaignAttachment[];
 
-  @ApiPropertyOptional({ enum: POST_STATUSES })
+  @ApiPropertyOptional({ enum: EDITABLE_POST_STATUSES })
   @IsOptional()
-  @IsIn(POST_STATUSES)
+  @IsIn(EDITABLE_POST_STATUSES, {
+    message: "Solo puedes guardar una publicación como borrador o programada.",
+  })
   status?: PostStatus;
 
   @ApiPropertyOptional({ description: "ISO date" })
@@ -106,9 +114,11 @@ export class UpdatePostDto {
   @Type(() => MediaAttachmentDto)
   attachments?: CampaignAttachment[];
 
-  @ApiPropertyOptional({ enum: POST_STATUSES })
+  @ApiPropertyOptional({ enum: EDITABLE_POST_STATUSES })
   @IsOptional()
-  @IsIn(POST_STATUSES)
+  @IsIn(EDITABLE_POST_STATUSES, {
+    message: "Solo puedes guardar una publicación como borrador o programada.",
+  })
   status?: PostStatus;
 
   @ApiPropertyOptional({ description: "ISO date, or null to unschedule." })
@@ -202,6 +212,9 @@ export class PostsService {
     if (existing.status === "sent") {
       throw new BadRequestException("No se puede modificar una publicación ya enviada.");
     }
+    if (existing.status === "publishing") {
+      throw new BadRequestException("La publicación se está enviando en este momento.");
+    }
 
     const data: Record<string, unknown> = {};
     if (dto.channel !== undefined) data.channel = dto.channel;
@@ -214,6 +227,10 @@ export class PostsService {
     // scheduledAt: undefined = leave as-is; null = unschedule; string = move.
     if (dto.scheduledAt !== undefined) {
       data.scheduledAt = dto.scheduledAt ? new Date(dto.scheduledAt) : null;
+    }
+    // Moving a failed post to a new date retries it: it goes back to scheduled.
+    if (existing.status === "error" && dto.status === undefined && dto.scheduledAt) {
+      data.status = "scheduled";
     }
 
     const row = await this.db().post.update({ where: { id }, data, ...WITH_CAMPAIGN });

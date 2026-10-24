@@ -1,10 +1,12 @@
 import { Global, Module } from "@nestjs/common";
 
+import { ProvidersModule } from "../../providers/providers.module";
 import { PostScheduler } from "./post-scheduler.service";
 
-/** Provides the background post scheduler (BullMQ) app-wide. */
+/** Provides the post scheduler (queue job + database sweep) app-wide. */
 @Global()
 @Module({
+  imports: [ProvidersModule],
   providers: [PostScheduler],
   exports: [PostScheduler],
 })
