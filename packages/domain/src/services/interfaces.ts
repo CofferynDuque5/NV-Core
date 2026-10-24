@@ -261,6 +261,8 @@ export interface ContactService {
   notes(workspaceId: string, contactId: string): Promise<ContactNote[]>;
   addNote(workspaceId: string, contactId: string, body: string): Promise<ContactNote>;
   removeNote(workspaceId: string, contactId: string, noteId: string): Promise<void>;
+  /** Opt the contact out of (true) or back into (false) automated messages. */
+  setOptOut(workspaceId: string, contactId: string, optedOut: boolean): Promise<Contact>;
   /** Export every contact in the workspace as CSV text. */
   exportCsv(workspaceId: string): Promise<string>;
   /** Bulk-create contacts from CSV; dedupes by email. Returns a summary. */

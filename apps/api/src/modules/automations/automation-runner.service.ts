@@ -5,6 +5,7 @@ import { EventBus } from "../../core/events/event-bus.service";
 import { PrismaService } from "../../prisma/prisma.service";
 import { ProviderManager } from "../../providers/provider-manager.service";
 import { AiService } from "../ai/ai.module";
+import { ConsentService, isOptOutMessage } from "../consent/consent.service";
 import { NotificationsService } from "../notifications/notifications.module";
 
 /**
@@ -86,6 +87,7 @@ export class AutomationRunnerService implements OnModuleInit, OnModuleDestroy {
     private readonly providers: ProviderManager,
     private readonly ai: AiService,
     private readonly notifications: NotificationsService,
+    private readonly consent: ConsentService,
   ) {}
 
   onModuleInit(): void {
@@ -108,6 +110,8 @@ export class AutomationRunnerService implements OnModuleInit, OnModuleDestroy {
 
   private async onMessage(p: IncomingMessage): Promise<void> {
     if (!this.prisma.enabled || !p.text?.trim()) return;
+    // "BAJA"/"STOP" lo registra ConsentService; ningún flujo debe contestarlo.
+    if (isOptOutMessage(p.text)) return;
     const flows = await this.prisma.automation.findMany({
       where: { workspaceSlug: p.workspaceSlug, status: "activo" },
     });
@@ -226,13 +230,14 @@ export class AutomationRunnerService implements OnModuleInit, OnModuleDestroy {
     switch (kind) {
       case "ai_reply": {
         if (!resumed && !this.cooldownOk(p)) return false;
+        if (await this.consent.isHandleOptedOut(p.workspaceSlug, p.contactHandle)) return false;
         const { reply } = await this.ai.chat(p.workspaceSlug, {
           system: str(c.prompt) || undefined,
           messages: [{ role: "user", content: p.text }],
           mode: "ventas",
         });
         if (!reply) return false;
-        await this.deliver(p, reply);
+        if (!(await this.deliver(p, reply))) return false;
         // Si el cliente pidió ayuda y la IA no derivó, lo damos por resuelto.
         const low = reply.toLowerCase();
         ctx.resolved = /persona|humano|asesor|te paso con/.test(low) ? "false" : "true";
@@ -242,8 +247,7 @@ export class AutomationRunnerService implements OnModuleInit, OnModuleDestroy {
         if (!resumed && !this.cooldownOk(p)) return false;
         const body = str(c.body).replace(/\{\{\s*nombre\s*\}\}/gi, p.contactName || "");
         if (!body.trim()) return false;
-        await this.deliver(p, body);
-        return true;
+        return this.deliver(p, body);
       }
       case "create_contact": {
         const exists = await this.prisma.contact.findFirst({
@@ -411,7 +415,12 @@ export class AutomationRunnerService implements OnModuleInit, OnModuleDestroy {
   private async deliver(
     p: { workspaceSlug: string; channel: string; contactHandle: string },
     text: string,
-  ): Promise<void> {
+  ): Promise<boolean> {
+    // Nunca se escribe a un contacto dado de baja (también al reanudar una espera).
+    if (await this.consent.isHandleOptedOut(p.workspaceSlug, p.contactHandle)) {
+      this.logger.log(`Envío omitido: ${p.contactHandle} está dado de baja (${p.workspaceSlug}).`);
+      return false;
+    }
     await this.providers.sendByChannel(p.workspaceSlug, p.channel, p.contactHandle, text);
     const conv = await this.prisma.conversation.findFirst({
       where: { workspaceSlug: p.workspaceSlug, contactHandle: p.contactHandle },
@@ -422,5 +431,6 @@ export class AutomationRunnerService implements OnModuleInit, OnModuleDestroy {
         .create({ data: { conversationId: conv.id, direction: "out", text } })
         .catch(() => undefined);
     }
+    return true;
   }
 }

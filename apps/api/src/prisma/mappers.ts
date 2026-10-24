@@ -79,6 +79,10 @@ export const mapContact = (c: PContact): Contact => ({
   stage: c.stage as ContactStage,
   createdAt: c.createdAt.toISOString(),
   lastContactAt: iso(c.lastContactAt),
+  optOutAt: iso(c.optOutAt),
+  optOutSource: (c.optOutSource as Contact["optOutSource"]) ?? undefined,
+  consentAt: iso(c.consentAt),
+  consentSource: c.consentSource ?? undefined,
 });
 
 export const mapContactNote = (n: PContactNote): ContactNote => ({

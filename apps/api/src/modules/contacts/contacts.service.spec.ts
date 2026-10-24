@@ -45,6 +45,7 @@ function makeService(opts: { contactExists?: boolean; notes?: Note[] } = {}) {
     prisma as unknown as PrismaService,
     audit as never,
     { assertWithinLimit: vi.fn() } as never,
+    {} as never,
   );
   return { service, notes };
 }
@@ -58,6 +59,7 @@ describe("ContactsService.list (server-side search + stage)", () => {
       prisma as unknown as PrismaService,
       { record: vi.fn() } as never,
       { assertWithinLimit: vi.fn() } as never,
+    {} as never,
     );
     return { service, findMany, count };
   }
@@ -98,6 +100,7 @@ describe("ContactsService.list (server-side search + stage)", () => {
       prisma as unknown as PrismaService,
       { record: vi.fn() } as never,
       { assertWithinLimit: vi.fn() } as never,
+    {} as never,
     );
     const res = await service.list("w1", { page: 1, pageSize: 100 } as never);
     expect(res.items).toEqual([]);
@@ -138,6 +141,7 @@ describe("ContactsService import/export CSV", () => {
       prisma as unknown as PrismaService,
       { record: vi.fn() } as never,
       plans as never,
+      {} as never,
     );
     return { service, created, plans };
   }
@@ -185,7 +189,7 @@ describe("ContactsService import/export CSV", () => {
     const { service } = makeIO([{ name: "Ana", email: "ana@x.com" }, { name: "Bob" }]);
     const csv = await service.exportCsv("w1");
     const lines = csv.split("\r\n");
-    expect(lines[0]).toBe("name,phone,email,company,tags,stage,createdAt");
+    expect(lines[0]).toBe("name,phone,email,company,tags,stage,createdAt,optOutAt,consentAt");
     expect(csv).toContain("Ana");
     expect(csv).toContain("Bob");
     expect(lines).toHaveLength(3); // header + 2

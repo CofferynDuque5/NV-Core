@@ -1,12 +1,17 @@
 import * as React from "react";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { CONTACT_STAGES, type Contact } from "@nv/domain";
-import { Building2, Loader2, Mail, Pencil, Phone, Tag, Trash2, X } from "lucide-react";
+import { BellOff, BellRing, Building2, Loader2, Mail, Pencil, Phone, Tag, Trash2, X } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { STAGE_ACCENTS } from "@/lib/crm";
 import { useContactNotes } from "@/hooks/use-domain-data";
-import { useAddContactNote, useDeleteContactNote, useUpdateContact } from "@/hooks/use-domain-mutations";
+import {
+  useAddContactNote,
+  useDeleteContactNote,
+  useSetContactOptOut,
+  useUpdateContact,
+} from "@/hooks/use-domain-mutations";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
@@ -47,6 +52,7 @@ export function ContactDetailDrawer({
   const addNote = useAddContactNote(contact?.id ?? "");
   const delNote = useDeleteContactNote(contact?.id ?? "");
   const updateContact = useUpdateContact();
+  const setOptOut = useSetContactOptOut();
   const [draft, setDraft] = React.useState("");
 
   function submitNote() {
@@ -103,6 +109,47 @@ export function ContactDetailDrawer({
                 <Button variant="outline" size="sm" onClick={() => onDelete(contact)}><Trash2 className="size-3.5" /></Button>
               </div>
             </div>
+
+            {/* Opt-out / consent */}
+            {contact.optOutAt ? (
+              <div className="flex items-start gap-2 rounded-xl border border-state-danger/30 bg-state-danger/10 p-3 text-xs text-ink">
+                <BellOff className="mt-0.5 size-4 shrink-0 text-state-danger" />
+                <div className="min-w-0 flex-1">
+                  <p className="font-semibold text-ink-bright">Dado de baja</p>
+                  <p className="text-ink-muted">
+                    {contact.optOutSource === "keyword" ? "Escribió BAJA/STOP" : "Marcado a mano"} ·{" "}
+                    {new Date(contact.optOutAt).toLocaleDateString("es")}. No recibe secuencias ni
+                    automatizaciones.
+                  </p>
+                </div>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  disabled={setOptOut.isPending}
+                  onClick={() => setOptOut.mutate({ id: contact.id, optedOut: false })}
+                  title="Solo si el contacto pidió volver a recibir mensajes"
+                >
+                  <BellRing className="size-3.5" /> Reactivar
+                </Button>
+              </div>
+            ) : (
+              <div className="flex items-center gap-2 text-xs text-ink-faint">
+                <span>
+                  {contact.consentAt
+                    ? `Consentimiento: ${contact.consentSource ?? "registrado"} · ${new Date(contact.consentAt).toLocaleDateString("es")}`
+                    : "Sin consentimiento registrado"}
+                </span>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="ml-auto"
+                  disabled={setOptOut.isPending}
+                  onClick={() => setOptOut.mutate({ id: contact.id, optedOut: true })}
+                >
+                  <BellOff className="size-3.5" /> Dar de baja
+                </Button>
+              </div>
+            )}
 
             {/* Fields */}
             <div className="space-y-2 rounded-xl border border-line-soft bg-panel-raised p-3 text-sm">

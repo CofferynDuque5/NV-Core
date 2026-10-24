@@ -204,7 +204,14 @@ export class SequencesService implements OnModuleInit, OnModuleDestroy {
     const firstRun = steps.length > 0 ? addDays(now, Math.max(0, steps[0]!.delayDays)) : null;
     let enrolled = 0;
     let skipped = 0;
+    let optedOut = 0;
     for (const c of contacts) {
+      // Un contacto dado de baja nunca se inscribe.
+      if (c.optOutAt) {
+        skipped++;
+        optedOut++;
+        continue;
+      }
       const existing = await this.prisma.sequenceEnrollment.findUnique({
         where: { sequenceId_contactId: { sequenceId: id, contactId: c.id } },
       });
@@ -226,7 +233,7 @@ export class SequencesService implements OnModuleInit, OnModuleDestroy {
       enrolled++;
     }
     await this.audit.record(workspaceId, actor, "sequence.enroll", id);
-    return { enrolled, skipped };
+    return { enrolled, skipped, optedOut };
   }
 
   /**
@@ -257,6 +264,15 @@ export class SequencesService implements OnModuleInit, OnModuleDestroy {
       const step = steps[e.stepIndex];
       if (step) {
         const contact = await this.prisma.contact.findUnique({ where: { id: e.contactId } });
+        if (contact?.optOutAt) {
+          // Se dio de baja después de inscribirse: se detiene sin enviar.
+          await this.prisma.sequenceEnrollment.update({
+            where: { id: e.id },
+            data: { status: "opted_out", nextRunAt: null },
+          });
+          processed++;
+          continue;
+        }
         const to = contact ? recipientFor(step.channel, contact) : null;
         if (to) {
           try {

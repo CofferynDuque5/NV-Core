@@ -11,6 +11,7 @@ import { CoreModule } from "./core/core.module";
 import { MetricsModule } from "./common/metrics/metrics.module";
 import { PrismaModule } from "./prisma/prisma.module";
 import { SchedulerModule } from "./modules/scheduler/scheduler.module";
+import { ConsentModule } from "./modules/consent/consent.service";
 import { PlanModule } from "./common/plan/plan.service";
 import { HealthModule } from "./health/health.module";
 import { AuthModule } from "./auth/auth.module";
@@ -65,6 +66,7 @@ import { ProvidersModule } from "./providers/providers.module";
     PrismaModule,
     PlanModule,
     SchedulerModule,
+    ConsentModule,
     AuthModule,
     HealthModule,
     MetricsModule,

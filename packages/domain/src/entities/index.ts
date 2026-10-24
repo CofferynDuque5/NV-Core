@@ -179,6 +179,12 @@ export interface Contact {
   createdAt: string;
   lastContactAt?: string;
   avatarHue?: number;
+  /** Set when the contact asked not to receive automated messages. */
+  optOutAt?: string;
+  optOutSource?: "keyword" | "manual";
+  /** When consent to receive messages was recorded, and how. */
+  consentAt?: string;
+  consentSource?: string;
 }
 
 /** Result of a bulk contact CSV import. */
@@ -333,7 +339,8 @@ export interface SequenceEnrollment {
   contactId: string;
   contactName: string;
   stepIndex: number;
-  status: "active" | "completed" | "cancelled";
+  /** "opted_out": the contact asked to stop (BAJA/STOP or manual); never resumes. */
+  status: "active" | "completed" | "cancelled" | "opted_out";
   nextRunAt?: string;
   createdAt: string;
 }
@@ -350,6 +357,8 @@ export interface SequencePreviewStep {
 export interface SequenceEnrollResult {
   enrolled: number;
   skipped: number;
+  /** Of the skipped, how many were opted out (never enrolled). */
+  optedOut?: number;
 }
 
 // ── Funnels (multi-step opt-in → sales → thank-you) ──────────────────────────

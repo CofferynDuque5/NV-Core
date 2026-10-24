@@ -156,6 +156,21 @@ export function useUpdateContact() {
   });
 }
 
+export function useSetContactOptOut() {
+  const svc = useServices();
+  const ws = useWorkspace();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, optedOut }: { id: string; optedOut: boolean }) =>
+      svc.contacts.setOptOut(ws.id, id, optedOut),
+    onSuccess: (_c, v) => {
+      void qc.invalidateQueries({ queryKey: [ws.id, "contacts"] });
+      toast.success(v.optedOut ? "Contacto dado de baja" : "Contacto reactivado");
+    },
+    onError: (err) => toast.error(errText(err)),
+  });
+}
+
 export function useDeleteContact() {
   const svc = useServices();
   const ws = useWorkspace();

@@ -223,7 +223,14 @@ export default function ContactosPage() {
                       onClick={() => setDrawer(row)}
                       className="cursor-pointer border-b border-line last:border-0 hover:bg-panel-raised/40"
                     >
-                      <td className="px-4 py-3 font-medium text-ink">{row.name}</td>
+                      <td className="px-4 py-3 font-medium text-ink">
+                        {row.name}
+                        {row.optOutAt ? (
+                          <Badge variant="danger" className="ml-2" title="No recibe secuencias ni automatizaciones">
+                            Baja
+                          </Badge>
+                        ) : null}
+                      </td>
                       <td className="px-4 py-3 text-ink-muted">{row.phone}</td>
                       <td className="px-4 py-3 text-ink-muted">{row.company}</td>
                       <td className="px-4 py-3">

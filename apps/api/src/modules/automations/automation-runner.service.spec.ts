@@ -71,11 +71,20 @@ function build(flows: unknown[]) {
   const providers = { sendByChannel: vi.fn(async (_ws: string, _ch: string, to: string, body: string) => { outbox.push({ to, body }); }) };
   const ai = { chat: vi.fn(async () => ({ reply: "Netflix cuesta $3.5/mes. ¿Te lo activo?" })) };
   const notifications = { create: vi.fn(async () => ({})) };
-  const svc = new AutomationRunnerService(events as never, prisma as never, providers as never, ai as never, notifications as never);
+  const optedOut = new Set<string>();
+  const consent = { isHandleOptedOut: vi.fn(async (_ws: string, h: string) => optedOut.has(h)) };
+  const svc = new AutomationRunnerService(
+    events as never,
+    prisma as never,
+    providers as never,
+    ai as never,
+    notifications as never,
+    consent as never,
+  );
   svc.onModuleInit();
   const fire = (text: string, handle = "+573001112233") =>
     handler!({ workspaceSlug: "ws", channel: "wa", contactHandle: handle, contactName: "Ana", text });
-  return { svc, fire, prisma, providers, ai, notifications, outbox, contacts, messages, waits };
+  return { svc, fire, prisma, providers, ai, notifications, outbox, contacts, messages, waits, optedOut };
 }
 
 const salesFlow = {
@@ -256,6 +265,45 @@ describe("AutomationRunnerService", () => {
       expect(waitDurationMs({ duration: "999d" })).toBe(30 * 86_400_000);
       expect(waitDurationMs({ duration: "pronto" })).toBeNull();
       expect(waitDurationMs({})).toBeNull();
+    });
+  });
+
+  describe("bajas", () => {
+    const welcome = {
+      id: "f6",
+      name: "Bienvenida",
+      status: "activo",
+      workspaceSlug: "ws",
+      nodes: [
+        { id: "t", type: "trigger", label: "Mensaje", config: {} },
+        { id: "m", type: "action", label: "Msg", config: { kind: "send_message", body: "Hola" } },
+        { id: "w", type: "wait", label: "Esperar", config: { duration: "1h" } },
+        { id: "m2", type: "action", label: "Msg2", config: { kind: "send_message", body: "¿Seguimos?" } },
+      ],
+      edges: [
+        { id: "e1", from: "t", to: "m" },
+        { id: "e2", from: "m", to: "w" },
+        { id: "e3", from: "w", to: "m2" },
+      ],
+    };
+
+    it("no contesta a un «BAJA» con ningún flujo", async () => {
+      const { fire, outbox, waits } = build([welcome]);
+      await fire("BAJA");
+      await fire("Stop!");
+      expect(outbox).toHaveLength(0);
+      expect(waits).toHaveLength(0);
+    });
+
+    it("no escribe a un contacto dado de baja, ni con IA ni al reanudar una espera", async () => {
+      const { svc, fire, outbox, ai, optedOut } = build([welcome, salesFlow]);
+      await fire("hola");
+      expect(outbox).toHaveLength(1);
+      optedOut.add("+573001112233");
+      await svc.resumeDue(new Date(Date.now() + 2 * 3_600_000));
+      await fire("quiero comprar netflix", "+573001112233");
+      expect(outbox).toHaveLength(1);
+      expect(ai.chat).not.toHaveBeenCalled();
     });
   });
 });

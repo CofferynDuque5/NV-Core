@@ -15,6 +15,7 @@ describe.skipIf(!url)("Nodo «esperar» contra PostgreSQL real", () => {
       { sendByChannel: vi.fn(async (_w: string, _c: string, _to: string, body: string) => void sent.push(body)) } as never,
       {} as never,
       { create: vi.fn() } as never,
+      { isHandleOptedOut: vi.fn(async () => false) } as never,
     );
     svc.onModuleInit();
     svc.onModuleDestroy();
