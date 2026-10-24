@@ -24,6 +24,7 @@ import { ApiBearerAuth, ApiExcludeEndpoint, ApiPropertyOptional, ApiTags } from 
 import { SkipThrottle } from "@nestjs/throttler";
 import { CHANNEL_IDS, type ChannelId, type Conversation, type Message } from "@nv/domain";
 import { IsArray, IsBoolean, IsIn, IsOptional, IsString, MinLength } from "class-validator";
+import { Prisma } from "@prisma/client";
 import type { Response } from "express";
 
 import type { AppConfig } from "../../config/configuration";
@@ -181,12 +182,23 @@ export class InboxService implements OnModuleInit {
   async conversations(workspaceId: string): Promise<ListResultDto<Conversation>> {
     if (!this.prisma.enabled) return ListResultDto.empty<Conversation>();
     const where = { workspaceSlug: workspaceId };
+    // Pick the LIST_CAP threads with the most recent activity (last message, or
+    // creation when empty). Ordering by creation alone dropped old threads that
+    // just received a new message once the workspace had more than LIST_CAP.
+    const recent = await this.prisma.$queryRaw<{ id: string }[]>(Prisma.sql`
+      SELECT c."id"
+      FROM "Conversation" c
+      LEFT JOIN LATERAL (
+        SELECT MAX(m."createdAt") AS "last" FROM "Message" m WHERE m."conversationId" = c."id"
+      ) lm ON TRUE
+      WHERE c."workspaceSlug" = ${workspaceId}
+      ORDER BY COALESCE(lm."last", c."createdAt") DESC
+      LIMIT ${LIST_CAP}
+    `);
     const [rows, total] = await Promise.all([
       this.prisma.conversation.findMany({
-        where,
-        orderBy: { createdAt: "desc" },
-        take: LIST_CAP,
-        // Newest message per thread → preview + real "last activity" ordering.
+        where: { ...where, id: { in: recent.map((r) => r.id) } },
+        // Newest message per thread → preview + "last activity" ordering.
         include: { messages: { orderBy: { createdAt: "desc" }, take: 1 } },
       }),
       this.prisma.conversation.count({ where }),

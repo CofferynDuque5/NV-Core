@@ -79,8 +79,22 @@ El tick reanuda las ejecuciones con latido vencido usando la misma clave, marca 
 «Sin confirmar» lo que estaba a medias (no se reenvía ni cuenta como éxito) y el resultado final
 se calcula sobre toda la ejecución. Detalle en `docs/whatsapp-campaigns.md`.
 
-## 5. Siguiente paso recomendado
+## 5. Correcciones de la etapa 1b
 
-Corregir el éxito falso de **publicaciones programadas** (publicar de verdad por el proveedor y
-registrar el resultado, con barrido en base de datos cuando no hay Redis). Después, en el núcleo:
-consentimiento/bajas en contactos y búsqueda + paginación del Inbox en servidor.
+- **Publicaciones programadas** (`scheduler/post-scheduler.service.ts`): ya no se marcan «enviadas»
+  sin publicar. Se publican por el proveedor activo del canal (`ProviderManager.publish`); solo si el
+  proveedor acepta pasan a `sent`, si no a `error` con el motivo en una notificación. Un barrido en
+  base de datos cada minuto las procesa aunque no haya Redis (cPanel). La reserva
+  `scheduled → publishing` es atómica, así que la cola y el barrido no publican dos veces. Una
+  publicación cortada por un reinicio queda como error «sin confirmar», sin reenviarse.
+  Migración `20261024010000_post_publish_tracking` (columna `publishStartedAt` + índice).
+- Los estados `publishing`, `sent` y `error` ya no se pueden poner a mano por la API (inflaban la
+  analítica). Una publicación con error se reprograma moviéndola de fecha.
+- **Inbox**: la lista toma las 500 conversaciones con actividad más reciente (último mensaje), no las
+  500 creadas más recientemente.
+- **Marca**: logo del megáfono en toda la app, íconos PWA, favicon y página de ventas.
+
+## 6. Siguiente paso recomendado
+
+Consentimiento/bajas en contactos; búsqueda + paginación del Inbox en servidor; nodo «esperar» de
+las automatizaciones.

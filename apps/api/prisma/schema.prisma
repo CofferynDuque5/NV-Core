@@ -401,10 +401,14 @@ model Post {
   attachments   Json       @default("[]")
   status        PostStatus @default(draft)
   scheduledAt   DateTime?
+  /// When the scheduler claimed the post (status "publishing"); lets the sweep
+  /// tell an interrupted publish from one still in flight.
+  publishStartedAt DateTime?
   createdAt     DateTime   @default(now())
 
   @@index([workspaceSlug])
   @@index([workspaceSlug, scheduledAt])
+  @@index([status, scheduledAt])
 }
 
 model Connection {

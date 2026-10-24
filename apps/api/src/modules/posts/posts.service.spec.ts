@@ -119,3 +119,31 @@ describe("PostsService.duplicate", () => {
     expect(scheduler.schedule).not.toHaveBeenCalled();
   });
 });
+
+describe("PostsService.update (failed / in-flight posts)", () => {
+  it("moving a failed post to a new date schedules it again", async () => {
+    const { service, scheduler, rows } = makeService([baseRow({ status: "error" })]);
+    await service.update("w1", "u", "p1", { scheduledAt: "2026-09-05T10:00:00Z" });
+    expect(rows[0]!.status).toBe("scheduled");
+    expect(scheduler.schedule).toHaveBeenCalledWith("p1", new Date("2026-09-05T10:00:00Z"));
+  });
+
+  it("refuses to edit a post while it is being published", async () => {
+    const { service } = makeService([baseRow({ status: "publishing" })]);
+    await expect(service.update("w1", "u", "p1", { title: "x" })).rejects.toThrow(/enviando/);
+  });
+});
+
+describe("Post DTOs", () => {
+  it("only accept draft or scheduled as a user-set status", async () => {
+    const { plainToInstance } = await import("class-transformer");
+    const { validate } = await import("class-validator");
+    const { CreatePostDto, UpdatePostDto } = await import("./posts.module");
+    for (const status of ["sent", "publishing", "error"]) {
+      const errs = await validate(plainToInstance(UpdatePostDto, { status }));
+      expect(errs.map((e) => e.property)).toContain("status");
+    }
+    const ok = await validate(plainToInstance(CreatePostDto, { channel: "fb", title: "t", status: "scheduled" }));
+    expect(ok.map((e) => e.property)).not.toContain("status");
+  });
+});

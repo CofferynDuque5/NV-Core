@@ -64,7 +64,7 @@ export function PostPanel({
   const scheduledAt = date ? new Date(`${date}T${time || "12:00"}:00`).toISOString() : null;
   const nextStatus: PostStatus = !scheduledAt
     ? "draft"
-    : post.status === "draft"
+    : post.status === "draft" || post.status === "error"
       ? "scheduled"
       : post.status;
 
