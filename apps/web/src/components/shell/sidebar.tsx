@@ -3,6 +3,7 @@ import { NAV_SECTIONS } from "@nv/domain";
 import { ChevronLeft, ChevronsUpDown } from "lucide-react";
 
 import { cn } from "@/lib/utils";
+import { BrandMark } from "./brand-mark";
 import { useUiStore } from "@/stores/ui-store";
 import { useAuthStore } from "@/stores/auth-store";
 import { useWorkspace } from "@/hooks/use-workspace";
@@ -12,7 +13,6 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { EXTRA_NAV_ITEMS, getNavIcon } from "./sidebar-icon";
-import { BrandMark } from "@/components/common/brand-mark";
 
 export function Sidebar({ onOpenSwitcher }: { onOpenSwitcher: () => void }) {
   const collapsed = useUiStore((s) => s.navCollapsed);
@@ -50,7 +50,7 @@ export function Sidebar({ onOpenSwitcher }: { onOpenSwitcher: () => void }) {
           title="Expandir / colapsar"
           className="grid size-8 shrink-0 place-items-center rounded-[9px] bg-gradient-to-br from-brand to-brand-violet shadow-brand"
         >
-          <BrandMark size={18} />
+          <BrandMark size={19} />
         </button>
         {!collapsed ? (
           <>

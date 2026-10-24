@@ -2,7 +2,7 @@ import { Link } from "react-router-dom";
 import { DEFAULT_WORKSPACE_SLUG } from "@nv/domain";
 
 import { Button } from "@/components/ui/button";
-import { BrandMark } from "@/components/common/brand-mark";
+import { BrandMark } from "@/components/shell/brand-mark";
 
 export default function NotFound() {
   return (

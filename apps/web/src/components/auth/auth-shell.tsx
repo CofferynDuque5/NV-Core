@@ -1,7 +1,7 @@
 import { Link } from "react-router-dom";
 import { CalendarClock, MessageCircle, Sparkles, Users } from "lucide-react";
 
-import { BrandMark } from "@/components/common/brand-mark";
+import { BrandMark } from "@/components/shell/brand-mark";
 
 const FEATURES = [
   { icon: MessageCircle, text: "Difunde a WhatsApp, Telegram, Facebook e Instagram" },
@@ -67,7 +67,7 @@ export function AuthShell({
         <div className="hidden flex-col justify-between p-12 lg:flex">
           <div className="flex items-center gap-3">
             <span className="from-brand to-brand-violet shadow-brand grid size-11 place-items-center rounded-xl bg-gradient-to-br">
-              <BrandMark size={24} />
+              <BrandMark size={26} />
             </span>
             <div>
               <div className="font-display text-ink-bright text-xl font-semibold">NV Marketing</div>
@@ -112,7 +112,7 @@ export function AuthShell({
             {/* Brand (mobile / small screens) */}
             <div className="mb-8 flex flex-col items-center gap-3 text-center lg:hidden">
               <span className="from-brand to-brand-violet shadow-brand grid size-11 place-items-center rounded-xl bg-gradient-to-br">
-                <BrandMark size={24} />
+                <BrandMark size={26} />
               </span>
               <div>
                 <div className="font-display text-ink-bright text-xl font-semibold">NV Marketing</div>
