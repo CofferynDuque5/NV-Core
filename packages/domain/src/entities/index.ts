@@ -475,6 +475,21 @@ export interface AutomationTestResult {
   error?: string;
 }
 
+/** One real execution of a flow for one contact (not a test). */
+export interface AutomationRun {
+  id: string;
+  /** "message" = incoming message; "resume" = continued after a wait step. */
+  trigger: "message" | "resume";
+  contactHandle: string;
+  contactName?: string;
+  /** ok: did something · skipped: nothing to do · waiting: paused on a wait · error: failed. */
+  status: "ok" | "skipped" | "waiting" | "error";
+  steps: AutomationTraceStep[];
+  error?: string;
+  startedAt: string;
+  finishedAt?: string;
+}
+
 export interface Automation {
   id: string;
   name: string;

@@ -18,6 +18,7 @@ import { ApiBearerAuth, ApiPropertyOptional, ApiTags } from "@nestjs/swagger";
 import { AUTOMATION_NODE_TYPES } from "@nv/domain";
 import type {
   Automation,
+  AutomationRun,
   AutomationEdge,
   AutomationNode,
   AutomationTestResult,
@@ -41,7 +42,7 @@ import { WorkspaceId } from "../../common/tenant/workspace.decorator";
 import { WorkspaceGuard } from "../../common/tenant/workspace.guard";
 import { AuditLogger } from "../../common/audit-logger.service";
 import { PrismaService } from "../../prisma/prisma.service";
-import { mapAutomation } from "../../prisma/mappers";
+import { mapAutomation, mapAutomationRun } from "../../prisma/mappers";
 import { RolesGuard } from "../../auth/guards/roles.guard";
 import { Roles } from "../../auth/decorators/roles.decorator";
 import { CurrentUser } from "../../auth/decorators/current-user.decorator";
@@ -161,6 +162,9 @@ export class UpdateAutomationDto {
   @IsString()
   webhookUrl?: string;
 }
+
+/** Executions returned by the history endpoint. */
+const RUNS_PAGE = 50;
 
 @Injectable()
 export class AutomationsService {
@@ -294,6 +298,22 @@ export class AutomationsService {
     return result;
   }
 
+  /** Latest real executions of a flow, newest first (kept 30 days by the runner). */
+  async runs(workspaceId: string, id: string): Promise<AutomationRun[]> {
+    if (!this.prisma.enabled) return [];
+    const exists = await this.prisma.automation.findFirst({
+      where: { id, workspaceSlug: workspaceId },
+      select: { id: true },
+    });
+    if (!exists) throw new NotFoundException("Automatización no encontrada.");
+    const rows = await this.prisma.automationRun.findMany({
+      where: { automationId: id, workspaceSlug: workspaceId },
+      orderBy: { startedAt: "desc" },
+      take: RUNS_PAGE,
+    });
+    return rows.map(mapAutomationRun);
+  }
+
   async remove(workspaceId: string, actor: string, id: string): Promise<void> {
     const { count } = await this.db().automation.deleteMany({
       where: { id, workspaceSlug: workspaceId },
@@ -336,6 +356,11 @@ export class AutomationsController {
     @Body() dto: UpdateAutomationDto,
   ) {
     return this.service.update(workspaceId, user.email, id, dto);
+  }
+
+  @Get(":id/runs")
+  runs(@WorkspaceId() workspaceId: string, @Param("id") id: string) {
+    return this.service.runs(workspaceId, id);
   }
 
   @Post(":id/run")

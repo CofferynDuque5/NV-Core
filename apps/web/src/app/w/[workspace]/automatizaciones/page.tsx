@@ -1,7 +1,7 @@
 
 import * as React from "react";
 import type { Automation } from "@nv/domain";
-import { Loader2, Pencil, Play, Plus, Trash2, Workflow } from "lucide-react";
+import { History, Loader2, Pencil, Play, Plus, Trash2, Workflow } from "lucide-react";
 
 import { useAutomations } from "@/hooks/use-domain-data";
 import { useDeleteAutomation, useRunAutomation } from "@/hooks/use-domain-mutations";
@@ -14,6 +14,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { AutomationCreateDialog } from "@/components/entities/automation-create-dialog";
 import { WorkflowEditor } from "@/components/automations/workflow-editor";
+import { AutomationRunsSheet } from "@/components/automations/automation-runs-sheet";
 
 export default function AutomatizacionesPage() {
   const automations = useAutomations();
@@ -24,6 +25,7 @@ export default function AutomatizacionesPage() {
   const [editingId, setEditingId] = React.useState<string | null>(null);
   const [deletingId, setDeletingId] = React.useState<string | null>(null);
   const [runningId, setRunningId] = React.useState<string | null>(null);
+  const [historyId, setHistoryId] = React.useState<string | null>(null);
 
   // When a flow is selected, swap the list for the visual editor (same route).
   const editing: Automation | undefined = editingId
@@ -117,6 +119,13 @@ export default function AutomatizacionesPage() {
                   </button>
                 ) : null}
                 <button
+                  onClick={() => setHistoryId(a.id)}
+                  className="flex items-center gap-1.5 rounded-md px-2 py-1.5 text-xs font-medium text-ink-muted transition-colors hover:bg-panel-high hover:text-ink"
+                  title="Ver ejecuciones reales"
+                >
+                  <History className="size-4" /> Historial
+                </button>
+                <button
                   onClick={() => setEditingId(a.id)}
                   className="flex items-center gap-1.5 rounded-md px-2 py-1.5 text-xs font-medium text-ink-muted transition-colors hover:bg-panel-high hover:text-ink"
                   title="Editar flujo"
@@ -142,6 +151,10 @@ export default function AutomatizacionesPage() {
       </QueryBoundary>
 
       <AutomationCreateDialog open={open} onOpenChange={setOpen} />
+      <AutomationRunsSheet
+        automation={automations.data?.items.find((a) => a.id === historyId) ?? null}
+        onClose={() => setHistoryId(null)}
+      />
     </div>
   );
 }

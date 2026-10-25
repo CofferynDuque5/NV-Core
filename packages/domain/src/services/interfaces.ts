@@ -1,6 +1,7 @@
 import type {
   AnalyticsSnapshot,
   Automation,
+  AutomationRun,
   AutomationTestResult,
   Campaign,
   CampaignImportResult,
@@ -530,6 +531,8 @@ export interface AutomationService {
   run(workspaceId: string, id: string): Promise<RunAutomationResult>;
   /** Dry-run the flow graph against a sample context; returns the execution trace. */
   test(workspaceId: string, id: string, input?: TestAutomationInput): Promise<AutomationTestResult>;
+  /** Latest real executions (newest first), kept 30 days. */
+  runs(workspaceId: string, id: string): Promise<AutomationRun[]>;
 }
 
 export interface AnalyticsService {

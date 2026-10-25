@@ -1,5 +1,5 @@
 import { Injectable, Logger, type OnModuleDestroy, type OnModuleInit } from "@nestjs/common";
-import type { AutomationEdge, AutomationNode } from "@nv/domain";
+import type { AutomationEdge, AutomationNode, AutomationTraceStep } from "@nv/domain";
 
 import { EventBus } from "../../core/events/event-bus.service";
 import { PrismaService } from "../../prisma/prisma.service";
@@ -24,6 +24,11 @@ import { NotificationsService } from "../notifications/notifications.module";
  * pendiente por flujo + contacto + nodo (un cliente que escribe 5 veces no
  * recibe 5 seguimientos), y una espera cortada por un reinicio a mitad de
  * ejecución se marca como fallida «sin confirmar» en vez de repetirse.
+ *
+ * Historial: cada ejecución real (mensaje entrante o reanudación) se guarda en
+ * `AutomationRun` con los pasos recorridos y por qué se omitió cada acción
+ * (pausa anti-spam, contacto dado de baja, sin respuesta de la IA…). Se
+ * conserva 30 días.
  */
 const COOLDOWN_MS = 30_000;
 const TICK_MS = 30_000;
@@ -33,6 +38,8 @@ const RESUME_BATCH = 20;
 const STUCK_RUNNING_MS = 10 * 60_000;
 /** Tope de una espera, para que un valor erróneo no deje flujos colgados años. */
 const MAX_WAIT_MS = 30 * 86_400_000;
+/** Días que se conserva el historial de ejecuciones. */
+const RUN_RETENTION_MS = 30 * 86_400_000;
 export const WAIT_UNCONFIRMED =
   "Sin confirmar: el servidor se reinició mientras se reanudaba el flujo. No se repite para no duplicar envíos.";
 
@@ -48,6 +55,24 @@ interface WaitPayload {
   message: IncomingMessage;
   context: Record<string, string>;
 }
+
+/** Lo que una ejecución va dejando para el historial. */
+interface RunTrace {
+  steps: AutomationTraceStep[];
+  /** Terminó pausada en un nodo «esperar». */
+  waiting: boolean;
+}
+
+interface ActionResult {
+  ok: boolean;
+  note: string;
+}
+
+const COOLDOWN_NOTE = "Omitido: ya se respondió a este chat hace menos de 30 s (anti-spam).";
+const OPTED_OUT_NOTE = "Omitido: el contacto está dado de baja.";
+
+const done = (note: string): ActionResult => ({ ok: true, note });
+const skipped = (note: string): ActionResult => ({ ok: false, note });
 
 /** Duración del nodo «esperar»: "5m", "1h", "1d", "3d" o {minutes|hours|days}. */
 export function waitDurationMs(config: Record<string, unknown>): number | null {
@@ -136,15 +161,20 @@ export class AutomationRunnerService implements OnModuleInit, OnModuleDestroy {
       const edges = (flow.edges as unknown as AutomationEdge[]) ?? [];
       const trigger = nodes.find((n) => n.type === "trigger");
       if (!trigger || !this.triggerMatches(trigger, low)) continue;
+      const trace: RunTrace = { steps: [], waiting: false };
+      const startedAt = new Date();
       try {
-        const ran = await this.walk(flow.id, p, nodes, edges, trigger.id, { ...context }, false);
+        const ran = await this.walk(flow.id, p, nodes, edges, trigger.id, { ...context }, false, trace);
         if (ran) {
           await this.prisma.automation
             .update({ where: { id: flow.id }, data: { runs: { increment: 1 } } })
             .catch(() => undefined);
         }
+        await this.recordRun(flow.id, "message", p, trace, ran, null, startedAt);
       } catch (err) {
-        this.logger.warn(`Flujo "${flow.name}" falló: ${(err as Error).message}`);
+        const reason = (err as Error).message || "Error al ejecutar el flujo.";
+        this.logger.warn(`Flujo "${flow.name}" falló: ${reason}`);
+        await this.recordRun(flow.id, "message", p, trace, false, reason, startedAt);
       }
     }
   }
@@ -171,8 +201,11 @@ export class AutomationRunnerService implements OnModuleInit, OnModuleDestroy {
     startId: string,
     context: Record<string, string>,
     resumed: boolean,
+    trace: RunTrace = { steps: [], waiting: false },
   ): Promise<boolean> {
     const byId = new Map(nodes.map((n) => [n.id, n]));
+    const step = (n: AutomationNode, note: string, decision?: "true" | "false") =>
+      trace.steps.push({ nodeId: n.id, type: n.type, label: n.label, note, ...(decision ? { decision } : {}) });
     const visited = new Set<string>();
     let current: AutomationNode | undefined = byId.get(startId);
     let didSomething = false;
@@ -181,19 +214,42 @@ export class AutomationRunnerService implements OnModuleInit, OnModuleDestroy {
       visited.add(current.id);
       let branch: "true" | "false" | undefined;
 
-      if (current.type === "action") {
-        didSomething = (await this.runAction(flowId, current, p, context, resumed)) || didSomething;
+      if (current.type === "trigger") {
+        step(current, `«${p.text.slice(0, 80)}»`);
+      } else if (current.type === "action") {
+        let result: ActionResult;
+        try {
+          result = await this.runAction(flowId, current, p, context, resumed);
+        } catch (err) {
+          step(current, `Error: ${(err as Error).message || "falló la acción"}`);
+          throw err;
+        }
+        step(current, result.note);
+        didSomething = result.ok || didSomething;
       } else if (current.type === "cond") {
         branch = this.evalCond(current, context) ? "true" : "false";
+        step(current, branch === "true" ? "Se cumple." : "No se cumple.", branch);
       } else if (current.type === "wait") {
         const next = edges.find((e) => e.from === current!.id);
         // Una espera al final del flujo no tiene nada que reanudar.
-        if (!next) break;
+        if (!next) {
+          step(current, "Espera al final del flujo: no hay nada que reanudar.");
+          break;
+        }
         const ms = waitDurationMs(cfg(current));
         if (ms == null) {
           this.logger.warn(`Nodo de espera sin duración válida en flujo ${flowId} (${current.label}); se omite.`);
+          step(current, "Sin duración válida: se omite la espera.");
         } else {
-          return (await this.scheduleWait(flowId, current.id, next.to, p, context, ms)) || didSomething;
+          const scheduled = await this.scheduleWait(flowId, current.id, next.to, p, context, ms);
+          step(
+            current,
+            scheduled
+              ? `En espera hasta ${new Date(Date.now() + ms).toISOString()}.`
+              : "Este contacto ya tenía una espera pendiente en este paso.",
+          );
+          trace.waiting = scheduled;
+          return scheduled || didSomething;
         }
       }
 
@@ -224,37 +280,37 @@ export class AutomationRunnerService implements OnModuleInit, OnModuleDestroy {
     p: IncomingMessage,
     ctx: Record<string, string>,
     resumed = false,
-  ): Promise<boolean> {
+  ): Promise<ActionResult> {
     const c = cfg(node);
     const kind = (str(c.kind) || str(c.action)).replace(/-/g, "_");
     switch (kind) {
       case "ai_reply": {
-        if (!resumed && !this.cooldownOk(p)) return false;
-        if (await this.consent.isHandleOptedOut(p.workspaceSlug, p.contactHandle)) return false;
+        if (!resumed && !this.cooldownOk(p)) return skipped(COOLDOWN_NOTE);
+        if (await this.consent.isHandleOptedOut(p.workspaceSlug, p.contactHandle)) return skipped(OPTED_OUT_NOTE);
         const { reply } = await this.ai.chat(p.workspaceSlug, {
           system: str(c.prompt) || undefined,
           messages: [{ role: "user", content: p.text }],
           mode: "ventas",
         });
-        if (!reply) return false;
-        if (!(await this.deliver(p, reply))) return false;
+        if (!reply) return skipped("La IA no devolvió respuesta.");
+        if (!(await this.deliver(p, reply))) return skipped(OPTED_OUT_NOTE);
         // Si el cliente pidió ayuda y la IA no derivó, lo damos por resuelto.
         const low = reply.toLowerCase();
         ctx.resolved = /persona|humano|asesor|te paso con/.test(low) ? "false" : "true";
-        return true;
+        return done(`Respuesta con IA enviada: «${reply.slice(0, 80)}»`);
       }
       case "send_message": {
-        if (!resumed && !this.cooldownOk(p)) return false;
+        if (!resumed && !this.cooldownOk(p)) return skipped(COOLDOWN_NOTE);
         const body = str(c.body).replace(/\{\{\s*nombre\s*\}\}/gi, p.contactName || "");
-        if (!body.trim()) return false;
-        return this.deliver(p, body);
+        if (!body.trim()) return skipped("El mensaje está vacío.");
+        return (await this.deliver(p, body)) ? done(`Mensaje enviado: «${body.slice(0, 80)}»`) : skipped(OPTED_OUT_NOTE);
       }
       case "create_contact": {
         const exists = await this.prisma.contact.findFirst({
           where: { workspaceSlug: p.workspaceSlug, phone: { contains: p.contactHandle.replace(/\D/g, "").slice(-9) } },
           select: { id: true },
         });
-        if (exists) return false;
+        if (exists) return skipped("El contacto ya existía.");
         const tag = str(c.tag).trim();
         await this.prisma.contact.create({
           data: {
@@ -266,7 +322,7 @@ export class AutomationRunnerService implements OnModuleInit, OnModuleDestroy {
             lastContactAt: new Date(),
           },
         });
-        return true;
+        return done(tag ? `Contacto creado con la etiqueta «${tag}».` : "Contacto creado.");
       }
       case "notify": {
         await this.notifications.create(p.workspaceSlug, {
@@ -274,7 +330,7 @@ export class AutomationRunnerService implements OnModuleInit, OnModuleDestroy {
           title: str(c.title) || `Interesado: ${p.contactName || p.contactHandle}`,
           meta: p.text.slice(0, 140),
         });
-        return true;
+        return done("Aviso enviado al equipo.");
       }
       case "assign_human": {
         await this.prisma.conversation.updateMany({
@@ -286,11 +342,11 @@ export class AutomationRunnerService implements OnModuleInit, OnModuleDestroy {
           title: `Escalado a humano: ${p.contactName || p.contactHandle}`,
           meta: p.text.slice(0, 140),
         });
-        return true;
+        return done("Conversación marcada «requiere-humano» y equipo avisado.");
       }
       default:
         this.logger.debug?.(`Acción desconocida "${kind}" en flujo ${flowId}; se omite.`);
-        return false;
+        return skipped(`Acción desconocida «${kind || "sin tipo"}»: se omite.`);
     }
   }
 
@@ -331,6 +387,7 @@ export class AutomationRunnerService implements OnModuleInit, OnModuleDestroy {
     this.ticking = true;
     try {
       await this.failStuck(now);
+      await this.pruneRuns(now);
       const due = await this.prisma.automationWait.findMany({
         where: { status: "pending", resumeAt: { lte: now } },
         orderBy: { resumeAt: "asc" },
@@ -372,12 +429,16 @@ export class AutomationRunnerService implements OnModuleInit, OnModuleDestroy {
       return;
     }
     const { message, context } = w.payload as WaitPayload;
+    const trace: RunTrace = { steps: [], waiting: false };
+    const startedAt = new Date();
     try {
-      await this.walk(flow.id, message, nodes, edges, w.nextNodeId, { ...context }, true);
+      const ran = await this.walk(flow.id, message, nodes, edges, w.nextNodeId, { ...context }, true, trace);
       await this.finishWait(w.id, "done", null);
+      await this.recordRun(flow.id, "resume", message, trace, ran, null, startedAt);
     } catch (err) {
       const reason = (err as Error).message || "Error al reanudar el flujo.";
       await this.finishWait(w.id, "failed", reason);
+      await this.recordRun(flow.id, "resume", message, trace, false, reason, startedAt);
       await this.notifications.create(w.workspaceSlug, {
         type: "error",
         title: `Automatización "${flow.name}" falló tras la espera`,
@@ -400,6 +461,51 @@ export class AutomationRunnerService implements OnModuleInit, OnModuleDestroy {
       where: { status: "running", startedAt: { lte: new Date(now.getTime() - STUCK_RUNNING_MS) } },
       data: { status: "failed", error: WAIT_UNCONFIRMED },
     });
+  }
+
+  /** Guarda la ejecución en el historial. Nunca hace fallar el flujo. */
+  private async recordRun(
+    automationId: string,
+    trigger: "message" | "resume",
+    p: IncomingMessage,
+    trace: RunTrace,
+    didSomething: boolean,
+    error: string | null,
+    startedAt: Date,
+  ): Promise<void> {
+    const status = error ? "error" : trace.waiting ? "waiting" : didSomething ? "ok" : "skipped";
+    try {
+      await this.prisma.automationRun.create({
+        data: {
+          workspaceSlug: p.workspaceSlug,
+          automationId,
+          trigger,
+          contactHandle: p.contactHandle,
+          contactName: p.contactName || null,
+          status,
+          steps: trace.steps as unknown as object[],
+          error,
+          startedAt,
+          finishedAt: new Date(),
+        },
+      });
+    } catch (err) {
+      this.logger.warn(`No se pudo guardar el historial de ${automationId}: ${(err as Error).message}`);
+    }
+  }
+
+  /** Borra ejecuciones de más de 30 días (como mucho una vez por hora). */
+  private lastPrune = 0;
+  private async pruneRuns(now: Date): Promise<void> {
+    if (now.getTime() - this.lastPrune < 3_600_000) return;
+    this.lastPrune = now.getTime();
+    try {
+      await this.prisma.automationRun.deleteMany({
+        where: { startedAt: { lt: new Date(now.getTime() - RUN_RETENTION_MS) } },
+      });
+    } catch (err) {
+      this.logger.warn(`Limpieza del historial falló: ${(err as Error).message}`);
+    }
   }
 
   /** Un auto-envío por chat cada 30 s (entre TODOS los flujos). */

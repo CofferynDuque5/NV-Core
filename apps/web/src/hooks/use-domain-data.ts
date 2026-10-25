@@ -247,6 +247,18 @@ export function useAutomations() {
   return useQuery({ queryKey: [ws.id, "automations"], queryFn: () => svc.automations.list(ws.id) });
 }
 
+/** Real executions of one flow (newest first); refreshes while the panel is open. */
+export function useAutomationRuns(automationId: string | null) {
+  const svc = useServices();
+  const ws = useWorkspace();
+  return useQuery({
+    queryKey: [ws.id, "automations", automationId, "runs"],
+    queryFn: () => svc.automations.runs(ws.id, automationId!),
+    enabled: !!automationId,
+    refetchInterval: 15_000,
+  });
+}
+
 export function useDesigns() {
   const svc = useServices();
   const ws = useWorkspace();

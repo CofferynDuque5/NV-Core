@@ -227,20 +227,20 @@ model Funnel {
 
 // A referral partner in the affiliate program.
 model Affiliate {
-  id            String   @id @default(cuid())
-  workspaceSlug String
-  name          String
-  email         String
-  code          String   @unique
-  commissionPct Int      @default(20)
+  id             String   @id @default(cuid())
+  workspaceSlug  String
+  name           String
+  email          String
+  code           String   @unique
+  commissionPct  Int      @default(20)
   destinationUrl String?
-  status        String   @default("active")
-  clicks        Int      @default(0)
-  conversions   Int      @default(0)
-  earnings      Float    @default(0)
-  createdAt     DateTime @default(now())
+  status         String   @default("active")
+  clicks         Int      @default(0)
+  conversions    Int      @default(0)
+  earnings       Float    @default(0)
+  createdAt      DateTime @default(now())
 
-  events        AffiliateEvent[]
+  events AffiliateEvent[]
 
   @@index([workspaceSlug])
   @@index([workspaceSlug, createdAt])
@@ -268,7 +268,7 @@ model Sequence {
   steps         Json     @default("[]")
   createdAt     DateTime @default(now())
 
-  enrollments   SequenceEnrollment[]
+  enrollments SequenceEnrollment[]
 
   @@index([workspaceSlug])
   @@index([workspaceSlug, createdAt])
@@ -294,52 +294,52 @@ model SequenceEnrollment {
 }
 
 model Campaign {
-  id            String         @id @default(cuid())
-  workspaceSlug String
-  name          String
-  status        CampaignStatus @default(borrador)
+  id                 String         @id @default(cuid())
+  workspaceSlug      String
+  name               String
+  status             CampaignStatus @default(borrador)
   /// Delivery channels: `wa` → WhatsApp target groups; `fb`/`ig` → social publish.
-  channels      ChannelId[]
-  progress      Int            @default(0)
-  nextRunAt     DateTime?
-  accent        String?
+  channels           ChannelId[]
+  progress           Int            @default(0)
+  nextRunAt          DateTime?
+  accent             String?
   /// Message body; supports {{variables}} rendered per target group.
-  message       String         @default("")
+  message            String         @default("")
   /// Schedule: "once" | "daily" | "weekly".
-  scheduleType  String         @default("once")
+  scheduleType       String         @default("once")
   /// once → ISO datetime; daily/weekly → "HH:MM".
-  scheduleAt    String?
+  scheduleAt         String?
   /// daily/weekly → multiple send times per day ["HH:MM", …]. Falls back to
   /// [scheduleAt] when empty (backward compatible).
-  scheduleTimes String[]       @default([])
+  scheduleTimes      String[]       @default([])
   /// weekly → days of week (0=Sun … 6=Sat).
-  scheduleDays  Int[]
+  scheduleDays       Int[]
   /// Uploaded media descriptors [{ path, filename, mime, kind, url }]. First is
   /// used for WhatsApp; all are used for IG carousel.
-  attachments   Json           @default("[]")
+  attachments        Json           @default("[]")
   /// When true, WhatsApp/Telegram/Status sends rotate through the attachments
   /// (one image per run) instead of always using the first. Great for daily
   /// campaigns that should vary the creative.
-  rotateAttachments Boolean    @default(false)
+  rotateAttachments  Boolean        @default(false)
   /// Cursor for attachment rotation — which image the next run should use.
-  attachmentRotation Int       @default(0)
+  attachmentRotation Int            @default(0)
   /// IG publish format: "feed" | "reel" | "story" | "carousel".
-  socialFormat  String?
+  socialFormat       String?
   /// When true, the campaign also publishes to the connected WhatsApp Status
   /// (Estados) via Baileys, in addition to any target groups / social posts.
-  postToWaStatus Boolean       @default(false)
-  lastRunAt     DateTime?
+  postToWaStatus     Boolean        @default(false)
+  lastRunAt          DateTime?
   /// Last execution day (YYYY-MM-DD) to dedupe daily/weekly runs.
-  lastRunDay    String?
+  lastRunDay         String?
   /// Last executed time-slot ("YYYY-MM-DDTHH:MM") to dedupe multi-time runs.
-  lastRunSlot   String?
+  lastRunSlot        String?
   /// Run in flight: idempotency key of the current execution ("once:<at>",
   /// "<YYYY-MM-DD>T<HH:MM>" or "manual:<id>"). NULL when no run is in flight.
   /// Lets a run interrupted by a restart be resumed without resending.
-  runKey        String?
+  runKey             String?
   /// Heartbeat of the in-flight run; a stale heartbeat means the process died.
-  runHeartbeatAt DateTime?
-  createdAt     DateTime       @default(now())
+  runHeartbeatAt     DateTime?
+  createdAt          DateTime       @default(now())
 
   posts    Post[]
   targets  CampaignTarget[]
@@ -396,23 +396,23 @@ model SendLog {
 }
 
 model Post {
-  id            String     @id @default(cuid())
-  workspaceSlug String
-  campaign      Campaign?  @relation(fields: [campaignId], references: [id], onDelete: SetNull)
-  campaignId    String?
-  channel       ChannelId
-  title         String
-  copy          String?
-  hashtags      String[]
+  id               String     @id @default(cuid())
+  workspaceSlug    String
+  campaign         Campaign?  @relation(fields: [campaignId], references: [id], onDelete: SetNull)
+  campaignId       String?
+  channel          ChannelId
+  title            String
+  copy             String?
+  hashtags         String[]
   /// Uploaded media descriptors [{ path, filename, mime, kind, url }], shared
   /// with the unified content editor's preview. First is the primary visual.
-  attachments   Json       @default("[]")
-  status        PostStatus @default(draft)
-  scheduledAt   DateTime?
+  attachments      Json       @default("[]")
+  status           PostStatus @default(draft)
+  scheduledAt      DateTime?
   /// When the scheduler claimed the post (status "publishing"); lets the sweep
   /// tell an interrupted publish from one still in flight.
   publishStartedAt DateTime?
-  createdAt     DateTime   @default(now())
+  createdAt        DateTime   @default(now())
 
   @@index([workspaceSlug])
   @@index([workspaceSlug, scheduledAt])
@@ -490,21 +490,45 @@ model Template {
 }
 
 model Automation {
-  id            String   @id @default(cuid())
+  id            String           @id @default(cuid())
   workspaceSlug String
   name          String
-  status        String   @default("pausado")
-  runs          Int      @default(0)
+  status        String           @default("pausado")
+  runs          Int              @default(0)
   description   String?
-  nodes         Json     @default("[]")
+  nodes         Json             @default("[]")
   // Visual-editor connections between nodes (graph edges).
-  edges         Json     @default("[]")
+  edges         Json             @default("[]")
   // Optional n8n webhook (absolute URL or path resolved against N8N_BASE_URL).
   webhookUrl    String?
-  createdAt     DateTime @default(now())
+  createdAt     DateTime         @default(now())
   waits         AutomationWait[]
+  executions    AutomationRun[]
 
   @@index([workspaceSlug])
+}
+
+/// One real execution of a flow for one contact (an incoming message, or a
+/// resume after a "wait" step), with the steps it took and why any were
+/// skipped. Kept 30 days. status: ok | skipped | waiting | error.
+model AutomationRun {
+  id            String     @id @default(cuid())
+  workspaceSlug String
+  automation    Automation @relation(fields: [automationId], references: [id], onDelete: Cascade)
+  automationId  String
+  /// "message" (incoming message) or "resume" (after a wait).
+  trigger       String
+  contactHandle String
+  contactName   String?
+  status        String
+  /// AutomationTraceStep[]
+  steps         Json       @default("[]")
+  error         String?
+  startedAt     DateTime   @default(now())
+  finishedAt    DateTime?
+
+  @@index([automationId, startedAt])
+  @@index([startedAt])
 }
 
 /// A flow paused on a "wait" node for one contact. The runner resumes it from
@@ -752,7 +776,6 @@ model ContactNote {
 
   @@index([workspaceSlug, contactId])
 }
-
 
 /**
  * Per-user onboarding state for a workspace. Step completion is derived from

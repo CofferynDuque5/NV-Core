@@ -1,5 +1,6 @@
 import type {
   Automation as PAutomation,
+  AutomationRun as PAutomationRun,
   AuditLog as PAuditLog,
   CalendarEvent as PCalendarEvent,
   Campaign as PCampaign,
@@ -25,6 +26,7 @@ import type {
 } from "@prisma/client";
 import type {
   Automation,
+  AutomationRun,
   AuditLogEntry,
   CalendarEvent,
   Campaign,
@@ -261,6 +263,20 @@ export const mapAutomation = (a: PAutomation & { _count?: { waits?: number } }):
   edges: (a.edges as unknown as Automation["edges"]) ?? [],
   webhookUrl: a.webhookUrl ?? undefined,
   waiting: a._count?.waits,
+});
+
+const RUN_STATUSES = ["ok", "skipped", "waiting", "error"] as const;
+
+export const mapAutomationRun = (r: PAutomationRun): AutomationRun => ({
+  id: r.id,
+  trigger: r.trigger === "resume" ? "resume" : "message",
+  contactHandle: r.contactHandle,
+  contactName: r.contactName ?? undefined,
+  status: (RUN_STATUSES as readonly string[]).includes(r.status) ? (r.status as AutomationRun["status"]) : "error",
+  steps: Array.isArray(r.steps) ? (r.steps as unknown as AutomationRun["steps"]) : [],
+  error: r.error ?? undefined,
+  startedAt: r.startedAt.toISOString(),
+  finishedAt: r.finishedAt?.toISOString(),
 });
 
 export const mapDesign = (d: PDesign): Design => ({
