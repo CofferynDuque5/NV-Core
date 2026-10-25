@@ -1,14 +1,14 @@
-import type { Conversation } from "@nv/domain";
+import { INBOX_UNASSIGNED, type Conversation } from "@nv/domain";
 
 /**
- * Pure Inbox triage helpers — no React, unit-tested. Filtering runs client-side
- * over the loaded conversation list.
+ * Pure Inbox triage helpers — no React, unit-tested. The Inbox page searches and
+ * filters on the server; `filterConversations` mirrors those rules for local lists.
  */
 
 export type InboxStatus = "open" | "resolved" | "all";
 
 /** Sentinel assignee filter value meaning "unassigned". */
-export const UNASSIGNED = "__none__";
+export const UNASSIGNED = INBOX_UNASSIGNED;
 
 export interface InboxFilter {
   q?: string;

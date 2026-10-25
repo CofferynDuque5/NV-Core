@@ -419,8 +419,30 @@ export interface UpdateConversationInput {
   labels?: string[];
 }
 
+/** Assignee filter value meaning "only unassigned conversations". */
+export const INBOX_UNASSIGNED = "__none__";
+
+export interface ConversationQuery {
+  /** Matches contact name, handle, labels and message text. */
+  q?: string;
+  channel?: ChannelId;
+  status?: "open" | "resolved" | "all";
+  /** Assignee email, or INBOX_UNASSIGNED. */
+  assignee?: string;
+  limit?: number;
+  /** `nextCursor` from the previous page. */
+  cursor?: string;
+}
+
+export interface ConversationPage extends ListResult<Conversation> {
+  /** Pass back as `cursor` for the next page; null when this is the last one. */
+  nextCursor?: string | null;
+  /** Open conversations in the whole workspace (ignores the filters). */
+  openCount?: number;
+}
+
 export interface InboxService {
-  conversations(workspaceId: string): Promise<ListResult<Conversation>>;
+  conversations(workspaceId: string, query?: ConversationQuery): Promise<ConversationPage>;
   messages(workspaceId: string, conversationId: string): Promise<Message[]>;
   createConversation(workspaceId: string, input: CreateConversationInput): Promise<Conversation>;
   sendMessage(

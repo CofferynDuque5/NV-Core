@@ -1,4 +1,5 @@
-import { useQuery } from "@tanstack/react-query";
+import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
+import type { ConversationQuery } from "@nv/domain";
 
 import { useServices } from "./use-services";
 import { useWorkspace } from "./use-workspace";
@@ -183,12 +184,15 @@ export function useSequenceEnrollments(sequenceId: string | null) {
   });
 }
 
-export function useConversations() {
+/** Inbox list, searched and filtered on the server, one page at a time. */
+export function useConversations(filters: Omit<ConversationQuery, "cursor"> = {}) {
   const svc = useServices();
   const ws = useWorkspace();
-  return useQuery({
-    queryKey: [ws.id, "inbox"],
-    queryFn: () => svc.inbox.conversations(ws.id),
+  return useInfiniteQuery({
+    queryKey: [ws.id, "inbox", "list", filters],
+    queryFn: ({ pageParam }) => svc.inbox.conversations(ws.id, { ...filters, cursor: pageParam }),
+    initialPageParam: undefined as string | undefined,
+    getNextPageParam: (last) => last.nextCursor ?? undefined,
     // Inbox en vivo: nuevos chats entrantes aparecen solos.
     refetchInterval: 10_000,
     refetchOnWindowFocus: true,
