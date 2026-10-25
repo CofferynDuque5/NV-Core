@@ -237,6 +237,7 @@ export const emptyAdapters: Services = {
     remove: () => notAvailable(),
     run: () => notAvailable(),
     test: () => delay({ steps: [], error: "Demo: conecta el backend para probar flujos." }),
+    runs: () => delay([]),
   },
   designs: {
     list: () => emptyList(),

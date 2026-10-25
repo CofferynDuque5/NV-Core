@@ -25,6 +25,7 @@ function build(flows: unknown[]) {
   const messages: unknown[] = [];
   type Wait = Record<string, unknown>;
   const waits: Wait[] = [];
+  const runs: Record<string, unknown>[] = [];
   let wseq = 0;
   const match = (w: Wait, where: Record<string, unknown>) =>
     Object.entries(where).every(([k, v]) =>
@@ -67,6 +68,10 @@ function build(flows: unknown[]) {
       updateMany: vi.fn(async () => ({ count: 1 })),
     },
     message: { create: vi.fn(async ({ data }: { data: unknown }) => { messages.push(data); return data; }) },
+    automationRun: {
+      create: vi.fn(async ({ data }: { data: Record<string, unknown> }) => { runs.push(data); return data; }),
+      deleteMany: vi.fn(async () => ({ count: 0 })),
+    },
   };
   const providers = { sendByChannel: vi.fn(async (_ws: string, _ch: string, to: string, body: string) => { outbox.push({ to, body }); }) };
   const ai = { chat: vi.fn(async () => ({ reply: "Netflix cuesta $3.5/mes. ¿Te lo activo?" })) };
@@ -84,7 +89,7 @@ function build(flows: unknown[]) {
   svc.onModuleInit();
   const fire = (text: string, handle = "+573001112233") =>
     handler!({ workspaceSlug: "ws", channel: "wa", contactHandle: handle, contactName: "Ana", text });
-  return { svc, fire, prisma, providers, ai, notifications, outbox, contacts, messages, waits, optedOut };
+  return { svc, fire, prisma, providers, ai, notifications, outbox, contacts, messages, waits, optedOut, runs };
 }
 
 const salesFlow = {
@@ -300,10 +305,91 @@ describe("AutomationRunnerService", () => {
       await fire("hola");
       expect(outbox).toHaveLength(1);
       optedOut.add("+573001112233");
-      await svc.resumeDue(new Date(Date.now() + 2 * 3_600_000));
+      expect(await svc.resumeDue(new Date(Date.now() + 2 * 3_600_000))).toBe(1);
       await fire("quiero comprar netflix", "+573001112233");
       expect(outbox).toHaveLength(1);
       expect(ai.chat).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("historial de ejecuciones", () => {
+    type Step = { nodeId: string; note: string; decision?: string };
+
+    it("guarda cada paso con lo que hizo y la rama tomada", async () => {
+      const { fire, runs } = build([salesFlow]);
+      await fire("Hola, ¿cuánto cuesta Netflix?");
+      expect(runs).toHaveLength(1);
+      const run = runs[0]!;
+      expect(run).toMatchObject({ automationId: "f1", trigger: "message", status: "ok", contactHandle: "+573001112233", error: null });
+      const steps = run.steps as Step[];
+      expect(steps.map((x) => x.nodeId)).toEqual(["t", "c", "cond", "ai", "n"]);
+      expect(steps[2]).toMatchObject({ decision: "true", note: "Se cumple." });
+      expect(steps[3]!.note).toContain("Respuesta con IA enviada");
+    });
+
+    it("explica por qué se omitió: pausa anti-spam", async () => {
+      const replyFlow = {
+        id: "f2",
+        name: "Saludo",
+        status: "activo",
+        nodes: [
+          { id: "t", type: "trigger", label: "Mensaje", config: {} },
+          { id: "m", type: "action", label: "Hola", config: { kind: "send_message", body: "Hola {{nombre}}" } },
+        ],
+        edges: [{ id: "e", from: "t", to: "m" }],
+      };
+      const { fire, runs } = build([replyFlow]);
+      await fire("hola");
+      await fire("¿sigues ahí?");
+      expect(runs.map((r) => r.status)).toEqual(["ok", "skipped"]);
+      expect((runs[1]!.steps as Step[])[1]!.note).toContain("anti-spam");
+    });
+
+    it("explica por qué se omitió: contacto dado de baja", async () => {
+      const { fire, runs, optedOut } = build([salesFlow]);
+      optedOut.add("+573001112233");
+      await fire("¿cuánto cuesta?");
+      const ai = (runs[0]!.steps as Step[]).find((x) => x.nodeId === "ai")!;
+      expect(ai.note).toContain("dado de baja");
+    });
+
+    it("marca la ejecución como error con el motivo y el paso que falló", async () => {
+      const { fire, runs, providers } = build([salesFlow]);
+      providers.sendByChannel.mockRejectedValueOnce(new Error("WhatsApp desconectado"));
+      await fire("¿cuánto cuesta?");
+      expect(runs[0]).toMatchObject({ status: "error", error: "WhatsApp desconectado" });
+      expect((runs[0]!.steps as Step[]).at(-1)).toMatchObject({ nodeId: "ai", note: "Error: WhatsApp desconectado" });
+    });
+
+    it("una pausa en «esperar» queda como en espera y la reanudación tiene su propia ejecución", async () => {
+      const flow = {
+        id: "f3",
+        workspaceSlug: "ws",
+        name: "Seguimiento",
+        status: "activo",
+        nodes: [
+          { id: "t", type: "trigger", label: "Mensaje", config: {} },
+          { id: "w", type: "wait", label: "Esperar", config: { duration: "1h" } },
+          { id: "m", type: "action", label: "Seguimiento", config: { kind: "send_message", body: "¿Pudiste verlo?" } },
+        ],
+        edges: [
+          { id: "e1", from: "t", to: "w" },
+          { id: "e2", from: "w", to: "m" },
+        ],
+      };
+      const { fire, svc, runs } = build([flow]);
+      await fire("info");
+      expect(runs[0]).toMatchObject({ status: "waiting", trigger: "message" });
+      expect(await svc.resumeDue(new Date(Date.now() + 2 * 3_600_000))).toBe(1);
+      expect(runs[1]).toMatchObject({ status: "ok", trigger: "resume" });
+      expect((runs[1]!.steps as Step[]).map((x) => x.nodeId)).toEqual(["m"]);
+    });
+
+    it("si guardar el historial falla, el flujo sigue funcionando", async () => {
+      const { fire, prisma, outbox } = build([salesFlow]);
+      prisma.automationRun.create.mockRejectedValueOnce(new Error("db caída"));
+      await fire("¿cuánto cuesta?");
+      expect(outbox).toHaveLength(1);
     });
   });
 });

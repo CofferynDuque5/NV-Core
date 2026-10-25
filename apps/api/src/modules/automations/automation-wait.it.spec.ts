@@ -2,6 +2,7 @@ import { PrismaClient } from "@prisma/client";
 import { describe, expect, it, vi } from "vitest";
 
 import { AutomationRunnerService } from "./automation-runner.service";
+import { AutomationsService } from "./automations.module";
 
 const url = process.env.IT_DATABASE_URL;
 describe.skipIf(!url)("Nodo «esperar» contra PostgreSQL real", () => {
@@ -50,5 +51,34 @@ describe.skipIf(!url)("Nodo «esperar» contra PostgreSQL real", () => {
     expect([...a.sent, ...b.sent]).toEqual(["¿Seguimos?"]);
     const w = await prisma.automationWait.findFirst({ where: { workspaceSlug: ws } });
     expect(w!.status).toBe("done");
+  });
+
+  it("guarda el historial y lo devuelve por workspace, más reciente primero", async () => {
+    const ws = `it-runs-${Date.now()}`;
+    const flow = await prisma.automation.create({
+      data: {
+        workspaceSlug: ws, name: "Saludo", status: "activo",
+        nodes: [
+          { id: "t", type: "trigger", label: "Mensaje", config: {} },
+          { id: "m", type: "action", label: "Hola", config: { kind: "send_message", body: "Hola {{nombre}}" } },
+        ],
+        edges: [{ id: "e1", from: "t", to: "m" }],
+      },
+    });
+    const r = mk();
+    await r.fire(ws, "hola");
+    await r.fire(ws, "otra vez"); // pausa anti-spam → omitida
+    const api = new AutomationsService(prisma as never, { record: vi.fn() } as never, {} as never);
+    const runs = await api.runs(ws, flow.id);
+    expect(runs.map((x) => x.status)).toEqual(["skipped", "ok"]);
+    expect(runs[1]!.steps.map((x) => x.nodeId)).toEqual(["t", "m"]);
+    expect(runs[1]!.steps[1]!.note).toBe("Mensaje enviado: «Hola Ana»");
+    // Otro workspace no puede leer este historial.
+    await expect(api.runs(`${ws}-otro`, flow.id)).rejects.toThrow(/no encontrada/);
+
+    // La limpieza borra lo que tiene más de 30 días.
+    await prisma.automationRun.updateMany({ where: { automationId: flow.id }, data: { startedAt: new Date(Date.now() - 31 * 86_400_000) } });
+    await mk().svc.resumeDue(new Date());
+    expect(await prisma.automationRun.count({ where: { automationId: flow.id } })).toBe(0);
   });
 });

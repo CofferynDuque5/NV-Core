@@ -4,6 +4,7 @@ import type {
   AiUsage,
   AnalyticsSnapshot,
   Automation,
+  AutomationRun,
   AutomationTestResult,
   CampaignImportResult,
   ChangelogStatus,
@@ -353,6 +354,7 @@ export function createHttpAdapters(opts: HttpAdapterOptions): Services {
         post<{ triggered: boolean; runs: number }>(`${ws(id)}/automations/${aid}/run`, {}),
       test: (id, aid, input) =>
         post<AutomationTestResult>(`${ws(id)}/automations/${aid}/test`, input ?? {}),
+      runs: (id, aid) => get<AutomationRun[]>(`${ws(id)}/automations/${aid}/runs`),
     },
     designs: {
       list: (id) => get<ListResult<Design>>(`${ws(id)}/designs`),
