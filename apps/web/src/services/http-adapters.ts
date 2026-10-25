@@ -25,6 +25,7 @@ import type {
   Connection,
   Contact,
   Conversation,
+  ConversationPage,
   CredentialStatus,
   GoogleStatus,
   Group,
@@ -293,7 +294,17 @@ export function createHttpAdapters(opts: HttpAdapterOptions): Services {
       preview: (id, input) => post<SegmentPreview>(`${ws(id)}/segments/preview`, input),
     },
     inbox: {
-      conversations: (id) => get<ListResult<Conversation>>(`${ws(id)}/inbox/conversations`),
+      conversations: (id, query) => {
+        const p = new URLSearchParams();
+        if (query?.q) p.set("q", query.q);
+        if (query?.channel) p.set("channel", query.channel);
+        if (query?.status) p.set("status", query.status);
+        if (query?.assignee) p.set("assignee", query.assignee);
+        if (query?.limit) p.set("limit", String(query.limit));
+        if (query?.cursor) p.set("cursor", query.cursor);
+        const qs = p.toString();
+        return get<ConversationPage>(`${ws(id)}/inbox/conversations${qs ? `?${qs}` : ""}`);
+      },
       messages: (id, cid) => get<Message[]>(`${ws(id)}/inbox/conversations/${cid}/messages`),
       createConversation: (id, input) => post<Conversation>(`${ws(id)}/inbox/conversations`, input),
       sendMessage: (id, cid, input) =>

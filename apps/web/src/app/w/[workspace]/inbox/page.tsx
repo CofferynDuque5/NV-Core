@@ -1,16 +1,9 @@
 import * as React from "react";
-import { CHANNELS, CHANNEL_IDS } from "@nv/domain";
+import { CHANNELS, CHANNEL_IDS, type ChannelId, type Conversation } from "@nv/domain";
 import { CheckCircle2, Inbox, MessageSquare, Plus, RotateCcw, Search, Send, Tag, UserRound, X } from "lucide-react";
 
 import { cn } from "@/lib/utils";
-import {
-  UNASSIGNED,
-  filterConversations,
-  openCount,
-  withLabel,
-  withoutLabel,
-  type InboxStatus,
-} from "@/lib/inbox";
+import { UNASSIGNED, withLabel, withoutLabel, type InboxStatus } from "@/lib/inbox";
 import { useConversations, useMessages, useTeam } from "@/hooks/use-domain-data";
 import { useResolveConversation, useSendMessage, useUpdateConversation } from "@/hooks/use-domain-mutations";
 import { PageHeader } from "@/components/common/page-header";
@@ -52,10 +45,7 @@ const STATUSES: { v: InboxStatus; label: string }[] = [
 ];
 
 export default function InboxPage() {
-  const conversations = useConversations();
   const team = useTeam();
-  const all = conversations.data?.items ?? [];
-
   const [selected, setSelected] = React.useState<string | null>(null);
   const [dialogOpen, setDialogOpen] = React.useState(false);
   const [draft, setDraft] = React.useState("");
@@ -66,6 +56,25 @@ export default function InboxPage() {
   const [channel, setChannel] = React.useState("");
   const [status, setStatus] = React.useState<InboxStatus>("open");
   const [assignee, setAssignee] = React.useState("");
+  const [debouncedQ, setDebouncedQ] = React.useState("");
+  React.useEffect(() => {
+    const t = setTimeout(() => setDebouncedQ(q.trim()), 300);
+    return () => clearTimeout(t);
+  }, [q]);
+
+  // Search and filters run on the server; pages load as the list is scrolled.
+  const conversations = useConversations({
+    q: debouncedQ || undefined,
+    channel: (channel || undefined) as ChannelId | undefined,
+    status,
+    assignee: assignee || undefined,
+  });
+  const pages = conversations.data?.pages ?? [];
+  const filtered = React.useMemo(() => pages.flatMap((p) => p.items), [pages]);
+  const total = pages[0]?.total ?? 0;
+  const openTotal = pages[0]?.openCount ?? 0;
+  // "Abiertas" is the default view: with nothing open the inbox reads as empty.
+  const hasFilters = !!(debouncedQ || channel || assignee || status === "resolved");
 
   const messages = useMessages(selected);
   const send = useSendMessage(selected);
@@ -77,8 +86,14 @@ export default function InboxPage() {
     () => Object.fromEntries(members.map((m) => [m.email, m.name])),
     [members],
   );
-  const filtered = filterConversations(all, { q, channel, status, assignee });
-  const active = all.find((c) => c.id === selected) ?? null;
+  // Keep the open thread on screen even when a filter (e.g. "Abiertas" after
+  // resolving it) drops it from the loaded list.
+  const [pinned, setPinned] = React.useState<Conversation | null>(null);
+  const listed = filtered.find((c) => c.id === selected) ?? null;
+  React.useEffect(() => {
+    if (listed) setPinned(listed);
+  }, [listed]);
+  const active = listed ?? (pinned?.id === selected ? pinned : null);
 
   // Chronological thread (oldest → newest) so it reads like a real chat.
   const thread = React.useMemo(
@@ -98,7 +113,7 @@ export default function InboxPage() {
 
   function addLabel() {
     if (!active || !labelDraft.trim()) return;
-    updateConv.mutate({ id: active.id, input: { labels: withLabel(active.labels, labelDraft) } });
+    updateConv.mutate({ id: active.id, input: { labels: withLabel(active.labels, labelDraft) } }, { onSuccess: setPinned });
     setLabelDraft("");
   }
 
@@ -121,7 +136,7 @@ export default function InboxPage() {
           <div className="space-y-2 border-b border-line p-3">
             <div className="relative">
               <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-ink-faint" />
-              <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Buscar por nombre o etiqueta…" className="pl-9" aria-label="Buscar conversaciones" />
+              <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Buscar por nombre, etiqueta o mensaje…" className="pl-9" aria-label="Buscar conversaciones" />
             </div>
             <div className="flex flex-wrap gap-1.5">
               {STATUSES.map((s) => (
@@ -136,7 +151,7 @@ export default function InboxPage() {
                   {s.label}
                 </button>
               ))}
-              <span className="ml-auto self-center text-[11px] text-ink-faint">{openCount(all)} abiertas</span>
+              <span className="ml-auto self-center text-[11px] text-ink-faint">{openTotal} abiertas</span>
             </div>
             <div className="flex gap-1.5">
               <select value={channel} onChange={(e) => setChannel(e.target.value)} className={cn(selectClass, "flex-1")} aria-label="Filtrar por canal">
@@ -158,7 +173,7 @@ export default function InboxPage() {
           <div className="flex-1 overflow-y-auto p-3">
             {conversations.isLoading ? (
               <ListSkeleton rows={5} />
-            ) : all.length === 0 ? (
+            ) : filtered.length === 0 && !hasFilters ? (
               <EmptyState icon={Inbox} title="Bandeja vacía" description="Crea una conversación o conecta un canal para recibir mensajes." compact />
             ) : filtered.length === 0 ? (
               <p className="py-8 text-center text-xs text-ink-faint">Ninguna conversación coincide con los filtros.</p>
@@ -216,6 +231,18 @@ export default function InboxPage() {
                 ))}
               </ul>
             )}
+            {conversations.hasNextPage ? (
+              <div className="pt-2 text-center">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => void conversations.fetchNextPage()}
+                  disabled={conversations.isFetchingNextPage}
+                >
+                  {conversations.isFetchingNextPage ? "Cargando…" : `Cargar más (${filtered.length} de ${total})`}
+                </Button>
+              </div>
+            ) : null}
           </div>
         </Panel>
 
@@ -236,7 +263,7 @@ export default function InboxPage() {
                       <UserRound className="size-3.5" />
                       <select
                         value={active.assignee ?? ""}
-                        onChange={(e) => updateConv.mutate({ id: active.id, input: { assignee: e.target.value } })}
+                        onChange={(e) => updateConv.mutate({ id: active.id, input: { assignee: e.target.value } }, { onSuccess: setPinned })}
                         className={selectClass}
                         aria-label="Asignar responsable"
                       >
@@ -249,7 +276,7 @@ export default function InboxPage() {
                     <Button
                       variant={active.resolved ? "secondary" : "outline"}
                       size="sm"
-                      onClick={() => resolve.mutate({ id: active.id, resolved: !active.resolved })}
+                      onClick={() => resolve.mutate({ id: active.id, resolved: !active.resolved }, { onSuccess: setPinned })}
                     >
                       {active.resolved ? (<><RotateCcw className="size-4" /> Reabrir</>) : (<><CheckCircle2 className="size-4" /> Resolver</>)}
                     </Button>
@@ -264,7 +291,7 @@ export default function InboxPage() {
                   <span key={l} className="inline-flex items-center gap-1 rounded-full bg-panel-high px-2 py-0.5 text-[11px] text-ink">
                     {l}
                     <button
-                      onClick={() => updateConv.mutate({ id: active.id, input: { labels: withoutLabel(active.labels, l) } })}
+                      onClick={() => updateConv.mutate({ id: active.id, input: { labels: withoutLabel(active.labels, l) } }, { onSuccess: setPinned })}
                       className="text-ink-faint hover:text-state-danger"
                       aria-label={`Quitar etiqueta ${l}`}
                     >

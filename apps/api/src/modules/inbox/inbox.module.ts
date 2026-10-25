@@ -22,14 +22,32 @@ import {
 import { ConfigService } from "@nestjs/config";
 import { ApiBearerAuth, ApiExcludeEndpoint, ApiPropertyOptional, ApiTags } from "@nestjs/swagger";
 import { SkipThrottle } from "@nestjs/throttler";
-import { CHANNEL_IDS, type ChannelId, type Conversation, type Message } from "@nv/domain";
-import { IsArray, IsBoolean, IsIn, IsOptional, IsString, MinLength } from "class-validator";
+import {
+  CHANNEL_IDS,
+  INBOX_UNASSIGNED,
+  type ChannelId,
+  type Conversation,
+  type ConversationPage,
+  type Message,
+} from "@nv/domain";
+import { Type } from "class-transformer";
+import {
+  IsArray,
+  IsBoolean,
+  IsIn,
+  IsInt,
+  IsOptional,
+  IsString,
+  Max,
+  MaxLength,
+  Min,
+  MinLength,
+} from "class-validator";
 import { Prisma } from "@prisma/client";
 import type { Response } from "express";
 
 import type { AppConfig } from "../../config/configuration";
-import { ListResultDto } from "../../common/dto/list-result.dto";
-import { LIST_CAP, THREAD_CAP } from "../../common/query-limits";
+import { THREAD_CAP } from "../../common/query-limits";
 import { WorkspaceId } from "../../common/tenant/workspace.decorator";
 import { WorkspaceGuard } from "../../common/tenant/workspace.guard";
 import { WorkspaceRegistry } from "../../common/workspace-registry.service";
@@ -48,6 +66,67 @@ import {
   verifyMetaSignature,
   type InboundMessage,
 } from "./inbound";
+
+/** Conversations per page when the client does not ask for a size. */
+export const INBOX_PAGE_SIZE = 50;
+
+export class ConversationsQueryDto {
+  @ApiPropertyOptional({ description: "Busca en nombre, teléfono/chat, etiquetas y texto de los mensajes." })
+  @IsOptional()
+  @IsString()
+  @MaxLength(200)
+  q?: string;
+
+  @ApiPropertyOptional({ enum: CHANNEL_IDS })
+  @IsOptional()
+  @IsIn(CHANNEL_IDS)
+  channel?: ChannelId;
+
+  @ApiPropertyOptional({ enum: ["open", "resolved", "all"], default: "all" })
+  @IsOptional()
+  @IsIn(["open", "resolved", "all"])
+  status?: "open" | "resolved" | "all";
+
+  @ApiPropertyOptional({ description: `Email del responsable, o "${INBOX_UNASSIGNED}" para sin asignar.` })
+  @IsOptional()
+  @IsString()
+  @MaxLength(320)
+  assignee?: string;
+
+  @ApiPropertyOptional({ default: INBOX_PAGE_SIZE, minimum: 1, maximum: 100 })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(100)
+  limit?: number;
+
+  @ApiPropertyOptional({ description: "nextCursor de la página anterior." })
+  @IsOptional()
+  @IsString()
+  @MaxLength(200)
+  cursor?: string;
+}
+
+/** Opaque page cursor: the last row's activity time and id. */
+export function encodeInboxCursor(at: Date, id: string): string {
+  return Buffer.from(`${at.toISOString()}|${id}`, "utf8").toString("base64url");
+}
+
+export function decodeInboxCursor(cursor: string | undefined): { at: Date; id: string } | null {
+  if (!cursor) return null;
+  const raw = Buffer.from(cursor, "base64url").toString("utf8");
+  const sep = raw.indexOf("|");
+  if (sep <= 0) return null;
+  const at = new Date(raw.slice(0, sep));
+  const id = raw.slice(sep + 1);
+  return Number.isNaN(at.getTime()) || !id ? null : { at, id };
+}
+
+/** Escape LIKE wildcards so a search for "50%" matches the literal text. */
+function likePattern(q: string): string {
+  return `%${q.replace(/[\\%_]/g, (c) => `\\${c}`)}%`;
+}
 
 export class CreateConversationDto {
   @IsIn(CHANNEL_IDS) channel!: ChannelId;
@@ -179,34 +258,77 @@ export class InboxService implements OnModuleInit {
     });
   }
 
-  async conversations(workspaceId: string): Promise<ListResultDto<Conversation>> {
-    if (!this.prisma.enabled) return ListResultDto.empty<Conversation>();
-    const where = { workspaceSlug: workspaceId };
-    // Pick the LIST_CAP threads with the most recent activity (last message, or
-    // creation when empty). Ordering by creation alone dropped old threads that
-    // just received a new message once the workspace had more than LIST_CAP.
-    const recent = await this.prisma.$queryRaw<{ id: string }[]>(Prisma.sql`
-      SELECT c."id"
-      FROM "Conversation" c
-      LEFT JOIN LATERAL (
-        SELECT MAX(m."createdAt") AS "last" FROM "Message" m WHERE m."conversationId" = c."id"
-      ) lm ON TRUE
-      WHERE c."workspaceSlug" = ${workspaceId}
-      ORDER BY COALESCE(lm."last", c."createdAt") DESC
-      LIMIT ${LIST_CAP}
-    `);
-    const [rows, total] = await Promise.all([
-      this.prisma.conversation.findMany({
-        where: { ...where, id: { in: recent.map((r) => r.id) } },
-        // Newest message per thread → preview + "last activity" ordering.
-        include: { messages: { orderBy: { createdAt: "desc" }, take: 1 } },
-      }),
-      this.prisma.conversation.count({ where }),
+  /**
+   * One page of the workspace's conversations, newest activity first (last
+   * message, or creation when empty). Search and filters run in the database,
+   * so a large inbox never has to be loaded whole to find a thread.
+   */
+  async conversations(
+    workspaceId: string,
+    query: ConversationsQueryDto = {},
+  ): Promise<ConversationPage> {
+    if (!this.prisma.enabled) return { items: [], total: 0, nextCursor: null, openCount: 0 };
+    const limit = query.limit ?? INBOX_PAGE_SIZE;
+    const filters: Prisma.Sql[] = [Prisma.sql`c."workspaceSlug" = ${workspaceId}`];
+    if (query.channel) filters.push(Prisma.sql`c."channel"::text = ${query.channel}`);
+    if (query.status === "open") filters.push(Prisma.sql`c."resolved" = false`);
+    if (query.status === "resolved") filters.push(Prisma.sql`c."resolved" = true`);
+    if (query.assignee === INBOX_UNASSIGNED) filters.push(Prisma.sql`c."assignee" IS NULL`);
+    else if (query.assignee) filters.push(Prisma.sql`c."assignee" = ${query.assignee}`);
+    const q = query.q?.trim();
+    if (q) {
+      const p = likePattern(q);
+      filters.push(Prisma.sql`(
+        c."contactName" ILIKE ${p}
+        OR c."contactHandle" ILIKE ${p}
+        OR EXISTS (SELECT 1 FROM unnest(c."labels") l WHERE l ILIKE ${p})
+        OR EXISTS (SELECT 1 FROM "Message" mq WHERE mq."conversationId" = c."id" AND mq."text" ILIKE ${p})
+      )`);
+    }
+    const where = Prisma.join(filters, " AND ");
+    const cursor = decodeInboxCursor(query.cursor);
+    const activity = Prisma.sql`COALESCE(lm."last", c."createdAt")`;
+    const after = cursor ? Prisma.sql`AND (${activity}, c."id") < (${cursor.at}, ${cursor.id})` : Prisma.empty;
+
+    // One extra row tells whether another page exists.
+    const [page, counts] = await Promise.all([
+      this.prisma.$queryRaw<{ id: string; activity: Date }[]>(Prisma.sql`
+        SELECT c."id", ${activity} AS "activity"
+        FROM "Conversation" c
+        LEFT JOIN LATERAL (
+          SELECT MAX(m."createdAt") AS "last" FROM "Message" m WHERE m."conversationId" = c."id"
+        ) lm ON TRUE
+        WHERE ${where} ${after}
+        ORDER BY ${activity} DESC, c."id" DESC
+        LIMIT ${limit + 1}
+      `),
+      this.prisma.$queryRaw<{ total: bigint; open: bigint }[]>(Prisma.sql`
+        SELECT
+          (SELECT COUNT(*) FROM "Conversation" c WHERE ${where}) AS "total",
+          (SELECT COUNT(*) FROM "Conversation" WHERE "workspaceSlug" = ${workspaceId} AND "resolved" = false) AS "open"
+      `),
     ]);
-    const items = rows
-      .map((r) => mapConversation(r, r.messages[0]))
-      .sort((a, b) => b.lastMessageAt.localeCompare(a.lastMessageAt));
-    return new ListResultDto(items, total);
+    const more = page.length > limit;
+    const ids = page.slice(0, limit).map((r) => r.id);
+    const rows = ids.length
+      ? await this.prisma.conversation.findMany({
+          where: { workspaceSlug: workspaceId, id: { in: ids } },
+          // Newest message per thread → preview + "last activity".
+          include: { messages: { orderBy: { createdAt: "desc" }, take: 1 } },
+        })
+      : [];
+    const byId = new Map(rows.map((r) => [r.id, r]));
+    const items = ids
+      .map((id) => byId.get(id))
+      .filter((r): r is NonNullable<typeof r> => !!r)
+      .map((r) => mapConversation(r, r.messages[0]));
+    const last = page[limit - 1];
+    return {
+      items,
+      total: Number(counts[0]?.total ?? 0),
+      openCount: Number(counts[0]?.open ?? 0),
+      nextCursor: more && last ? encodeInboxCursor(new Date(last.activity), last.id) : null,
+    };
   }
 
   async messages(workspaceId: string, conversationId: string): Promise<Message[]> {
@@ -286,8 +408,8 @@ export class InboxController {
   constructor(private readonly service: InboxService) {}
 
   @Get("conversations")
-  conversations(@WorkspaceId() workspaceId: string) {
-    return this.service.conversations(workspaceId);
+  conversations(@WorkspaceId() workspaceId: string, @Query() query: ConversationsQueryDto) {
+    return this.service.conversations(workspaceId, query);
   }
 
   @Get("conversations/:id/messages")
