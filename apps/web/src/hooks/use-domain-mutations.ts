@@ -1,6 +1,9 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import type {
+  CreatePaymentRequestInput,
+  PaymentMethodInput,
+  UpdatePaymentRequestInput,
   AddMemberInput,
   CampaignAttachment,
   ChannelId,
@@ -1659,5 +1662,75 @@ export function useDeleteTask() {
       toast.success("Tarea eliminada");
     },
     onError: (err) => toast.error(errText(err)),
+  });
+}
+
+// ── Cobros ──────────────────────────────────────────────────────────────────
+
+export function useSavePaymentMethod() {
+  const svc = useServices();
+  const ws = useWorkspace();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, input }: { id?: string; input: PaymentMethodInput }) =>
+      id ? svc.payments.updateMethod(ws.id, id, input) : svc.payments.createMethod(ws.id, input),
+    onSuccess: (_m, { id }) => {
+      void qc.invalidateQueries({ queryKey: [ws.id, "payments", "methods"] });
+      toast.success(id ? "Método actualizado" : "Método de cobro añadido");
+    },
+  });
+}
+
+export function useTogglePaymentMethod() {
+  const svc = useServices();
+  const ws = useWorkspace();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, active }: { id: string; active: boolean }) => svc.payments.updateMethod(ws.id, id, { active }),
+    onSuccess: (m) => {
+      void qc.invalidateQueries({ queryKey: [ws.id, "payments", "methods"] });
+      toast.success(m.active ? "Método activado" : "Método pausado");
+    },
+    onError: (err) => toast.error(errText(err)),
+  });
+}
+
+export function useDeletePaymentMethod() {
+  const svc = useServices();
+  const ws = useWorkspace();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => svc.payments.removeMethod(ws.id, id),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: [ws.id, "payments", "methods"] });
+      toast.success("Método eliminado");
+    },
+    onError: (err) => toast.error(errText(err)),
+  });
+}
+
+export function useCreatePayment() {
+  const svc = useServices();
+  const ws = useWorkspace();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: CreatePaymentRequestInput) => svc.payments.create(ws.id, input),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: [ws.id, "payments", "list"] });
+      toast.success("Cobro creado");
+    },
+  });
+}
+
+export function useUpdatePayment() {
+  const svc = useServices();
+  const ws = useWorkspace();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, input }: { id: string; input: UpdatePaymentRequestInput }) => svc.payments.update(ws.id, id, input),
+    onSuccess: (p) => {
+      void qc.invalidateQueries({ queryKey: [ws.id, "payments", "list"] });
+      toast.success(p.status === "pagado" ? "Pago confirmado" : "Cobro actualizado");
+    },
   });
 }

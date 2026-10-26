@@ -128,6 +128,34 @@ export type TaskStatus = (typeof TASK_STATUSES)[number];
 export const TASK_PRIORITIES = ["low", "normal", "high"] as const;
 export type TaskPriority = (typeof TASK_PRIORITIES)[number];
 
+/** Currencies a payment request can be issued in. */
+export const PAYMENT_CURRENCIES = ["COP", "VES", "PEN", "USD", "USDT"] as const;
+export type PaymentCurrency = (typeof PAYMENT_CURRENCIES)[number];
+
+/** Ways a brand can be paid, each collected and verified by hand. */
+export const PAYMENT_METHOD_KINDS = [
+  "nequi",
+  "daviplata",
+  "banco_co",
+  "pago_movil",
+  "banco_ve",
+  "yape",
+  "plin",
+  "banco_pe",
+  "binance_pay",
+  "usdt",
+  "zinli",
+  "otro",
+] as const;
+export type PaymentMethodKind = (typeof PAYMENT_METHOD_KINDS)[number];
+
+/**
+ * Life of a payment request: issued → the customer says they paid (por
+ * verificar) → the team checks its own account and marks it paid or rejected.
+ */
+export const PAYMENT_STATUSES = ["pendiente", "por_verificar", "pagado", "rechazado", "cancelado"] as const;
+export type PaymentStatus = (typeof PAYMENT_STATUSES)[number];
+
 /** Calendar sub-views. */
 export const CALENDAR_VIEWS = ["mes", "semana", "dia", "agenda", "kanban"] as const;
 export type CalendarView = (typeof CALENDAR_VIEWS)[number];

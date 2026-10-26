@@ -886,3 +886,46 @@ model WeeklyReport {
 
   @@unique([workspaceSlug, weekStart])
 }
+
+/// A way a brand gets paid (Nequi, Pago Móvil, Yape, Binance Pay, Zinli…).
+/// Details are what customers need to pay; they are not credentials.
+model PaymentMethod {
+  id            String   @id @default(cuid())
+  workspaceSlug String
+  kind          String
+  label         String
+  currency      String
+  details       Json     @default("{}")
+  instructions  String?
+  active        Boolean  @default(true)
+  createdAt     DateTime @default(now())
+
+  @@index([workspaceSlug])
+}
+
+/// A charge to a customer. Confirmed by hand (status "pagado") once the team
+/// sees the money in its own account; the app never moves funds.
+model PaymentRequest {
+  id            String    @id @default(cuid())
+  workspaceSlug String
+  concept       String
+  amount        Decimal   @db.Decimal(18, 2)
+  currency      String
+  status        String    @default("pendiente")
+  contactId     String?
+  methodId      String?
+  /// Method name when it was used, kept if the method is later deleted.
+  methodLabel   String?
+  reference     String?
+  note          String?
+  rejectReason  String?
+  dueAt         DateTime?
+  paidAt        DateTime?
+  verifiedBy    String?
+  createdBy     String
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@index([workspaceSlug, status, createdAt])
+  @@index([workspaceSlug, contactId])
+}

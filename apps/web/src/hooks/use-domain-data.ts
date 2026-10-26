@@ -370,6 +370,22 @@ export function useNotifications() {
   });
 }
 
+export function usePaymentMethods() {
+  const svc = useServices();
+  const ws = useWorkspace();
+  return useQuery({ queryKey: [ws.id, "payments", "methods"], queryFn: () => svc.payments.methods(ws.id) });
+}
+
+/** Payment requests, optionally only one contact's. */
+export function usePayments(contactId?: string) {
+  const svc = useServices();
+  const ws = useWorkspace();
+  return useQuery({
+    queryKey: [ws.id, "payments", "list", contactId ?? "all"],
+    queryFn: () => svc.payments.list(ws.id, contactId ? { contactId } : undefined),
+  });
+}
+
 export function useWeeklyReports() {
   const svc = useServices();
   const ws = useWorkspace();

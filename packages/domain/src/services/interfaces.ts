@@ -2,6 +2,8 @@ import type {
   AnalyticsSnapshot,
   Task,
   WeeklyReport,
+  PaymentMethod,
+  PaymentRequest,
   WeeklyReportSummary,
   Automation,
   AutomationRun,
@@ -562,6 +564,44 @@ export interface AutomationService {
   runs(workspaceId: string, id: string): Promise<AutomationRun[]>;
 }
 
+export interface PaymentMethodInput {
+  kind: PaymentMethod["kind"];
+  label: string;
+  currency: PaymentMethod["currency"];
+  details: Record<string, string>;
+  instructions?: string;
+  active?: boolean;
+}
+
+export interface CreatePaymentRequestInput {
+  concept: string;
+  amount: number;
+  currency: PaymentRequest["currency"];
+  contactId?: string;
+  dueAt?: string;
+  note?: string;
+}
+
+/** Status change or detail edit; `null` clears an optional field. */
+export interface UpdatePaymentRequestInput {
+  status?: PaymentRequest["status"];
+  methodId?: string | null;
+  reference?: string | null;
+  note?: string | null;
+  rejectReason?: string | null;
+  dueAt?: string | null;
+}
+
+export interface PaymentService {
+  methods(workspaceId: string): Promise<PaymentMethod[]>;
+  createMethod(workspaceId: string, input: PaymentMethodInput): Promise<PaymentMethod>;
+  updateMethod(workspaceId: string, id: string, input: Partial<PaymentMethodInput>): Promise<PaymentMethod>;
+  removeMethod(workspaceId: string, id: string): Promise<void>;
+  list(workspaceId: string, filter?: { status?: PaymentRequest["status"]; contactId?: string }): Promise<PaymentRequest[]>;
+  create(workspaceId: string, input: CreatePaymentRequestInput): Promise<PaymentRequest>;
+  update(workspaceId: string, id: string, input: UpdatePaymentRequestInput): Promise<PaymentRequest>;
+}
+
 export interface ReportService {
   /** Stored weekly reports, newest first. */
   weekly(workspaceId: string): Promise<WeeklyReportSummary[]>;
@@ -963,6 +1003,7 @@ export interface Services {
   team: TeamService;
   tasks: TaskService;
   reports: ReportService;
+  payments: PaymentService;
   audit: AuditService;
   ai: AiService;
   pcAgent: PcAgentService;

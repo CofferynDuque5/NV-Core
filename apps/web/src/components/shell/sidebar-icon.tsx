@@ -1,5 +1,6 @@
 import {
   Activity,
+  BadgeDollarSign,
   BarChart3,
   Calendar,
   ClipboardList,
@@ -28,6 +29,7 @@ import {
 
 const MAP: Record<string, LucideIcon> = {
   Activity,
+  BadgeDollarSign,
   LayoutDashboard,
   Calendar,
   Megaphone,
@@ -71,6 +73,7 @@ export interface NavRenderItem {
 export const EXTRA_NAV_ITEMS: Record<string, NavRenderItem[]> = {
   PRINCIPAL: [
     { module: "tareas", label: "Tareas", icon: "KanbanSquare" },
+    { module: "cobros", label: "Cobros", icon: "BadgeDollarSign" },
     { module: "historial", label: "Historial", icon: "History" },
   ],
   "AUTOMATIZACIÓN": [{ module: "informes", label: "Informe semanal", icon: "FileBarChart" }],

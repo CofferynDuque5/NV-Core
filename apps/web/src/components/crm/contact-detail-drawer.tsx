@@ -1,12 +1,14 @@
 import * as React from "react";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
-import { CONTACT_STAGES, type Contact } from "@nv/domain";
-import { BellOff, BellRing, Building2, KanbanSquare, Loader2, Mail, Navigation, Pencil, Phone, Plus, Tag, Trash2, X } from "lucide-react";
+import { CONTACT_STAGES, PAYMENT_STATUS_LABEL, formatPaymentAmount, type Contact } from "@nv/domain";
+import { Link } from "react-router-dom";
+import { BadgeDollarSign, BellOff, BellRing, Building2, KanbanSquare, Loader2, Mail, Navigation, Pencil, Phone, Plus, Tag, Trash2, X } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { STAGE_ACCENTS } from "@/lib/crm";
 import { attributionLine } from "@/lib/attribution";
-import { useContactNotes, useTasks, useTeam } from "@/hooks/use-domain-data";
+import { useContactNotes, usePayments, useTasks, useTeam } from "@/hooks/use-domain-data";
+import { useWorkspace } from "@/hooks/use-workspace";
 import {
   useAddContactNote,
   useDeleteContactNote,
@@ -17,6 +19,8 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { TaskDialog } from "@/components/tasks/task-dialog";
+import { PaymentDialog } from "@/components/payments/payment-dialog";
+import { STATUS_BADGE } from "@/lib/payments";
 import { PRIORITY_LABEL, TASK_COLUMNS, dueLabel, isOverdue } from "@/lib/tasks";
 
 function initials(name: string): string {
@@ -60,6 +64,10 @@ export function ContactDetailDrawer({
   const [taskOpen, setTaskOpen] = React.useState(false);
   const tasks = useTasks();
   const team = useTeam();
+  const workspace = useWorkspace();
+  const [paymentOpen, setPaymentOpen] = React.useState(false);
+  const payments = usePayments(contact?.id);
+  const contactPayments = contact ? (payments.data ?? []) : [];
   const contactTasks = (tasks.data ?? [])
     .filter((t) => contact && t.contactId === contact.id)
     .sort((a, b) => (a.status === "done" ? 1 : 0) - (b.status === "done" ? 1 : 0) || a.position - b.position);
@@ -235,6 +243,38 @@ export function ContactDetailDrawer({
               )}
             </div>
 
+            {/* Payment requests for this contact */}
+            <div className="space-y-2" data-testid="contact-payments">
+              <div className="flex items-center justify-between">
+                <h3 className="text-xs font-semibold uppercase tracking-wide text-ink-faint">Cobros</h3>
+                <Button variant="ghost" size="sm" onClick={() => setPaymentOpen(true)}>
+                  <Plus className="size-3.5" />
+                  Nuevo
+                </Button>
+              </div>
+              {contactPayments.length === 0 ? (
+                <p className="py-2 text-center text-xs text-ink-faint">Sin cobros para este contacto.</p>
+              ) : (
+                <ul className="space-y-1.5">
+                  {contactPayments.slice(0, 5).map((p) => (
+                    <li key={p.id}>
+                      <Link
+                        to={`/w/${workspace.slug}/cobros?cobro=${p.id}`}
+                        className="flex items-center gap-2 rounded-lg border border-line-soft bg-panel-raised p-2.5 text-sm hover:border-brand/40"
+                      >
+                        <BadgeDollarSign className="size-3.5 shrink-0 text-ink-faint" />
+                        <span className="min-w-0 flex-1 truncate text-ink">{p.concept}</span>
+                        <span className="text-xs font-medium tabular-nums text-ink-bright">
+                          {formatPaymentAmount(p.amount, p.currency)}
+                        </span>
+                        <Badge variant={STATUS_BADGE[p.status]}>{PAYMENT_STATUS_LABEL[p.status]}</Badge>
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+
             {/* Notes / activity */}
             <div className="space-y-2">
               <h3 className="text-xs font-semibold uppercase tracking-wide text-ink-faint">Actividad</h3>
@@ -286,6 +326,7 @@ export function ContactDetailDrawer({
         defaultContactId={contact?.id}
         members={team.data ?? []}
       />
+      <PaymentDialog open={paymentOpen} onOpenChange={setPaymentOpen} defaultContactId={contact?.id} />
     </DialogPrimitive.Root>
   );
 }
