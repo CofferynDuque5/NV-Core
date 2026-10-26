@@ -2,6 +2,7 @@ import * as React from "react";
 import { Trash2 } from "lucide-react";
 import type { Task, TaskPriority, TaskStatus, TeamMember } from "@nv/domain";
 
+import { useContacts } from "@/hooks/use-domain-data";
 import { useCreateTask, useDeleteTask, useUpdateTask } from "@/hooks/use-domain-mutations";
 import { useConfirm } from "@/providers/confirm-provider";
 import { FormDialog, errorMessage } from "@/components/entities/form-dialog";
@@ -36,12 +37,15 @@ export function TaskDialog({
   onOpenChange,
   task,
   defaultStatus = "todo",
+  defaultContactId,
   members,
 }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
   task?: Task | null;
   defaultStatus?: TaskStatus;
+  /** Pre-link a contact, when the dialog is opened from that contact's file. */
+  defaultContactId?: string;
   members: TeamMember[];
 }) {
   const create = useCreateTask();
@@ -54,6 +58,7 @@ export function TaskDialog({
   const [priority, setPriority] = React.useState<TaskPriority>("normal");
   const [assignee, setAssignee] = React.useState("");
   const [due, setDue] = React.useState("");
+  const [contactId, setContactId] = React.useState("");
   const [error, setError] = React.useState<string | null>(null);
 
   React.useEffect(() => {
@@ -64,8 +69,18 @@ export function TaskDialog({
     setPriority(task?.priority ?? "normal");
     setAssignee(task?.assignee ?? "");
     setDue(toDateInput(task?.dueAt));
+    setContactId(task?.contactId ?? defaultContactId ?? "");
     setError(null);
-  }, [open, task, defaultStatus]);
+  }, [open, task, defaultStatus, defaultContactId]);
+
+  // The picker lists the first page of contacts (the API caps a page at 100); a
+  // task linked to one outside that page keeps its own entry, so saving the
+  // dialog never drops the link.
+  const contacts = useContacts({ pageSize: 100 });
+  const contactOptions = (contacts.data?.items ?? []).map((c) => ({ id: c.id, name: c.name }));
+  if (contactId && !contactOptions.some((c) => c.id === contactId)) {
+    contactOptions.unshift({ id: contactId, name: task?.contactName ?? "Contacto enlazado" });
+  }
 
   const done = { onSuccess: () => onOpenChange(false), onError: (err: unknown) => setError(errorMessage(err)) };
 
@@ -74,12 +89,25 @@ export function TaskDialog({
     const base = { title: title.trim(), description: description.trim(), status, priority };
     if (task) {
       update.mutate(
-        { id: task.id, input: { ...base, assignee: assignee || null, dueAt: due ? fromDateInput(due) : null } },
+        {
+          id: task.id,
+          input: {
+            ...base,
+            assignee: assignee || null,
+            dueAt: due ? fromDateInput(due) : null,
+            contactId: contactId || null,
+          },
+        },
         done,
       );
     } else {
       create.mutate(
-        { ...base, assignee: assignee || undefined, dueAt: (due && fromDateInput(due)) || undefined },
+        {
+          ...base,
+          assignee: assignee || undefined,
+          dueAt: (due && fromDateInput(due)) || undefined,
+          contactId: contactId || undefined,
+        },
         done,
       );
     }
@@ -165,6 +193,17 @@ export function TaskDialog({
           <Label htmlFor="tk-due">Fecha límite</Label>
           <Input id="tk-due" type="date" value={due} onChange={(e) => setDue(e.target.value)} />
         </div>
+      </div>
+      <div className="space-y-1.5">
+        <Label htmlFor="tk-contact">Contacto</Label>
+        <select id="tk-contact" value={contactId} onChange={(e) => setContactId(e.target.value)} className={selectCls}>
+          <option value="">Sin contacto</option>
+          {contactOptions.map((c) => (
+            <option key={c.id} value={c.id}>
+              {c.name}
+            </option>
+          ))}
+        </select>
       </div>
       {task ? (
         <Button

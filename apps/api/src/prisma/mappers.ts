@@ -325,6 +325,7 @@ export const mapNotification = (n: PNotification): Notification => ({
   type: (n.type as Notification["type"]) ?? "info",
   title: n.title,
   meta: n.meta ?? undefined,
+  ...(n.recipient ? { personal: true } : {}),
   read: n.read,
   createdAt: n.createdAt.toISOString(),
 });

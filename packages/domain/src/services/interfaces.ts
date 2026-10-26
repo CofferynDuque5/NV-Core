@@ -156,6 +156,7 @@ export interface CreateTaskInput {
   assignee?: string;
   /** ISO date-time. */
   dueAt?: string;
+  contactId?: string;
 }
 
 /** Partial task update; `null` clears assignee or due date. */
@@ -167,6 +168,8 @@ export interface UpdateTaskInput {
   assignee?: string | null;
   dueAt?: string | null;
   position?: number;
+  /** `null` unlinks the contact. */
+  contactId?: string | null;
 }
 
 export interface CreateAutomationInput {

@@ -1,5 +1,5 @@
 import * as React from "react";
-import { CalendarClock, KanbanSquare, Plus, Search } from "lucide-react";
+import { CalendarClock, KanbanSquare, Plus, Search, User } from "lucide-react";
 import type { Task, TaskStatus } from "@nv/domain";
 
 import { cn } from "@/lib/utils";
@@ -76,6 +76,12 @@ function TaskCard({
           <Badge variant={overdue ? "danger" : "outline"} title={new Date(task.dueAt).toLocaleDateString()}>
             <CalendarClock className="size-3" />
             {overdue ? `Vencida · ${dueLabel(task.dueAt)}` : dueLabel(task.dueAt)}
+          </Badge>
+        ) : null}
+        {task.contactName ? (
+          <Badge variant="outline" title={`Contacto: ${task.contactName}`}>
+            <User className="size-3" />
+            {task.contactName}
           </Badge>
         ) : null}
         {task.assignee ? (

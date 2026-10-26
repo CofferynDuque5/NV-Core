@@ -32,7 +32,27 @@ test("task board: create, move to done, persist, delete", async ({ page }) => {
   await page.getByLabel("Responsable").selectOption("me");
   await expect(page.getByTestId("task-column-done")).toContainText("Grabar el reel del lanzamiento");
 
+  // Link it to a contact: the card shows the name and the contact's file lists it.
+  await page.goto(`/w/${WS}/contactos`, { waitUntil: "networkidle" });
+  await page.getByRole("button", { name: "Nuevo", exact: true }).first().click();
+  await page.waitForSelector("#c-name");
+  await page.fill("#c-name", "Marta Enlace");
+  await page.getByRole("button", { name: "Crear contacto" }).click();
+  await expect(page.locator("body")).toContainText("Marta Enlace", { timeout: 10000 });
+
+  await page.goto(`/w/${WS}/tareas`, { waitUntil: "networkidle" });
+  await page.getByTestId("task-column-done").getByTestId("task-card").first().click();
+  await page.selectOption("#tk-contact", { label: "Marta Enlace" });
+  await page.getByRole("button", { name: "Guardar", exact: true }).click();
+  await expect(page.getByTestId("task-column-done")).toContainText("Marta Enlace", { timeout: 10000 });
+
+  await page.goto(`/w/${WS}/contactos`, { waitUntil: "networkidle" });
+  await page.getByText("Marta Enlace").first().click();
+  await expect(page.getByTestId("contact-tasks")).toContainText("Grabar el reel del lanzamiento", { timeout: 10000 });
+  await page.keyboard.press("Escape");
+
   // Delete (confirm dialog).
+  await page.goto(`/w/${WS}/tareas`, { waitUntil: "networkidle" });
   await page.getByTestId("task-column-done").getByTestId("task-card").first().click();
   await page.getByRole("button", { name: "Eliminar tarea" }).click();
   await page.getByRole("button", { name: "Eliminar", exact: true }).click();

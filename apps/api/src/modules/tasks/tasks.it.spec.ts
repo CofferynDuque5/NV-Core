@@ -1,6 +1,7 @@
 import { PrismaClient } from "@prisma/client";
 import { describe, expect, it } from "vitest";
 
+import { NotificationsService } from "../notifications/notifications.module";
 import { TasksService } from "./tasks.module";
 
 const url = process.env.IT_DATABASE_URL;
@@ -10,7 +11,8 @@ describe.skipIf(!url)("Tareas: tablero contra PostgreSQL real", () => {
     listWorkspaceMembers: async () => [{ user: { email: "Ana@nv.tv" }, role: "Editor" }],
   };
   const audit = { record: async () => undefined };
-  const tasks = new TasksService(prisma as never, store as never, audit as never);
+  const notifications = new NotificationsService(prisma as never);
+  const tasks = new TasksService(prisma as never, store as never, audit as never, notifications);
 
   it("crea al final de su columna, mueve y marca la fecha de cierre", async () => {
     const ws = `it-tasks-${Date.now()}`;
@@ -50,5 +52,34 @@ describe.skipIf(!url)("Tareas: tablero contra PostgreSQL real", () => {
     await expect(tasks.remove(`${ws}-otro`, "x", t.id)).rejects.toThrow(/no encontrada/);
     await tasks.remove(ws, "yo@nv.tv", t.id);
     expect(await tasks.list(ws)).toEqual([]);
+  });
+
+  it("enlaza contactos del workspace y oculta el enlace si el contacto se borra", async () => {
+    const ws = `it-tasks-c-${Date.now()}`;
+    const contact = await prisma.contact.create({ data: { workspaceSlug: ws, name: "Lucía Romero" } });
+    const other = await prisma.contact.create({ data: { workspaceSlug: `${ws}-otro`, name: "Ajeno" } });
+    const t = await tasks.create(ws, "yo@nv.tv", { title: "Llamar", contactId: contact.id });
+    expect(t).toMatchObject({ contactId: contact.id, contactName: "Lucía Romero" });
+    await expect(tasks.update(ws, "yo@nv.tv", t.id, { contactId: other.id })).rejects.toThrow(/contacto no existe/);
+
+    await prisma.contact.delete({ where: { id: contact.id } });
+    const [after] = await tasks.list(ws);
+    expect(after.contactId).toBeUndefined();
+    expect((await tasks.update(ws, "yo@nv.tv", t.id, { contactId: null })).contactId).toBeUndefined();
+  });
+
+  it("el aviso de asignación solo lo ve el responsable", async () => {
+    const ws = `it-tasks-n-${Date.now()}`;
+    const t = await tasks.create(ws, "yo@nv.tv", { title: "Editar vídeo" });
+    await tasks.update(ws, "yo@nv.tv", t.id, { assignee: "ana@nv.tv" });
+    await tasks.update(ws, "yo@nv.tv", t.id, { title: "Editar vídeo final" }); // same assignee: no new notice
+
+    const forAna = await notifications.list(ws, "ANA@nv.tv");
+    expect(forAna.map((n) => n.title)).toEqual(["Te asignaron una tarea: Editar vídeo"]);
+    expect(forAna[0].personal).toBe(true);
+    expect(await notifications.list(ws, "yo@nv.tv")).toEqual([]);
+    expect(await notifications.unreadCount(ws, "yo@nv.tv")).toBe(0);
+    await expect(notifications.markRead(ws, forAna[0].id, "yo@nv.tv")).rejects.toThrow(/no encontrada/);
+    expect(await notifications.markAllRead(ws, "ana@nv.tv")).toEqual({ updated: 1 });
   });
 });

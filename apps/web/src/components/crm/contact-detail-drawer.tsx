@@ -1,12 +1,12 @@
 import * as React from "react";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { CONTACT_STAGES, type Contact } from "@nv/domain";
-import { BellOff, BellRing, Building2, Loader2, Mail, Navigation, Pencil, Phone, Tag, Trash2, X } from "lucide-react";
+import { BellOff, BellRing, Building2, KanbanSquare, Loader2, Mail, Navigation, Pencil, Phone, Plus, Tag, Trash2, X } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { STAGE_ACCENTS } from "@/lib/crm";
 import { attributionLine } from "@/lib/attribution";
-import { useContactNotes } from "@/hooks/use-domain-data";
+import { useContactNotes, useTasks, useTeam } from "@/hooks/use-domain-data";
 import {
   useAddContactNote,
   useDeleteContactNote,
@@ -16,6 +16,8 @@ import {
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
+import { TaskDialog } from "@/components/tasks/task-dialog";
+import { PRIORITY_LABEL, TASK_COLUMNS, dueLabel, isOverdue } from "@/lib/tasks";
 
 function initials(name: string): string {
   return name.split(/\s+/).filter(Boolean).slice(0, 2).map((p) => p[0]!.toUpperCase()).join("");
@@ -55,6 +57,12 @@ export function ContactDetailDrawer({
   const updateContact = useUpdateContact();
   const setOptOut = useSetContactOptOut();
   const [draft, setDraft] = React.useState("");
+  const [taskOpen, setTaskOpen] = React.useState(false);
+  const tasks = useTasks();
+  const team = useTeam();
+  const contactTasks = (tasks.data ?? [])
+    .filter((t) => contact && t.contactId === contact.id)
+    .sort((a, b) => (a.status === "done" ? 1 : 0) - (b.status === "done" ? 1 : 0) || a.position - b.position);
 
   function submitNote() {
     if (!draft.trim()) return;
@@ -193,6 +201,40 @@ export function ContactDetailDrawer({
               ) : null}
             </div>
 
+            {/* Tasks about this contact */}
+            <div className="space-y-2" data-testid="contact-tasks">
+              <div className="flex items-center justify-between">
+                <h3 className="text-xs font-semibold uppercase tracking-wide text-ink-faint">Tareas</h3>
+                <Button variant="ghost" size="sm" onClick={() => setTaskOpen(true)}>
+                  <Plus className="size-3.5" />
+                  Nueva
+                </Button>
+              </div>
+              {contactTasks.length === 0 ? (
+                <p className="py-2 text-center text-xs text-ink-faint">Sin tareas para este contacto.</p>
+              ) : (
+                <ul className="space-y-1.5">
+                  {contactTasks.map((t) => (
+                    <li
+                      key={t.id}
+                      className="flex items-center gap-2 rounded-lg border border-line-soft bg-panel-raised p-2.5 text-sm"
+                    >
+                      <KanbanSquare className="size-3.5 shrink-0 text-ink-faint" />
+                      <span className={cn("min-w-0 flex-1 truncate text-ink", t.status === "done" && "line-through opacity-70")}>
+                        {t.title}
+                      </span>
+                      {t.dueAt ? (
+                        <Badge variant={isOverdue(t) ? "danger" : "outline"}>{dueLabel(t.dueAt)}</Badge>
+                      ) : null}
+                      <Badge variant={t.priority === "high" ? "danger" : "neutral"}>
+                        {TASK_COLUMNS.find((c) => c.status === t.status)?.label ?? PRIORITY_LABEL[t.priority]}
+                      </Badge>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+
             {/* Notes / activity */}
             <div className="space-y-2">
               <h3 className="text-xs font-semibold uppercase tracking-wide text-ink-faint">Actividad</h3>
@@ -238,6 +280,12 @@ export function ContactDetailDrawer({
           </div>
         </DialogPrimitive.Content>
       </DialogPrimitive.Portal>
+      <TaskDialog
+        open={taskOpen}
+        onOpenChange={setTaskOpen}
+        defaultContactId={contact?.id}
+        members={team.data ?? []}
+      />
     </DialogPrimitive.Root>
   );
 }

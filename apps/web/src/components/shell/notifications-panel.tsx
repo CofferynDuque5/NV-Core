@@ -55,7 +55,10 @@ export function NotificationsPanel() {
                     aria-hidden
                   />
                   <div className="min-w-0">
-                    <div className="text-sm font-medium text-ink">{n.title}</div>
+                    <div className="text-sm font-medium text-ink">
+                      {n.title}
+                      {n.personal ? <span className="ml-1.5 text-[10px] uppercase text-brand">para ti</span> : null}
+                    </div>
                     {n.meta ? <div className="text-xs text-ink-muted">{n.meta}</div> : null}
                   </div>
                 </li>
