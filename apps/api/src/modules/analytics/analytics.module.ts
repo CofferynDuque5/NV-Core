@@ -12,10 +12,13 @@ import { ApiBearerAuth, ApiQuery, ApiTags } from "@nestjs/swagger";
 import {
   CONTACT_STAGES,
   type AnalyticsPoint,
+  type AnalyticsSources,
   type AnalyticsSnapshot,
   type ChannelId,
   type FunnelStep,
   type KpiMetric,
+  type MetricScope,
+  type MetricSource,
 } from "@nv/domain";
 
 import { Prisma } from "@prisma/client";
@@ -33,6 +36,34 @@ const STAGE_ACCENT: Record<string, string> = {
   Cliente: "#3FB950",
   "En riesgo": "#E3B341",
   Inactivo: "#8A93A0",
+};
+
+const src = (source: string, scope: MetricScope, method: string): MetricSource => ({ source, scope, method });
+
+/**
+ * Provenance of every number the snapshot returns. All of it is read from this
+ * workspace's own tables at request time; nothing comes from external networks.
+ */
+export const KPI_SOURCES: Record<string, MetricSource> = {
+  "Contactos nuevos": src("Contactos del CRM", "period", "Contactos creados en el período, comparados con el período anterior."),
+  Publicaciones: src("Publicaciones del calendario", "period", "Publicaciones creadas en el período, en cualquier estado."),
+  Conversaciones: src("Bandeja de entrada", "period", "Conversaciones iniciadas en el período."),
+  Mensajes: src("Bandeja de entrada", "period", "Mensajes enviados y recibidos en el período."),
+  "Campañas nuevas": src("Campañas", "period", "Campañas creadas en el período."),
+};
+
+export const RATE_SOURCES: Record<string, MetricSource> = {
+  "Conversión (Cliente)": src("Contactos del CRM", "all-time", "Contactos en etapa Cliente sobre el total de contactos."),
+  "Entrega de posts": src("Publicaciones del calendario", "all-time", "Publicaciones con estado Enviada sobre el total de publicaciones."),
+  "Campañas activas": src("Campañas", "all-time", "Campañas con estado Activa sobre el total de campañas."),
+};
+
+export const SNAPSHOT_SOURCES: AnalyticsSources = {
+  series: src("Datos del workspace", "period", "Registros creados cada día (UTC), por tipo."),
+  platforms: src("Publicaciones del calendario", "period", "Publicaciones creadas en el período, agrupadas por canal."),
+  funnel: src("Contactos del CRM", "all-time", "Contactos actuales agrupados por etapa del pipeline."),
+  heatmap: src("Bandeja de entrada", "period", "Mensajes del período por día de la semana y hora (UTC)."),
+  topCampaigns: src("Campañas", "all-time", "Campañas con más publicaciones asociadas."),
 };
 
 /** UTC day key (YYYY-MM-DD) — stable across server timezones. */
@@ -148,7 +179,7 @@ export class AnalyticsService {
       { label: "Conversaciones", value: String(curConversations), ...delta(curConversations, prevConversations) },
       { label: "Mensajes", value: String(curMessages), ...delta(curMessages, prevMessages) },
       { label: "Campañas nuevas", value: String(campaignsNew), ...delta(campaignsNew, prevCampaigns) },
-    ];
+    ].map((k) => ({ ...k, source: KPI_SOURCES[k.label] }));
 
     // ── Time-series (continuous daily buckets from the SQL aggregates) ───────
     const postMap = dailyMap(postSeriesRows);
@@ -198,7 +229,7 @@ export class AnalyticsService {
       { label: "Conversión (Cliente)", value: `${rate(clientes, totalContacts)}%`, pct: rate(clientes, totalContacts), accent: "#3FB950" },
       { label: "Entrega de posts", value: `${rate(postsSent, postsAll)}%`, pct: rate(postsSent, postsAll), accent: "#5B8DEF" },
       { label: "Campañas activas", value: `${rate(campaignsActive, campaignsTotal)}%`, pct: rate(campaignsActive, campaignsTotal), accent: "#7C7CF0" },
-    ];
+    ].map((r) => ({ ...r, source: RATE_SOURCES[r.label] }));
 
     // ── Activity heatmap (weekday × hour, UTC, from messages) ───────────────
     const heatmap: number[][] = Array.from({ length: 7 }, () => new Array(24).fill(0));
@@ -219,7 +250,9 @@ export class AnalyticsService {
       topCampaigns,
       series,
       conversion,
-      range: { days: window, from: from.toISOString(), to: to.toISOString() },
+      range: { days: window, from: from.toISOString(), to: to.toISOString(), compareFrom: prevFrom.toISOString() },
+      generatedAt: to.toISOString(),
+      sources: SNAPSHOT_SOURCES,
     };
   }
 

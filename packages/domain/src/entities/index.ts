@@ -584,11 +584,24 @@ export interface AuditLogEntry {
   createdAt: string;
 }
 
+/** Whether a metric covers the selected period or the workspace's whole history. */
+export type MetricScope = "period" | "all-time";
+
+/** Where an analytics number comes from, so the panel never shows an unexplained figure. */
+export interface MetricSource {
+  /** The workspace data it is read from, in plain words (e.g. "Contactos del CRM"). */
+  source: string;
+  scope: MetricScope;
+  /** How it is calculated, in one sentence. */
+  method: string;
+}
+
 export interface KpiMetric {
   label: string;
   value: string;
   delta?: string;
   deltaTrend?: "up" | "down";
+  source?: MetricSource;
 }
 
 export interface FunnelStep {
@@ -596,6 +609,7 @@ export interface FunnelStep {
   value: string;
   pct: number;
   accent: string;
+  source?: MetricSource;
 }
 
 export interface PlatformShare {
@@ -620,6 +634,17 @@ export interface AnalyticsRange {
   days: number;
   from: string;
   to: string;
+  /** Start of the preceding window of equal length that KPI deltas compare against. */
+  compareFrom?: string;
+}
+
+/** Provenance of each chart block in a snapshot. */
+export interface AnalyticsSources {
+  series: MetricSource;
+  platforms: MetricSource;
+  funnel: MetricSource;
+  heatmap: MetricSource;
+  topCampaigns: MetricSource;
 }
 
 export interface AnalyticsSnapshot {
@@ -634,6 +659,9 @@ export interface AnalyticsSnapshot {
   series?: AnalyticsPoint[];
   /** Derived conversion / engagement rates (reuses the FunnelStep shape). */
   conversion?: FunnelStep[];
+  /** When the server computed these numbers (ISO). They are live aggregates, not a cache. */
+  generatedAt?: string;
+  sources?: AnalyticsSources;
 }
 
 // ── Campaign Builder (visual creative editor) ────────────────────────────────

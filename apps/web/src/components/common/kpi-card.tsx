@@ -12,6 +12,10 @@ interface KpiCardProps {
   icon: LucideIcon;
   accent?: string;
   loading?: boolean;
+  /** Short provenance line under the label (e.g. "Contactos del CRM · período"). */
+  footnote?: string;
+  /** Longer explanation shown on hover. */
+  hint?: string;
 }
 
 export function KpiCard({
@@ -22,9 +26,11 @@ export function KpiCard({
   icon: Icon,
   accent = "#5B8DEF",
   loading = false,
+  footnote,
+  hint,
 }: KpiCardProps) {
   return (
-    <div className="nv-panel flex flex-col gap-3 p-4">
+    <div className="nv-panel flex flex-col gap-3 p-4" title={hint}>
       <div className="flex items-center justify-between">
         <div
           className="grid size-9 place-items-center rounded-lg"
@@ -56,6 +62,7 @@ export function KpiCard({
           </div>
         )}
         <div className="text-xs text-ink-muted">{label}</div>
+        {footnote ? <div className="mt-1 text-[11px] text-ink-faint">{footnote}</div> : null}
       </div>
     </div>
   );

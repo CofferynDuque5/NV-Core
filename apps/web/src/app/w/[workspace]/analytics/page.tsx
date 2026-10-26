@@ -6,6 +6,7 @@ import {
   Mail,
   Megaphone,
   MessageSquare,
+  RefreshCw,
   Send,
   Users,
 } from "lucide-react";
@@ -24,14 +25,24 @@ import {
   YAxis,
 } from "recharts";
 
-import { cn } from "@/lib/utils";
-import { peakLabel, peakSlot, sumSeries, toChartSeries } from "@/lib/analytics";
+import { cn, relativeTime } from "@/lib/utils";
+import {
+  compareLabel,
+  peakLabel,
+  peakSlot,
+  rangeLabel,
+  scopeLabel,
+  sourceLine,
+  sumSeries,
+  toChartSeries,
+} from "@/lib/analytics";
 import { useAnalytics } from "@/hooks/use-domain-data";
 import { PageHeader } from "@/components/common/page-header";
 import { Panel, PanelHeader } from "@/components/common/panel";
 import { EmptyState } from "@/components/common/empty-state";
 import { KpiCard } from "@/components/common/kpi-card";
 import { KpiSkeletonRow } from "@/components/common/skeletons";
+import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ActivityHeatmap } from "@/components/analytics/activity-heatmap";
 
@@ -105,6 +116,20 @@ export default function AnalyticsPage() {
 
   const analytics = useAnalytics(days);
   const snap = analytics.data;
+  const sources = snap?.sources;
+  // Re-render every 30 s so "Actualizado hace …" stays truthful.
+  const [, tick] = React.useReducer((n: number) => n + 1, 0);
+  React.useEffect(() => {
+    const t = setInterval(tick, 30_000);
+    return () => clearInterval(t);
+  }, []);
+  const periodLabel = rangeLabel(snap?.range);
+  const compared = compareLabel(snap?.range);
+  /** Panel subtitle with its provenance appended, when the API sent it. */
+  const withSource = (text: string, key: keyof NonNullable<typeof sources>) => {
+    const src = sources?.[key];
+    return src ? `${text} · ${src.source} · ${scopeLabel(src.scope)}` : text;
+  };
 
   const series = toChartSeries(snap?.series);
   const activeMetric = METRICS.find((m) => m.key === metric)!;
@@ -143,6 +168,40 @@ export default function AnalyticsPage() {
         }
       />
 
+      {/* Where the numbers come from and how fresh they are */}
+      {snap ? (
+        <div
+          data-testid="analytics-provenance"
+          className="nv-panel flex flex-wrap items-center gap-x-4 gap-y-1 px-4 py-2.5 text-xs text-ink-muted"
+        >
+          <span>
+            <span className="text-ink-faint">Fuente:</span> datos propios de este workspace (no se consultan redes
+            externas)
+          </span>
+          {periodLabel ? (
+            <span>
+              <span className="text-ink-faint">Período:</span> {periodLabel}
+              {compared ? <span className="text-ink-faint"> · comparado con {compared}</span> : null}
+            </span>
+          ) : null}
+          {snap.generatedAt ? (
+            <span title={new Date(snap.generatedAt).toLocaleString()}>
+              <span className="text-ink-faint">Actualizado:</span> {relativeTime(snap.generatedAt)}
+            </span>
+          ) : null}
+          <Button
+            variant="ghost"
+            size="sm"
+            className="ml-auto h-7 gap-1.5 px-2 text-xs"
+            disabled={analytics.isFetching}
+            onClick={() => void analytics.refetch()}
+          >
+            <RefreshCw className={cn("size-3.5", analytics.isFetching && "animate-spin")} />
+            Actualizar
+          </Button>
+        </div>
+      ) : null}
+
       {/* KPI row (period-over-period deltas) */}
       {analytics.isLoading ? (
         <KpiSkeletonRow count={5} />
@@ -159,6 +218,8 @@ export default function AnalyticsPage() {
                 deltaTrend={k.deltaTrend}
                 icon={meta.icon}
                 accent={meta.accent}
+                footnote={sourceLine(k.source)}
+                hint={k.source?.method}
               />
             );
           })}
@@ -169,7 +230,7 @@ export default function AnalyticsPage() {
       {!analytics.isLoading && (snap?.conversion?.length ?? 0) > 0 ? (
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
           {snap!.conversion!.map((r) => (
-            <div key={r.label} className="nv-panel p-4">
+            <div key={r.label} className="nv-panel p-4" title={r.source?.method}>
               <div className="flex items-center justify-between">
                 <span className="text-xs text-ink-muted">{r.label}</span>
                 <span className="text-lg font-semibold tabular-nums text-ink-bright">{r.value}</span>
@@ -177,6 +238,7 @@ export default function AnalyticsPage() {
               <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-line">
                 <div className="h-full rounded-full" style={{ width: `${r.pct}%`, background: r.accent }} />
               </div>
+              {r.source ? <div className="mt-2 text-[11px] text-ink-faint">{sourceLine(r.source)}</div> : null}
             </div>
           ))}
         </div>
@@ -196,7 +258,7 @@ export default function AnalyticsPage() {
           <Panel>
             <PanelHeader
               title="Tendencia"
-              description={`${metricTotal} en los últimos ${days} días`}
+              description={withSource(`${metricTotal} en los últimos ${days} días`, "series")}
               action={
                 <Segmented
                   ariaLabel="Métrica"
@@ -248,7 +310,7 @@ export default function AnalyticsPage() {
           {/* Channel share + stage distribution */}
           <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
             <Panel>
-              <PanelHeader title="Publicaciones por canal" description={`Período: ${days} días`} />
+              <PanelHeader title="Publicaciones por canal" description={withSource(`Período: ${days} días`, "platforms")} />
               <div className="h-72 p-4">
                 {mounted && platformData.length > 0 ? (
                   <ResponsiveContainer width="100%" height="100%">
@@ -281,7 +343,7 @@ export default function AnalyticsPage() {
             </Panel>
 
             <Panel>
-              <PanelHeader title="Contactos por etapa" description="Pipeline del CRM" />
+              <PanelHeader title="Contactos por etapa" description={withSource("Etapas actuales", "funnel")} />
               <div className="h-72 p-4">
                 {mounted && stageData.length > 0 ? (
                   <ResponsiveContainer width="100%" height="100%">
@@ -313,7 +375,7 @@ export default function AnalyticsPage() {
           <Panel>
             <PanelHeader
               title="Mapa de actividad"
-              description={peak ? `Hora pico: ${peak} (UTC)` : "Mensajes por día y hora (UTC)"}
+              description={withSource(peak ? `Hora pico: ${peak} (UTC)` : "Mensajes por día y hora (UTC)", "heatmap")}
             />
             <ActivityHeatmap matrix={heatmap} />
           </Panel>
@@ -323,7 +385,7 @@ export default function AnalyticsPage() {
       {/* Top campaigns */}
       {(snap?.topCampaigns ?? []).length > 0 ? (
         <Panel>
-          <PanelHeader title="Mejores campañas" description="Por número de publicaciones" />
+          <PanelHeader title="Mejores campañas" description={withSource("Por número de publicaciones", "topCampaigns")} />
           <ul className="divide-y divide-line">
             {(snap?.topCampaigns ?? []).map((c, i) => (
               <li key={c.id} className="flex items-center gap-3 px-5 py-3">
