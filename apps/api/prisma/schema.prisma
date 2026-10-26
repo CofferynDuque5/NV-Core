@@ -872,3 +872,17 @@ model Task {
   @@index([workspaceSlug, status, position])
   @@index([workspaceSlug, contactId])
 }
+
+/// Frozen summary of one closed week (Monday UTC), generated once per
+/// workspace and kept as history. `data` holds metrics, lead sources and the
+/// "needs attention" list (see WeeklyReport in @nv/domain).
+model WeeklyReport {
+  id            String   @id @default(cuid())
+  workspaceSlug String
+  /// Monday 00:00 UTC that starts the week.
+  weekStart     DateTime
+  data          Json
+  createdAt     DateTime @default(now())
+
+  @@unique([workspaceSlug, weekStart])
+}

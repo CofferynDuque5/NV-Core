@@ -4,6 +4,7 @@ import {
   Calendar,
   ClipboardList,
   Contact,
+  FileBarChart,
   FileText,
   Filter,
   Handshake,
@@ -41,6 +42,7 @@ const MAP: Record<string, LucideIcon> = {
   Layers,
   Sparkles,
   FileText,
+  FileBarChart,
   Image,
   Workflow,
   BarChart3,
@@ -71,6 +73,7 @@ export const EXTRA_NAV_ITEMS: Record<string, NavRenderItem[]> = {
     { module: "tareas", label: "Tareas", icon: "KanbanSquare" },
     { module: "historial", label: "Historial", icon: "History" },
   ],
+  "AUTOMATIZACIÓN": [{ module: "informes", label: "Informe semanal", icon: "FileBarChart" }],
   SISTEMA: [
     { module: "ayuda", label: "Centro de ayuda", icon: "LifeBuoy" },
     { module: "estado", label: "Estado del servicio", icon: "Activity" },

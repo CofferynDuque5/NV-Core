@@ -25,6 +25,7 @@ const ROUTES = [
   "configuracion",
   "historial",
   "tareas",
+  "informes",
 ];
 
 async function register(page: Page) {

@@ -1,9 +1,11 @@
 import * as React from "react";
+import { Link } from "react-router-dom";
 import { CHANNELS, type ChannelId } from "@nv/domain";
 import {
   Activity,
   BarChart3,
   Download,
+  FileBarChart,
   FileText,
   Mail,
   Megaphone,
@@ -46,6 +48,7 @@ import { KpiCard } from "@/components/common/kpi-card";
 import { KpiSkeletonRow } from "@/components/common/skeletons";
 import { leadSourceLabel } from "@/lib/attribution";
 import { analyticsCsv, analyticsFileName } from "@/lib/analytics-export";
+import { downloadCsv, printReport } from "@/lib/download";
 import { useWorkspace } from "@/hooks/use-workspace";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -111,31 +114,6 @@ function Segmented<T extends string | number>({
       ))}
     </div>
   );
-}
-
-function downloadCsv(csv: string, fileName: string) {
-  const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = fileName;
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  URL.revokeObjectURL(url);
-}
-
-/** Print (→ "Guardar como PDF") in the light theme, so dark panels don't print as grey on white. */
-function printReport() {
-  const root = document.documentElement;
-  const before = root.className;
-  root.classList.remove("dark");
-  root.classList.add("light");
-  const restore = () => {
-    root.className = before;
-    window.removeEventListener("afterprint", restore);
-  };
-  window.addEventListener("afterprint", restore);
-  window.print();
 }
 
 export default function AnalyticsPage() {
@@ -239,6 +217,12 @@ export default function AnalyticsPage() {
             >
               <FileText className="size-3.5" />
               PDF
+            </Button>
+            <Button asChild variant="ghost" size="sm" className="h-7 gap-1.5 px-2 text-xs">
+              <Link to={`/w/${ws.slug}/informes`}>
+                <FileBarChart className="size-3.5" />
+                Informe semanal
+              </Link>
             </Button>
             <Button
               variant="ghost"

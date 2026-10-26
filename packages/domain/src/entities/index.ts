@@ -714,6 +714,51 @@ export interface AnalyticsSnapshot {
   leadSources?: LeadSourceCount[];
 }
 
+/** One activity count of a weekly report, next to the week before. */
+export interface WeeklyReportMetric {
+  key: string;
+  label: string;
+  value: number;
+  previous: number;
+  /** How it is counted, in plain words. */
+  source: string;
+}
+
+/** Something that needs someone, with up to a few examples. */
+export interface WeeklyReportAttention {
+  key: string;
+  label: string;
+  count: number;
+  /** Workspace section that resolves it (e.g. "tareas", "inbox"). */
+  section: string;
+  items: { id: string; label: string; meta?: string }[];
+}
+
+/**
+ * The workspace's summary of one closed week (Monday 00:00 → Monday 00:00
+ * UTC). Activity counts are frozen when the report is generated; the
+ * "attention" list is the state at that moment.
+ */
+export interface WeeklyReport {
+  id: string;
+  /** Monday the week starts on, YYYY-MM-DD (UTC). */
+  weekStart: string;
+  /** Sunday the week ends on, YYYY-MM-DD (UTC). */
+  weekEnd: string;
+  generatedAt: string;
+  metrics: WeeklyReportMetric[];
+  leadSources: LeadSourceCount[];
+  attention: WeeklyReportAttention[];
+}
+
+/** A row of the report history. */
+export interface WeeklyReportSummary {
+  id: string;
+  weekStart: string;
+  weekEnd: string;
+  generatedAt: string;
+}
+
 /** A team to-do on the workspace task board. */
 export interface Task {
   id: string;

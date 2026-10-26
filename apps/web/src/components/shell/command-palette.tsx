@@ -32,6 +32,13 @@ export function CommandPalette() {
       ),
       // Web-only destinations without a domain module (see EXTRA_NAV_ITEMS).
       {
+        module: "informes",
+        label: "Informe semanal",
+        section: "AUTOMATIZACIÓN",
+        icon: "FileBarChart",
+        description: "Resumen de la semana y lo que necesita atención",
+      },
+      {
         module: "ayuda",
         label: "Centro de ayuda",
         section: "SISTEMA",

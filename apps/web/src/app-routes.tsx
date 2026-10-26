@@ -40,6 +40,7 @@ const BibliotecaPage = React.lazy(() => import("@/app/w/[workspace]/biblioteca/p
 const AutomatizacionesPage = React.lazy(() => import("@/app/w/[workspace]/automatizaciones/page"));
 const TareasPage = React.lazy(() => import("@/app/w/[workspace]/tareas/page"));
 const AnalyticsPage = React.lazy(() => import("@/app/w/[workspace]/analytics/page"));
+const InformesPage = React.lazy(() => import("@/app/w/[workspace]/informes/page"));
 const MarketplacePage = React.lazy(() => import("@/app/w/[workspace]/marketplace/page"));
 const ConexionesPage = React.lazy(() => import("@/app/w/[workspace]/conexiones/page"));
 const ConfiguracionPage = React.lazy(() => import("@/app/w/[workspace]/configuracion/page"));
@@ -237,6 +238,14 @@ export function AppRoutes() {
         element={
           <WorkspacePage>
             <BibliotecaPage />
+          </WorkspacePage>
+        }
+      />
+      <Route
+        path="/w/:workspace/informes"
+        element={
+          <WorkspacePage>
+            <InformesPage />
           </WorkspacePage>
         }
       />
