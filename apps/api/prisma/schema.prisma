@@ -607,6 +607,8 @@ model Notification {
   type          String   @default("info")
   title         String
   meta          String?
+  /// Email of the one member it is for; null = whole workspace.
+  recipient     String?
   read          Boolean  @default(false)
   createdAt     DateTime @default(now())
 
@@ -864,6 +866,9 @@ model Task {
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
   completedAt   DateTime?
+  /// CRM contact this task is about (same workspace; ignored once that contact is deleted).
+  contactId     String?
 
   @@index([workspaceSlug, status, position])
+  @@index([workspaceSlug, contactId])
 }

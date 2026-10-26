@@ -16,10 +16,22 @@ function make(over: Record<string, unknown> = {}) {
       })),
       ...over,
     },
+    contact: {
+      findFirst: vi.fn(async ({ where }: { where: { id: string; workspaceSlug: string } }) =>
+        where.id === "c1" && where.workspaceSlug === "w1" ? { name: "Lucía" } : null,
+      ),
+      findMany: vi.fn(async () => [{ id: "c1", name: "Lucía" }]),
+    },
   };
   const store = { listWorkspaceMembers: vi.fn(async () => [{ user: { email: "ana@nv.tv" }, role: "Editor" }]) };
   const audit = { record: vi.fn(async () => undefined) };
-  return { svc: new TasksService(prisma as never, store as never, audit as never), prisma, audit };
+  const notifications = { create: vi.fn(async () => undefined) };
+  return {
+    svc: new TasksService(prisma as never, store as never, audit as never, notifications as never),
+    prisma,
+    audit,
+    notifications,
+  };
 }
 
 describe("TasksService", () => {
@@ -43,7 +55,45 @@ describe("TasksService", () => {
   });
 
   it("devuelve lista vacía sin base de datos", async () => {
-    const svc = new TasksService({ enabled: false } as never, {} as never, {} as never);
+    const svc = new TasksService({ enabled: false } as never, {} as never, {} as never, {} as never);
     expect(await svc.list("w1")).toEqual([]);
+  });
+
+  it("enlaza un contacto del mismo workspace y devuelve su nombre", async () => {
+    const { svc } = make();
+    const t = await svc.create("w1", "yo@nv.tv", { title: "Llamar", contactId: "c1" });
+    expect(t).toMatchObject({ contactId: "c1", contactName: "Lucía" });
+  });
+
+  it("rechaza contactos de otro workspace sin crear nada", async () => {
+    const { svc, prisma } = make();
+    await expect(svc.create("w1", "yo@nv.tv", { title: "A", contactId: "c-ajeno" })).rejects.toThrow(/contacto no existe/);
+    expect(prisma.task.create).not.toHaveBeenCalled();
+  });
+
+  it("avisa solo al responsable, y no cuando se asigna a sí mismo", async () => {
+    const { svc, notifications } = make();
+    await svc.create("w1", "yo@nv.tv", { title: "Editar vídeo", assignee: "ana@nv.tv" });
+    expect(notifications.create).toHaveBeenCalledWith(
+      "w1",
+      expect.objectContaining({ recipient: "ana@nv.tv", title: "Te asignaron una tarea: Editar vídeo" }),
+    );
+    notifications.create.mockClear();
+    await svc.create("w1", "ana@nv.tv", { title: "Mía", assignee: "ana@nv.tv" });
+    expect(notifications.create).not.toHaveBeenCalled();
+  });
+
+  it("al editar solo avisa si cambia el responsable", async () => {
+    const current = {
+      id: "t1", workspaceSlug: "w1", title: "Copy", description: "", status: "todo", priority: "normal",
+      assignee: "ana@nv.tv", dueAt: null, position: 1, createdBy: "yo@nv.tv", createdAt: new Date(),
+      updatedAt: new Date(), completedAt: null, contactId: null,
+    };
+    const { svc, notifications } = make({
+      findFirst: vi.fn(async () => current),
+      update: vi.fn(async ({ data }: { data: Record<string, unknown> }) => ({ ...current, ...data })),
+    });
+    await svc.update("w1", "yo@nv.tv", "t1", { title: "Copy final" });
+    expect(notifications.create).not.toHaveBeenCalled();
   });
 });

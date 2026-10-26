@@ -611,6 +611,8 @@ export interface Notification {
   type: "info" | "success" | "warning" | "error";
   title: string;
   meta?: string;
+  /** True when addressed to the current member only (e.g. a task assignment). */
+  personal?: boolean;
   read: boolean;
   createdAt: string;
 }
@@ -728,6 +730,10 @@ export interface Task {
   createdAt: string;
   updatedAt: string;
   completedAt?: string;
+  /** CRM contact the task is about. */
+  contactId?: string;
+  /** That contact's name, resolved by the API for display. */
+  contactName?: string;
 }
 
 // ── Campaign Builder (visual creative editor) ────────────────────────────────

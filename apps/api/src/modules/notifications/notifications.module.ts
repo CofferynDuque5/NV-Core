@@ -19,6 +19,16 @@ import { WorkspaceGuard } from "../../common/tenant/workspace.guard";
 import { PrismaService } from "../../prisma/prisma.service";
 import { mapNotification } from "../../prisma/mappers";
 import { LIST_CAP } from "../../common/query-limits";
+import { CurrentUser } from "../../auth/decorators/current-user.decorator";
+import type { AuthenticatedUser } from "../../auth/auth.types";
+
+/** Workspace-wide notifications plus the ones addressed to this member. */
+function visibleTo(workspaceId: string, viewer?: string) {
+  return {
+    workspaceSlug: workspaceId,
+    OR: viewer ? [{ recipient: null }, { recipient: viewer.toLowerCase() }] : [{ recipient: null }],
+  };
+}
 
 @Injectable()
 export class NotificationsService {
@@ -29,10 +39,13 @@ export class NotificationsService {
     return this.prisma;
   }
 
-  /** Record a notification (e.g. a channel disconnect alert). No-op without a DB. */
+  /**
+   * Record a notification (e.g. a channel disconnect alert). With `recipient`
+   * only that member sees it. No-op without a DB.
+   */
   async create(
     workspaceId: string,
-    input: { type: Notification["type"]; title: string; meta?: string | null },
+    input: { type: Notification["type"]; title: string; meta?: string | null; recipient?: string | null },
   ): Promise<void> {
     if (!this.prisma.enabled) return;
     await this.prisma.notification.create({
@@ -41,37 +54,38 @@ export class NotificationsService {
         type: input.type,
         title: input.title,
         meta: input.meta ?? null,
+        recipient: input.recipient ? input.recipient.toLowerCase() : null,
       },
     });
   }
 
-  async list(workspaceId: string): Promise<Notification[]> {
+  async list(workspaceId: string, viewer?: string): Promise<Notification[]> {
     if (!this.prisma.enabled) return [];
     const rows = await this.prisma.notification.findMany({
-      where: { workspaceSlug: workspaceId },
+      where: visibleTo(workspaceId, viewer),
       orderBy: { createdAt: "desc" },
       take: LIST_CAP,
     });
     return rows.map(mapNotification);
   }
 
-  async unreadCount(workspaceId: string): Promise<number> {
+  async unreadCount(workspaceId: string, viewer?: string): Promise<number> {
     if (!this.prisma.enabled) return 0;
-    return this.prisma.notification.count({ where: { workspaceSlug: workspaceId, read: false } });
+    return this.prisma.notification.count({ where: { ...visibleTo(workspaceId, viewer), read: false } });
   }
 
-  async markRead(workspaceId: string, id: string): Promise<Notification> {
+  async markRead(workspaceId: string, id: string, viewer?: string): Promise<Notification> {
     const existing = await this.db().notification.findFirst({
-      where: { id, workspaceSlug: workspaceId },
+      where: { id, ...visibleTo(workspaceId, viewer) },
     });
     if (!existing) throw new NotFoundException("Notificación no encontrada.");
     const row = await this.prisma.notification.update({ where: { id }, data: { read: true } });
     return mapNotification(row);
   }
 
-  async markAllRead(workspaceId: string): Promise<{ updated: number }> {
+  async markAllRead(workspaceId: string, viewer?: string): Promise<{ updated: number }> {
     const { count } = await this.db().notification.updateMany({
-      where: { workspaceSlug: workspaceId, read: false },
+      where: { ...visibleTo(workspaceId, viewer), read: false },
       data: { read: true },
     });
     return { updated: count };
@@ -86,24 +100,24 @@ export class NotificationsController {
   constructor(private readonly service: NotificationsService) {}
 
   @Get()
-  list(@WorkspaceId() workspaceId: string) {
-    return this.service.list(workspaceId);
+  list(@WorkspaceId() workspaceId: string, @CurrentUser() user: AuthenticatedUser) {
+    return this.service.list(workspaceId, user.email);
   }
 
   @Get("unread-count")
-  async unreadCount(@WorkspaceId() workspaceId: string) {
-    return { count: await this.service.unreadCount(workspaceId) };
+  async unreadCount(@WorkspaceId() workspaceId: string, @CurrentUser() user: AuthenticatedUser) {
+    return { count: await this.service.unreadCount(workspaceId, user.email) };
   }
 
   @Patch(":id/read")
-  markRead(@WorkspaceId() workspaceId: string, @Param("id") id: string) {
-    return this.service.markRead(workspaceId, id);
+  markRead(@WorkspaceId() workspaceId: string, @CurrentUser() user: AuthenticatedUser, @Param("id") id: string) {
+    return this.service.markRead(workspaceId, id, user.email);
   }
 
   @Post("read-all")
   @HttpCode(200)
-  markAllRead(@WorkspaceId() workspaceId: string) {
-    return this.service.markAllRead(workspaceId);
+  markAllRead(@WorkspaceId() workspaceId: string, @CurrentUser() user: AuthenticatedUser) {
+    return this.service.markAllRead(workspaceId, user.email);
   }
 }
 

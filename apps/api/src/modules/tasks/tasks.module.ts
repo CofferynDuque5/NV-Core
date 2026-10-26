@@ -37,6 +37,7 @@ import {
 import { WorkspaceId } from "../../common/tenant/workspace.decorator";
 import { WorkspaceGuard } from "../../common/tenant/workspace.guard";
 import { AuditLogger } from "../../common/audit-logger.service";
+import { NotificationsModule, NotificationsService } from "../notifications/notifications.module";
 import { PrismaService } from "../../prisma/prisma.service";
 import { AuthStore } from "../../auth/auth.store";
 import { CurrentUser } from "../../auth/decorators/current-user.decorator";
@@ -54,6 +55,7 @@ export class CreateTaskDto {
   @IsOptional() @IsIn(TASK_PRIORITIES) priority?: TaskPriority;
   @IsOptional() @IsString() @MaxLength(320) assignee?: string;
   @IsOptional() @IsDateString() dueAt?: string;
+  @IsOptional() @IsString() @MaxLength(64) contactId?: string;
 }
 
 export class UpdateTaskDto {
@@ -71,9 +73,16 @@ export class UpdateTaskDto {
   @IsDateString()
   dueAt?: string | null;
   @IsOptional() @IsNumber({ allowNaN: false, allowInfinity: false }) position?: number;
+  @ApiPropertyOptional({ nullable: true })
+  @ValidateIf((_o, v) => v !== null && v !== undefined)
+  @IsString()
+  @MaxLength(64)
+  contactId?: string | null;
 }
 
-export function mapTask(row: TaskRow): Task {
+/** `contactName` present means the linked contact still exists in the workspace. */
+export function mapTask(row: TaskRow, contactName?: string): Task {
+  const contact = row.contactId && contactName !== undefined ? { contactId: row.contactId, contactName } : {};
   return {
     id: row.id,
     title: row.title,
@@ -87,6 +96,7 @@ export function mapTask(row: TaskRow): Task {
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
     completedAt: row.completedAt?.toISOString(),
+    ...contact,
   };
 }
 
@@ -96,6 +106,7 @@ export class TasksService {
     private readonly prisma: PrismaService,
     private readonly store: AuthStore,
     private readonly audit: AuditLogger,
+    private readonly notifications: NotificationsService,
   ) {}
 
   private requireDb(): void {
@@ -109,6 +120,39 @@ export class TasksService {
     const member = members.find((m) => m.user.email.toLowerCase() === wanted);
     if (!member) throw new BadRequestException("El responsable no es miembro de este workspace.");
     return member.user.email;
+  }
+
+  /** A task may only point at a contact of the same workspace. Returns its name. */
+  private async checkContact(workspaceId: string, contactId: string): Promise<string> {
+    const contact = await this.prisma.contact.findFirst({
+      where: { id: contactId, workspaceSlug: workspaceId },
+      select: { name: true },
+    });
+    if (!contact) throw new BadRequestException("El contacto no existe en este workspace.");
+    return contact.name;
+  }
+
+  /** Names of the linked contacts that still exist, by id. */
+  private async contactNames(workspaceId: string, rows: TaskRow[]): Promise<Map<string, string>> {
+    const ids = [...new Set(rows.map((r) => r.contactId).filter((id): id is string => !!id))];
+    if (ids.length === 0) return new Map();
+    const contacts = await this.prisma.contact.findMany({
+      where: { workspaceSlug: workspaceId, id: { in: ids } },
+      select: { id: true, name: true },
+    });
+    return new Map(contacts.map((c) => [c.id, c.name]));
+  }
+
+  /** Tell a member a task was assigned to them, unless they did it themselves. */
+  private async noticeAssignment(workspaceId: string, actor: string, task: TaskRow): Promise<void> {
+    if (!task.assignee || task.assignee.toLowerCase() === actor.toLowerCase()) return;
+    const due = task.dueAt ? ` · vence ${task.dueAt.toISOString().slice(0, 10)}` : "";
+    await this.notifications.create(workspaceId, {
+      type: "info",
+      title: `Te asignaron una tarea: ${task.title}`,
+      meta: `Asignada por ${actor}${due}`,
+      recipient: task.assignee,
+    });
   }
 
   /** Next position at the bottom of a column. */
@@ -128,7 +172,8 @@ export class TasksService {
       orderBy: [{ position: "asc" }, { createdAt: "asc" }],
       take: TASKS_LIMIT,
     });
-    return rows.map(mapTask);
+    const names = await this.contactNames(workspaceId, rows);
+    return rows.map((r) => mapTask(r, r.contactId ? names.get(r.contactId) : undefined));
   }
 
   async create(workspaceId: string, actor: string, dto: CreateTaskDto): Promise<Task> {
@@ -139,6 +184,8 @@ export class TasksService {
     }
     const status = dto.status ?? "todo";
     const assignee = dto.assignee?.trim() ? await this.checkAssignee(workspaceId, dto.assignee) : null;
+    const contactId = dto.contactId?.trim() || null;
+    const contactName = contactId ? await this.checkContact(workspaceId, contactId) : undefined;
     const row = await this.prisma.task.create({
       data: {
         workspaceSlug: workspaceId,
@@ -151,10 +198,12 @@ export class TasksService {
         position: await this.bottomOf(workspaceId, status),
         createdBy: actor,
         completedAt: status === "done" ? new Date() : null,
+        contactId,
       },
     });
     await this.audit.record(workspaceId, actor, "task.create", row.title);
-    return mapTask(row);
+    await this.noticeAssignment(workspaceId, actor, row);
+    return mapTask(row, contactName);
   }
 
   async update(workspaceId: string, actor: string, id: string, dto: UpdateTaskDto): Promise<Task> {
@@ -181,10 +230,16 @@ export class TasksService {
       if (dto.position === undefined) data.position = await this.bottomOf(workspaceId, dto.status);
     }
     if (dto.position !== undefined) data.position = dto.position;
+    if (dto.contactId !== undefined) {
+      data.contactId = dto.contactId && dto.contactId.trim() ? dto.contactId.trim() : null;
+      if (data.contactId) await this.checkContact(workspaceId, data.contactId as string);
+    }
 
     const row = await this.prisma.task.update({ where: { id: current.id }, data });
     if (data.status) await this.audit.record(workspaceId, actor, `task.${row.status}`, row.title);
-    return mapTask(row);
+    if (row.assignee && row.assignee !== current.assignee) await this.noticeAssignment(workspaceId, actor, row);
+    const names = await this.contactNames(workspaceId, [row]);
+    return mapTask(row, row.contactId ? names.get(row.contactId) : undefined);
   }
 
   async remove(workspaceId: string, actor: string, id: string): Promise<void> {
@@ -235,5 +290,5 @@ export class TasksController {
   }
 }
 
-@Module({ controllers: [TasksController], providers: [TasksService] })
+@Module({ imports: [NotificationsModule], controllers: [TasksController], providers: [TasksService] })
 export class TasksModule {}
