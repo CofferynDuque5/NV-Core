@@ -43,6 +43,7 @@ import { IntegrationsModule } from "./modules/integrations/integrations.module";
 import { GoogleModule } from "./modules/integrations/google/google.module";
 import { NotificationsModule } from "./modules/notifications/notifications.module";
 import { TeamModule } from "./modules/team/team.module";
+import { TasksModule } from "./modules/tasks/tasks.module";
 import { AuditModule } from "./modules/audit/audit.module";
 import { AiModule } from "./modules/ai/ai.module";
 import { MessagingModule } from "./modules/messaging/messaging.module";
@@ -99,6 +100,7 @@ import { ProvidersModule } from "./providers/providers.module";
     GoogleModule,
     NotificationsModule,
     TeamModule,
+    TasksModule,
     AuditModule,
     AiModule,
     MessagingModule,

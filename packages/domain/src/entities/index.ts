@@ -10,6 +10,8 @@ import type {
   SequenceChannel,
   ModuleId,
   PostStatus,
+  TaskPriority,
+  TaskStatus,
   Role,
   SegmentField,
   SegmentMatch,
@@ -662,6 +664,24 @@ export interface AnalyticsSnapshot {
   /** When the server computed these numbers (ISO). They are live aggregates, not a cache. */
   generatedAt?: string;
   sources?: AnalyticsSources;
+}
+
+/** A team to-do on the workspace task board. */
+export interface Task {
+  id: string;
+  title: string;
+  description: string;
+  status: TaskStatus;
+  priority: TaskPriority;
+  /** Email of the workspace member it is assigned to. */
+  assignee?: string;
+  dueAt?: string;
+  /** Order within its column (ascending). */
+  position: number;
+  createdBy: string;
+  createdAt: string;
+  updatedAt: string;
+  completedAt?: string;
 }
 
 // ── Campaign Builder (visual creative editor) ────────────────────────────────

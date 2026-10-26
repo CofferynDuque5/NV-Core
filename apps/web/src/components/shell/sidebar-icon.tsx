@@ -10,6 +10,7 @@ import {
   History,
   Image,
   Inbox,
+  KanbanSquare,
   Layers,
   LayoutDashboard,
   LifeBuoy,
@@ -36,6 +37,7 @@ const MAP: Record<string, LucideIcon> = {
   Handshake,
   History,
   Inbox,
+  KanbanSquare,
   Layers,
   Sparkles,
   FileText,
@@ -65,7 +67,10 @@ export interface NavRenderItem {
  * @nv/domain) so pages without a domain module can still appear in the sidebar.
  */
 export const EXTRA_NAV_ITEMS: Record<string, NavRenderItem[]> = {
-  PRINCIPAL: [{ module: "historial", label: "Historial", icon: "History" }],
+  PRINCIPAL: [
+    { module: "tareas", label: "Tareas", icon: "KanbanSquare" },
+    { module: "historial", label: "Historial", icon: "History" },
+  ],
   SISTEMA: [
     { module: "ayuda", label: "Centro de ayuda", icon: "LifeBuoy" },
     { module: "estado", label: "Estado del servicio", icon: "Activity" },

@@ -269,6 +269,12 @@ export const emptyAdapters: Services = {
     unreadCount: () => delay(0),
     markAllRead: () => delay({ updated: 0 }),
   },
+  tasks: {
+    list: () => delay([]),
+    create: () => notAvailable(),
+    update: () => notAvailable(),
+    remove: () => notAvailable(),
+  },
   team: {
     members: () => delay([]),
     roles: () => delay([]),

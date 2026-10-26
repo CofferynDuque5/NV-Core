@@ -1,5 +1,6 @@
 import type {
   AnalyticsSnapshot,
+  Task,
   Automation,
   AutomationRun,
   AutomationTestResult,
@@ -145,6 +146,27 @@ export interface UpsertConnectionInput {
   expiresAt?: string;
   webhookStatus?: string;
   permissions?: string[];
+}
+
+export interface CreateTaskInput {
+  title: string;
+  description?: string;
+  status?: Task["status"];
+  priority?: Task["priority"];
+  assignee?: string;
+  /** ISO date-time. */
+  dueAt?: string;
+}
+
+/** Partial task update; `null` clears assignee or due date. */
+export interface UpdateTaskInput {
+  title?: string;
+  description?: string;
+  status?: Task["status"];
+  priority?: Task["priority"];
+  assignee?: string | null;
+  dueAt?: string | null;
+  position?: number;
 }
 
 export interface CreateAutomationInput {
@@ -535,6 +557,13 @@ export interface AutomationService {
   runs(workspaceId: string, id: string): Promise<AutomationRun[]>;
 }
 
+export interface TaskService {
+  list(workspaceId: string): Promise<Task[]>;
+  create(workspaceId: string, input: CreateTaskInput): Promise<Task>;
+  update(workspaceId: string, id: string, input: UpdateTaskInput): Promise<Task>;
+  remove(workspaceId: string, id: string): Promise<void>;
+}
+
 export interface AnalyticsService {
   /** `days` selects the reporting window (default 30). */
   snapshot(workspaceId: string, days?: number): Promise<AnalyticsSnapshot | null>;
@@ -918,6 +947,7 @@ export interface Services {
   integrations: IntegrationService;
   notifications: NotificationService;
   team: TeamService;
+  tasks: TaskService;
   audit: AuditService;
   ai: AiService;
   pcAgent: PcAgentService;

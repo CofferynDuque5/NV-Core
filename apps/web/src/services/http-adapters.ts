@@ -59,6 +59,7 @@ import type {
   WhatsappStatus,
   TelegramStatus,
   PcAgentStatus,
+  Task,
 } from "@nv/domain";
 
 /**
@@ -389,6 +390,12 @@ export function createHttpAdapters(opts: HttpAdapterOptions): Services {
       unreadCount: (id) =>
         get<{ count: number }>(`${ws(id)}/notifications/unread-count`).then((r) => r.count),
       markAllRead: (id) => post<{ updated: number }>(`${ws(id)}/notifications/read-all`, {}),
+    },
+    tasks: {
+      list: (id) => get<Task[]>(`${ws(id)}/tasks`),
+      create: (id, input) => post<Task>(`${ws(id)}/tasks`, input),
+      update: (id, tid, input) => patch<Task>(`${ws(id)}/tasks/${tid}`, input),
+      remove: (id, tid) => del<void>(`${ws(id)}/tasks/${tid}`),
     },
     team: {
       members: (id) => get<TeamMember[]>(`${ws(id)}/team/members`),
