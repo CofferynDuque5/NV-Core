@@ -129,6 +129,8 @@ model Contact {
   /// When / how consent to receive messages was recorded (e.g. "form", "manual").
   consentAt     DateTime?
   consentSource String?
+  /// First-touch origin (LeadAttribution) set by public forms and funnels.
+  attribution   Json?
   createdAt     DateTime  @default(now())
 
   @@index([workspaceSlug])

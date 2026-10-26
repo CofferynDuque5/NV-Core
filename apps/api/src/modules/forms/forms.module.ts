@@ -23,11 +23,23 @@ import {
   type Form,
   type FormField,
   type FormFieldKey,
+  type AttributionInput,
   type FormSubmitResult,
+  type LeadAttribution,
   type PublicForm,
 } from "@nv/domain";
+import { Prisma } from "@prisma/client";
 import { Type } from "class-transformer";
-import { IsArray, IsBoolean, IsIn, IsOptional, IsString, MinLength, ValidateNested } from "class-validator";
+import {
+  IsArray,
+  IsBoolean,
+  IsIn,
+  IsOptional,
+  IsString,
+  MaxLength,
+  MinLength,
+  ValidateNested,
+} from "class-validator";
 
 import { ListResultDto } from "../../common/dto/list-result.dto";
 import { WorkspaceId } from "../../common/tenant/workspace.decorator";
@@ -42,6 +54,7 @@ import type { AuthenticatedUser } from "../../auth/auth.types";
 import { Public } from "../../auth/decorators/public.decorator";
 import { PlanService } from "../../common/plan/plan.service";
 import { LIST_CAP } from "../../common/query-limits";
+import { buildAttribution } from "./attribution";
 
 /** Public submit is unauthenticated → rate-limit hard to blunt spam/abuse. */
 const SUBMIT_THROTTLE = { default: { limit: 10, ttl: 60_000 } };
@@ -73,11 +86,28 @@ export class UpdateFormDto extends CreateFormDto {
   @IsOptional() @IsString() @MinLength(1) declare name: string;
 }
 
+/** Visit origin reported by the public page (cleaned again server-side). */
+export class AttributionDto implements AttributionInput {
+  @IsOptional() @IsString() @MaxLength(500) utmSource?: string;
+  @IsOptional() @IsString() @MaxLength(500) utmMedium?: string;
+  @IsOptional() @IsString() @MaxLength(500) utmCampaign?: string;
+  @IsOptional() @IsString() @MaxLength(500) utmContent?: string;
+  @IsOptional() @IsString() @MaxLength(500) utmTerm?: string;
+  @IsOptional() @IsString() @MaxLength(2000) landingUrl?: string;
+  @IsOptional() @IsString() @MaxLength(2000) referrer?: string;
+  @IsOptional() @IsString() @MaxLength(64) funnelId?: string;
+}
+
 /** Public submission payload: the collected values + an anti-spam honeypot. */
 export class SubmitFormDto {
   @IsOptional() values?: Record<string, string>;
   /** Hidden field; if a bot fills it we silently accept and drop. */
   @IsOptional() @IsString() hp?: string;
+  @ApiPropertyOptional({ type: AttributionDto })
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => AttributionDto)
+  attribution?: AttributionDto;
 }
 
 const DEFAULT_FIELDS: FormField[] = [
@@ -163,8 +193,31 @@ export class FormsService {
     return { id: row.id, name: row.name, fields, submitLabel: row.submitLabel };
   }
 
+  /**
+   * Where this lead came from. A funnel id is only trusted when that funnel
+   * belongs to the form's workspace, so one brand can't tag another's leads.
+   */
+  private async attributionFor(
+    form: { id: string; name: string; workspaceSlug: string },
+    input: AttributionInput | undefined,
+  ): Promise<LeadAttribution> {
+    const funnel = input?.funnelId
+      ? await this.prisma.funnel.findFirst({
+          where: { id: input.funnelId, workspaceSlug: form.workspaceSlug },
+          select: { id: true, name: true },
+        })
+      : null;
+    return buildAttribution(input, {
+      via: funnel ? "funnel" : "form",
+      formId: form.id,
+      formName: form.name,
+      funnelId: funnel?.id,
+      funnelName: funnel?.name,
+    });
+  }
+
   /** Public submission → create/dedupe a Contact, apply tags + stage. */
-  async submit(id: string, values: Record<string, string>): Promise<FormSubmitResult> {
+  async submit(id: string, values: Record<string, string>, attribution?: AttributionInput): Promise<FormSubmitResult> {
     const form = await this.db().form.findUnique({ where: { id } });
     if (!form) throw new NotFoundException("Formulario no encontrado.");
     const ws = form.workspaceSlug;
@@ -186,9 +239,18 @@ export class FormsService {
       ? await this.prisma.contact.findFirst({ where: { workspaceSlug: ws, email } })
       : null;
 
+    const origin = await this.attributionFor(form, attribution);
+
     if (existing) {
       const mergedTags = Array.from(new Set([...(existing.tags ?? []), ...(form.tags ?? [])]));
-      await this.prisma.contact.update({ where: { id: existing.id }, data: { tags: mergedTags } });
+      // First touch wins: an existing contact keeps the origin it already has.
+      await this.prisma.contact.update({
+        where: { id: existing.id },
+        data: {
+          tags: mergedTags,
+          ...(existing.attribution ? {} : { attribution: origin as unknown as Prisma.InputJsonValue }),
+        },
+      });
     } else {
       // A new contact counts against the workspace plan (402 when exceeded).
       await this.plans.assertWithinLimit(ws, "contacts", 1);
@@ -201,6 +263,7 @@ export class FormsService {
           company: String(values.company ?? "").trim() || null,
           tags: form.tags ?? [],
           stage: form.stage,
+          attribution: origin as unknown as Prisma.InputJsonValue,
         },
       });
     }
@@ -283,7 +346,7 @@ export class PublicFormsController {
     if (dto.hp && dto.hp.trim()) {
       return { ok: true, successMessage: "¡Gracias!" };
     }
-    return this.service.submit(id, dto.values ?? {});
+    return this.service.submit(id, dto.values ?? {}, dto.attribution);
   }
 }
 

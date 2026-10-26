@@ -187,6 +187,43 @@ export interface Contact {
   /** When consent to receive messages was recorded, and how. */
   consentAt?: string;
   consentSource?: string;
+  /** Where the contact first came from (forms and funnels only). */
+  attribution?: LeadAttribution;
+}
+
+/**
+ * First-touch origin of a lead, captured when it submits a public form or
+ * funnel. Only what the visitor's own URL and browser said; nothing inferred.
+ */
+export interface LeadAttribution {
+  /** utm_source, else the referring site's host, else "directo". */
+  source: string;
+  medium?: string;
+  campaign?: string;
+  content?: string;
+  term?: string;
+  /** Page the visitor was on (origin + path; query string removed). */
+  landingUrl?: string;
+  /** Referring page (origin + path). */
+  referrer?: string;
+  via: "form" | "funnel";
+  formId?: string;
+  formName?: string;
+  funnelId?: string;
+  funnelName?: string;
+  capturedAt: string;
+}
+
+/** What a public page sends about the visit; the server cleans it. */
+export interface AttributionInput {
+  utmSource?: string;
+  utmMedium?: string;
+  utmCampaign?: string;
+  utmContent?: string;
+  utmTerm?: string;
+  landingUrl?: string;
+  referrer?: string;
+  funnelId?: string;
 }
 
 /** Result of a bulk contact CSV import. */
@@ -647,6 +684,14 @@ export interface AnalyticsSources {
   funnel: MetricSource;
   heatmap: MetricSource;
   topCampaigns: MetricSource;
+  leadSources?: MetricSource;
+}
+
+/** New contacts in the period grouped by first-touch source. */
+export interface LeadSourceCount {
+  /** LeadAttribution.source, or null for contacts created outside forms/funnels. */
+  source: string | null;
+  count: number;
 }
 
 export interface AnalyticsSnapshot {
@@ -664,6 +709,7 @@ export interface AnalyticsSnapshot {
   /** When the server computed these numbers (ISO). They are live aggregates, not a cache. */
   generatedAt?: string;
   sources?: AnalyticsSources;
+  leadSources?: LeadSourceCount[];
 }
 
 /** A team to-do on the workspace task board. */

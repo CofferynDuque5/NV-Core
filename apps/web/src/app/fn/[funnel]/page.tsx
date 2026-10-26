@@ -4,6 +4,7 @@ import { useParams } from "react-router-dom";
 import type { PublicForm, PublicFunnelStep } from "@nv/domain";
 
 import { API_URL, isBackendConfigured } from "@/lib/env";
+import { readAttribution } from "@/lib/attribution";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -81,7 +82,11 @@ export default function PublicFunnelPage() {
       const res = await fetch(`${API_URL}/api/public/forms/${step.formId}/submit`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ values, hp }),
+        body: JSON.stringify({
+          values,
+          hp,
+          attribution: readAttribution(window.location.href, document.referrer, funnelId),
+        }),
       });
       const data = (await res.json().catch(() => ({}))) as { ok?: boolean; message?: string };
       if (!res.ok || !data.ok) {
