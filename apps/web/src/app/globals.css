@@ -259,3 +259,17 @@
   opacity: 0;
   animation: nv-rise 0.55s cubic-bezier(0.22, 1, 0.36, 1) forwards;
 }
+
+/* Printed reports (Analytics → PDF): plain white page, no dark canvas around it. */
+@media print {
+  html,
+  body {
+    background: #fff !important;
+    /* The theme sets color-scheme inline; dark would tint the page margins. */
+    color-scheme: light !important;
+  }
+  /* Keep each card whole instead of splitting a chart across two pages. */
+  .nv-panel {
+    break-inside: avoid;
+  }
+}

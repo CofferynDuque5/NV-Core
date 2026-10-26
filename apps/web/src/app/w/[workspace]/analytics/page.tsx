@@ -3,6 +3,8 @@ import { CHANNELS, type ChannelId } from "@nv/domain";
 import {
   Activity,
   BarChart3,
+  Download,
+  FileText,
   Mail,
   Megaphone,
   MessageSquare,
@@ -43,6 +45,8 @@ import { EmptyState } from "@/components/common/empty-state";
 import { KpiCard } from "@/components/common/kpi-card";
 import { KpiSkeletonRow } from "@/components/common/skeletons";
 import { leadSourceLabel } from "@/lib/attribution";
+import { analyticsCsv, analyticsFileName } from "@/lib/analytics-export";
+import { useWorkspace } from "@/hooks/use-workspace";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ActivityHeatmap } from "@/components/analytics/activity-heatmap";
@@ -109,6 +113,31 @@ function Segmented<T extends string | number>({
   );
 }
 
+function downloadCsv(csv: string, fileName: string) {
+  const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = fileName;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
+/** Print (→ "Guardar como PDF") in the light theme, so dark panels don't print as grey on white. */
+function printReport() {
+  const root = document.documentElement;
+  const before = root.className;
+  root.classList.remove("dark");
+  root.classList.add("light");
+  const restore = () => {
+    root.className = before;
+    window.removeEventListener("afterprint", restore);
+  };
+  window.addEventListener("afterprint", restore);
+  window.print();
+}
+
 export default function AnalyticsPage() {
   const [days, setDays] = React.useState<number>(30);
   const [metric, setMetric] = React.useState<MetricKey>("posts");
@@ -116,6 +145,7 @@ export default function AnalyticsPage() {
   React.useEffect(() => setMounted(true), []);
 
   const analytics = useAnalytics(days);
+  const ws = useWorkspace();
   const snap = analytics.data;
   const sources = snap?.sources;
   // Re-render every 30 s so "Actualizado hace …" stays truthful.
@@ -190,16 +220,37 @@ export default function AnalyticsPage() {
               <span className="text-ink-faint">Actualizado:</span> {relativeTime(snap.generatedAt)}
             </span>
           ) : null}
-          <Button
-            variant="ghost"
-            size="sm"
-            className="ml-auto h-7 gap-1.5 px-2 text-xs"
-            disabled={analytics.isFetching}
-            onClick={() => void analytics.refetch()}
-          >
-            <RefreshCw className={cn("size-3.5", analytics.isFetching && "animate-spin")} />
-            Actualizar
-          </Button>
+          <div className="ml-auto flex items-center gap-1 print:hidden">
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-7 gap-1.5 px-2 text-xs"
+              onClick={() => downloadCsv(analyticsCsv(snap), analyticsFileName(ws.slug, snap))}
+            >
+              <Download className="size-3.5" />
+              CSV
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-7 gap-1.5 px-2 text-xs"
+              title="Abre el diálogo de impresión; elige «Guardar como PDF»"
+              onClick={printReport}
+            >
+              <FileText className="size-3.5" />
+              PDF
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-7 gap-1.5 px-2 text-xs"
+              disabled={analytics.isFetching}
+              onClick={() => void analytics.refetch()}
+            >
+              <RefreshCw className={cn("size-3.5", analytics.isFetching && "animate-spin")} />
+              Actualizar
+            </Button>
+          </div>
         </div>
       ) : null}
 

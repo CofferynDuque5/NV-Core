@@ -62,11 +62,16 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         >
           Saltar al contenido
         </a>
-        <Sidebar onOpenSwitcher={() => setSwitcherOpen(true)} />
-        <MobileNav onOpenSwitcher={() => setSwitcherOpen(true)} />
+        {/* Navigation chrome stays off printed reports (e.g. Analytics → PDF). */}
+        <div className="contents print:hidden">
+          <Sidebar onOpenSwitcher={() => setSwitcherOpen(true)} />
+          <MobileNav onOpenSwitcher={() => setSwitcherOpen(true)} />
+        </div>
 
         <div className="flex min-w-0 flex-1 flex-col">
-          <Topbar />
+          <div className="contents print:hidden">
+            <Topbar />
+          </div>
           <main
             id="main-content"
             tabIndex={-1}
