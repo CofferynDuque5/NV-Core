@@ -1,4 +1,4 @@
-import type { AnalyticsPoint } from "@nv/domain";
+import type { AnalyticsPoint, AnalyticsRange, MetricScope, MetricSource } from "@nv/domain";
 
 /**
  * Pure analytics view helpers — no React, no side effects, unit-tested.
@@ -70,4 +70,26 @@ export function peakSlot(matrix: number[][]): PeakSlot {
 export function peakLabel(slot: PeakSlot): string {
   if (slot.value <= 0) return "";
   return `${WEEKDAYS_ES[slot.day]} ${String(slot.hour).padStart(2, "0")}:00`;
+}
+
+/** Human label for a metric's time scope. */
+export function scopeLabel(scope: MetricScope): string {
+  return scope === "all-time" ? "histórico" : "período";
+}
+
+/** "Contactos del CRM · período" — the short provenance line under a metric. */
+export function sourceLine(src: MetricSource | undefined): string | undefined {
+  return src ? `${src.source} · ${scopeLabel(src.scope)}` : undefined;
+}
+
+/** "27 sep – 26 oct" for a snapshot window; undefined when the API sent none. */
+export function rangeLabel(range: AnalyticsRange | undefined): string | undefined {
+  if (!range) return undefined;
+  return `${shortDate(range.from.slice(0, 10))} – ${shortDate(range.to.slice(0, 10))}`;
+}
+
+/** The preceding window KPI deltas compare against, e.g. "28 ago – 27 sep". */
+export function compareLabel(range: AnalyticsRange | undefined): string | undefined {
+  if (!range?.compareFrom) return undefined;
+  return `${shortDate(range.compareFrom.slice(0, 10))} – ${shortDate(range.from.slice(0, 10))}`;
 }

@@ -1,11 +1,15 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  compareLabel,
   heatIntensity,
   heatmapMax,
   peakLabel,
   peakSlot,
+  rangeLabel,
+  scopeLabel,
   shortDate,
+  sourceLine,
   sumSeries,
   toChartSeries,
 } from "./analytics";
@@ -69,5 +73,30 @@ describe("heatmap helpers", () => {
   });
   it("returns an empty label with no activity", () => {
     expect(peakLabel(peakSlot([[0, 0], [0, 0]]))).toBe("");
+  });
+});
+
+describe("metric provenance labels", () => {
+  const range = {
+    days: 30,
+    from: "2026-09-26T01:00:00.000Z",
+    to: "2026-10-26T01:00:00.000Z",
+    compareFrom: "2026-08-27T01:00:00.000Z",
+  };
+
+  it("names the source and whether it covers the period or all history", () => {
+    expect(scopeLabel("period")).toBe("período");
+    expect(scopeLabel("all-time")).toBe("histórico");
+    expect(sourceLine({ source: "Contactos del CRM", scope: "all-time", method: "x" })).toBe(
+      "Contactos del CRM · histórico",
+    );
+    expect(sourceLine(undefined)).toBeUndefined();
+  });
+
+  it("labels the window and the window it is compared with", () => {
+    expect(rangeLabel(range)).toBe("26 sep – 26 oct");
+    expect(compareLabel(range)).toBe("27 ago – 26 sep");
+    expect(rangeLabel(undefined)).toBeUndefined();
+    expect(compareLabel({ ...range, compareFrom: undefined })).toBeUndefined();
   });
 });

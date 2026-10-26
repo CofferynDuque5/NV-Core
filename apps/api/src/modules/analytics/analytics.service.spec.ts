@@ -207,4 +207,25 @@ describe("AnalyticsService.snapshot", () => {
     expect(total).toBe(2);
     expect(snap.kpis.find((k) => k.label === "Mensajes")!.value).toBe("2");
   });
+
+  it("explains the source, period and computation time of every metric", async () => {
+    const before = Date.now();
+    const service = makeService({});
+    const snap = (await service.snapshot("w1", 7))!;
+    for (const k of snap.kpis) {
+      expect(k.source, k.label).toBeDefined();
+      expect(k.source!.scope).toBe("period");
+      expect(k.source!.source.length).toBeGreaterThan(0);
+    }
+    // Rates use the whole history, and say so.
+    for (const r of snap.conversion!) expect(r.source, r.label).toMatchObject({ scope: "all-time" });
+    expect(snap.sources!.funnel.scope).toBe("all-time");
+    expect(snap.sources!.platforms.scope).toBe("period");
+    expect(snap.sources!.heatmap.method).toContain("UTC");
+    // Deltas compare against the 7 days before the window.
+    const from = Date.parse(snap.range!.from);
+    expect(from - Date.parse(snap.range!.compareFrom!)).toBe(7 * DAY);
+    expect(Date.parse(snap.generatedAt!)).toBeGreaterThanOrEqual(before);
+    expect(snap.generatedAt).toBe(snap.range!.to);
+  });
 });
