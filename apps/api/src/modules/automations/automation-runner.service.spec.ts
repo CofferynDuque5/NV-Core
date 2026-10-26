@@ -185,6 +185,38 @@ describe("AutomationRunnerService", () => {
     expect(outbox[0]?.body).toBe("Hola Ana, ya te atiendo.");
   });
 
+  it("runs flows saved by the editor: typed keywords and a welcome only for new contacts", async () => {
+    const flow = {
+      id: "f5",
+      name: "Bienvenida",
+      status: "activo",
+      nodes: [
+        { id: "t", type: "trigger", label: "Mensaje", config: { event: "message.received", contains: "hola, buenas" } },
+        { id: "c", type: "action", label: "Contacto", config: { action: "create-contact", stage: "Lead", tag: "nuevo" } },
+        { id: "q", type: "cond", label: "¿Nuevo?", config: { field: "newContact=true" } },
+        { id: "m", type: "action", label: "Msg", config: { action: "send-message", body: "Bienvenida, {{nombre}}" } },
+      ],
+      edges: [
+        { id: "e1", from: "t", to: "c" },
+        { id: "e2", from: "c", to: "q" },
+        { id: "e3", from: "q", to: "m", branch: "true" },
+      ],
+    };
+    const { fire, outbox, contacts, prisma } = build([flow]);
+    await fire("precio?");
+    expect(contacts).toHaveLength(0);
+
+    await fire("Buenas tardes");
+    expect(contacts).toHaveLength(1);
+    expect(outbox).toEqual([{ to: "+573001112233", body: "Bienvenida, Ana" }]);
+
+    // Someone already in the CRM writes from another chat: no welcome.
+    prisma.contact.findFirst.mockResolvedValueOnce({ id: "k1" } as never);
+    await fire("hola", "+573009998877");
+    expect(contacts).toHaveLength(1);
+    expect(outbox).toHaveLength(1);
+  });
+
   describe("nodo «esperar»", () => {
     const followUp = (status = "activo") => ({
       id: "f5",

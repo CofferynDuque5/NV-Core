@@ -1,7 +1,7 @@
 import { Trash2 } from "lucide-react";
 import type { AutomationNode } from "@nv/domain";
 
-import { nodeKind } from "@/lib/workflow";
+import { configWithOption, keywordsText, nodeKind, selectedOption as currentOption } from "@/lib/workflow";
 import { AiTextButton } from "@/components/entities/ai-text-button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -39,8 +39,10 @@ export function NodeInspector({
 
   const kind = nodeKind(node.type);
   const config = node.config ?? {};
-  const selectedOption = String(config[kind.optionKey] ?? kind.options[0]?.value ?? "");
+  const selectedOption = currentOption(node) || kind.options[0]?.value || "";
   const option = kind.options.find((o) => o.value === selectedOption);
+  // A value the catalog no longer offers stays visible instead of looking like the first option.
+  const options = option ? kind.options : [{ value: selectedOption, label: `Actual: ${selectedOption}` }, ...kind.options];
 
   function setConfig(key: string, value: string) {
     onChange({ config: { ...config, [key]: value } });
@@ -48,7 +50,7 @@ export function NodeInspector({
 
   function setOption(value: string) {
     const opt = kind.options.find((o) => o.value === value);
-    onChange({ config: { ...config, [kind.optionKey]: value }, label: opt?.label ?? node!.label });
+    onChange({ config: configWithOption(node!, value), label: opt?.label ?? node!.label });
   }
 
   return (
@@ -66,12 +68,13 @@ export function NodeInspector({
       <div className="space-y-1.5">
         <Label htmlFor="nd-option">{kind.title.replace("…", "")}</Label>
         <select id="nd-option" value={selectedOption} onChange={(e) => setOption(e.target.value)} className={selectClass}>
-          {kind.options.map((o) => (
+          {options.map((o) => (
             <option key={o.value} value={o.value}>
               {o.label}
             </option>
           ))}
         </select>
+        {option?.hint ? <p className="text-[11px] leading-snug text-ink-faint">{option.hint}</p> : null}
       </div>
 
       <div className="space-y-1.5">
@@ -104,7 +107,7 @@ export function NodeInspector({
               ) : (
                 <Input
                   id={`nd-${f.key}`}
-                  value={String(config[f.key] ?? "")}
+                  value={f.key === "contains" ? keywordsText(config[f.key]) : String(config[f.key] ?? "")}
                   placeholder={f.placeholder}
                   onChange={(e) => setConfig(f.key, e.target.value)}
                 />

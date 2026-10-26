@@ -1,7 +1,7 @@
 
 import * as React from "react";
 import type { Automation } from "@nv/domain";
-import { History, Loader2, Pencil, Play, Plus, Trash2, Workflow } from "lucide-react";
+import { History, LayoutTemplate, Loader2, Pencil, Play, Plus, Trash2, Workflow } from "lucide-react";
 
 import { useAutomations } from "@/hooks/use-domain-data";
 import { useDeleteAutomation, useRunAutomation } from "@/hooks/use-domain-mutations";
@@ -15,6 +15,7 @@ import { Button } from "@/components/ui/button";
 import { AutomationCreateDialog } from "@/components/entities/automation-create-dialog";
 import { WorkflowEditor } from "@/components/automations/workflow-editor";
 import { AutomationRunsSheet } from "@/components/automations/automation-runs-sheet";
+import { TemplatePicker } from "@/components/automations/template-picker";
 
 export default function AutomatizacionesPage() {
   const automations = useAutomations();
@@ -22,6 +23,7 @@ export default function AutomatizacionesPage() {
   const run = useRunAutomation();
   const confirm = useConfirm();
   const [open, setOpen] = React.useState(false);
+  const [templatesOpen, setTemplatesOpen] = React.useState(false);
   const [editingId, setEditingId] = React.useState<string | null>(null);
   const [deletingId, setDeletingId] = React.useState<string | null>(null);
   const [runningId, setRunningId] = React.useState<string | null>(null);
@@ -59,9 +61,14 @@ export default function AutomatizacionesPage() {
         title="Automatizaciones"
         description="Crea flujos que trabajan por ti: triggers, acciones, esperas y condiciones."
         actions={
-          <Button size="sm" onClick={() => setOpen(true)}>
-            <Plus className="size-4" /> Nuevo flujo
-          </Button>
+          <>
+            <Button variant="secondary" size="sm" onClick={() => setTemplatesOpen(true)}>
+              <LayoutTemplate className="size-4" /> Plantillas
+            </Button>
+            <Button size="sm" onClick={() => setOpen(true)}>
+              <Plus className="size-4" /> Nuevo flujo
+            </Button>
+          </>
         }
       />
 
@@ -75,9 +82,14 @@ export default function AutomatizacionesPage() {
           description:
             "Diseña tu primer flujo visual (ej. compra → onboarding, renovación → recordatorio) con disparadores, acciones, esperas y condiciones.",
           action: (
-            <Button size="sm" onClick={() => setOpen(true)}>
-              <Plus className="size-4" /> Nuevo flujo
-            </Button>
+            <div className="flex gap-2">
+              <Button variant="secondary" size="sm" onClick={() => setTemplatesOpen(true)}>
+                <LayoutTemplate className="size-4" /> Empezar con una plantilla
+              </Button>
+              <Button size="sm" onClick={() => setOpen(true)}>
+                <Plus className="size-4" /> Nuevo flujo
+              </Button>
+            </div>
           ),
         }}
       >
@@ -151,6 +163,7 @@ export default function AutomatizacionesPage() {
       </QueryBoundary>
 
       <AutomationCreateDialog open={open} onOpenChange={setOpen} />
+      <TemplatePicker open={templatesOpen} onOpenChange={setTemplatesOpen} onCreated={(a) => setEditingId(a.id)} />
       <AutomationRunsSheet
         automation={automations.data?.items.find((a) => a.id === historyId) ?? null}
         onClose={() => setHistoryId(null)}
