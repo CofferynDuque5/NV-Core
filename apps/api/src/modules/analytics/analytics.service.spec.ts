@@ -8,7 +8,7 @@ const dayKey = (d: Date) => d.toISOString().slice(0, 10);
 
 interface Seed {
   posts?: { workspaceSlug: string; createdAt: Date; channel: string; status?: string }[];
-  contacts?: { workspaceSlug: string; createdAt: Date; stage: string }[];
+  contacts?: { workspaceSlug: string; createdAt: Date; stage: string; source?: string | null }[];
   conversations?: { workspaceSlug: string; createdAt: Date }[];
   messages?: { workspaceSlug: string; createdAt: Date }[];
   campaigns?: { workspaceSlug: string; createdAt: Date; status?: string; posts?: number }[];
@@ -83,6 +83,14 @@ function makeService(seed: Seed) {
         }
         return [...m.entries()].map(([day, n]) => ({ day, n }));
       };
+      if (text.includes("attribution")) {
+        const m = new Map<string | null, number>();
+        for (const r of s.contacts.filter((x) => x.workspaceSlug === ws && inWin(x.createdAt))) {
+          const k = r.source ?? null;
+          m.set(k, (m.get(k) ?? 0) + 1);
+        }
+        return [...m.entries()].map(([source, n]) => ({ source, n }));
+      }
       if (text.includes("EXTRACT(DOW")) {
         const m = new Map<string, number>();
         for (const r of s.messages.filter((x) => x.workspaceSlug === ws && inWin(x.createdAt))) {
@@ -227,5 +235,29 @@ describe("AnalyticsService.snapshot", () => {
     expect(from - Date.parse(snap.range!.compareFrom!)).toBe(7 * DAY);
     expect(Date.parse(snap.generatedAt!)).toBeGreaterThanOrEqual(before);
     expect(snap.generatedAt).toBe(snap.range!.to);
+  });
+
+  it("counts new leads by first-touch source, top 8 plus 'otros', untracked last", async () => {
+    const now = Date.now();
+    const c = (source: string | null, n: number, daysAgo = 1) =>
+      Array.from({ length: n }, () => ({ workspaceSlug: "w1", createdAt: new Date(now - daysAgo * DAY), stage: "Lead", source }));
+    const service = makeService({
+      contacts: [
+        ...c("instagram", 5),
+        ...c("google", 3),
+        ...c(null, 4),
+        ...["a", "b", "c", "d", "e", "f", "g", "h"].flatMap((s) => c(s, 1)),
+        ...c("tiktok", 9, 40), // previous window: not counted
+      ],
+    });
+    const snap = (await service.snapshot("w1", 30))!;
+    const ls = snap.leadSources!;
+    expect(ls[0]).toEqual({ source: "instagram", count: 5 });
+    expect(ls[1]).toEqual({ source: "google", count: 3 });
+    expect(ls).toHaveLength(10); // 8 named + otros + untracked
+    expect(ls[8]).toEqual({ source: "otros", count: 2 });
+    expect(ls[9]).toEqual({ source: null, count: 4 });
+    expect(ls.some((r) => r.source === "tiktok")).toBe(false);
+    expect(snap.sources!.leadSources!.scope).toBe("period");
   });
 });

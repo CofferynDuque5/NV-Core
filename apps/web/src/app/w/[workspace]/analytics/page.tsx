@@ -42,6 +42,7 @@ import { Panel, PanelHeader } from "@/components/common/panel";
 import { EmptyState } from "@/components/common/empty-state";
 import { KpiCard } from "@/components/common/kpi-card";
 import { KpiSkeletonRow } from "@/components/common/skeletons";
+import { leadSourceLabel } from "@/lib/attribution";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ActivityHeatmap } from "@/components/analytics/activity-heatmap";
@@ -370,6 +371,42 @@ export default function AnalyticsPage() {
               </div>
             </Panel>
           </div>
+
+          {/* New leads by first-touch origin */}
+          {(snap?.leadSources?.length ?? 0) > 0 ? (
+            <Panel>
+              <PanelHeader
+                title="Leads por origen"
+                description={withSource("Contactos nuevos del período según su primer origen", "leadSources")}
+              />
+              <ul className="space-y-2.5 p-5" data-testid="lead-sources">
+                {(() => {
+                  const rows = snap!.leadSources!;
+                  const max = Math.max(1, ...rows.map((r) => r.count));
+                  return rows.map((r) => (
+                    <li key={r.source ?? "__none__"} className="flex items-center gap-3 text-sm">
+                      <span
+                        className={cn("w-56 shrink-0 truncate", r.source === null ? "text-ink-faint" : "text-ink")}
+                        title={leadSourceLabel(r.source)}
+                      >
+                        {leadSourceLabel(r.source)}
+                      </span>
+                      <span className="h-2 flex-1 overflow-hidden rounded-full bg-line">
+                        <span
+                          className="block h-full rounded-full"
+                          style={{
+                            width: `${Math.round((r.count / max) * 100)}%`,
+                            background: r.source === null ? "hsl(var(--line-strong))" : "linear-gradient(90deg,#5F86F2,#8C7BEF)",
+                          }}
+                        />
+                      </span>
+                      <span className="w-10 text-right tabular-nums text-ink-bright">{r.count}</span>
+                    </li>
+                  ));
+                })()}
+              </ul>
+            </Panel>
+          ) : null}
 
           {/* Activity heatmap */}
           <Panel>

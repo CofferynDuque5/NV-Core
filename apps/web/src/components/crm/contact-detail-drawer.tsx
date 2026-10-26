@@ -1,10 +1,11 @@
 import * as React from "react";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { CONTACT_STAGES, type Contact } from "@nv/domain";
-import { BellOff, BellRing, Building2, Loader2, Mail, Pencil, Phone, Tag, Trash2, X } from "lucide-react";
+import { BellOff, BellRing, Building2, Loader2, Mail, Navigation, Pencil, Phone, Tag, Trash2, X } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { STAGE_ACCENTS } from "@/lib/crm";
+import { attributionLine } from "@/lib/attribution";
 import { useContactNotes } from "@/hooks/use-domain-data";
 import {
   useAddContactNote,
@@ -164,6 +165,30 @@ export function ContactDetailDrawer({
                       <Badge key={t} variant="neutral">{t}</Badge>
                     ))}
                   </span>
+                </div>
+              ) : null}
+              {contact.attribution ? (
+                <div className="flex items-start gap-2 pt-1" data-testid="contact-origin">
+                  <Navigation className="mt-0.5 size-4 shrink-0 text-ink-faint" />
+                  <div className="min-w-0 text-xs">
+                    <p className="text-ink">
+                      <span className="text-ink-faint">Origen:</span> {attributionLine(contact.attribution)}
+                    </p>
+                    <p className="text-ink-faint">
+                      {contact.attribution.via === "funnel" && contact.attribution.funnelName
+                        ? `Embudo «${contact.attribution.funnelName}»`
+                        : contact.attribution.formName
+                          ? `Formulario «${contact.attribution.formName}»`
+                          : "Formulario"}
+                      {" · "}
+                      {new Date(contact.attribution.capturedAt).toLocaleDateString("es")}
+                      {contact.attribution.landingUrl ? (
+                        <span className="block truncate" title={contact.attribution.landingUrl}>
+                          {contact.attribution.landingUrl}
+                        </span>
+                      ) : null}
+                    </p>
+                  </div>
                 </div>
               ) : null}
             </div>

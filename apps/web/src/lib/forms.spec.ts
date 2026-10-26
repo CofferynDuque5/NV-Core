@@ -19,4 +19,12 @@ describe("forms helpers", () => {
     expect(snip).toContain("https://app.nv.com/f/f1");
     expect(snip).toContain("<iframe");
   });
+
+  it("embedSnippet forwards the host page's utm params, address and referrer", () => {
+    const snip = embedSnippet("https://app.nv.com", "f1");
+    expect(snip).toContain('k.indexOf("utm_")===0');
+    expect(snip).toContain('p.set("nv_page"');
+    expect(snip).toContain('p.set("nv_ref"');
+    expect(snip).toContain('id="nv-form-f1"');
+  });
 });

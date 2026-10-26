@@ -13,8 +13,18 @@ export function publicFormUrl(origin: string, formId: string): string {
   return `${origin.replace(/\/$/, "")}/f/${formId}`;
 }
 
-/** Embeddable iframe snippet a user can paste into any site. */
+/**
+ * Embeddable snippet for any site. The iframe can't see the host page's URL,
+ * so a tiny script forwards the page's utm_* params, its address and its
+ * referrer; without JavaScript the plain iframe still works (no origin data).
+ */
 export function embedSnippet(origin: string, formId: string): string {
   const src = publicFormUrl(origin, formId);
-  return `<iframe src="${src}" style="border:0;width:100%;max-width:480px;height:520px" loading="lazy" title="Formulario"></iframe>`;
+  const id = `nv-form-${formId}`;
+  return (
+    `<iframe id="${id}" src="${src}" style="border:0;width:100%;max-width:480px;height:520px" loading="lazy" title="Formulario"></iframe>\n` +
+    `<script>(function(){var f=document.getElementById("${id}"),q=new URLSearchParams(location.search),p=new URLSearchParams();` +
+    `q.forEach(function(v,k){if(k.indexOf("utm_")===0)p.set(k,v)});p.set("nv_page",location.origin+location.pathname);` +
+    `if(document.referrer)p.set("nv_ref",document.referrer);f.src="${src}?"+p.toString()})();</script>`
+  );
 }

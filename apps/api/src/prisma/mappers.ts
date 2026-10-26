@@ -85,6 +85,7 @@ export const mapContact = (c: PContact): Contact => ({
   optOutSource: (c.optOutSource as Contact["optOutSource"]) ?? undefined,
   consentAt: iso(c.consentAt),
   consentSource: c.consentSource ?? undefined,
+  attribution: (c.attribution as unknown as Contact["attribution"]) ?? undefined,
 });
 
 export const mapContactNote = (n: PContactNote): ContactNote => ({

@@ -17,6 +17,7 @@ import {
   type ChannelId,
   type FunnelStep,
   type KpiMetric,
+  type LeadSourceCount,
   type MetricScope,
   type MetricSource,
 } from "@nv/domain";
@@ -64,7 +65,15 @@ export const SNAPSHOT_SOURCES: AnalyticsSources = {
   funnel: src("Contactos del CRM", "all-time", "Contactos actuales agrupados por etapa del pipeline."),
   heatmap: src("Bandeja de entrada", "period", "Mensajes del período por día de la semana y hora (UTC)."),
   topCampaigns: src("Campañas", "all-time", "Campañas con más publicaciones asociadas."),
+  leadSources: src(
+    "Formularios y embudos",
+    "period",
+    "Contactos creados en el período según su primer origen (utm_source o sitio de procedencia). Los creados a mano, por importación o por chat no tienen origen.",
+  ),
 };
+
+/** How many lead sources the panel lists before grouping the rest. */
+const LEAD_SOURCES_TOP = 8;
 
 /** UTC day key (YYYY-MM-DD) — stable across server timezones. */
 function dayKey(d: Date): string {
@@ -141,6 +150,7 @@ export class AnalyticsService {
       convSeriesRows,
       msgSeriesRows,
       heatRows,
+      leadSourceRows,
     ] = await Promise.all([
       this.prisma.post.count({ where: { ...where, createdAt: cur } }),
       this.prisma.contact.count({ where: { ...where, createdAt: cur } }),
@@ -170,6 +180,7 @@ export class AnalyticsService {
       this.dailyCount("Conversation", workspaceSlug, from, to),
       this.dailyMessageCount(workspaceSlug, from, to),
       this.messageHeatmap(workspaceSlug, from, to),
+      this.leadSources(workspaceSlug, from, to),
     ]);
 
     // ── KPIs (windowed, period-over-period deltas) ──────────────────────────
@@ -239,6 +250,17 @@ export class AnalyticsService {
       if (dow >= 0 && dow < 7 && hour >= 0 && hour < 24) heatmap[dow]![hour] = Number(r.n);
     }
 
+    // ── New contacts by first-touch source (top N, rest summed as "otros") ───
+    const ranked = leadSourceRows
+      .map((r) => ({ source: r.source, count: Number(r.n) }))
+      .sort((a, b) => b.count - a.count || String(a.source).localeCompare(String(b.source)));
+    const named = ranked.filter((r) => r.source !== null);
+    const leadSources: LeadSourceCount[] = named.slice(0, LEAD_SOURCES_TOP);
+    const rest = named.slice(LEAD_SOURCES_TOP).reduce((a, r) => a + r.count, 0);
+    if (rest > 0) leadSources.push({ source: "otros", count: rest });
+    const untracked = ranked.find((r) => r.source === null);
+    if (untracked) leadSources.push(untracked);
+
     // ── Top campaigns by number of posts (ordered + limited in the DB) ──────
     const topCampaigns = campaignRows.map(mapCampaign);
 
@@ -253,6 +275,7 @@ export class AnalyticsService {
       range: { days: window, from: from.toISOString(), to: to.toISOString(), compareFrom: prevFrom.toISOString() },
       generatedAt: to.toISOString(),
       sources: SNAPSHOT_SOURCES,
+      leadSources,
     };
   }
 
@@ -286,6 +309,20 @@ export class AnalyticsService {
       FROM "Message" m
       JOIN "Conversation" c ON c."id" = m."conversationId"
       WHERE c."workspaceSlug" = ${workspaceSlug} AND m."createdAt" >= ${from} AND m."createdAt" < ${to}
+      GROUP BY 1
+    `);
+  }
+
+  /** New contacts in the window grouped by `attribution->>'source'` (null = no origin). */
+  private leadSources(
+    workspaceSlug: string,
+    from: Date,
+    to: Date,
+  ): Promise<{ source: string | null; n: number }[]> {
+    return this.prisma.$queryRaw<{ source: string | null; n: number }[]>(Prisma.sql`
+      SELECT "attribution"->>'source' AS source, COUNT(*)::int AS n
+      FROM "Contact"
+      WHERE "workspaceSlug" = ${workspaceSlug} AND "createdAt" >= ${from} AND "createdAt" < ${to}
       GROUP BY 1
     `);
   }
