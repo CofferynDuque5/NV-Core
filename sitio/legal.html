@@ -1,0 +1,380 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="theme-color" content="#0B0D10" />
+<title>Términos legales — NV Marketing</title>
+<title>NV Marketing — Business Operating System</title>
+<meta name="description" content="Términos y condiciones, política de privacidad y política de cookies de NV Marketing." />
+<style>
+
+  /* ==================== TOKENS ==================== */
+  :root{
+    --bg:#0B0D10;
+    --bg-2:#0E1116;
+    --panel:#151A21;
+    --panel-2:#11151b;
+    --line:rgba(255,255,255,.08);
+    --line-strong:rgba(255,255,255,.14);
+    --text:#E6EAF0;
+    --muted:#9AA4B2;
+    --muted-2:#6f7885;
+    --brand-1:#5F86F2;
+    --brand-2:#8C7BEF;
+    --cyan:#22D3EE;
+    --grad:linear-gradient(135deg,#5F86F2 0%,#8C7BEF 100%);
+    --grad-soft:linear-gradient(135deg,rgba(99,102,241,.18),rgba(139,92,246,.14));
+    --radius:16px;
+    --radius-lg:22px;
+    --radius-sm:12px;
+    --shadow:0 24px 60px -18px rgba(0,0,0,.65);
+    --glow:0 0 0 1px rgba(139,92,246,.35),0 18px 50px -12px rgba(99,102,241,.55);
+    --maxw:1180px;
+    --font:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Inter,"Helvetica Neue",Arial,sans-serif;
+  }
+
+  /* ==================== RESET / BASE ==================== */
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  html,body{max-width:100%;overflow-x:hidden}
+  body{
+    margin:0;
+    font-family:var(--font);
+    background:var(--bg);
+    color:var(--text);
+    line-height:1.6;
+    -webkit-font-smoothing:antialiased;
+    text-rendering:optimizeLegibility;
+    font-size:16px;
+  }
+  a{color:inherit;text-decoration:none}
+  img,svg{display:block;max-width:100%}
+  h1,h2,h3,h4{margin:0;line-height:1.12;letter-spacing:-.02em;font-weight:700}
+  p{margin:0}
+  ul{margin:0;padding:0;list-style:none}
+  button{font-family:inherit;cursor:pointer}
+  :focus-visible{outline:2px solid var(--cyan);outline-offset:3px;border-radius:6px}
+
+  .container{width:100%;max-width:var(--maxw);margin:0 auto;padding:0 22px}
+  section{position:relative}
+
+  .eyebrow{
+    display:inline-flex;align-items:center;gap:8px;
+    font-size:12px;font-weight:700;letter-spacing:.16em;text-transform:uppercase;
+    color:#c9c2ff;
+    padding:6px 12px;border-radius:999px;
+    background:var(--grad-soft);border:1px solid rgba(139,92,246,.28);
+  }
+  .eyebrow .dot{width:6px;height:6px;border-radius:50%;background:var(--cyan);box-shadow:0 0 10px var(--cyan)}
+
+  .grad-text{
+    background:var(--grad);
+    -webkit-background-clip:text;background-clip:text;
+    -webkit-text-fill-color:transparent;color:transparent;
+  }
+
+  .section-head{max-width:640px;margin:0 auto 54px;text-align:center}
+  .section-head h2{font-size:clamp(28px,4.4vw,44px)}
+  .section-head p{color:var(--muted);margin-top:16px;font-size:clamp(15px,1.8vw,18px)}
+
+  /* ==================== BUTTONS ==================== */
+  .btn{
+    display:inline-flex;align-items:center;justify-content:center;gap:9px;
+    font-weight:650;font-size:15px;
+    padding:12px 22px;border-radius:12px;border:1px solid transparent;
+    transition:transform .18s ease, box-shadow .25s ease, background .25s ease, border-color .2s ease;
+    white-space:nowrap;
+  }
+  .btn-primary{
+    background:var(--grad);color:#fff;
+    box-shadow:0 10px 26px -8px rgba(99,102,241,.6), inset 0 1px 0 rgba(255,255,255,.2);
+  }
+  .btn-primary:hover{transform:translateY(-2px);box-shadow:0 18px 40px -10px rgba(99,102,241,.75)}
+  .btn-ghost{
+    background:rgba(255,255,255,.04);color:var(--text);border-color:var(--line-strong);
+  }
+  .btn-ghost:hover{transform:translateY(-2px);background:rgba(255,255,255,.08);border-color:rgba(255,255,255,.22)}
+  .btn-lg{padding:15px 30px;font-size:16px;border-radius:14px}
+  .btn-block{width:100%}
+
+  /* ==================== HEADER ==================== */
+  header.site{
+    position:sticky;top:0;z-index:60;
+    background:rgba(11,13,16,.72);
+    backdrop-filter:saturate(160%) blur(14px);
+    -webkit-backdrop-filter:saturate(160%) blur(14px);
+    border-bottom:1px solid transparent;
+    transition:border-color .3s ease, background .3s ease;
+  }
+  header.site.scrolled{border-bottom-color:var(--line);background:rgba(11,13,16,.86)}
+  .nav{display:flex;align-items:center;justify-content:space-between;height:68px;gap:20px}
+  .brand{display:flex;align-items:center;gap:11px;font-weight:750;font-size:18px;letter-spacing:-.01em}
+  .brand .logo{width:34px;height:34px;flex:none}
+  .nav-links{display:flex;align-items:center;gap:6px}
+  .nav-links a{
+    color:var(--muted);font-weight:550;font-size:15px;padding:9px 14px;border-radius:10px;
+    transition:color .2s ease, background .2s ease;
+  }
+  .nav-links a:hover{color:var(--text);background:rgba(255,255,255,.05)}
+  .nav-cta{display:flex;align-items:center;gap:12px}
+  .btn-ingresar{padding:9px 18px;font-size:14.5px}
+  .hamburger{
+    display:none;width:44px;height:44px;border-radius:11px;
+    background:rgba(255,255,255,.05);border:1px solid var(--line);
+    align-items:center;justify-content:center;flex:none;
+  }
+  .hamburger svg{width:22px;height:22px;stroke:var(--text)}
+
+  /* mobile menu */
+  .mobile-menu{
+    display:none;position:fixed;inset:68px 0 0;z-index:55;
+    background:rgba(11,13,16,.97);backdrop-filter:blur(12px);
+    padding:26px 22px;flex-direction:column;gap:8px;
+  }
+  .mobile-menu.open{display:flex}
+  .mobile-menu a{
+    color:var(--text);font-size:19px;font-weight:600;padding:16px 14px;border-radius:12px;
+    border:1px solid var(--line);background:var(--panel-2);
+  }
+  .mobile-menu .btn{margin-top:12px}
+
+  
+  /* ==================== LEGAL ==================== */
+  .legal-hero{padding:56px 0 28px;text-align:center}
+  .legal-hero h1{font-size:clamp(32px,5vw,50px);margin-top:18px}
+  .legal-hero p{color:var(--muted);margin-top:14px}
+  .legal-layout{display:grid;grid-template-columns:240px minmax(0,1fr);gap:40px;padding:12px 0 80px;align-items:start}
+  .toc{position:sticky;top:92px;display:flex;flex-direction:column;gap:4px;padding:14px;border:1px solid var(--line);border-radius:var(--radius);background:var(--panel-2)}
+  .toc a{color:var(--muted);font-size:14px;padding:8px 10px;border-radius:10px}
+  .toc a:hover{color:var(--text);background:rgba(255,255,255,.05)}
+  .legal-doc{min-width:0}
+  .legal-part{padding:30px;border:1px solid var(--line);border-radius:var(--radius-lg);background:var(--panel);margin-bottom:26px;scroll-margin-top:90px}
+  .legal-part > h2{font-size:clamp(24px,3vw,30px);margin-bottom:6px}
+  .legal-part > .lead{color:var(--muted);font-size:14px;margin-bottom:8px}
+  .legal-sec{padding-top:22px;scroll-margin-top:90px}
+  .legal-sec h3{font-size:18px;margin-bottom:10px}
+  .legal-sec p{color:#cfd5de;margin:0 0 10px;font-size:15.5px}
+  .legal-sec ul{display:flex;flex-direction:column;gap:8px;margin:0 0 10px;padding-left:20px;list-style:disc}
+  .legal-sec li{color:#cfd5de;font-size:15.5px}
+  .legal-sec strong{color:var(--text)}
+  .legal-sec a, .legal-part a{color:#a9b9ff;text-decoration:underline;text-underline-offset:3px}
+  .people{list-style:none!important;padding-left:0!important}
+  .people li{padding:12px 14px;border:1px solid var(--line);border-radius:var(--radius-sm);background:var(--panel-2)}
+  .table-wrap{overflow-x:auto;margin:6px 0 12px}
+  table{width:100%;border-collapse:collapse;font-size:14.5px;min-width:520px}
+  th,td{text-align:left;padding:10px 12px;border-bottom:1px solid var(--line);vertical-align:top;color:#cfd5de}
+  th{color:var(--muted);font-size:12px;text-transform:uppercase;letter-spacing:.08em}
+  @media(max-width:860px){.legal-layout{grid-template-columns:1fr;gap:18px}.toc{position:static;flex-direction:row;flex-wrap:wrap}.legal-part{padding:22px 18px}}
+  @media print{header.site,.toc,footer.site{display:none}body{background:#fff;color:#111}.legal-part{border:0;background:#fff}.legal-sec p,.legal-sec li,td{color:#111}}
+  footer.site{border-top:1px solid var(--line);padding:26px 0;background:var(--bg-2)}
+  .foot-grid{display:grid;grid-template-columns:2fr 1fr 1fr 1fr;gap:28px}
+  .foot-brand .brand{margin-bottom:12px}
+  .foot-brand p{color:var(--muted);font-size:13.5px;max-width:38ch;line-height:1.5}
+  .foot-col h4{font-size:12px;text-transform:uppercase;letter-spacing:.1em;color:var(--muted-2);margin-bottom:12px;font-weight:700}
+  .foot-col a{display:block;color:var(--muted);font-size:14px;padding:4px 0;transition:color .2s}
+  .foot-col a:hover{color:var(--text)}
+  .foot-bottom{margin-top:26px;padding-top:16px;border-top:1px solid var(--line)}
+  .foot-bottom p{color:var(--muted-2);font-size:13px;margin:0}
+  @media(max-width:720px){.foot-grid{grid-template-columns:1fr 1fr;gap:18px 22px}.foot-brand{grid-column:1 / -1}}
+</style>
+</head>
+<body>
+<header class="site" id="site-header">
+  <div class="container">
+    <nav class="nav" aria-label="Principal">
+      <a class="brand" href="index.html" aria-label="NV Marketing inicio">
+        <svg class="logo" viewBox="0 0 40 40" fill="none" aria-hidden="true">
+          <defs>
+            <linearGradient id="lg" x1="0" y1="0" x2="40" y2="40" gradientUnits="userSpaceOnUse">
+              <stop stop-color="#5F86F2"/><stop offset="1" stop-color="#8C7BEF"/>
+            </linearGradient>
+          </defs>
+          <rect width="40" height="40" rx="11" fill="url(#lg)"/><g transform="translate(6 6) scale(.4375)" fill="none" stroke-width="5"><path d="M8 26h9l17-11v34L17 38H8z" stroke="#fff" stroke-linejoin="round"/><path d="M17 38v11h9v-7" stroke="#fff" stroke-linejoin="round"/><path d="M43 24a11 11 0 0 1 0 16" stroke="#fff" stroke-linecap="round"/><path d="M50 16a21 21 0 0 1 0 32" stroke="rgba(255,255,255,.55)" stroke-linecap="round"/></g>
+        </svg>
+        <span>NV Marketing</span>
+      </a>
+      <div class="nav-cta">
+        <a class="btn btn-ghost btn-ingresar" href="index.html">Volver al inicio</a>
+      </div>
+    </nav>
+  </div>
+</header>
+
+<main>
+  <div class="container">
+    <div class="legal-hero">
+      <span class="eyebrow"><span class="dot"></span>Legal</span>
+      <h1>Términos legales</h1>
+      <p>Última actualización: 26 de octubre de 2026</p>
+    </div>
+    <div class="legal-layout">
+      <nav class="toc" aria-label="Contenido">
+        <a href="#terminos">Términos y condiciones</a><a href="#privacidad">Política de privacidad</a><a href="#cookies">Política de cookies</a><a href="#contacto">Responsables y contacto</a>
+      </nav>
+      <div class="legal-doc">
+        <article class="legal-part" id="terminos">
+          <h2>Términos y condiciones</h2>
+          <p class="lead">Las reglas para usar NV Marketing.</p>
+          <section class="legal-sec" id="responsables"><h3>1. Quiénes somos</h3>
+<p>NV Marketing («NV Marketing», «nosotros») es una plataforma de software creada y operada por sus autores y socios:</p>
+<ul class="people">
+  <li><strong>Valeryn Rouse Duque Valladares</strong>, desarrolladora full-stack, estudiante de Ingeniería de Sistemas. Isla de Margarita, estado Nueva Esparta, Venezuela. Portafolio: <a href="https://cofferyncode.nvcorx.com/" target="_blank" rel="noopener">cofferyncode.nvcorx.com</a>.</li>
+  <li><strong>Nathan Gabriel Quevedo Morales</strong>, socio. Venezuela.</li>
+</ul>
+<p>Ambos son responsables del servicio y del tratamiento de los datos descrito en esta página.</p>
+<p id="contacto"><strong>Contacto.</strong> <span data-contact>Mientras publicamos el correo oficial, puedes escribirnos a través del portafolio de Valeryn Duque en <a href="https://cofferyncode.nvcorx.com/" target="_blank" rel="noopener">cofferyncode.nvcorx.com</a>.</span></p>
+</section>
+<section class="legal-sec" id="aceptacion"><h3>2. Aceptación de estos términos</h3>
+<p>Al crear una cuenta, entrar a la aplicación o usar cualquier parte de NV Marketing aceptas estos Términos y condiciones, la Política de privacidad y la Política de cookies de esta página. Si usas NV Marketing en nombre de una empresa o marca, declaras que tienes autorización para aceptarlos en su nombre.</p>
+<p>Si no estás de acuerdo, no uses el servicio.</p>
+</section>
+<section class="legal-sec" id="servicio"><h3>3. Qué es el servicio</h3>
+<p>NV Marketing es un sistema de gestión para negocios y marcas que reúne, en espacios de trabajo separados: contactos y CRM, bandeja de mensajes (Inbox), campañas, publicaciones programadas, automatizaciones y secuencias, formularios y embudos, tareas de equipo, cobros manuales, contenido asistido por inteligencia artificial, analítica e informes.</p>
+<p>Algunas funciones solo trabajan si tú conectas tus propias cuentas de terceros (por ejemplo WhatsApp, Telegram, Facebook, Instagram, Google o un proveedor de IA). Mientras una conexión no esté configurada y verificada, la función correspondiente no envía ni publica nada. NV Marketing no garantiza resultados comerciales, alcance, ventas ni la aprobación de tus cuentas por parte de esos terceros.</p>
+</section>
+<section class="legal-sec" id="cuentas"><h3>4. Cuentas, espacios de trabajo y equipo</h3>
+<ul>
+  <li>Debes tener al menos 18 años, o la mayoría de edad de tu país, para crear una cuenta.</li>
+  <li>Eres responsable de la veracidad de los datos de registro y de mantener segura tu contraseña. Avísanos si sospechas un acceso no autorizado.</li>
+  <li>Cada marca trabaja en su propio espacio de trabajo. Sus miembros solo ven los contactos, campañas, archivos, canales e informes de los espacios a los que tienen acceso, según su rol (Owner, Admin, Editor u otros que el dueño asigne).</li>
+  <li>El dueño de cada espacio de trabajo decide quién entra y con qué permisos, y responde por lo que su equipo hace dentro de él.</li>
+</ul>
+</section>
+<section class="legal-sec" id="uso"><h3>5. Uso aceptable</h3>
+<p>Te comprometes a no usar NV Marketing para:</p>
+<ul>
+  <li>Enviar mensajes no solicitados (spam) o escribir a personas que no te dieron su consentimiento o que pidieron no recibir más mensajes.</li>
+  <li>Incumplir las políticas de WhatsApp, Meta, Telegram, Google u otros canales que conectes. Cada canal tiene sus propios límites y puede suspender tu cuenta; NV Marketing aplica pausas entre envíos, pero no puede garantizar que un canal no te limite.</li>
+  <li>Difundir contenido ilegal, engañoso, fraudulento, discriminatorio, violento o que infrinja derechos de terceros.</li>
+  <li>Suplantar a otra persona o marca, o recopilar datos de personas sin una base legítima.</li>
+  <li>Intentar acceder a espacios de trabajo, cuentas o datos que no te pertenecen, interferir con el servicio o hacer ingeniería inversa de él.</li>
+</ul>
+<p>La app registra las bajas de tus contactos (por ejemplo, cuando responden BAJA o STOP) y las respeta en secuencias, automatizaciones y respuestas automáticas. No intentes eludir ese registro.</p>
+</section>
+<section class="legal-sec" id="contenido"><h3>6. Tu contenido y propiedad intelectual</h3>
+<ul>
+  <li><strong>Tu contenido es tuyo.</strong> Los contactos, mensajes, textos, imágenes, plantillas y demás información que subes o creas siguen siendo de tu propiedad o de quien te los haya licenciado.</li>
+  <li>Nos das permiso para guardar, procesar y mostrar ese contenido solo en la medida necesaria para prestarte el servicio (por ejemplo, para enviarlo por los canales que tú elijas).</li>
+  <li>Garantizas que tienes derecho a usar el contenido que subes y los datos de los contactos que importas.</li>
+  <li>El software, el nombre NV Marketing, el logotipo del megáfono, el descriptor BUSINESS OS y el diseño de la plataforma pertenecen a sus autores. No puedes copiarlos ni usarlos sin autorización escrita.</li>
+</ul>
+</section>
+<section class="legal-sec" id="ia"><h3>7. Inteligencia artificial</h3>
+<p>NV Marketing puede proponerte borradores, resúmenes y respuestas usando un proveedor de inteligencia artificial que esté configurado. Ese contenido puede contener errores: revísalo antes de usarlo. Las acciones externas sensibles, como enviar o publicar, requieren tu revisión y confirmación. Eres responsable de lo que decidas publicar o enviar.</p>
+<p>Para generar una propuesta, el texto necesario se envía al proveedor de IA configurado (por ejemplo OpenAI, Anthropic o Google), bajo sus propias condiciones.</p>
+</section>
+<section class="legal-sec" id="pagos"><h3>8. Planes, pagos y cancelación</h3>
+<ul>
+  <li>Hay un plan gratuito y planes de pago. Los precios de referencia se muestran en la sección de precios de este sitio, en dólares estadounidenses (USD), y pueden cambiar. Si cambian, te avisaremos antes de tu siguiente renovación.</li>
+  <li>Cuando el cobro con tarjeta está activo, el pago de los planes lo procesa Stripe. NV Marketing no guarda los datos completos de tu tarjeta.</li>
+  <li>Puedes cambiar de plan o cancelar en cualquier momento. Al cancelar, mantienes el acceso de pago hasta el final del período ya pagado y no se renueva.</li>
+  <li>Salvo que la ley aplicable diga otra cosa, no hacemos reembolsos parciales de períodos ya iniciados.</li>
+</ul>
+<p><strong>Cobros a tus propios clientes.</strong> La función «Cobros» te ayuda a pedir y registrar pagos de tus clientes a tus propias cuentas (Nequi, Pago Móvil, Yape, Binance, Zinli y otras). NV Marketing no recibe, retiene ni transfiere ese dinero, no se conecta a tus bancos o billeteras y no verifica los pagos por ti: tú confirmas cada pago después de revisarlo en tu cuenta. La relación comercial, las facturas y los impuestos de esas ventas son responsabilidad tuya.</p>
+</section>
+<section class="legal-sec" id="disponibilidad"><h3>9. Disponibilidad y cambios del servicio</h3>
+<p>Trabajamos para que NV Marketing esté disponible y funcione bien, pero no garantizamos que funcione sin interrupciones ni errores. Podemos hacer mantenimiento, mejorar o cambiar funciones. Si retiramos una función importante de un plan de pago, te avisaremos con antelación razonable.</p>
+<p>Te recomendamos exportar periódicamente la información que sea importante para tu negocio.</p>
+</section>
+<section class="legal-sec" id="responsabilidad"><h3>10. Limitación de responsabilidad</h3>
+<p>En la máxima medida que permita la ley, NV Marketing y sus autores no responden por daños indirectos, pérdida de ganancias, de datos o de oportunidades de negocio, ni por fallos, bloqueos o cambios de servicios de terceros (como WhatsApp, Meta, Telegram, Google, proveedores de IA o de pago). En cualquier caso, nuestra responsabilidad total frente a ti se limita al importe que nos hayas pagado por el servicio en los últimos tres meses.</p>
+</section>
+<section class="legal-sec" id="terminacion"><h3>11. Suspensión y cierre de la cuenta</h3>
+<p>Puedes dejar de usar el servicio y pedirnos que eliminemos tu cuenta cuando quieras. Podemos suspender o cerrar una cuenta que incumpla estos términos, ponga en riesgo a otros usuarios o al servicio, o cuando la ley lo exija. Siempre que sea posible, te avisaremos antes y te daremos la oportunidad de exportar tus datos.</p>
+</section>
+<section class="legal-sec" id="ley"><h3>12. Ley aplicable y cambios a estos términos</h3>
+<p>Estos términos se rigen por las leyes de la República Bolivariana de Venezuela. Antes de acudir a cualquier instancia, intentaremos resolver cualquier diferencia de buena fe escribiéndonos por el canal de contacto.</p>
+<p>Podemos actualizar estos términos. Publicaremos la nueva versión en esta página con su fecha y, si el cambio es importante, te avisaremos dentro de la aplicación. Si sigues usando el servicio después del cambio, aceptas la nueva versión.</p>
+</section>
+        </article>
+        <article class="legal-part" id="privacidad">
+          <h2>Política de privacidad</h2>
+          <p class="lead">Qué datos tratamos, para qué y cuáles son tus derechos.</p>
+          <section class="legal-sec" id="datos"><h3>1. Qué datos tratamos</h3>
+<ul>
+  <li><strong>Datos de tu cuenta:</strong> nombre, correo electrónico y contraseña. La contraseña se guarda protegida con un algoritmo de derivación (scrypt), nunca en texto plano.</li>
+  <li><strong>Datos de tus espacios de trabajo:</strong> los contactos que tú importas o captas (nombre, teléfono, correo, empresa, etiquetas, notas, consentimiento y bajas, origen del lead como campaña o página de llegada), conversaciones y mensajes, campañas, publicaciones, archivos, tareas, cobros e informes.</li>
+  <li><strong>Datos de conexiones:</strong> los identificadores y claves de acceso de las cuentas de terceros que conectes. Se guardan cifrados.</li>
+  <li><strong>Datos técnicos:</strong> registros de actividad y de auditoría (quién hizo qué cambio y cuándo) y registros de errores necesarios para mantener el servicio seguro y funcionando.</li>
+</ul>
+</section>
+<section class="legal-sec" id="finalidad"><h3>2. Para qué los usamos</h3>
+<ul>
+  <li>Prestarte el servicio: guardar tu información, mostrarla a tu equipo y ejecutar lo que tú configures.</li>
+  <li>Mantener la seguridad: autenticarte, separar los espacios de trabajo, detectar abusos y corregir errores.</li>
+  <li>Cobrar los planes de pago, cuando corresponda.</li>
+  <li>Comunicarnos contigo sobre tu cuenta y cambios importantes del servicio.</li>
+</ul>
+<p>No vendemos tus datos ni los de tus contactos, y no los usamos para publicidad de terceros.</p>
+</section>
+<section class="legal-sec" id="contactos"><h3>3. Los datos de tus clientes</h3>
+<p>Respecto de los contactos que tú gestionas en NV Marketing, tú (la marca) decides qué datos recoges y para qué; NV Marketing solo los procesa por tu cuenta para prestarte el servicio. Eres responsable de tener el consentimiento o la base legal para tratarlos y para escribirles, y de atender sus solicitudes. La app te ayuda registrando el consentimiento y las bajas de cada contacto.</p>
+</section>
+<section class="legal-sec" id="donde"><h3>4. Dónde se guardan y con quién se comparten</h3>
+<p>La base de datos de NV Marketing es PostgreSQL alojada en <strong>Neon</strong>, un proveedor de bases de datos en la nube, y la aplicación funciona en nuestro servidor de alojamiento web. Las conexiones van cifradas (HTTPS y SSL).</p>
+<p>Solo si tú o nosotros activamos la función correspondiente, compartimos los datos estrictamente necesarios con estos proveedores:</p>
+<ul>
+  <li><strong>Canales de mensajería y redes:</strong> Meta (WhatsApp, Facebook, Instagram), Telegram y, si se usa, Ayrshare para publicar.</li>
+  <li><strong>Inteligencia artificial:</strong> OpenAI, Anthropic o Google (Gemini), según el que esté configurado.</li>
+  <li><strong>Archivos multimedia:</strong> Cloudinary o ImgBB.</li>
+  <li><strong>Correo electrónico:</strong> Resend.</li>
+  <li><strong>Pagos de los planes:</strong> Stripe.</li>
+  <li><strong>Servicios de Google</strong> que conectes y, para el registro de errores, Sentry.</li>
+  <li><strong>Automatizaciones externas</strong> (n8n) que tú configures.</li>
+</ul>
+<p>Algunos de estos proveedores pueden guardar datos fuera de Venezuela. Cada uno trata los datos según sus propias políticas. También podemos revelar datos si una autoridad competente lo exige conforme a la ley.</p>
+</section>
+<section class="legal-sec" id="seguridad"><h3>5. Seguridad</h3>
+<p>Usamos conexiones cifradas, contraseñas protegidas, cifrado de las claves de terceros en reposo, sesiones con cookie segura y separación estricta entre espacios de trabajo. Ningún sistema es infalible: si detectamos una brecha que afecte tus datos, te avisaremos sin demora indebida.</p>
+</section>
+<section class="legal-sec" id="conservacion"><h3>6. Cuánto tiempo los conservamos</h3>
+<p>Conservamos tus datos mientras tu cuenta esté activa. Si pides eliminar tu cuenta, borraremos o anonimizaremos tus datos en un plazo razonable, salvo lo que debamos conservar por obligación legal, para resolver disputas o para hacer cumplir estos términos.</p>
+</section>
+<section class="legal-sec" id="derechos"><h3>7. Tus derechos</h3>
+<p>Puedes pedirnos acceder a tus datos, corregirlos, exportarlos o eliminarlos, y oponerte a un tratamiento concreto. Escríbenos por el <a href="#contacto">canal de contacto</a>. Si eres contacto de una marca que usa NV Marketing, dirígete primero a esa marca; si nos escribes a nosotros, le haremos llegar tu solicitud.</p>
+</section>
+<section class="legal-sec" id="menores"><h3>8. Menores de edad</h3>
+<p>NV Marketing no está dirigido a menores de 18 años y no recogemos sus datos a sabiendas. Si crees que un menor nos dio datos, avísanos para eliminarlos.</p>
+</section>
+        </article>
+        <article class="legal-part" id="cookies">
+          <h2>Política de cookies</h2>
+          <p class="lead">Qué guardamos en tu navegador.</p>
+          <section class="legal-sec">
+<p>NV Marketing usa solo lo necesario para funcionar. No usamos cookies de publicidad ni de seguimiento de terceros.</p>
+<div class="table-wrap"><table>
+  <thead><tr><th>Qué</th><th>Para qué</th><th>Duración</th></tr></thead>
+  <tbody>
+    <tr><td>Cookie de sesión (segura, no accesible desde JavaScript)</td><td>Mantener tu sesión iniciada de forma segura</td><td>Hasta 7 días o hasta que cierres sesión</td></tr>
+    <tr><td>Almacenamiento local del navegador</td><td>Recordar tus preferencias: tema claro u oscuro, vista y filtros del calendario, avance del registro inicial</td><td>Hasta que lo borres desde tu navegador</td></tr>
+  </tbody>
+</table></div>
+<p>Este sitio de presentación no usa cookies. Puedes borrar cookies y almacenamiento local desde la configuración de tu navegador; si borras la cookie de sesión tendrás que volver a ingresar.</p>
+</section>
+        </article>
+      </div>
+    </div>
+  </div>
+</main>
+
+<footer class="site">
+  <div class="container">
+    <div class="foot-bottom" style="margin-top:0;border-top:0;padding-top:0">
+      <p>© 2026 NV Marketing · Valeryn Duque y Nathan Quevedo. Todos los derechos reservados. · <a href="index.html" style="color:inherit">Inicio</a></p>
+    </div>
+  </div>
+</footer>
+<script>
+  /* Correo oficial: cuando lo tengas, escríbelo aquí y se mostrará en «Contacto». */
+  window.NV_CONTACT_EMAIL = "";
+  (function(){
+    var mail = (window.NV_CONTACT_EMAIL || "").trim();
+    var el = document.querySelector("[data-contact]");
+    if (mail && el) el.innerHTML = 'Escríbenos a <a href="mailto:' + mail + '">' + mail + '</a>.';
+    var h = document.getElementById("site-header");
+    window.addEventListener("scroll", function(){ h.classList.toggle("scrolled", window.scrollY > 8); }, {passive:true});
+  })();
+</script>
+</body>
+</html>
