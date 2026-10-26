@@ -60,6 +60,8 @@ import type {
   TelegramStatus,
   PcAgentStatus,
   Task,
+  WeeklyReport,
+  WeeklyReportSummary,
 } from "@nv/domain";
 
 /**
@@ -390,6 +392,11 @@ export function createHttpAdapters(opts: HttpAdapterOptions): Services {
       unreadCount: (id) =>
         get<{ count: number }>(`${ws(id)}/notifications/unread-count`).then((r) => r.count),
       markAllRead: (id) => post<{ updated: number }>(`${ws(id)}/notifications/read-all`, {}),
+    },
+    reports: {
+      weekly: (id) => get<WeeklyReportSummary[]>(`${ws(id)}/reports/weekly`),
+      weeklyReport: (id, week) => get<WeeklyReport>(`${ws(id)}/reports/weekly/${encodeURIComponent(week)}`),
+      currentWeek: (id) => get<WeeklyReport>(`${ws(id)}/reports/weekly/actual`),
     },
     tasks: {
       list: (id) => get<Task[]>(`${ws(id)}/tasks`),

@@ -370,6 +370,23 @@ export function useNotifications() {
   });
 }
 
+export function useWeeklyReports() {
+  const svc = useServices();
+  const ws = useWorkspace();
+  return useQuery({ queryKey: [ws.id, "reports", "weekly"], queryFn: () => svc.reports.weekly(ws.id) });
+}
+
+/** A stored week, or the current week so far when `week` is "actual". */
+export function useWeeklyReport(week: string | null) {
+  const svc = useServices();
+  const ws = useWorkspace();
+  return useQuery({
+    queryKey: [ws.id, "reports", "weekly", week],
+    queryFn: () => (week === "actual" ? svc.reports.currentWeek(ws.id) : svc.reports.weeklyReport(ws.id, week!)),
+    enabled: !!week,
+  });
+}
+
 export function useTasks() {
   const svc = useServices();
   const ws = useWorkspace();

@@ -1,6 +1,8 @@
 import type {
   AnalyticsSnapshot,
   Task,
+  WeeklyReport,
+  WeeklyReportSummary,
   Automation,
   AutomationRun,
   AutomationTestResult,
@@ -560,6 +562,15 @@ export interface AutomationService {
   runs(workspaceId: string, id: string): Promise<AutomationRun[]>;
 }
 
+export interface ReportService {
+  /** Stored weekly reports, newest first. */
+  weekly(workspaceId: string): Promise<WeeklyReportSummary[]>;
+  /** One stored week (weekStart = Monday, YYYY-MM-DD). */
+  weeklyReport(workspaceId: string, weekStart: string): Promise<WeeklyReport>;
+  /** The current week so far (live, not stored). */
+  currentWeek(workspaceId: string): Promise<WeeklyReport>;
+}
+
 export interface TaskService {
   list(workspaceId: string): Promise<Task[]>;
   create(workspaceId: string, input: CreateTaskInput): Promise<Task>;
@@ -951,6 +962,7 @@ export interface Services {
   notifications: NotificationService;
   team: TeamService;
   tasks: TaskService;
+  reports: ReportService;
   audit: AuditService;
   ai: AiService;
   pcAgent: PcAgentService;
