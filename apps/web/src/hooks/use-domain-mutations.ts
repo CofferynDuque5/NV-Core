@@ -44,6 +44,9 @@ import type {
   UpdateCampaignInput,
   UpdateContactInput,
   UpsertConnectionInput,
+  CreateTaskInput,
+  Task,
+  UpdateTaskInput,
 } from "@nv/domain";
 
 import { useServices } from "./use-services";
@@ -1592,6 +1595,68 @@ export function useRemoveMember() {
     onSuccess: () => {
       invalidateTeam(qc, ws.id);
       toast.success("Miembro eliminado");
+    },
+    onError: (err) => toast.error(errText(err)),
+  });
+}
+
+export function useCreateTask() {
+  const svc = useServices();
+  const ws = useWorkspace();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: CreateTaskInput) => svc.tasks.create(ws.id, input),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: [ws.id, "tasks"] });
+      toast.success("Tarea creada");
+    },
+  });
+}
+
+/** Updates a task, moving the card on screen right away and rolling back on error. */
+export function useUpdateTask() {
+  const svc = useServices();
+  const ws = useWorkspace();
+  const qc = useQueryClient();
+  const key = [ws.id, "tasks"];
+  return useMutation({
+    mutationFn: ({ id, input }: { id: string; input: UpdateTaskInput }) => svc.tasks.update(ws.id, id, input),
+    onMutate: async ({ id, input }) => {
+      await qc.cancelQueries({ queryKey: key });
+      const previous = qc.getQueryData<Task[]>(key);
+      if (previous) {
+        qc.setQueryData<Task[]>(
+          key,
+          previous.map((t) =>
+            t.id === id
+              ? {
+                  ...t,
+                  ...(input.status ? { status: input.status } : {}),
+                  ...(input.position !== undefined ? { position: input.position } : {}),
+                }
+              : t,
+          ),
+        );
+      }
+      return { previous };
+    },
+    onError: (err, _v, ctx) => {
+      if (ctx?.previous) qc.setQueryData(key, ctx.previous);
+      toast.error(errText(err));
+    },
+    onSettled: () => void qc.invalidateQueries({ queryKey: key }),
+  });
+}
+
+export function useDeleteTask() {
+  const svc = useServices();
+  const ws = useWorkspace();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => svc.tasks.remove(ws.id, id),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: [ws.id, "tasks"] });
+      toast.success("Tarea eliminada");
     },
     onError: (err) => toast.error(errText(err)),
   });

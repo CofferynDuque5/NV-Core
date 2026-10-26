@@ -24,6 +24,7 @@ const ROUTES = [
   "conexiones",
   "configuracion",
   "historial",
+  "tareas",
 ];
 
 async function register(page: Page) {

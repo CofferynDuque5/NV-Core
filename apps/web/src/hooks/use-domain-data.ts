@@ -370,6 +370,17 @@ export function useNotifications() {
   });
 }
 
+export function useTasks() {
+  const svc = useServices();
+  const ws = useWorkspace();
+  return useQuery({
+    queryKey: [ws.id, "tasks"],
+    queryFn: () => svc.tasks.list(ws.id),
+    // Teammates move cards too; keep the board fresh without a socket.
+    refetchInterval: 20_000,
+  });
+}
+
 export function useTeam() {
   const svc = useServices();
   const ws = useWorkspace();

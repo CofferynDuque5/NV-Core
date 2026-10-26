@@ -844,3 +844,24 @@ model Invitation {
   @@index([workspaceSlug])
   @@index([email])
 }
+
+/// A team to-do on the workspace task board. status: todo | doing | done;
+/// priority: low | normal | high. `position` orders cards within a column.
+model Task {
+  id            String    @id @default(cuid())
+  workspaceSlug String
+  title         String
+  description   String    @default("")
+  status        String    @default("todo")
+  priority      String    @default("normal")
+  /// Email of the assigned workspace member.
+  assignee      String?
+  dueAt         DateTime?
+  position      Float     @default(0)
+  createdBy     String
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  completedAt   DateTime?
+
+  @@index([workspaceSlug, status, position])
+}

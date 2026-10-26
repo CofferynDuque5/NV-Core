@@ -121,6 +121,13 @@ export const MODULE_IDS = [
 ] as const;
 export type ModuleId = (typeof MODULE_IDS)[number];
 
+/** Team task board columns, in board order. */
+export const TASK_STATUSES = ["todo", "doing", "done"] as const;
+export type TaskStatus = (typeof TASK_STATUSES)[number];
+
+export const TASK_PRIORITIES = ["low", "normal", "high"] as const;
+export type TaskPriority = (typeof TASK_PRIORITIES)[number];
+
 /** Calendar sub-views. */
 export const CALENDAR_VIEWS = ["mes", "semana", "dia", "agenda", "kanban"] as const;
 export type CalendarView = (typeof CALENDAR_VIEWS)[number];
