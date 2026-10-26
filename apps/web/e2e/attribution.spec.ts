@@ -45,3 +45,24 @@ test("public form keeps the lead's UTM origin and shows it in CRM and analytics"
   await page.goto(`/w/${WS}/analytics`, { waitUntil: "networkidle" });
   await expect(page.getByTestId("lead-sources")).toContainText("instagram", { timeout: 15000 });
 });
+
+test("analytics exports the snapshot as CSV", async ({ page }) => {
+  await page.goto("/login", { waitUntil: "networkidle" });
+  await page.fill("#email", email);
+  await page.fill("#password", PASSWORD);
+  await page.click('button[type="submit"]');
+  await page.waitForURL(`**/w/${WS}/**`, { timeout: 20000 });
+  await page.goto(`/w/${WS}/analytics`, { waitUntil: "networkidle" });
+  await page.getByTestId("analytics-provenance").waitFor();
+
+  const [download] = await Promise.all([
+    page.waitForEvent("download"),
+    page.getByRole("button", { name: "CSV", exact: true }).click(),
+  ]);
+  expect(download.suggestedFilename()).toMatch(new RegExp(`^analitica-${WS}-30d-\\d{4}-\\d{2}-\\d{2}\\.csv$`));
+  const path = await download.path();
+  const { readFileSync } = await import("node:fs");
+  const csv = readFileSync(path!, "utf8");
+  expect(csv).toContain("seccion,metrica,valor,detalle,fuente,alcance");
+  expect(csv).toContain("Leads por origen,instagram,1");
+});
