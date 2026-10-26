@@ -14,7 +14,10 @@ const str = (v: unknown): string => (v == null ? "" : String(v));
 
 /** Parse a condition node's `field` config ("stage=Cliente") into [key, value]. */
 export function parseCondition(node: AutomationNode): { key: string; value: string } | null {
-  const raw = str(cfg(node).field).trim();
+  const c = cfg(node);
+  const raw = str(c.field).trim();
+  const equals = c.equals ?? c.value;
+  if (raw && !raw.includes("=") && equals != null) return { key: raw, value: str(equals).trim() };
   if (!raw || !raw.includes("=")) return null;
   const idx = raw.indexOf("=");
   return { key: raw.slice(0, idx).trim(), value: raw.slice(idx + 1).trim() };
@@ -34,13 +37,21 @@ export function describeNode(node: AutomationNode): string {
     case "trigger":
       return `Disparador: ${str(c.event) || "manual"}`;
     case "action":
-      switch (str(c.action)) {
+      switch ((str(c.action) || str(c.kind)).replace(/_/g, "-")) {
         case "send-message":
-          return `Enviaría "${str(c.body)}" por ${str(c.channel) || "?"} a ${str(c.to) || "?"}`;
+          return `Enviaría "${str(c.body)}" en la misma conversación`;
+        case "ai-reply":
+          return "Respondería con IA";
+        case "create-contact":
+          return `Crearía el contacto${str(c.tag) ? ` con la etiqueta «${str(c.tag)}»` : ""}`;
+        case "notify":
+          return "Avisaría al equipo";
+        case "assign-human":
+          return "Pasaría la conversación a una persona";
         case "publish":
-          return `Publicaría en ${str(c.provider) || "?"}: "${str(c.message)}"`;
+          return `Publicaría en ${str(c.provider) || "?"}: "${str(c.message)}" (solo con n8n)`;
         case "run-campaign":
-          return `Lanzaría la campaña ${str(c.campaignId) || "?"}`;
+          return `Lanzaría la campaña ${str(c.campaignId) || "?"} (solo con n8n)`;
         default:
           return "Acción sin configurar";
       }

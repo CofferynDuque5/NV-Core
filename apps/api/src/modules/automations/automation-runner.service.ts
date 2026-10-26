@@ -154,6 +154,7 @@ export class AutomationRunnerService implements OnModuleInit, OnModuleDestroy {
           ? "soporte"
           : "consulta",
       resolved: "false",
+      newContact: "false",
     };
 
     for (const flow of flows) {
@@ -184,7 +185,10 @@ export class AutomationRunnerService implements OnModuleInit, OnModuleDestroy {
     const c = cfg(trigger);
     const event = str(c.event) || "message.received";
     if (event !== "message.received" && event !== "manual") return false;
-    const contains = Array.isArray(c.contains) ? (c.contains as unknown[]).map(str) : [];
+    // The editor stores keywords as typed ("precio, info"); older flows as an array.
+    const contains = (Array.isArray(c.contains) ? (c.contains as unknown[]).map(str) : str(c.contains).split(","))
+      .map((w) => w.trim())
+      .filter(Boolean);
     if (contains.length === 0) return true;
     return contains.some((w) => w && low.includes(w.toLowerCase()));
   }
@@ -310,6 +314,8 @@ export class AutomationRunnerService implements OnModuleInit, OnModuleDestroy {
           where: { workspaceSlug: p.workspaceSlug, phone: { contains: p.contactHandle.replace(/\D/g, "").slice(-9) } },
           select: { id: true },
         });
+        // «Es un contacto nuevo» (newContact=true) lets a flow greet only first-timers.
+        ctx.newContact = exists ? "false" : "true";
         if (exists) return skipped("El contacto ya existía.");
         const tag = str(c.tag).trim();
         await this.prisma.contact.create({

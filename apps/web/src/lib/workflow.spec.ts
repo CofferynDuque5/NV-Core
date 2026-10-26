@@ -6,10 +6,13 @@ import {
   autoLayout,
   branchForNewEdge,
   branchLabel,
+  configWithOption,
   connectError,
+  keywordsText,
   nextId,
   reachableFromTriggers,
   removeNode,
+  selectedOption,
   updateNode,
   validateGraph,
   wouldCycle,
@@ -182,5 +185,27 @@ describe("autoLayout", () => {
     const laid = autoLayout(g);
     const x = (id: string) => laid.nodes.find((n) => n.id === id)!.x!;
     expect(x("n3")).toBeGreaterThanOrEqual(x("n2"));
+  });
+});
+
+describe("selectedOption / configWithOption", () => {
+  const legacyAction = { id: "a", type: "action" as const, label: "IA", config: { kind: "ai_reply", prompt: "x" } };
+  const legacyCond = { id: "c", type: "cond" as const, label: "¿Compra?", config: { field: "intent", equals: "compra" } };
+
+  it("reads flows saved before the editor", () => {
+    expect(selectedOption(legacyAction)).toBe("ai-reply");
+    expect(selectedOption(legacyCond)).toBe("intent=compra");
+    expect(selectedOption({ id: "t", type: "trigger", label: "T", config: { event: "manual" } })).toBe("manual");
+  });
+
+  it("drops the legacy keys the engine would read first", () => {
+    expect(configWithOption(legacyAction, "notify")).toEqual({ prompt: "x", action: "notify" });
+    expect(configWithOption(legacyCond, "resolved=true")).toEqual({ field: "resolved=true" });
+  });
+
+  it("shows array keywords as typed text", () => {
+    expect(keywordsText(["cobro", "pago"])).toBe("cobro, pago");
+    expect(keywordsText("precio, info")).toBe("precio, info");
+    expect(keywordsText(undefined)).toBe("");
   });
 });

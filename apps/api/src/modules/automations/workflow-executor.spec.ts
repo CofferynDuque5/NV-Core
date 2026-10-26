@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { AutomationEdge, AutomationNode } from "@nv/domain";
 
-import { evalCondition, parseCondition, planExecution } from "./workflow-executor";
+import { describeNode, evalCondition, parseCondition, planExecution } from "./workflow-executor";
 
 const node = (id: string, type: AutomationNode["type"], config: Record<string, unknown> = {}): AutomationNode => ({
   id,
@@ -91,5 +91,20 @@ describe("planExecution", () => {
     const edges = [edge("t", "a"), edge("a", "t")];
     const res = planExecution(nodes, edges);
     expect(res.steps.map((s) => s.nodeId)).toEqual(["t", "a"]);
+  });
+});
+
+describe("flows saved before the editor", () => {
+  it("evaluates { field, equals } conditions", () => {
+    const cond = node("c", "cond", { field: "intent", equals: "compra" });
+    expect(parseCondition(cond)).toEqual({ key: "intent", value: "compra" });
+    expect(evalCondition(cond, { intent: "compra" })).toBe(true);
+    expect(evalCondition(cond, { intent: "soporte" })).toBe(false);
+  });
+
+  it("describes actions stored as kind or action, and flags the n8n-only ones", () => {
+    expect(describeNode(node("a", "action", { kind: "ai_reply" }))).toBe("Respondería con IA");
+    expect(describeNode(node("a", "action", { action: "assign-human" }))).toBe("Pasaría la conversación a una persona");
+    expect(describeNode(node("a", "action", { action: "run-campaign", campaignId: "c1" }))).toContain("solo con n8n");
   });
 });

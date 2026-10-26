@@ -21,6 +21,11 @@ export interface CatalogOption {
   label: string;
   /** Extra config fields this option needs (rendered by the inspector). */
   fields?: { key: string; label: string; placeholder?: string }[];
+  /**
+   * Shown under the selector. Options the built-in engine does not run (they
+   * only reach n8n) say so here, so nobody builds a flow that silently never fires.
+   */
+  hint?: string;
 }
 
 export interface NodeKind {
@@ -33,6 +38,10 @@ export interface NodeKind {
   options: CatalogOption[];
 }
 
+export const N8N_ONLY = "Solo funciona si conectas n8n: el motor integrado no lo ejecuta.";
+
+// The first option of each kind is what a new node starts with, so it is
+// always one the built-in engine (AutomationRunner) executes.
 export const NODE_KINDS: NodeKind[] = [
   {
     type: "trigger",
@@ -41,11 +50,16 @@ export const NODE_KINDS: NodeKind[] = [
     accent: "#3FB950",
     optionKey: "event",
     options: [
-      { value: "message.received", label: "Llega un mensaje" },
-      { value: "contact.created", label: "Se crea un contacto" },
-      { value: "campaign.completed", label: "Termina una campaña" },
-      { value: "post.published", label: "Se publica un post" },
-      { value: "manual", label: "Manualmente / webhook" },
+      {
+        value: "message.received",
+        label: "Llega un mensaje",
+        fields: [{ key: "contains", label: "Solo si contiene (opcional)", placeholder: "precio, info, catálogo" }],
+        hint: "Mensajes de WhatsApp o Telegram. Sin palabras clave, cualquier mensaje lo dispara.",
+      },
+      { value: "contact.created", label: "Se crea un contacto", hint: N8N_ONLY },
+      { value: "campaign.completed", label: "Termina una campaña", hint: N8N_ONLY },
+      { value: "post.published", label: "Se publica un post", hint: N8N_ONLY },
+      { value: "manual", label: "Manualmente / webhook", hint: "Se lanza con «Ejecutar» (requiere webhook de n8n)." },
     ],
   },
   {
@@ -58,11 +72,33 @@ export const NODE_KINDS: NodeKind[] = [
       {
         value: "send-message",
         label: "Enviar un mensaje",
+        fields: [{ key: "body", label: "Texto", placeholder: "Hola {{nombre}}…" }],
+        hint: "Responde en la misma conversación. {{nombre}} se cambia por el nombre del contacto.",
+      },
+      {
+        value: "ai-reply",
+        label: "Responder con IA",
+        fields: [{ key: "prompt", label: "Instrucciones para la IA (opcional)", placeholder: "Eres el asistente de…" }],
+        hint: "Necesita la IA configurada. Si la respuesta deriva a una persona, «Se resolvió» queda en no.",
+      },
+      {
+        value: "create-contact",
+        label: "Crear contacto",
         fields: [
-          { key: "channel", label: "Canal", placeholder: "wa / tg" },
-          { key: "to", label: "Destinatario", placeholder: "+52…" },
-          { key: "body", label: "Texto", placeholder: "Hola {{nombre}}…" },
+          { key: "tag", label: "Etiqueta (opcional)", placeholder: "whatsapp" },
+          { key: "stage", label: "Etapa", placeholder: "Lead" },
         ],
+        hint: "Si ya existe un contacto con ese teléfono, no se duplica.",
+      },
+      {
+        value: "notify",
+        label: "Avisar al equipo",
+        fields: [{ key: "title", label: "Título del aviso (opcional)", placeholder: "Nuevo interesado" }],
+      },
+      {
+        value: "assign-human",
+        label: "Pasar a una persona",
+        hint: "Marca la conversación «requiere-humano» y avisa al equipo.",
       },
       {
         value: "publish",
@@ -71,11 +107,13 @@ export const NODE_KINDS: NodeKind[] = [
           { key: "provider", label: "Proveedor", placeholder: "ig / fb" },
           { key: "message", label: "Mensaje", placeholder: "Texto del post…" },
         ],
+        hint: N8N_ONLY,
       },
       {
         value: "run-campaign",
         label: "Lanzar una campaña",
         fields: [{ key: "campaignId", label: "ID de campaña", placeholder: "cmp_…" }],
+        hint: N8N_ONLY,
       },
     ],
   },
@@ -98,13 +136,53 @@ export const NODE_KINDS: NodeKind[] = [
     glyph: "◆",
     accent: "#7C7CF0",
     optionKey: "field",
+    // Keys the engine fills for every incoming message (see AutomationRunner).
     options: [
-      { value: "stage=Cliente", label: "El contacto es Cliente" },
+      { value: "intent=compra", label: "Quiere comprar", hint: "El mensaje habla de precio, pago o compra." },
+      { value: "intent=soporte", label: "Pide ayuda", hint: "El mensaje habla de un problema o error." },
+      { value: "resolved=true", label: "La IA lo resolvió", hint: "Úsalo después de «Responder con IA»." },
+      { value: "newContact=true", label: "Es un contacto nuevo", hint: "Úsalo después de «Crear contacto»." },
       { value: "channel=wa", label: "El canal es WhatsApp" },
-      { value: "replied=true", label: "Respondió el mensaje" },
+      { value: "channel=tg", label: "El canal es Telegram" },
     ],
   },
 ];
+
+/**
+ * The option a node has selected. Flows written before the editor (sample
+ * data, older saves) use `kind: "ai_reply"` for actions and
+ * `{ field: "intent", equals: "compra" }` for conditions; both are read too.
+ */
+export function selectedOption(node: AutomationNode): string {
+  const kind = nodeKind(node.type);
+  const c = node.config ?? {};
+  if (node.type === "action") {
+    const v = c.action ?? c.kind;
+    return v == null ? "" : String(v).replace(/_/g, "-");
+  }
+  if (node.type === "cond") {
+    const field = String(c.field ?? "");
+    const equals = c.equals ?? c.value;
+    return field && !field.includes("=") && equals != null ? `${field}=${String(equals)}` : field;
+  }
+  return String(c[kind.optionKey] ?? "");
+}
+
+/** Config after choosing `value`, dropping legacy keys the engine would read first. */
+export function configWithOption(node: AutomationNode, value: string): Record<string, unknown> {
+  const config: Record<string, unknown> = { ...(node.config ?? {}) };
+  if (node.type === "action") delete config.kind;
+  if (node.type === "cond") {
+    delete config.equals;
+    delete config.value;
+  }
+  return { ...config, [nodeKind(node.type).optionKey]: value };
+}
+
+/** Trigger keywords as typed in the inspector ("a, b") or stored as an array. */
+export function keywordsText(v: unknown): string {
+  return Array.isArray(v) ? v.map(String).join(", ") : v == null ? "" : String(v);
+}
 
 export function nodeKind(type: AutomationNodeType): NodeKind {
   return NODE_KINDS.find((k) => k.type === type) ?? NODE_KINDS[0]!;
