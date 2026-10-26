@@ -32,6 +32,13 @@ export function CommandPalette() {
       ),
       // Web-only destinations without a domain module (see EXTRA_NAV_ITEMS).
       {
+        module: "cobros",
+        label: "Cobros",
+        section: "PRINCIPAL",
+        icon: "BadgeDollarSign",
+        description: "Métodos de cobro y pagos por verificar",
+      },
+      {
         module: "informes",
         label: "Informe semanal",
         section: "AUTOMATIZACIÓN",

@@ -11,25 +11,10 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { PRIORITY_LABEL, TASK_COLUMNS } from "@/lib/tasks";
+import { fromDateInput, toDateInput } from "@/lib/date-input";
 
 const selectCls =
   "flex h-9 w-full rounded-lg border border-line-soft bg-panel-raised px-3 text-sm text-ink focus-visible:border-brand/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/25";
-
-/** ISO → "YYYY-MM-DD" in local time, for <input type="date">. */
-function toDateInput(iso?: string): string {
-  if (!iso) return "";
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return "";
-  const pad = (n: number) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
-}
-
-/** "YYYY-MM-DD" → ISO at local noon, so the day never shifts across time zones. */
-function fromDateInput(v: string): string | null {
-  const [y, m, d] = v.split("-").map(Number);
-  if (!y || !m || !d) return null;
-  return new Date(y, m - 1, d, 12).toISOString();
-}
 
 /** Create a task (no `task`) or edit one, including moving and deleting it. */
 export function TaskDialog({

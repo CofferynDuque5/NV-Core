@@ -12,6 +12,9 @@ import type {
   PostStatus,
   TaskPriority,
   TaskStatus,
+  PaymentCurrency,
+  PaymentMethodKind,
+  PaymentStatus,
   Role,
   SegmentField,
   SegmentMatch,
@@ -757,6 +760,47 @@ export interface WeeklyReportSummary {
   weekStart: string;
   weekEnd: string;
   generatedAt: string;
+}
+
+/** A way a brand gets paid, with the details its customers need. */
+export interface PaymentMethod {
+  id: string;
+  kind: PaymentMethodKind;
+  /** Name shown to customers ("Nequi Ana", "Binance"). */
+  label: string;
+  currency: PaymentCurrency;
+  /** Values for the catalog fields of its kind (phone, account, address…). */
+  details: Record<string, string>;
+  /** Extra notes for the customer. */
+  instructions?: string;
+  active: boolean;
+  createdAt: string;
+}
+
+/** A charge to a customer, confirmed by hand once the money is seen. */
+export interface PaymentRequest {
+  id: string;
+  concept: string;
+  amount: number;
+  currency: PaymentCurrency;
+  status: PaymentStatus;
+  contactId?: string;
+  contactName?: string;
+  /** Method the customer used (once known). */
+  methodId?: string;
+  methodLabel?: string;
+  /** Transaction reference the customer gave. */
+  reference?: string;
+  note?: string;
+  /** Why it was rejected. */
+  rejectReason?: string;
+  dueAt?: string;
+  paidAt?: string;
+  /** Email of who confirmed it. */
+  verifiedBy?: string;
+  createdBy: string;
+  createdAt: string;
+  updatedAt: string;
 }
 
 /** A team to-do on the workspace task board. */

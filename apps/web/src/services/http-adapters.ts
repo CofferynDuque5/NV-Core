@@ -62,6 +62,8 @@ import type {
   Task,
   WeeklyReport,
   WeeklyReportSummary,
+  PaymentMethod,
+  PaymentRequest,
 } from "@nv/domain";
 
 /**
@@ -392,6 +394,21 @@ export function createHttpAdapters(opts: HttpAdapterOptions): Services {
       unreadCount: (id) =>
         get<{ count: number }>(`${ws(id)}/notifications/unread-count`).then((r) => r.count),
       markAllRead: (id) => post<{ updated: number }>(`${ws(id)}/notifications/read-all`, {}),
+    },
+    payments: {
+      methods: (id) => get<PaymentMethod[]>(`${ws(id)}/payments/methods`),
+      createMethod: (id, input) => post<PaymentMethod>(`${ws(id)}/payments/methods`, input),
+      updateMethod: (id, mid, input) => patch<PaymentMethod>(`${ws(id)}/payments/methods/${mid}`, input),
+      removeMethod: (id, mid) => del<void>(`${ws(id)}/payments/methods/${mid}`),
+      list: (id, filter) => {
+        const q = new URLSearchParams();
+        if (filter?.status) q.set("status", filter.status);
+        if (filter?.contactId) q.set("contactId", filter.contactId);
+        const qs = q.toString();
+        return get<PaymentRequest[]>(`${ws(id)}/payments${qs ? `?${qs}` : ""}`);
+      },
+      create: (id, input) => post<PaymentRequest>(`${ws(id)}/payments`, input),
+      update: (id, pid, input) => patch<PaymentRequest>(`${ws(id)}/payments/${pid}`, input),
     },
     reports: {
       weekly: (id) => get<WeeklyReportSummary[]>(`${ws(id)}/reports/weekly`),

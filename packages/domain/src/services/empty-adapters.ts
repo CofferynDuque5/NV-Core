@@ -269,6 +269,15 @@ export const emptyAdapters: Services = {
     unreadCount: () => delay(0),
     markAllRead: () => delay({ updated: 0 }),
   },
+  payments: {
+    methods: () => delay([]),
+    createMethod: () => notAvailable(),
+    updateMethod: () => notAvailable(),
+    removeMethod: () => notAvailable(),
+    list: () => delay([]),
+    create: () => notAvailable(),
+    update: () => notAvailable(),
+  },
   reports: {
     weekly: () => delay([]),
     weeklyReport: () => notAvailable(),
