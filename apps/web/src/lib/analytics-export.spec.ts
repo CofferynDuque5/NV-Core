@@ -38,7 +38,7 @@ describe("analytics CSV", () => {
 
   it("empieza con BOM y cabecera, y nombra el archivo por workspace y período", () => {
     const csv = analyticsCsv(snap);
-    expect(csv.startsWith("﻿seccion,metrica,valor,detalle,fuente,alcance\r\n")).toBe(true);
+    expect(csv.startsWith("\uFEFFseccion,metrica,valor,detalle,fuente,alcance\r\n")).toBe(true);
     expect(analyticsFileName("fitness", snap)).toBe("analitica-fitness-30d-2026-10-26.csv");
   });
 });

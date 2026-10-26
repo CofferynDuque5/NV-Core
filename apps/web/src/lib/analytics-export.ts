@@ -71,7 +71,7 @@ export function analyticsRows(snap: AnalyticsSnapshot): Row[] {
 /** Full CSV text, with a BOM so Excel opens the accents correctly. */
 export function analyticsCsv(snap: AnalyticsSnapshot): string {
   const lines = [ANALYTICS_CSV_HEADER.join(","), ...analyticsRows(snap).map((r) => r.map(csvField).join(","))];
-  return `﻿${lines.join("\r\n")}\r\n`;
+  return `\uFEFF${lines.join("\r\n")}\r\n`;
 }
 
 /** "analitica-<workspace>-30d-2026-10-26.csv" */
