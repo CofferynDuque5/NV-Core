@@ -1,5 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger";
-import { IsEmail, IsOptional, IsString, MinLength } from "class-validator";
+import { IsBoolean, IsEmail, IsOptional, IsString, MinLength } from "class-validator";
 
 export class RegisterDto {
   @ApiProperty({ example: "founder@empresa.com" })
@@ -24,4 +24,9 @@ export class RegisterDto {
   @IsOptional()
   @IsString()
   workspaceSlug?: string;
+
+  @ApiProperty({ description: "Debe ser true: el usuario acepta los Términos legales vigentes." })
+  @IsOptional()
+  @IsBoolean()
+  acceptTerms?: boolean;
 }

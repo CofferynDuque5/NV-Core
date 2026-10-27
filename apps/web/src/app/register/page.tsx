@@ -1,6 +1,7 @@
 import * as React from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Loader2 } from "lucide-react";
+import { DEFAULT_LEGAL_URL } from "@nv/domain";
 
 import { useAuthStore } from "@/stores/auth-store";
 import { isBackendConfigured } from "@/lib/env";
@@ -11,6 +12,9 @@ import { Input } from "@/components/ui/input";
 import { PasswordInput } from "@/components/ui/password-input";
 import { Label } from "@/components/ui/label";
 
+/** Legal page on the sales site; VITE_LEGAL_URL points it elsewhere. */
+const LEGAL_URL = import.meta.env.VITE_LEGAL_URL || DEFAULT_LEGAL_URL;
+
 export default function RegisterPage() {
   const navigate = useNavigate();
   const register = useAuthStore((s) => s.register);
@@ -18,6 +22,7 @@ export default function RegisterPage() {
   const [name, setName] = React.useState("");
   const [email, setEmail] = React.useState("");
   const [password, setPassword] = React.useState("");
+  const [accepted, setAccepted] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
   const [submitting, setSubmitting] = React.useState(false);
 
@@ -28,9 +33,13 @@ export default function RegisterPage() {
       setError("No hay backend configurado. Entra en modo demo desde el inicio.");
       return;
     }
+    if (!accepted) {
+      setError("Debes aceptar los Términos legales para crear tu cuenta.");
+      return;
+    }
     setSubmitting(true);
     try {
-      await register({ name, email, password });
+      await register({ name, email, password, acceptTerms: true });
       // New account: send them straight to the guided setup to create their first
       // workspace (unless a pending invitation already added them to one).
       const target = useAuthStore.getState().memberships[0]?.workspaceSlug;
@@ -90,6 +99,31 @@ export default function RegisterPage() {
             placeholder="Mínimo 8 caracteres"
           />
         </div>
+        <label htmlFor="accept-terms" className="flex items-start gap-2.5 text-xs leading-relaxed text-ink-muted">
+          <input
+            id="accept-terms"
+            type="checkbox"
+            required
+            checked={accepted}
+            onChange={(e) => setAccepted(e.target.checked)}
+            className="accent-brand mt-0.5 size-4 shrink-0"
+          />
+          <span>
+            Acepto los{" "}
+            <a href={`${LEGAL_URL}#terminos`} target="_blank" rel="noopener noreferrer" className="text-brand font-medium hover:underline">
+              Términos y condiciones
+            </a>
+            , la{" "}
+            <a href={`${LEGAL_URL}#privacidad`} target="_blank" rel="noopener noreferrer" className="text-brand font-medium hover:underline">
+              Política de privacidad
+            </a>{" "}
+            y la{" "}
+            <a href={`${LEGAL_URL}#cookies`} target="_blank" rel="noopener noreferrer" className="text-brand font-medium hover:underline">
+              Política de cookies
+            </a>
+            .
+          </span>
+        </label>
         {error ? (
           <p className="border-state-danger/30 bg-state-danger/10 text-state-danger rounded-lg border px-3 py-2 text-xs">
             {error}

@@ -1,5 +1,6 @@
 import { BadRequestException, HttpException, HttpStatus, UnauthorizedException } from "@nestjs/common";
 import { describe, expect, it, vi } from "vitest";
+import { TERMS_VERSION } from "@nv/domain";
 
 import { AuthService } from "./auth.service";
 import type { AuthStore } from "./auth.store";
@@ -311,9 +312,23 @@ describe("AuthService · team invitations", () => {
     expect(store.upsertMembership).toHaveBeenCalledWith("carol", "w1", "Editor");
   });
 
+  it("refuses to register without accepting the legal terms", async () => {
+    const { svc, store } = makeInviteService();
+    await expect(svc.register({ email: "eve@x.com", password: "password123", name: "Eve" } as never)).rejects.toThrow(
+      /Términos legales/,
+    );
+    expect(store.createUser).not.toHaveBeenCalled();
+  });
+
+  it("stores which terms version the new user accepted", async () => {
+    const { svc, store } = makeInviteService();
+    await svc.register({ email: "bob@x.com", password: "password123", name: "Bob", acceptTerms: true } as never);
+    expect(store.createUser).toHaveBeenCalledWith(expect.objectContaining({ termsVersion: TERMS_VERSION }));
+  });
+
   it("grants pending invitations when the invitee registers", async () => {
     const { svc, store, memberships } = makeInviteService();
-    await svc.register({ email: "bob@x.com", password: "password123", name: "Bob" } as never);
+    await svc.register({ email: "bob@x.com", password: "password123", name: "Bob", acceptTerms: true } as never);
     expect(store.findPendingInvitationsByEmail).toHaveBeenCalledWith("bob@x.com");
     expect(memberships).toContainEqual({ userId: "bob", workspaceSlug: "w1", role: "Editor" });
     expect(store.markInvitationAccepted).toHaveBeenCalledWith("inv1");

@@ -11,6 +11,10 @@ test.describe.serial("auth", () => {
     await page.fill("#name", "E2E Auth");
     await page.fill("#email", email);
     await page.fill("#password", password);
+    // The legal terms must be accepted: the browser blocks the form until then.
+    await expect(page.locator("#accept-terms")).toHaveAttribute("required", "");
+    await expect(page.getByRole("link", { name: "Términos y condiciones" })).toHaveAttribute("href", /legal\.html#terminos$/);
+    await page.check("#accept-terms");
     await page.click('button[type="submit"]');
     // A new account has no workspace yet: it goes to the guided setup.
     await page.waitForURL("**/onboarding", { timeout: 20000 });

@@ -49,9 +49,16 @@ export class AuthStore {
     email: string;
     name: string;
     passwordHash: string;
+    /** Version of the legal terms the user accepted when signing up. */
+    termsVersion?: string;
   }): Promise<UserRecord> {
     const u = await this.prisma.user.create({
-      data: { email: input.email.toLowerCase(), name: input.name, passwordHash: input.passwordHash },
+      data: {
+        email: input.email.toLowerCase(),
+        name: input.name,
+        passwordHash: input.passwordHash,
+        ...(input.termsVersion ? { termsVersion: input.termsVersion, termsAcceptedAt: new Date() } : {}),
+      },
     });
     return this.toUser(u);
   }

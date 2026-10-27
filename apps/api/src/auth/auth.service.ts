@@ -10,7 +10,7 @@ import {
 } from "@nestjs/common";
 import { JwtService } from "@nestjs/jwt";
 import { ConfigService } from "@nestjs/config";
-import { getWorkspaceBySlug, type Role } from "@nv/domain";
+import { TERMS_VERSION, getWorkspaceBySlug, type Role } from "@nv/domain";
 
 import type { AppConfig } from "../config/configuration";
 import { MailService } from "../common/mail.service";
@@ -56,6 +56,9 @@ export class AuthService {
   ) {}
 
   async register(dto: RegisterDto): Promise<AuthResult> {
+    if (dto.acceptTerms !== true) {
+      throw new BadRequestException("Debes aceptar los Términos legales para crear tu cuenta.");
+    }
     const existing = await this.store.findUserByEmail(dto.email);
     if (existing) throw new ConflictException("El email ya está registrado.");
 
@@ -64,6 +67,7 @@ export class AuthService {
       email: dto.email,
       name: dto.name,
       passwordHash,
+      termsVersion: TERMS_VERSION,
     });
 
     // Optional workspace bootstrap: first member of an unclaimed workspace
