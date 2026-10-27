@@ -12,7 +12,14 @@ import {
 } from "@nestjs/common";
 import { ApiBearerAuth, ApiTags } from "@nestjs/swagger";
 import { Prisma } from "@prisma/client";
-import type { WeeklyReport, WeeklyReportAttention, WeeklyReportMetric, WeeklyReportSummary } from "@nv/domain";
+import {
+  formatPaymentAmount,
+  type PaymentCurrency,
+  type WeeklyReport,
+  type WeeklyReportAttention,
+  type WeeklyReportMetric,
+  type WeeklyReportSummary,
+} from "@nv/domain";
 
 import { WorkspaceId } from "../../common/tenant/workspace.decorator";
 import { WorkspaceGuard } from "../../common/tenant/workspace.guard";
@@ -24,6 +31,7 @@ import {
   WEEK_MS,
   dayKey,
   lastClosedWeek,
+  mergePaymentTotals,
   noticeMeta,
   parseWeekStart,
   rankLeadSources,
@@ -226,7 +234,15 @@ export class ReportsService implements OnModuleInit, OnModuleDestroy {
       },
     ];
 
-    const [values, previous, leadRows, attention] = await Promise.all([
+    const paidIn = (r: Range) =>
+      this.prisma.paymentRequest.groupBy({
+        by: ["currency"],
+        where: { ...ws, status: "pagado", paidAt: r },
+        _sum: { amount: true },
+        _count: { _all: true },
+      });
+
+    const [values, previous, leadRows, attention, paidNow, paidBefore] = await Promise.all([
       Promise.all(counters.map((c) => c.count(cur))),
       Promise.all(counters.map((c) => c.count(prev))),
       this.prisma.$queryRaw<{ source: string | null; n: number }[]>(Prisma.sql`
@@ -236,7 +252,11 @@ export class ReportsService implements OnModuleInit, OnModuleDestroy {
         GROUP BY 1
       `),
       this.attention(workspaceSlug, cur, now),
+      paidIn(cur),
+      paidIn(prev),
     ]);
+    const sums = (rows: Awaited<ReturnType<typeof paidIn>>) =>
+      rows.map((g) => ({ currency: g.currency, amount: g._sum.amount, count: g._count._all }));
 
     const metrics: WeeklyReportMetric[] = counters.map((c, i) => ({
       key: c.key,
@@ -254,6 +274,7 @@ export class ReportsService implements OnModuleInit, OnModuleDestroy {
       metrics,
       leadSources: rankLeadSources(leadRows),
       attention,
+      payments: mergePaymentTotals(sums(paidNow), sums(paidBefore)),
     };
   }
 
@@ -269,6 +290,8 @@ export class ReportsService implements OnModuleInit, OnModuleDestroy {
     };
     const sendWhere = { ...ws, ok: false, createdAt: week };
     const runWhere = { ...ws, status: "error", startedAt: week };
+    const toVerifyWhere = { ...ws, status: "por_verificar" };
+    const overduePayWhere = { ...ws, status: "pendiente", dueAt: { lt: now } };
 
     const [
       overdueN,
@@ -282,6 +305,10 @@ export class ReportsService implements OnModuleInit, OnModuleDestroy {
       sends,
       runsN,
       runs,
+      toVerifyN,
+      toVerify,
+      overduePayN,
+      overduePay,
     ] = await Promise.all([
       this.prisma.task.count({ where: overdueWhere }),
       this.prisma.task.findMany({ where: overdueWhere, orderBy: { dueAt: "asc" }, take: ATTENTION_ITEMS }),
@@ -310,7 +337,13 @@ export class ReportsService implements OnModuleInit, OnModuleDestroy {
         take: ATTENTION_ITEMS,
         include: { automation: { select: { name: true } } },
       }),
+      this.prisma.paymentRequest.count({ where: toVerifyWhere }),
+      this.prisma.paymentRequest.findMany({ where: toVerifyWhere, orderBy: { updatedAt: "asc" }, take: ATTENTION_ITEMS }),
+      this.prisma.paymentRequest.count({ where: overduePayWhere }),
+      this.prisma.paymentRequest.findMany({ where: overduePayWhere, orderBy: { dueAt: "asc" }, take: ATTENTION_ITEMS }),
     ]);
+    const money = (p: { amount: Prisma.Decimal; currency: string }) =>
+      formatPaymentAmount(Number(p.amount.toString()), p.currency as PaymentCurrency);
 
     const out: WeeklyReportAttention[] = [
       {
@@ -362,6 +395,24 @@ export class ReportsService implements OnModuleInit, OnModuleDestroy {
         section: "automatizaciones",
         count: runsN,
         items: runs.map((r) => ({ id: r.id, label: r.automation.name, meta: r.error ?? undefined })),
+      },
+      {
+        key: "paymentsToVerify",
+        label: "Cobros por verificar",
+        section: "cobros",
+        count: toVerifyN,
+        items: toVerify.map((p) => ({
+          id: p.id,
+          label: p.concept,
+          meta: [money(p), p.methodLabel, p.reference ? `ref ${p.reference}` : null].filter(Boolean).join(" · "),
+        })),
+      },
+      {
+        key: "overduePayments",
+        label: "Cobros vencidos sin pagar",
+        section: "cobros",
+        count: overduePayN,
+        items: overduePay.map((p) => ({ id: p.id, label: p.concept, meta: `${money(p)} · vencía ${fmtDay(p.dueAt!)}` })),
       },
     ];
     return out.filter((a) => a.count > 0);

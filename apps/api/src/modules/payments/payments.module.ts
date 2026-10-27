@@ -7,6 +7,7 @@ import {
   Get,
   HttpCode,
   Injectable,
+  Logger,
   Module,
   NotFoundException,
   Param,
@@ -23,6 +24,7 @@ import {
   PAYMENT_STATUSES,
   PAYMENT_TRANSITIONS,
   PAYMENT_STATUS_LABEL,
+  formatPaymentAmount,
   paymentMethodDef,
   type PaymentCurrency,
   type PaymentMethod,
@@ -50,6 +52,7 @@ import { WorkspaceId } from "../../common/tenant/workspace.decorator";
 import { WorkspaceGuard } from "../../common/tenant/workspace.guard";
 import { AuditLogger } from "../../common/audit-logger.service";
 import { PrismaService } from "../../prisma/prisma.service";
+import { NotificationsModule, NotificationsService } from "../notifications/notifications.module";
 import { CurrentUser } from "../../auth/decorators/current-user.decorator";
 import { Roles } from "../../auth/decorators/roles.decorator";
 import { RolesGuard } from "../../auth/guards/roles.guard";
@@ -159,9 +162,12 @@ export function mapPayment(row: RequestRow, contactName?: string): PaymentReques
  */
 @Injectable()
 export class PaymentsService {
+  private readonly logger = new Logger(PaymentsService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly audit: AuditLogger,
+    private readonly notifications: NotificationsService,
   ) {}
 
   private requireDb(): void {
@@ -323,7 +329,34 @@ export class PaymentsService {
       );
     }
     const names = await this.contactNames(workspaceId, [row.contactId]);
-    return mapPayment(row, row.contactId ? names.get(row.contactId) : undefined);
+    const contactName = row.contactId ? names.get(row.contactId) : undefined;
+    if (to === "por_verificar" && from !== to) await this.noticeToVerify(workspaceId, row, contactName);
+    return mapPayment(row, contactName);
+  }
+
+  /**
+   * Tell the whole team (in-app only) that a payment is waiting for someone
+   * to check the account. A failed notice never undoes the status change.
+   */
+  private async noticeToVerify(
+    workspaceId: string,
+    row: { concept: string; amount: Prisma.Decimal; currency: string; methodLabel: string | null; reference: string | null },
+    contactName: string | undefined,
+  ): Promise<void> {
+    const meta = [
+      contactName,
+      formatPaymentAmount(Number(row.amount.toString()), row.currency as PaymentCurrency),
+      row.methodLabel,
+      row.reference ? `ref ${row.reference}` : null,
+      "Revisa la cuenta y confírmalo en Cobros.",
+    ]
+      .filter(Boolean)
+      .join(" · ");
+    try {
+      await this.notifications.create(workspaceId, { type: "warning", title: `Cobro por verificar: ${row.concept}`, meta });
+    } catch (err) {
+      this.logger.warn(`No se pudo avisar del cobro por verificar: ${(err as Error).message}`);
+    }
   }
 
   /** A reference that already confirmed another payment is most likely a reused receipt. */
@@ -431,5 +464,5 @@ export class PaymentsController {
   }
 }
 
-@Module({ controllers: [PaymentsController], providers: [PaymentsService] })
+@Module({ imports: [NotificationsModule], controllers: [PaymentsController], providers: [PaymentsService] })
 export class PaymentsModule {}

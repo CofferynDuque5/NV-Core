@@ -69,6 +69,27 @@ describe.skipIf(!url)("Informe semanal contra PostgreSQL real", () => {
         { workspaceSlug: ws, title: "Llamar a proveedor", status: "todo", dueAt: at("10T12:00:00"), createdBy: "x" },
       ],
     });
+    // Payments: confirmed in the week (2 COP + 1 USDT), the week before (COP + PEN), waiting, overdue, another workspace.
+    const pay = (concept: string, amount: number, currency: string, extra: object) => ({
+      workspaceSlug: ws,
+      concept,
+      amount,
+      currency,
+      createdBy: "x",
+      ...extra,
+    });
+    await prisma.paymentRequest.createMany({
+      data: [
+        pay("Plan Pro", 150000, "COP", { status: "pagado", paidAt: at("13T12:00:00") }),
+        pay("Asesoría", 50000, "COP", { status: "pagado", paidAt: at("15T12:00:00") }),
+        pay("Curso", 25, "USDT", { status: "pagado", paidAt: at("16T12:00:00") }),
+        pay("Plan Pro", 100000, "COP", { status: "pagado", paidAt: at("07T12:00:00") }),
+        pay("Plan mensual", 49.9, "PEN", { status: "pagado", paidAt: at("08T12:00:00") }),
+        pay("Pedido 12", 80000, "COP", { status: "por_verificar", methodLabel: "Nequi", reference: "M123" }),
+        pay("Pedido 9", 20, "USD", { status: "pendiente", dueAt: at("10T12:00:00") }),
+        { ...pay("Ajeno", 999, "COP", { status: "pagado", paidAt: at("13T12:00:00") }), workspaceSlug: `${ws}-otro` },
+      ],
+    });
   }
 
   it("genera la semana cerrada una sola vez, con cifras reales y lo pendiente", async () => {
@@ -101,6 +122,15 @@ describe.skipIf(!url)("Informe semanal contra PostgreSQL real", () => {
     expect(a.postErrors?.items[0]?.label).toBe("Post fallido");
     expect(a.sendErrors?.items[0]).toMatchObject({ label: "Promo → VIP", meta: "Sesión cerrada" });
     expect(a.automationErrors?.items[0]).toMatchObject({ label: "Bienvenida", meta: "IA sin configurar" });
+    expect(a.paymentsToVerify).toMatchObject({ count: 1, section: "cobros" });
+    expect(a.paymentsToVerify?.items[0]).toMatchObject({ label: "Pedido 12", meta: "$ 80.000 COP · Nequi · ref M123" });
+    expect(a.overduePayments?.items[0]).toMatchObject({ label: "Pedido 9", meta: "US$ 20,00 · vencía 10/10" });
+    // Money per currency, never added across currencies.
+    expect(report.payments).toEqual([
+      { currency: "COP", amount: 200000, count: 2, previousAmount: 100000, previousCount: 1 },
+      { currency: "PEN", amount: 0, count: 0, previousAmount: 49.9, previousCount: 1 },
+      { currency: "USDT", amount: 25, count: 1, previousAmount: 0, previousCount: 0 },
+    ]);
 
     // A second sweep (or another instance) neither duplicates nor notifies again.
     await reports.sweep(wednesday);
@@ -110,6 +140,7 @@ describe.skipIf(!url)("Informe semanal contra PostgreSQL real", () => {
     expect(notes).toHaveLength(1);
     expect(notes[0]).toMatchObject({ title: "Tu resumen semanal está listo", type: "warning" });
     expect(notes[0]?.meta).toContain("3 contactos nuevos (+2)");
+    expect(notes[0]?.meta).toContain("3 cobros confirmados");
 
     expect(await reports.list(ws)).toEqual([expect.objectContaining({ weekStart: "2026-10-12", weekEnd: "2026-10-18" })]);
   });
