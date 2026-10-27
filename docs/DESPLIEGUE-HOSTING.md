@@ -43,7 +43,9 @@ el núcleo.
 En el panel de Render → tu servicio → **Environment**, rellena solo las que uses y
 pulsa **Save** (redepliega solo):
 
-- `IMGBB_API_KEY` — imágenes (recomendado). `CLOUDINARY_URL` — si quieres video.
+- Archivos subidos: se guardan en el propio servidor (`MEDIA_DIR`, por defecto
+  `data/uploads`). En el plan free el disco se borra; usa un **Disk** en `/data` y
+  `MEDIA_DIR=/data/uploads`. `API_URL` debe ser la URL https del servicio.
 - `TELEGRAM_API_ID` + `TELEGRAM_API_HASH` — cuenta de Telegram (my.telegram.org).
 - `STRIPE_SECRET_KEY` (+ `STRIPE_WEBHOOK_SECRET`, `STRIPE_PRICE_ID`) — cobros.
 - `META_APP_ID` + `META_APP_SECRET` / `WHATSAPP_TOKEN` — Facebook/Instagram/WA Cloud.

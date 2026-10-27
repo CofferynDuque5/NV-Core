@@ -49,3 +49,4 @@ scratch/
 # archivos de prueba locales (no versionar)
 .e2e-db/
 _pg.mjs
+data/uploads/

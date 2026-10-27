@@ -64,6 +64,7 @@ import type {
   WeeklyReportSummary,
   PaymentMethod,
   PaymentRequest,
+  UploadFileResult,
 } from "@nv/domain";
 
 /**
@@ -90,15 +91,17 @@ function createClient(opts: HttpAdapterOptions) {
   }
 
   async function raw(method: string, path: string, body?: unknown): Promise<Response> {
+    // FormData (file uploads) goes as-is: the browser sets the multipart boundary.
+    const isForm = typeof FormData !== "undefined" && body instanceof FormData;
     return fetch(`${base}/api${path}`, {
       method,
       credentials: "include",
       headers: {
         Accept: "application/json",
-        ...(body !== undefined ? { "Content-Type": "application/json" } : {}),
+        ...(body !== undefined && !isForm ? { "Content-Type": "application/json" } : {}),
         ...authHeaders(),
       },
-      body: body !== undefined ? JSON.stringify(body) : undefined,
+      body: isForm ? body : body !== undefined ? JSON.stringify(body) : undefined,
     });
   }
 
@@ -337,6 +340,13 @@ export function createHttpAdapters(opts: HttpAdapterOptions): Services {
           `${ws(id)}/media/upload-signature${folder ? `?folder=${encodeURIComponent(folder)}` : ""}`,
         ),
       uploadImage: (id, image) => post<{ url: string }>(`${ws(id)}/media/upload-image`, { image }),
+      uploadFile: (id, file, options) => {
+        const form = new FormData();
+        if (options?.library) form.set("library", "true");
+        if (options?.folderId) form.set("folderId", options.folderId);
+        form.set("file", file, file.name);
+        return post<UploadFileResult>(`${ws(id)}/media/upload`, form);
+      },
       createAsset: (id, input) => post<MediaAsset>(`${ws(id)}/media/assets`, input),
       updateAsset: (id, assetId, input) =>
         patch<MediaAsset>(`${ws(id)}/media/assets/${assetId}`, input),

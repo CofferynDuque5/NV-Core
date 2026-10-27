@@ -161,5 +161,5 @@ export const CALENDAR_VIEWS = ["mes", "semana", "dia", "agenda", "kanban"] as co
 export type CalendarView = (typeof CALENDAR_VIEWS)[number];
 
 /** Media asset kinds. */
-export const MEDIA_TYPES = ["image", "video"] as const;
+export const MEDIA_TYPES = ["image", "video", "document"] as const;
 export type MediaType = (typeof MEDIA_TYPES)[number];

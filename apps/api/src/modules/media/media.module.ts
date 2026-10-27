@@ -1,4 +1,7 @@
+import { copyFile, mkdir, open as openFile, rename, stat, unlink, writeFile } from "node:fs/promises";
+import { join } from "node:path";
 import {
+  BadRequestException,
   Body,
   Controller,
   Delete,
@@ -11,9 +14,15 @@ import {
   Patch,
   Post,
   Query,
+  Res,
   ServiceUnavailableException,
+  UploadedFile,
   UseGuards,
+  UseInterceptors,
 } from "@nestjs/common";
+import { FileInterceptor, MulterModule } from "@nestjs/platform-express";
+import { SkipThrottle } from "@nestjs/throttler";
+import type { Response as ExpressResponse } from "express";
 import { ApiBearerAuth, ApiPropertyOptional, ApiTags } from "@nestjs/swagger";
 import { ConfigService } from "@nestjs/config";
 import {
@@ -22,6 +31,8 @@ import {
   type MediaFolder,
   type MediaType,
   type MediaUploadSignature,
+  type StoredFile,
+  type UploadFileResult,
 } from "@nv/domain";
 import { IsIn, IsOptional, IsString, IsUrl, MaxLength, MinLength } from "class-validator";
 
@@ -37,7 +48,19 @@ import { Roles } from "../../auth/decorators/roles.decorator";
 import { CurrentUser } from "../../auth/decorators/current-user.decorator";
 import type { AuthenticatedUser } from "../../auth/auth.types";
 import { CredentialsModule, CredentialsService } from "../credentials/credentials.module";
+import { Public } from "../../auth/decorators/public.decorator";
 import { buildUploadSignature, parseCloudinaryUrl } from "./cloudinary";
+import {
+  CONTENT_TYPE_BY_EXT,
+  STORED_NAME_RE,
+  WORKSPACE_DIR_RE,
+  displayName,
+  fileSpec,
+  publicFileUrl,
+  resolveMediaDir,
+  servesInline,
+  storedFileName,
+} from "./local-storage";
 import { LIST_CAP } from "../../common/query-limits";
 
 export class CreateFolderDto {
@@ -59,6 +82,23 @@ export class CreateAssetDto {
   @IsOptional()
   @IsUrl({ require_protocol: true, protocols: ["https"] })
   url?: string;
+}
+
+/** Extra form fields sent with a server upload (multipart). */
+export class UploadFileDto {
+  @ApiPropertyOptional({ description: "Guardar también en la Biblioteca: true | false" })
+  @IsOptional()
+  @IsIn(["true", "false"])
+  library?: string;
+  @ApiPropertyOptional() @IsOptional() @IsString() folderId?: string;
+}
+
+/** What multer hands over after writing the upload to a temp file. */
+export interface UploadedDiskFile {
+  path: string;
+  size: number;
+  mimetype: string;
+  originalname: string;
 }
 
 /** Rename / retag / move an asset. All fields optional. */
@@ -218,6 +258,100 @@ export class MediaService {
     if (!folder) throw new NotFoundException("Carpeta no encontrada.");
   }
 
+  /**
+   * Keep an uploaded file on this server: checks type and content, moves it to
+   * <MEDIA_DIR>/<workspace>/<random>.<ext> and returns its public URL.
+   * Optionally also adds it to the Biblioteca.
+   */
+  async saveFile(
+    workspaceId: string,
+    actor: string,
+    file: UploadedDiskFile | undefined,
+    dto: UploadFileDto = {},
+  ): Promise<UploadFileResult> {
+    const media = this.config.get("media", { infer: true });
+    if (!file) throw new BadRequestException("Falta el archivo.");
+    try {
+      if (!media.enabled) {
+        throw new ServiceUnavailableException(
+          "Almacenamiento en el servidor no configurado (MEDIA_STORAGE=off).",
+        );
+      }
+      if (!WORKSPACE_DIR_RE.test(workspaceId)) throw new BadRequestException("Marca no válida.");
+      const spec = fileSpec(file.mimetype);
+      if (!spec) {
+        throw new BadRequestException(
+          "Tipo de archivo no permitido. Sube imágenes (JPG, PNG, WebP, GIF), video (MP4, MOV, WebM) o documentos (PDF, Word, Excel, PowerPoint, TXT, CSV).",
+        );
+      }
+      if (file.size <= 0) throw new BadRequestException("El archivo está vacío.");
+      if (!spec.sniff(await readHead(file.path))) {
+        throw new BadRequestException("El contenido del archivo no coincide con su tipo.");
+      }
+      if (dto.library === "true") await this.assertOwnedFolder(workspaceId, dto.folderId);
+
+      const root = resolveMediaDir(media.dir);
+      await ensureStorageRoot(root);
+      const dir = join(root, workspaceId);
+      await mkdir(dir, { recursive: true });
+      const name = storedFileName(spec.ext);
+      await moveFile(file.path, join(dir, name));
+
+      const stored: StoredFile = {
+        url: publicFileUrl(media.publicBase, workspaceId, name),
+        kind: spec.kind,
+        mime: file.mimetype.toLowerCase(),
+        filename: displayName(file.originalname, name),
+        size: file.size,
+      };
+      await this.audit.record(workspaceId, actor, "media.file.upload", name);
+      let asset: MediaAsset | null = null;
+      if (dto.library === "true") {
+        const row = await this.db().mediaAsset.create({
+          data: {
+            workspaceSlug: workspaceId,
+            type: spec.kind,
+            title: stored.filename,
+            folderId: dto.folderId,
+            url: stored.url,
+          },
+        });
+        await this.audit.record(workspaceId, actor, "media.asset.create", row.id);
+        asset = mapMediaAsset(row);
+      }
+      return { file: stored, asset };
+    } finally {
+      // The temp file is gone after a successful move; on any rejection drop it.
+      await unlink(file.path).catch(() => undefined);
+    }
+  }
+
+  /** Stream a stored file. Only names this server generated are served. */
+  async serveFile(workspace: string, name: string, res: ExpressResponse): Promise<void> {
+    const media = this.config.get("media", { infer: true });
+    if (!WORKSPACE_DIR_RE.test(workspace) || !STORED_NAME_RE.test(name)) {
+      throw new NotFoundException("Archivo no encontrado.");
+    }
+    const ext = name.slice(name.lastIndexOf(".") + 1);
+    const type = CONTENT_TYPE_BY_EXT[ext];
+    if (!type) throw new NotFoundException("Archivo no encontrado.");
+    const full = join(resolveMediaDir(media.dir), workspace, name);
+    const info = await stat(full).catch(() => null);
+    if (!info?.isFile()) throw new NotFoundException("Archivo no encontrado.");
+
+    res.setHeader("Content-Type", type);
+    res.setHeader("X-Content-Type-Options", "nosniff");
+    // The web app (other origin in dev) and Meta/WhatsApp must be able to load it.
+    res.setHeader("Cross-Origin-Resource-Policy", "cross-origin");
+    res.setHeader("Content-Disposition", servesInline(ext) ? "inline" : "attachment");
+    // PDFs need the browser viewer; everything else can't run anything.
+    if (ext !== "pdf") res.setHeader("Content-Security-Policy", "default-src 'none'; sandbox");
+    // Names are random and never reused, so the content never changes.
+    res.sendFile(full, { maxAge: "365d", immutable: true, dotfiles: "deny" }, (err) => {
+      if (err && !res.headersSent) res.status(404).json({ message: "Archivo no encontrado." });
+    });
+  }
+
   async createAsset(workspaceId: string, actor: string, dto: CreateAssetDto): Promise<MediaAsset> {
     await this.assertOwnedFolder(workspaceId, dto.folderId);
     const row = await this.db().mediaAsset.create({
@@ -305,6 +439,20 @@ export class MediaController {
     return this.service.uploadImage(workspaceId, dto.image);
   }
 
+  @Post("upload")
+  @Roles("Owner", "Admin", "Editor")
+  @UseGuards(RolesGuard)
+  @UseInterceptors(FileInterceptor("file"))
+  @HttpCode(200)
+  uploadFile(
+    @WorkspaceId() workspaceId: string,
+    @CurrentUser() user: AuthenticatedUser,
+    @UploadedFile() file: UploadedDiskFile | undefined,
+    @Body() dto: UploadFileDto,
+  ) {
+    return this.service.saveFile(workspaceId, user.email, file, dto);
+  }
+
   @Post("folders")
   @Roles("Owner", "Admin", "Editor")
   @UseGuards(RolesGuard)
@@ -352,9 +500,76 @@ export class MediaController {
   }
 }
 
+/**
+ * Public file server for uploads kept on this server. No login: WhatsApp,
+ * Instagram and Facebook fetch these URLs. Names are 128-bit random.
+ */
+@ApiTags("media")
+@Public()
+@SkipThrottle()
+@Controller("files")
+export class FilesController {
+  constructor(private readonly service: MediaService) {}
+
+  @Get(":workspace/:name")
+  serve(@Param("workspace") workspace: string, @Param("name") name: string, @Res() res: ExpressResponse) {
+    return this.service.serveFile(workspace, name, res);
+  }
+}
+
+/**
+ * Create the storage folder with an .htaccess that blocks direct web access:
+ * on cPanel the app folder can be the site's web root, and files must only
+ * come out through /api/files (with its safe headers).
+ */
+async function ensureStorageRoot(root: string): Promise<void> {
+  await mkdir(root, { recursive: true });
+  await writeFile(join(root, ".htaccess"), "Require all denied\n", { flag: "wx" }).catch(
+    (err: NodeJS.ErrnoException) => {
+      if (err.code !== "EEXIST") throw err;
+    },
+  );
+}
+
+/** First bytes of a file, for the content check. */
+async function readHead(path: string): Promise<Buffer> {
+  const handle = await openFile(path, "r");
+  try {
+    const buf = Buffer.alloc(4096);
+    const { bytesRead } = await handle.read(buf, 0, buf.length, 0);
+    return buf.subarray(0, bytesRead);
+  } finally {
+    await handle.close();
+  }
+}
+
+/** rename(), or copy+delete when the temp folder is on another disk. */
+async function moveFile(from: string, to: string): Promise<void> {
+  try {
+    await rename(from, to);
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code !== "EXDEV") throw err;
+    await copyFile(from, to);
+    await unlink(from);
+  }
+}
+
 @Module({
-  imports: [CredentialsModule],
-  controllers: [MediaController],
+  imports: [
+    CredentialsModule,
+    // Uploads stream to <MEDIA_DIR>/.tmp first (never held in memory), capped at MEDIA_MAX_MB.
+    MulterModule.registerAsync({
+      inject: [ConfigService],
+      useFactory: (config: ConfigService<AppConfig, true>) => {
+        const media = config.get("media", { infer: true });
+        return {
+          dest: join(resolveMediaDir(media.dir), ".tmp"),
+          limits: { fileSize: media.maxBytes, files: 1, fields: 10 },
+        };
+      },
+    }),
+  ],
+  controllers: [MediaController, FilesController],
   providers: [MediaService],
 })
 export class MediaModule {}

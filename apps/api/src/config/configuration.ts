@@ -32,6 +32,8 @@ export interface AppConfig {
   database: { url?: string };
   redis: { url?: string };
   mail: { from: string };
+  /** Files uploaded to this server (see modules/media/local-storage.ts). */
+  media: { enabled: boolean; dir: string; maxBytes: number; publicBase: string };
   /** Plan applied when Stripe isn't configured (self-host / dev). */
   billing: { defaultPlan: "free" | "pro" };
   integrations: {
@@ -119,6 +121,12 @@ export function buildConfig(env: Env): AppConfig {
     database: { url: env.DATABASE_URL },
     redis: { url: env.REDIS_URL },
     mail: { from: env.MAIL_FROM },
+    media: {
+      enabled: env.MEDIA_STORAGE === "local",
+      dir: env.MEDIA_DIR,
+      maxBytes: env.MEDIA_MAX_MB * 1024 * 1024,
+      publicBase: (env.MEDIA_PUBLIC_URL ?? env.API_URL).replace(/\/$/, ""),
+    },
     billing: { defaultPlan: env.DEFAULT_PLAN === "free" ? "free" : "pro" },
     integrations: {
       n8n: {

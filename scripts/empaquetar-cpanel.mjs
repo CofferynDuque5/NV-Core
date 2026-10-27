@@ -442,6 +442,15 @@ NODE_ENV=production
 # Tu correo de admin (para el primer acceso)
 NV_ADMIN_EMAIL=tucorreo@ejemplo.com
 
+# ARCHIVOS (imágenes, video y documentos que subes en la app)
+# Se guardan en tu servidor. Pon una carpeta FUERA de la del subdominio para que
+# no se borre al subir una versión nueva, p.ej.:
+# MEDIA_DIR=/home/USUARIO/nv-archivos
+# Tamaño máximo por archivo (MB):
+# MEDIA_MAX_MB=100
+# Dirección pública de la app (https), para que WhatsApp e Instagram descarguen:
+# API_URL=https://tu-subdominio.com
+
 # OPCIONALES (ponlas cuando las tengas)
 # IMGBB_API_KEY=
 # TELEGRAM_API_ID=
@@ -521,6 +530,19 @@ Notas:
 - El mismo proceso sirve la API y la web en la misma URL (sin CORS, sin config.js).
 - Las migraciones de la base se aplican solas al arrancar.
 - Para WhatsApp/Telegram e IA, añade sus claves como variables de entorno y reinicia.
+
+ARCHIVOS SUBIDOS (Biblioteca y adjuntos de campañas)
+- Se guardan en TU servidor, no en Cloudinary. Por defecto en la carpeta
+  data/uploads dentro de la app. Recomendado: define MEDIA_DIR con una carpeta
+  fuera del subdominio (p.ej. /home/USUARIO/nv-archivos) para que no se pierdan
+  al vaciar la carpeta y subir una versión nueva. Inclúyela en tus copias de seguridad.
+- Se sirven en https://tu-subdominio.com/api/files/... Define API_URL con esa
+  dirección https: WhatsApp, Instagram y Facebook solo descargan por https.
+- Tipos permitidos: JPG, PNG, WebP, GIF, MP4, MOV, WebM, PDF, Word, Excel,
+  PowerPoint, TXT y CSV. Máximo 100 MB por archivo (MEDIA_MAX_MB lo cambia).
+  Revisa también el límite de subida de tu hosting.
+- Borrar un archivo de la Biblioteca no lo borra del disco (puede seguir en
+  campañas ya enviadas).
 `,
 );
 

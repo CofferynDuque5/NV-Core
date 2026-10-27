@@ -1,5 +1,5 @@
 import * as React from "react";
-import { Images, Loader2, Search, X } from "lucide-react";
+import { FileText, Film, Image as ImageIcon, Images, Loader2, Search, X } from "lucide-react";
 import type { CampaignAttachment, MediaAsset } from "@nv/domain";
 
 import { cn } from "@/lib/utils";
@@ -37,8 +37,17 @@ export function AttachmentRows({
           {att.url && (att.kind ?? "image") === "image" ? (
             <img src={att.url} alt="" className="size-10 shrink-0 rounded object-cover" />
           ) : (
-            <span className="grid size-10 shrink-0 place-items-center rounded bg-panel-high text-[10px] uppercase text-ink-faint">
-              {att.kind ?? "img"}
+            <span
+              className="grid size-10 shrink-0 place-items-center rounded bg-panel-high text-ink-faint"
+              title={att.kind === "video" ? "Video" : att.kind === "document" ? "Documento" : "Imagen"}
+            >
+              {att.kind === "video" ? (
+                <Film className="size-4" />
+              ) : att.kind === "document" ? (
+                <FileText className="size-4" />
+              ) : (
+                <ImageIcon className="size-4" />
+              )}
             </span>
           )}
           <span className="min-w-0 flex-1 truncate text-ink" title={att.url}>
@@ -108,7 +117,8 @@ export function LibraryPickerDialog({
 }) {
   const [q, setQ] = React.useState("");
   const assets = useMediaAssets({ q: q.trim() || undefined });
-  const items = (assets.data?.items ?? []).filter((a) => a.url);
+  // Documents are attached by uploading them; the picker offers images and video.
+  const items = (assets.data?.items ?? []).filter((a) => a.url && a.type !== "document");
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
