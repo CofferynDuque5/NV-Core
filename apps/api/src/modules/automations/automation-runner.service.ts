@@ -5,7 +5,7 @@ import { EventBus } from "../../core/events/event-bus.service";
 import { PrismaService } from "../../prisma/prisma.service";
 import { ProviderManager } from "../../providers/provider-manager.service";
 import { AiService } from "../ai/ai.module";
-import { ConsentService, isOptOutMessage } from "../consent/consent.service";
+import { ConsentService, isOptOutMessage, phoneKey } from "../consent/consent.service";
 import { NotificationsService } from "../notifications/notifications.module";
 
 /**
@@ -25,6 +25,12 @@ import { NotificationsService } from "../notifications/notifications.module";
  * recibe 5 seguimientos), y una espera cortada por un reinicio a mitad de
  * ejecución se marca como fallida «sin confirmar» en vez de repetirse.
  *
+ * Disparador «contacto sin actividad N días»: una vez por hora se buscan los
+ * contactos que dejaron de escribir hace N días y se ejecuta el flujo una sola
+ * vez por cada racha de silencio (`AutomationInactiveFire`). Solo cuentan los
+ * que cumplieron los N días en la última semana, así activar un flujo no le
+ * escribe de golpe a toda la lista antigua; y como mucho 50 por flujo y hora.
+ *
  * Historial: cada ejecución real (mensaje entrante o reanudación) se guarda en
  * `AutomationRun` con los pasos recorridos y por qué se omitió cada acción
  * (pausa anti-spam, contacto dado de baja, sin respuesta de la IA…). Se
@@ -40,6 +46,14 @@ const STUCK_RUNNING_MS = 10 * 60_000;
 const MAX_WAIT_MS = 30 * 86_400_000;
 /** Días que se conserva el historial de ejecuciones. */
 const RUN_RETENTION_MS = 30 * 86_400_000;
+const DAY_MS = 86_400_000;
+export const INACTIVE_EVENT = "contact.inactive";
+/** Cada cuánto se buscan contactos inactivos. */
+const INACTIVE_SWEEP_MS = 3_600_000;
+/** Solo los que cumplieron los N días hace menos de esto (y tras una caída del servidor). */
+export const INACTIVE_WINDOW_MS = 7 * DAY_MS;
+/** Contactos por flujo y barrido, para no saturar WhatsApp. */
+export const INACTIVE_BATCH = 50;
 export const WAIT_UNCONFIRMED =
   "Sin confirmar: el servidor se reinició mientras se reanudaba el flujo. No se repite para no duplicar envíos.";
 
@@ -91,11 +105,22 @@ export function waitDurationMs(config: Record<string, unknown>): number | null {
   return Math.min(ms, MAX_WAIT_MS);
 }
 const str = (v: unknown): string => (v == null ? "" : String(v));
+
+/** Días del disparador «sin actividad» (1–365); null si no es válido. */
+export function inactiveDays(config: Record<string, unknown>): number | null {
+  const d = Number(String(config.days ?? "").trim());
+  return Number.isInteger(d) && d >= 1 && d <= 365 ? d : null;
+}
 const cfg = (n: AutomationNode): Record<string, unknown> => n.config ?? {};
 
 /** Palabras que marcan intención de compra / soporte (heurística barata). */
 const BUY_WORDS = ["precio", "cuanto", "cuánto", "quiero", "comprar", "compra", "cuenta", "combo", "pago", "pagar", "vale"];
 const HELP_WORDS = ["no funciona", "ayuda", "error", "no me deja", "no puedo", "problema", "pantalla en uso", "pin"];
+
+/** Instrucción para la IA cuando el flujo no nace de un mensaje (contacto inactivo). */
+function reengagePrompt(p: IncomingMessage, ctx: Record<string, string>): string {
+  return `${p.contactName || "El contacto"} lleva ${ctx.inactiveDays || "varios"} días sin escribirnos. Escríbele un mensaje breve y amable para retomar la conversación, sin presionar.`;
+}
 
 @Injectable()
 export class AutomationRunnerService implements OnModuleInit, OnModuleDestroy {
@@ -103,6 +128,8 @@ export class AutomationRunnerService implements OnModuleInit, OnModuleDestroy {
   private unsubscribe: (() => void) | null = null;
   private timer: NodeJS.Timeout | null = null;
   private ticking = false;
+  /** Último barrido de contactos inactivos (0 = pendiente: el primero va al arrancar). */
+  private lastInactiveSweep = 0;
   /** Último auto-envío por (workspace|handle) para el cooldown anti-spam. */
   private readonly lastReply = new Map<string, number>();
 
@@ -119,13 +146,17 @@ export class AutomationRunnerService implements OnModuleInit, OnModuleDestroy {
     this.unsubscribe = this.events.on("message.received", (p) => this.onMessage(p));
     this.logger.log("Runner de automatizaciones activo (mensaje entrante → flujos).");
     if (!this.prisma.enabled) return;
-    this.timer = setInterval(
-      () =>
-        void this.resumeDue().catch((err: unknown) =>
-          this.logger.warn(`Reanudar esperas falló: ${(err as Error).message}`),
-        ),
-      TICK_MS,
-    );
+    this.timer = setInterval(() => {
+      void this.resumeDue().catch((err: unknown) =>
+        this.logger.warn(`Reanudar esperas falló: ${(err as Error).message}`),
+      );
+      if (Date.now() - this.lastInactiveSweep >= INACTIVE_SWEEP_MS) {
+        this.lastInactiveSweep = Date.now();
+        void this.sweepInactive().catch((err: unknown) =>
+          this.logger.warn(`Revisar contactos inactivos falló: ${(err as Error).message}`),
+        );
+      }
+    }, TICK_MS);
   }
 
   onModuleDestroy(): void {
@@ -219,7 +250,12 @@ export class AutomationRunnerService implements OnModuleInit, OnModuleDestroy {
       let branch: "true" | "false" | undefined;
 
       if (current.type === "trigger") {
-        step(current, `«${p.text.slice(0, 80)}»`);
+        step(
+          current,
+          context.trigger === "inactive"
+            ? `Sin escribir desde hace ${context.inactiveDays} días.`
+            : `«${p.text.slice(0, 80)}»`,
+        );
       } else if (current.type === "action") {
         let result: ActionResult;
         try {
@@ -293,7 +329,7 @@ export class AutomationRunnerService implements OnModuleInit, OnModuleDestroy {
         if (await this.consent.isHandleOptedOut(p.workspaceSlug, p.contactHandle)) return skipped(OPTED_OUT_NOTE);
         const { reply } = await this.ai.chat(p.workspaceSlug, {
           system: str(c.prompt) || undefined,
-          messages: [{ role: "user", content: p.text }],
+          messages: [{ role: "user", content: p.text || reengagePrompt(p, ctx) }],
           mode: "ventas",
         });
         if (!reply) return skipped("La IA no devolvió respuesta.");
@@ -385,6 +421,121 @@ export class AutomationRunnerService implements OnModuleInit, OnModuleDestroy {
   }
 
   /**
+   * Ejecuta los flujos «contacto sin actividad N días» para quien acaba de
+   * cumplir ese silencio. Devuelve cuántos contactos se procesaron.
+   */
+  async sweepInactive(now = new Date()): Promise<number> {
+    if (!this.prisma.enabled) return 0;
+    const flows = await this.prisma.automation.findMany({ where: { status: "activo" } });
+    let processed = 0;
+    for (const flow of flows) {
+      const nodes = (flow.nodes as unknown as AutomationNode[]) ?? [];
+      const edges = (flow.edges as unknown as AutomationEdge[]) ?? [];
+      const trigger = nodes.find((n) => n.type === "trigger");
+      if (!trigger || str(cfg(trigger).event) !== INACTIVE_EVENT) continue;
+      const days = inactiveDays(cfg(trigger));
+      if (days == null) continue;
+      const threshold = new Date(now.getTime() - days * DAY_MS);
+      const candidates = await this.prisma.contact.findMany({
+        where: {
+          workspaceSlug: flow.workspaceSlug,
+          optOutAt: null,
+          phone: { not: null },
+          lastContactAt: { lte: threshold, gt: new Date(threshold.getTime() - INACTIVE_WINDOW_MS) },
+        },
+        orderBy: { lastContactAt: "asc" },
+        take: INACTIVE_BATCH * 4,
+      });
+      if (candidates.length === 0) continue;
+      const fires = await this.prisma.automationInactiveFire.findMany({
+        where: { automationId: flow.id, contactId: { in: candidates.map((c) => c.id) } },
+      });
+      const firedFor = new Map(fires.map((f) => [f.contactId, f.lastContactAt.getTime()]));
+      const due = candidates
+        .filter((c) => (firedFor.get(c.id) ?? -1) < c.lastContactAt!.getTime())
+        .slice(0, INACTIVE_BATCH);
+
+      for (const c of due) {
+        // Se reclama antes de enviar: un reinicio a mitad nunca repite el mensaje.
+        if (!(await this.claimInactive(flow.id, flow.workspaceSlug, c.id, c.lastContactAt!))) continue;
+        processed++;
+        const route = await this.routeFor(flow.workspaceSlug, c.phone!);
+        const p: IncomingMessage = {
+          workspaceSlug: flow.workspaceSlug,
+          channel: route.channel,
+          contactHandle: route.handle,
+          contactName: c.name,
+          text: "",
+        };
+        const context: Record<string, string> = {
+          text: "",
+          channel: route.channel,
+          contactName: c.name,
+          contactHandle: route.handle,
+          trigger: "inactive",
+          inactiveDays: String(days),
+          intent: "",
+          resolved: "false",
+          newContact: "false",
+        };
+        const trace: RunTrace = { steps: [], waiting: false };
+        const startedAt = new Date();
+        try {
+          const ran = await this.walk(flow.id, p, nodes, edges, trigger.id, context, false, trace);
+          if (ran) {
+            await this.prisma.automation
+              .update({ where: { id: flow.id }, data: { runs: { increment: 1 } } })
+              .catch(() => undefined);
+          }
+          await this.recordRun(flow.id, "inactive", p, trace, ran, null, startedAt);
+        } catch (err) {
+          const reason = (err as Error).message || "Error al ejecutar el flujo.";
+          this.logger.warn(`Flujo "${flow.name}" falló con ${c.name}: ${reason}`);
+          await this.recordRun(flow.id, "inactive", p, trace, false, reason, startedAt);
+        }
+      }
+    }
+    return processed;
+  }
+
+  /** Marca el flujo como ejecutado para esta racha de silencio; false si ya lo estaba. */
+  private async claimInactive(
+    automationId: string,
+    workspaceSlug: string,
+    contactId: string,
+    lastContactAt: Date,
+  ): Promise<boolean> {
+    const moved = await this.prisma.automationInactiveFire.updateMany({
+      where: { automationId, contactId, lastContactAt: { lt: lastContactAt } },
+      data: { lastContactAt, firedAt: new Date() },
+    });
+    if (moved.count > 0) return true;
+    try {
+      await this.prisma.automationInactiveFire.create({
+        data: { automationId, workspaceSlug, contactId, lastContactAt },
+      });
+      return true;
+    } catch {
+      // Ya existe para esta misma racha (o la reclamó otro proceso).
+      return false;
+    }
+  }
+
+  /** Canal y destinatario del contacto: su chat si existe; si no, WhatsApp a su teléfono. */
+  private async routeFor(workspaceSlug: string, phone: string): Promise<{ channel: string; handle: string }> {
+    const key = phoneKey(phone);
+    if (key) {
+      const chats = await this.prisma.conversation.findMany({
+        where: { workspaceSlug, contactHandle: { contains: key.slice(-4) } },
+        select: { channel: true, contactHandle: true },
+      });
+      const chat = chats.find((c) => phoneKey(c.contactHandle) === key);
+      if (chat?.contactHandle) return { channel: chat.channel, handle: chat.contactHandle };
+    }
+    return { channel: "wa", handle: phone.replace(/\D/g, "") };
+  }
+
+  /**
    * Reanuda las esperas vencidas. Cada una se reclama con un compare-and-set
    * (pending → running), así dos procesos nunca reanudan la misma.
    */
@@ -472,7 +623,7 @@ export class AutomationRunnerService implements OnModuleInit, OnModuleDestroy {
   /** Guarda la ejecución en el historial. Nunca hace fallar el flujo. */
   private async recordRun(
     automationId: string,
-    trigger: "message" | "resume",
+    trigger: "message" | "resume" | "inactive",
     p: IncomingMessage,
     trace: RunTrace,
     didSomething: boolean,

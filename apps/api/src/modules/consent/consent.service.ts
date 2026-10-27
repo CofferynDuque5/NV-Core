@@ -47,7 +47,7 @@ export function phoneKey(handle: string | null | undefined): string | null {
  * contacto escribe "BAJA"/"STOP", queda dado de baja (optOutAt) y se avisa al
  * equipo. Las secuencias y automatizaciones consultan `isOptedOut` antes de
  * enviar; los mensajes manuales desde el Inbox no se bloquean (los decide una
- * persona).
+ * persona). Cada mensaje entrante también actualiza `lastContactAt` del contacto.
  */
 @Injectable()
 export class ConsentService implements OnModuleInit, OnModuleDestroy {
@@ -73,8 +73,24 @@ export class ConsentService implements OnModuleInit, OnModuleDestroy {
   }
 
   private async onMessage(p: { workspaceSlug: string; contactHandle: string; contactName: string; text: string }) {
-    if (!this.prisma.enabled || !isOptOutMessage(p.text)) return;
+    if (!this.prisma.enabled) return;
+    await this.touchByHandle(p.workspaceSlug, p.contactHandle);
+    if (!isOptOutMessage(p.text)) return;
     await this.optOutByHandle(p.workspaceSlug, p.contactHandle, p.contactName);
+  }
+
+  /**
+   * The contact just wrote: their last activity is now. This is what the
+   * "contacto sin actividad N días" automation counts from.
+   */
+  async touchByHandle(workspaceSlug: string, handle: string, at = new Date()): Promise<number> {
+    const matches = await this.matchByHandle(workspaceSlug, handle);
+    if (matches.length === 0) return 0;
+    const { count } = await this.prisma.contact.updateMany({
+      where: { id: { in: matches.map((c) => c.id) } },
+      data: { lastContactAt: at },
+    });
+    return count;
   }
 
   /** Contacts of the workspace whose phone matches a chat handle. */
@@ -82,7 +98,9 @@ export class ConsentService implements OnModuleInit, OnModuleDestroy {
     const key = phoneKey(handle);
     if (!key) return [];
     const candidates = await this.prisma.contact.findMany({
-      where: { workspaceSlug, phone: { contains: key.slice(-4) } },
+      // Phones are stored as typed ("+51 900 123 456"), so only the last two
+      // digits are reliably contiguous; the exact match is done below.
+      where: { workspaceSlug, phone: { contains: key.slice(-2) } },
     });
     return candidates.filter((c) => phoneKey(c.phone) === key);
   }

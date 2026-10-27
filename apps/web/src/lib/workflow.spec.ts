@@ -9,7 +9,9 @@ import {
   configWithOption,
   connectError,
   keywordsText,
+  N8N_ONLY,
   nextId,
+  nodeKind,
   reachableFromTriggers,
   removeNode,
   selectedOption,
@@ -207,5 +209,30 @@ describe("selectedOption / configWithOption", () => {
     expect(keywordsText(["cobro", "pago"])).toBe("cobro, pago");
     expect(keywordsText("precio, info")).toBe("precio, info");
     expect(keywordsText(undefined)).toBe("");
+  });
+});
+
+describe("inactive-contact trigger", () => {
+  const graph = (days: unknown) => ({
+    nodes: [
+      { id: "t", type: "trigger" as const, label: "Sin escribir", config: { event: "contact.inactive", days } },
+      { id: "m", type: "action" as const, label: "Msg", config: { action: "send-message", body: "Hola" } },
+    ],
+    edges: [{ id: "e", from: "t", to: "m" }],
+  });
+
+  it("is an option the built-in engine runs", () => {
+    const option = nodeKind("trigger").options.find((o) => o.value === "contact.inactive");
+    expect(option?.fields?.[0]?.key).toBe("days");
+    expect(option?.hint).not.toBe(N8N_ONLY);
+  });
+
+  it("needs a whole number of days between 1 and 365", () => {
+    expect(validateGraph(graph("30")).ok).toBe(true);
+    for (const bad of ["", "0", "2.5", "abc", "400"]) {
+      expect(validateGraph(graph(bad)).errors, bad).toContain(
+        "Indica cuántos días sin escribir (un número entero de 1 a 365).",
+      );
+    }
   });
 });
