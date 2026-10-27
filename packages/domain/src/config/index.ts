@@ -8,3 +8,4 @@ export * from "./plans";
 export * from "./segments";
 export * from "./payments";
 export * from "./legal";
+export * from "./time-zones";

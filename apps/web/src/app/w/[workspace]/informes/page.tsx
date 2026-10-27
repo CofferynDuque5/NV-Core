@@ -17,7 +17,11 @@ import {
   Workflow,
 } from "lucide-react";
 
-import { useWeeklyReport, useWeeklyReports } from "@/hooks/use-domain-data";
+import { REPORT_TIME_ZONES, reportTimeZoneLabel } from "@nv/domain";
+
+import { useWeeklyReport, useWeeklyReportSettings, useWeeklyReports } from "@/hooks/use-domain-data";
+import { useUpdateWeeklyReportSettings } from "@/hooks/use-domain-mutations";
+import { useAuthStore } from "@/stores/auth-store";
 import { useWorkspace } from "@/hooks/use-workspace";
 import { PageHeader } from "@/components/common/page-header";
 import { Panel, PanelHeader } from "@/components/common/panel";
@@ -59,6 +63,10 @@ export default function InformesPage() {
     if (week === null && history.isSuccess) setWeek(history.data[0]?.weekStart ?? "actual");
   }, [week, history.isSuccess, history.data]);
 
+  const settings = useWeeklyReportSettings();
+  const saveSettings = useUpdateWeeklyReportSettings();
+  const myRole = useAuthStore((s) => s.memberships.find((m) => m.workspaceSlug === ws.slug)?.role);
+  const canEditZone = myRole === "Owner" || myRole === "Admin";
   const report = useWeeklyReport(week);
   const r = report.data;
   const live = r?.id === "actual";
@@ -68,9 +76,26 @@ export default function InformesPage() {
       <PageHeader
         eyebrow="Analítica"
         title="Informe semanal"
-        description="Qué pasó cada semana (lunes a domingo, hora UTC) y qué necesita atención. Se genera solo cada lunes y te avisa en notificaciones."
+        description="Qué pasó cada semana (de lunes a domingo, con la hora de tu marca) y qué necesita atención. Se genera solo cada lunes y te avisa en notificaciones."
         actions={
-          <div className="flex items-center gap-2 print:hidden">
+          <div className="flex flex-wrap items-center gap-2 print:hidden">
+            <label htmlFor="report-zone" className="sr-only">
+              Zona horaria
+            </label>
+            <select
+              id="report-zone"
+              className={selectClass}
+              value={settings.data?.timeZone ?? ""}
+              onChange={(e) => saveSettings.mutate({ timeZone: e.target.value })}
+              disabled={!settings.isSuccess || !canEditZone || saveSettings.isPending}
+              title={canEditZone ? "Las semanas empiezan el lunes a medianoche en esta zona" : "Solo Owner o Admin pueden cambiarla"}
+            >
+              {REPORT_TIME_ZONES.map((z) => (
+                <option key={z.id} value={z.id}>
+                  {z.label}
+                </option>
+              ))}
+            </select>
             <label htmlFor="report-week" className="sr-only">
               Semana
             </label>
@@ -122,6 +147,9 @@ export default function InformesPage() {
           )}
           <span title={new Date(r.generatedAt).toLocaleString()}>
             <span className="text-ink-faint">{live ? "Actualizado:" : "Generado:"}</span> {relativeTime(r.generatedAt)}
+          </span>
+          <span>
+            <span className="text-ink-faint">Hora:</span> {reportTimeZoneLabel(r.timeZone)}
           </span>
           <span className="text-ink-faint">Fuente: datos propios de este workspace.</span>
         </div>

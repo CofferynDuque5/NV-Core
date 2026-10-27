@@ -771,6 +771,14 @@ export interface WeeklyReport {
   attention: WeeklyReportAttention[];
   /** Payments confirmed in the week, per currency (absent in reports made before it existed). */
   payments?: WeeklyReportPayments[];
+  /** Zone the week was cut in (IANA id). Absent in older reports, which used UTC. */
+  timeZone?: string;
+}
+
+/** Per-brand settings of the weekly report. */
+export interface WeeklyReportSettings {
+  /** IANA zone; weeks run Monday 00:00 → Monday 00:00 in it. */
+  timeZone: string;
 }
 
 /** Money confirmed as received («Pagado») in one currency, next to the week before. */

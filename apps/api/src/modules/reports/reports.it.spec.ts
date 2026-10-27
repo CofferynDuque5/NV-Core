@@ -8,7 +8,8 @@ const url = process.env.IT_DATABASE_URL;
 describe.skipIf(!url)("Informe semanal contra PostgreSQL real", () => {
   const prisma = Object.assign(new PrismaClient({ datasourceUrl: url }), { enabled: true });
   const notifications = new NotificationsService(prisma as never);
-  const reports = new ReportsService(prisma as never, notifications);
+  const audit = { record: async () => undefined };
+  const reports = new ReportsService(prisma as never, notifications, audit as never);
   const at = (s: string) => new Date(`2026-10-${s}Z`);
 
   async function seed(ws: string) {
@@ -171,5 +172,41 @@ describe.skipIf(!url)("Informe semanal contra PostgreSQL real", () => {
     expect(live.id).toBe("actual");
     expect(live.metrics.find((x) => x.key === "contacts")?.value).toBe(1);
     expect(await prisma.weeklyReport.count({ where: { workspaceSlug: ws } })).toBe(0);
+  });
+
+  it("corta la semana a la medianoche de la marca (Caracas)", async () => {
+    const ws = `it-rep-tz-${Date.now()}`;
+    const user = await prisma.user.create({ data: { email: `${ws}@nv.tv`, name: "Tz", passwordHash: "x" } });
+    await prisma.membership.create({ data: { userId: user.id, workspaceSlug: ws, role: "Owner", createdAt: at("12T10:00:00") } });
+    expect(await reports.settings(ws)).toEqual({ timeZone: "UTC" });
+    expect(await reports.updateSettings(ws, "ana@nv.tv", { timeZone: "America/Caracas" })).toEqual({
+      timeZone: "America/Caracas",
+    });
+    await prisma.contact.createMany({
+      data: [
+        // Sunday 18, 23:00 in Caracas (already Monday in UTC): belongs to the week of the 12th.
+        { workspaceSlug: ws, name: "Domingo noche", createdAt: at("19T03:00:00") },
+        // Monday 19, 01:00 in Caracas: next week.
+        { workspaceSlug: ws, name: "Lunes", createdAt: at("19T05:00:00") },
+      ],
+    });
+    await prisma.task.create({
+      data: { workspaceSlug: ws, title: "Pagar hosting", status: "todo", dueAt: at("16T02:00:00"), createdBy: "x" },
+    });
+
+    // Monday 00:30 UTC is still Sunday evening in Caracas: the week is not closed there yet.
+    await reports.sweep(at("19T00:30:00"));
+    expect(await reports.list(ws)).toEqual([]);
+    // Monday 01:00 in Caracas: now it is.
+    await reports.sweep(at("19T05:00:00"));
+    const report = await reports.get(ws, "2026-10-12");
+    expect(report.timeZone).toBe("America/Caracas");
+    expect(report.metrics.find((m) => m.key === "contacts")?.value).toBe(1);
+    // Dates shown in the brand's own day (15/10 in Caracas, 16/10 in UTC).
+    expect(report.attention.find((a) => a.key === "overdueTasks")?.items[0]?.meta).toBe("vencía 15/10");
+
+    // An unknown saved zone falls back to UTC instead of breaking the report.
+    await prisma.workspaceSettings.update({ where: { workspaceSlug: ws }, data: { timeZone: "Marte/Base" } });
+    expect(await reports.settings(ws)).toEqual({ timeZone: "UTC" });
   });
 });

@@ -2,6 +2,7 @@ import type {
   AnalyticsSnapshot,
   Task,
   WeeklyReport,
+  WeeklyReportSettings,
   PaymentMethod,
   PaymentRequest,
   WeeklyReportSummary,
@@ -619,6 +620,8 @@ export interface ReportService {
   weeklyReport(workspaceId: string, weekStart: string): Promise<WeeklyReport>;
   /** The current week so far (live, not stored). */
   currentWeek(workspaceId: string): Promise<WeeklyReport>;
+  settings(workspaceId: string): Promise<WeeklyReportSettings>;
+  updateSettings(workspaceId: string, input: WeeklyReportSettings): Promise<WeeklyReportSettings>;
 }
 
 export interface TaskService {

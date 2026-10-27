@@ -1,4 +1,5 @@
 import {
+  Body,
   Controller,
   Get,
   Injectable,
@@ -6,36 +7,49 @@ import {
   Module,
   NotFoundException,
   Param,
+  Put,
   UseGuards,
   type OnModuleDestroy,
   type OnModuleInit,
 } from "@nestjs/common";
-import { ApiBearerAuth, ApiTags } from "@nestjs/swagger";
+import { ApiBearerAuth, ApiProperty, ApiTags } from "@nestjs/swagger";
+import { IsIn } from "class-validator";
 import { Prisma } from "@prisma/client";
 import {
+  DEFAULT_REPORT_TIME_ZONE,
+  REPORT_TIME_ZONES,
   formatPaymentAmount,
+  isReportTimeZone,
   type PaymentCurrency,
   type WeeklyReport,
   type WeeklyReportAttention,
   type WeeklyReportMetric,
+  type WeeklyReportSettings,
   type WeeklyReportSummary,
 } from "@nv/domain";
 
 import { WorkspaceId } from "../../common/tenant/workspace.decorator";
 import { WorkspaceGuard } from "../../common/tenant/workspace.guard";
 import { PrismaService } from "../../prisma/prisma.service";
+import { AuditLogger } from "../../common/audit-logger.service";
+import { CurrentUser } from "../../auth/decorators/current-user.decorator";
+import { Roles } from "../../auth/decorators/roles.decorator";
+import { RolesGuard } from "../../auth/guards/roles.guard";
+import type { AuthenticatedUser } from "../../auth/auth.types";
 import { NotificationsModule, NotificationsService } from "../notifications/notifications.module";
 import {
   ATTENTION_ITEMS,
   DAY_MS,
   WEEK_MS,
   dayKey,
-  lastClosedWeek,
+  lastClosedLocalWeek,
+  localWeekStart,
   mergePaymentTotals,
   noticeMeta,
   parseWeekStart,
   rankLeadSources,
-  weekStartOf,
+  shortDay,
+  weekBounds,
 } from "./weekly-report";
 
 /** How often the sweep checks for weeks without a report. */
@@ -47,7 +61,11 @@ const HISTORY = 26;
 
 type Range = { gte: Date; lt: Date };
 
-const fmtDay = (d: Date) => `${String(d.getUTCDate()).padStart(2, "0")}/${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
+export class WeeklyReportSettingsDto {
+  @ApiProperty({ enum: REPORT_TIME_ZONES.map((z) => z.id) })
+  @IsIn(REPORT_TIME_ZONES.map((z) => z.id), { message: "Zona horaria no válida." })
+  timeZone!: string;
+}
 
 /**
  * Weekly workspace report. Every closed week (Monday → Monday, UTC) each
@@ -67,6 +85,7 @@ export class ReportsService implements OnModuleInit, OnModuleDestroy {
   constructor(
     private readonly prisma: PrismaService,
     private readonly notifications: NotificationsService,
+    private readonly audit: AuditLogger,
   ) {}
 
   onModuleInit(): void {
@@ -87,23 +106,31 @@ export class ReportsService implements OnModuleInit, OnModuleDestroy {
     if (!this.prisma.enabled || this.sweeping) return 0;
     this.sweeping = true;
     try {
-      const weekStart = lastClosedWeek(now);
-      const weekEnd = new Date(weekStart.getTime() + WEEK_MS);
-      // Workspaces someone had joined before the week ended (unclaimed demos are skipped).
+      // Workspaces in use (unclaimed demos are skipped), each with its own zone.
       const members = await this.prisma.membership.groupBy({
         by: ["workspaceSlug"],
-        where: { createdAt: { lt: weekEnd } },
+        where: { createdAt: { lt: now } },
+        _min: { createdAt: true },
       });
+      const zones = await this.timeZones(members.map((m) => m.workspaceSlug));
+      const due = members
+        .map((m) => {
+          const tz = zones.get(m.workspaceSlug) ?? DEFAULT_REPORT_TIME_ZONE;
+          const weekStart = lastClosedLocalWeek(now, tz);
+          return { workspaceSlug: m.workspaceSlug, tz, weekStart, firstMember: m._min.createdAt! };
+        })
+        // Someone had joined before the week ended.
+        .filter((w) => w.firstMember < weekBounds(w.weekStart, w.tz).to);
       const done = await this.prisma.weeklyReport.findMany({
-        where: { weekStart, workspaceSlug: { in: members.map((m) => m.workspaceSlug) } },
+        where: { OR: due.map((w) => ({ workspaceSlug: w.workspaceSlug, weekStart: w.weekStart })) },
         select: { workspaceSlug: true },
       });
       const have = new Set(done.map((r) => r.workspaceSlug));
       let created = 0;
-      for (const { workspaceSlug } of members) {
+      for (const { workspaceSlug, weekStart, tz } of due) {
         if (have.has(workspaceSlug)) continue;
         try {
-          if (await this.generate(workspaceSlug, weekStart)) created++;
+          if (await this.generate(workspaceSlug, weekStart, tz)) created++;
         } catch (err) {
           this.logger.warn(`Informe semanal de ${workspaceSlug}: ${(err as Error).message}`);
         }
@@ -115,9 +142,9 @@ export class ReportsService implements OnModuleInit, OnModuleDestroy {
   }
 
   /** Build, store and announce one closed week. False when it already existed. */
-  async generate(workspaceSlug: string, weekStart: Date): Promise<boolean> {
-    const to = new Date(weekStart.getTime() + WEEK_MS);
-    const data = await this.build(workspaceSlug, weekStart, to);
+  async generate(workspaceSlug: string, weekStart: Date, tz?: string): Promise<boolean> {
+    const zone = tz ?? (await this.timeZone(workspaceSlug));
+    const data = await this.build(workspaceSlug, weekStart, zone);
     try {
       const row = await this.prisma.weeklyReport.create({
         data: { workspaceSlug, weekStart, data: data as unknown as Prisma.InputJsonValue },
@@ -164,19 +191,51 @@ export class ReportsService implements OnModuleInit, OnModuleDestroy {
 
   /** The current week so far, compared with the same span of last week. Not stored. */
   async current(workspaceSlug: string, now = new Date()): Promise<WeeklyReport> {
-    const from = weekStartOf(now);
-    const report = await this.build(workspaceSlug, from, now);
+    const tz = await this.timeZone(workspaceSlug);
+    const report = await this.build(workspaceSlug, localWeekStart(now, tz), tz, now);
     return { ...report, id: "actual" };
   }
 
+  async settings(workspaceSlug: string): Promise<WeeklyReportSettings> {
+    return { timeZone: await this.timeZone(workspaceSlug) };
+  }
+
+  /** Change the zone. Stored reports keep the zone they were cut in; the next ones use the new one. */
+  async updateSettings(workspaceSlug: string, actor: string, input: WeeklyReportSettingsDto): Promise<WeeklyReportSettings> {
+    if (!this.prisma.enabled) return { timeZone: DEFAULT_REPORT_TIME_ZONE };
+    const row = await this.prisma.workspaceSettings.upsert({
+      where: { workspaceSlug },
+      create: { workspaceSlug, timeZone: input.timeZone, updatedBy: actor },
+      update: { timeZone: input.timeZone, updatedBy: actor },
+    });
+    await this.audit.record(workspaceSlug, actor, "report.settings", `Zona horaria del informe: ${row.timeZone}`);
+    return { timeZone: row.timeZone };
+  }
+
+  private async timeZone(workspaceSlug: string): Promise<string> {
+    return (await this.timeZones([workspaceSlug])).get(workspaceSlug) ?? DEFAULT_REPORT_TIME_ZONE;
+  }
+
+  /** Saved zones; workspaces without a valid one fall back to UTC. */
+  private async timeZones(slugs: string[]): Promise<Map<string, string>> {
+    if (!this.prisma.enabled || slugs.length === 0) return new Map();
+    const rows = await this.prisma.workspaceSettings.findMany({ where: { workspaceSlug: { in: slugs } } });
+    return new Map(rows.filter((r) => isReportTimeZone(r.timeZone)).map((r) => [r.workspaceSlug, r.timeZone]));
+  }
+
   /**
-   * Counts for [from, to) next to the same span one week earlier, plus what
-   * needs someone right now. Every number is a DB count of the workspace's
-   * own rows.
+   * Counts for the week starting `weekStart` (Monday 00:00 in `tz`), up to
+   * `until` for the live week, next to the same span one week earlier, plus
+   * what needs someone right now. Every number is a DB count of the
+   * workspace's own rows.
    */
-  async build(workspaceSlug: string, from: Date, to: Date): Promise<WeeklyReport> {
+  async build(workspaceSlug: string, weekStart: Date, tz: string, until?: Date): Promise<WeeklyReport> {
+    const week = weekBounds(weekStart, tz);
+    const before = weekBounds(new Date(weekStart.getTime() - WEEK_MS), tz);
+    const to = until ?? week.to;
+    const from = week.from;
     const cur: Range = { gte: from, lt: to };
-    const prev: Range = { gte: new Date(from.getTime() - WEEK_MS), lt: new Date(to.getTime() - WEEK_MS) };
+    const prev: Range = { gte: before.from, lt: until ? new Date(before.from.getTime() + (to.getTime() - from.getTime())) : before.to };
     const ws = { workspaceSlug };
     const now = new Date();
 
@@ -251,7 +310,7 @@ export class ReportsService implements OnModuleInit, OnModuleDestroy {
         WHERE "workspaceSlug" = ${workspaceSlug} AND "createdAt" >= ${from} AND "createdAt" < ${to}
         GROUP BY 1
       `),
-      this.attention(workspaceSlug, cur, now),
+      this.attention(workspaceSlug, cur, now, tz),
       paidIn(cur),
       paidIn(prev),
     ]);
@@ -268,9 +327,10 @@ export class ReportsService implements OnModuleInit, OnModuleDestroy {
 
     return {
       id: "",
-      weekStart: dayKey(from),
-      weekEnd: dayKey(new Date(weekStartOf(from).getTime() + WEEK_MS - DAY_MS)),
+      weekStart: dayKey(weekStart),
+      weekEnd: dayKey(new Date(weekStart.getTime() + WEEK_MS - DAY_MS)),
       generatedAt: now.toISOString(),
+      timeZone: tz,
       metrics,
       leadSources: rankLeadSources(leadRows),
       attention,
@@ -279,7 +339,8 @@ export class ReportsService implements OnModuleInit, OnModuleDestroy {
   }
 
   /** What needs someone: open items now, and failures inside the week. Empty entries are left out. */
-  private async attention(workspaceSlug: string, week: Range, now: Date): Promise<WeeklyReportAttention[]> {
+  private async attention(workspaceSlug: string, week: Range, now: Date, tz: string): Promise<WeeklyReportAttention[]> {
+    const fmtDay = (d: Date) => shortDay(d, tz);
     const ws = { workspaceSlug };
     const overdueWhere = { ...ws, status: { not: "done" }, dueAt: { lt: now } };
     const humanWhere = { ...ws, resolved: false, labels: { has: "requiere-humano" } };
@@ -446,6 +507,22 @@ export class ReportsController {
   @Get("actual")
   current(@WorkspaceId() workspaceId: string) {
     return this.service.current(workspaceId);
+  }
+
+  @Get("settings")
+  settings(@WorkspaceId() workspaceId: string) {
+    return this.service.settings(workspaceId);
+  }
+
+  @Put("settings")
+  @Roles("Owner", "Admin")
+  @UseGuards(RolesGuard)
+  updateSettings(
+    @WorkspaceId() workspaceId: string,
+    @CurrentUser() user: AuthenticatedUser,
+    @Body() dto: WeeklyReportSettingsDto,
+  ) {
+    return this.service.updateSettings(workspaceId, user.email, dto);
   }
 
   @Get(":week")
