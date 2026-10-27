@@ -347,9 +347,18 @@
   .cta-inner p{color:var(--muted);margin:16px auto 30px;max-width:520px;font-size:17px;position:relative}
   .cta-inner .btn{position:relative}
 
+  /* ==================== LO QUE GANAS ==================== */
+  .gains{padding:90px 0 20px}
+  .gains-list{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:14px}
+  .gains-list li{display:flex;gap:12px;padding:18px;border:1px solid var(--line);border-radius:var(--radius);background:var(--panel)}
+  .gains-list svg{width:20px;height:20px;flex:none;margin-top:2px;stroke:#22D3EE;fill:none;stroke-width:2}
+  .gains-list strong{display:block;font-size:15.5px;margin-bottom:4px}
+  .gains-list span{display:block;color:var(--muted);font-size:14px;line-height:1.5}
+  @media(max-width:420px){.gains-list{grid-template-columns:1fr}}
+
   /* ==================== FOOTER ==================== */
   footer.site{border-top:1px solid var(--line);padding:26px 0;background:var(--bg-2)}
-  .foot-grid{display:grid;grid-template-columns:2fr 1fr 1fr 1fr;gap:28px}
+  .foot-grid{display:grid;grid-template-columns:2fr 1fr 1fr 1fr 1fr;gap:28px}
   .foot-brand .brand{margin-bottom:12px}
   .foot-brand p{color:var(--muted);font-size:13.5px;max-width:38ch;line-height:1.5}
   .foot-col h4{font-size:12px;text-transform:uppercase;letter-spacing:.1em;color:var(--muted-2);margin-bottom:12px;font-weight:700}
@@ -430,6 +439,7 @@
       </a>
       <div class="nav-links">
         <a href="#features">Características</a>
+        <a href="#beneficios">Lo que ganas</a>
         <a href="#pricing">Precios</a>
         <a href="#download">Descargar</a>
         <a href="#faq">FAQ</a>
@@ -448,6 +458,7 @@
 <!-- mobile menu -->
 <div class="mobile-menu" id="mobile-menu">
   <a href="#features">Características</a>
+  <a href="#beneficios">Lo que ganas</a>
   <a href="#pricing">Precios</a>
   <a href="#download">Descargar</a>
   <a href="#faq">FAQ</a>
@@ -630,6 +641,31 @@
           <p>Analiza el rendimiento con reportes en tiempo real y optimiza para crecer con datos, no intuición.</p>
         </div>
       </div>
+    </div>
+  </section>
+
+  <!-- ============ LO QUE GANAS ============ -->
+  <section class="gains" id="beneficios">
+    <div class="container">
+      <div class="section-head reveal">
+        <span class="eyebrow"><span class="dot"></span>Lo que ganas</span>
+        <h2 style="margin-top:18px">Lo que ganas con NV Marketing</h2>
+        <p>Funciones que ya trabajan dentro de la app. Las que usan WhatsApp, Telegram, redes o IA se activan al conectar tus propias cuentas.</p>
+      </div>
+      <ul class="gains-list">
+          <li class="reveal"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 13l4 4L19 7"/></svg><div><strong>Todos tus clientes en un solo lugar</strong><span>CRM con etapas, notas, tareas y el origen de cada lead (campaña, anuncio o página por la que llegó).</span></div></li>
+          <li class="reveal"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 13l4 4L19 7"/></svg><div><strong>Una bandeja para tus chats</strong><span>WhatsApp y Telegram en el mismo Inbox, con búsqueda por nombre, etiqueta o texto del mensaje.</span></div></li>
+          <li class="reveal"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 13l4 4L19 7"/></svg><div><strong>Campañas que no se pierden</strong><span>Si el servidor se reinicia, la campaña sigue donde iba y no repite el mensaje a quien ya lo recibió.</span></div></li>
+          <li class="reveal"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 13l4 4L19 7"/></svg><div><strong>Publicaciones que de verdad salen</strong><span>Programa tus posts: se publican en su fecha o te dice claramente por qué fallaron.</span></div></li>
+          <li class="reveal"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 13l4 4L19 7"/></svg><div><strong>Automatizaciones que trabajan por ti</strong><span>Secuencias con esperas reales, plantillas listas para usar e historial de cada ejecución.</span></div></li>
+          <li class="reveal"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 13l4 4L19 7"/></svg><div><strong>Respeto por tus contactos</strong><span>Las bajas (BAJA o STOP) se registran solas y nadie vuelve a recibir mensajes que no quiere.</span></div></li>
+          <li class="reveal"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 13l4 4L19 7"/></svg><div><strong>Cobros en tu país</strong><span>Pide pagos por Nequi, Daviplata, Pago Móvil, Yape, Plin, Binance, USDT o Zinli con el mensaje listo para enviar, y confírmalos al verlos.</span></div></li>
+          <li class="reveal"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 13l4 4L19 7"/></svg><div><strong>Tu equipo organizado</strong><span>Tablero de tareas por columnas, enlazadas a clientes, con aviso a quien se le asigna.</span></div></li>
+          <li class="reveal"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 13l4 4L19 7"/></svg><div><strong>Un informe cada lunes</strong><span>Resumen de la semana con lo que creció y lo que necesita atención: tareas vencidas, chats sin responder y fallos.</span></div></li>
+          <li class="reveal"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 13l4 4L19 7"/></svg><div><strong>Números en los que puedes confiar</strong><span>Analítica que indica de dónde sale cada dato y su período, descargable en CSV o PDF.</span></div></li>
+          <li class="reveal"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 13l4 4L19 7"/></svg><div><strong>IA que te ahorra tiempo</strong><span>Borradores de textos y respuestas que tú revisas y apruebas antes de enviar.</span></div></li>
+          <li class="reveal"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 13l4 4L19 7"/></svg><div><strong>Varias marcas, cero mezclas</strong><span>Cada marca en su propio espacio, con roles y permisos para tu equipo.</span></div></li>
+      </ul>
     </div>
   </section>
 
@@ -836,6 +872,7 @@
       <nav class="foot-col" aria-label="Producto">
         <h4>Producto</h4>
         <a href="#features">Características</a>
+        <a href="#beneficios">Lo que ganas</a>
         <a href="#how">Cómo funciona</a>
         <a href="#download">Descargar</a>
       </nav>
@@ -851,9 +888,15 @@
         <a data-app data-path="/register" href="#">Crear cuenta</a>
         <a href="#faq">FAQ</a>
       </nav>
+      <nav class="foot-col" aria-label="Legal">
+        <h4>Legal</h4>
+        <a href="legal.html#terminos">Términos y condiciones</a>
+        <a href="legal.html#privacidad">Privacidad</a>
+        <a href="legal.html#cookies">Cookies</a>
+      </nav>
     </div>
     <div class="foot-bottom">
-      <p>© 2026 NV Marketing. Todos los derechos reservados.</p>
+      <p>© 2026 NV Marketing · Valeryn Duque y Nathan Quevedo. Todos los derechos reservados. · <a href="legal.html" style="color:inherit;text-decoration:underline">Términos legales</a></p>
     </div>
   </div>
 </footer>

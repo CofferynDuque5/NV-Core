@@ -50,3 +50,13 @@ necesitas configurar Stripe DENTRO de la aplicación (variable STRIPE_SECRET_KEY
 y su webhook). Sin Stripe, el registro funciona igual pero no cobra: los
 usuarios entran con el plan por defecto. Tú, como dueño del servidor, no pagas
 nada por usar tu propio software.
+
+PÁGINA LEGAL (legal.html)
+-------------------------
+Sube "legal.html" junto a index.html. Tiene los Términos y condiciones, la
+Política de privacidad y la Política de cookies, y está enlazada desde el pie
+de página. Cuando tengas el correo oficial, abre legal.html y escríbelo en:
+     window.NV_CONTACT_EMAIL = "";
+Mientras esté vacío, el contacto apunta al portafolio de Valeryn Duque.
+Si cambias de proveedor (base de datos, IA, correo, pagos), actualiza la
+sección «Dónde se guardan y con quién se comparten».
