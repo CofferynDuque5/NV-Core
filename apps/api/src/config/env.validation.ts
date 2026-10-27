@@ -103,6 +103,14 @@ export const envSchema = z.object({
   STRIPE_PRICE_ID: z.string().optional(),
   /** Plan used when Stripe isn't configured (self-host / dev). Default "pro". */
   DEFAULT_PLAN: z.enum(["free", "pro"]).optional(),
+  /** Free trial of a customer-created brand, in hours (0 = no trial, never locked). */
+  TRIAL_HOURS: z.coerce.number().int().min(0).max(24 * 90).optional(),
+  // Manual plan payment after the trial: the operator's own brand whose
+  // Cobros methods customers pay to, and the price of each paid period.
+  NV_BILLING_WORKSPACE: z.string().optional(),
+  PLAN_PRICE: z.coerce.number().positive().max(1_000_000).optional(),
+  PLAN_CURRENCY: z.enum(["COP", "VES", "PEN", "USD", "USDT"]).optional(),
+  PLAN_DAYS: z.coerce.number().int().min(1).max(400).optional(),
   CLOUDINARY_URL: z.string().optional(),
   // Alternativa de hosting de imágenes (https://api.imgbb.com). Solo imágenes.
   IMGBB_API_KEY: z.string().optional(),

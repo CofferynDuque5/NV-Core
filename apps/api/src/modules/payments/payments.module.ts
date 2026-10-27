@@ -51,6 +51,9 @@ import {
 import { WorkspaceId } from "../../common/tenant/workspace.decorator";
 import { WorkspaceGuard } from "../../common/tenant/workspace.guard";
 import { AuditLogger } from "../../common/audit-logger.service";
+import { WorkspaceAccessService } from "../../common/access/workspace-access.service";
+import { ConfigService } from "@nestjs/config";
+import type { AppConfig } from "../../config/configuration";
 import { PrismaService } from "../../prisma/prisma.service";
 import { NotificationsModule, NotificationsService } from "../notifications/notifications.module";
 import { CurrentUser } from "../../auth/decorators/current-user.decorator";
@@ -168,6 +171,8 @@ export class PaymentsService {
     private readonly prisma: PrismaService,
     private readonly audit: AuditLogger,
     private readonly notifications: NotificationsService,
+    private readonly access: WorkspaceAccessService,
+    private readonly config: ConfigService<AppConfig, true>,
   ) {}
 
   private requireDb(): void {
@@ -328,10 +333,61 @@ export class PaymentsService {
         `${row.concept} · ${row.amount.toString()} ${row.currency}${row.reference ? ` · ref ${row.reference}` : ""}`,
       );
     }
+    // A confirmed plan payment of a customer brand opens it for another period.
+    if (to === "pagado" && from !== to && row.forWorkspace) {
+      const days = this.config.get("billing", { infer: true }).plan.days;
+      const state = await this.access.activate(row.forWorkspace, days, actor);
+      await this.audit.record(row.forWorkspace, actor, "access.activate", `+${days} días · hasta ${state.paidUntil} · cobro ${row.id}`);
+    }
     const names = await this.contactNames(workspaceId, [row.contactId]);
     const contactName = row.contactId ? names.get(row.contactId) : undefined;
     if (to === "por_verificar" && from !== to) await this.noticeToVerify(workspaceId, row, contactName);
     return mapPayment(row, contactName);
+  }
+
+  /**
+   * A customer brand sends the reference of its plan payment. It lands in the
+   * operator's billing brand as «Por verificar» (with the usual team notice);
+   * the brand opens when someone there confirms it as «Pagado».
+   */
+  async submitPlanPayment(
+    billingWorkspace: string,
+    forWorkspace: string,
+    forName: string,
+    actor: string,
+    input: { methodId: string; reference: string; note?: string },
+  ): Promise<RequestRow> {
+    this.requireDb();
+    const plan = this.config.get("billing", { infer: true }).plan;
+    const method = await this.prisma.paymentMethod.findFirst({
+      where: { id: input.methodId, workspaceSlug: billingWorkspace, active: true },
+    });
+    if (!method) throw new BadRequestException("Ese método de pago no está disponible.");
+    const reference = input.reference.trim();
+    const waiting = await this.prisma.paymentRequest.findFirst({
+      where: { workspaceSlug: billingWorkspace, forWorkspace, status: "por_verificar" },
+      select: { id: true },
+    });
+    if (waiting) throw new ConflictException("Ya enviaste un pago que estamos verificando. Te avisaremos al confirmarlo.");
+    await this.checkReferenceUnused(billingWorkspace, "", reference);
+    const row = await this.prisma.paymentRequest.create({
+      data: {
+        workspaceSlug: billingWorkspace,
+        forWorkspace,
+        concept: `Plan ${forName} (${forWorkspace}) · ${plan.days} días`,
+        amount: new Prisma.Decimal(plan.price),
+        currency: plan.currency,
+        status: "por_verificar",
+        methodId: method.id,
+        methodLabel: method.label,
+        reference,
+        note: [input.note?.trim(), `Enviado por ${actor}`].filter(Boolean).join(" · "),
+        createdBy: actor,
+      },
+    });
+    await this.audit.record(billingWorkspace, actor, "payment.por_verificar", `${row.concept} · ${row.amount.toString()} ${row.currency} · ref ${reference}`);
+    await this.noticeToVerify(billingWorkspace, row, undefined);
+    return row;
   }
 
   /**
@@ -464,5 +520,10 @@ export class PaymentsController {
   }
 }
 
-@Module({ imports: [NotificationsModule], controllers: [PaymentsController], providers: [PaymentsService] })
+@Module({
+  imports: [NotificationsModule],
+  controllers: [PaymentsController],
+  providers: [PaymentsService],
+  exports: [PaymentsService],
+})
 export class PaymentsModule {}

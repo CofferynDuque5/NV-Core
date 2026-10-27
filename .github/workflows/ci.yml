@@ -88,6 +88,8 @@ jobs:
       # The E2E specs register into built-in demo workspaces (first member claims
       # them as Owner). That self-serve claim is gated behind this flag.
       ALLOW_OPEN_WORKSPACE_CLAIM: "true"
+      # Operator brand that receives plan payments after the free trial (e2e/trial.spec).
+      NV_BILLING_WORKSPACE: nv-cobros
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4

@@ -35,7 +35,13 @@ export interface AppConfig {
   /** Files uploaded to this server (see modules/media/local-storage.ts). */
   media: { enabled: boolean; dir: string; maxBytes: number; publicBase: string };
   /** Plan applied when Stripe isn't configured (self-host / dev). */
-  billing: { defaultPlan: "free" | "pro" };
+  billing: {
+    defaultPlan: "free" | "pro";
+    trialHours: number;
+    /** Operator brand whose Cobros receive plan payments ("" = not set). */
+    operatorWorkspace: string;
+    plan: { price: number; currency: "COP" | "VES" | "PEN" | "USD" | "USDT"; days: number };
+  };
   integrations: {
     n8n: { baseUrl?: string; apiKey?: string; eventsWebhook?: string; inboundSecret?: string };
     ai: {
@@ -127,7 +133,12 @@ export function buildConfig(env: Env): AppConfig {
       maxBytes: env.MEDIA_MAX_MB * 1024 * 1024,
       publicBase: (env.MEDIA_PUBLIC_URL ?? env.API_URL).replace(/\/$/, ""),
     },
-    billing: { defaultPlan: env.DEFAULT_PLAN === "free" ? "free" : "pro" },
+    billing: {
+      defaultPlan: env.DEFAULT_PLAN === "free" ? "free" : "pro",
+      trialHours: env.TRIAL_HOURS ?? 24,
+      operatorWorkspace: env.NV_BILLING_WORKSPACE?.trim().toLowerCase() ?? "",
+      plan: { price: env.PLAN_PRICE ?? 19, currency: env.PLAN_CURRENCY ?? "USD", days: env.PLAN_DAYS ?? 30 },
+    },
     integrations: {
       n8n: {
         baseUrl: env.N8N_BASE_URL,

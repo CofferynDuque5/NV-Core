@@ -1,4 +1,8 @@
 import type {
+  AccessOverview,
+  AccessPaymentInput,
+  AdminAccessRow,
+  WorkspaceAccess,
   AnalyticsSnapshot,
   Task,
   WeeklyReport,
@@ -945,6 +949,17 @@ export interface AdminService {
   workspaces(): Promise<Workspace[]>;
   setMembership(input: { email: string; workspaceSlug: string; role: Role }): Promise<{ ok: true }>;
   removeMembership(userId: string, workspaceSlug: string): Promise<void>;
+  /** Brands on a free trial or paid plan. */
+  access(): Promise<AdminAccessRow[]>;
+  /** Add paid days to a brand (after checking its payment). */
+  activate(workspaceSlug: string, days: number): Promise<WorkspaceAccess>;
+}
+
+/** Free trial and plan payment of a customer brand (open after the trial ends). */
+export interface AccessService {
+  overview(workspaceId: string): Promise<AccessOverview>;
+  /** Send the reference of a plan payment for the operator to check. */
+  pay(workspaceId: string, input: AccessPaymentInput): Promise<AccessOverview>;
 }
 
 export interface WorkspaceService {
@@ -1022,4 +1037,5 @@ export interface Services {
   pcAgent: PcAgentService;
   messaging: MessagingService;
   billing: BillingService;
+  access: AccessService;
 }

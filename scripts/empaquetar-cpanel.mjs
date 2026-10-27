@@ -451,6 +451,18 @@ NV_ADMIN_EMAIL=tucorreo@ejemplo.com
 # Dirección pública de la app (https), para que WhatsApp e Instagram descarguen:
 # API_URL=https://tu-subdominio.com
 
+# PRUEBA GRATIS Y COBRO DEL PLAN (pago manual, como en Cobros)
+# Cada marca que crea un cliente tiene 24 h gratis; al terminar, el panel se
+# bloquea y le muestra tus métodos de pago. Pon aquí el identificador (slug) de
+# TU marca donde configuraste esos métodos en Cobros (créala con NV_ADMIN_EMAIL
+# para que no tenga prueba). Al confirmar su pago como «Pagado», la marca del
+# cliente se activa PLAN_DAYS días más.
+# NV_BILLING_WORKSPACE=nv-cobros
+# PLAN_PRICE=19
+# PLAN_CURRENCY=USD
+# PLAN_DAYS=30
+# TRIAL_HOURS=24
+
 # OPCIONALES (ponlas cuando las tengas)
 # IMGBB_API_KEY=
 # TELEGRAM_API_ID=
@@ -543,6 +555,18 @@ ARCHIVOS SUBIDOS (Biblioteca y adjuntos de campañas)
   Revisa también el límite de subida de tu hosting.
 - Borrar un archivo de la Biblioteca no lo borra del disco (puede seguir en
   campañas ya enviadas).
+
+PRUEBA GRATIS DE 24 H Y COBRO DEL PLAN
+- Cada marca que crea un cliente tiene 24 horas gratis con todo el panel.
+  Las marcas que crees tú (con el correo de NV_ADMIN_EMAIL) no tienen límite.
+- Al terminar, el panel del cliente se bloquea (sus datos se guardan) y le
+  muestra el precio y tus métodos de pago. Él envía la referencia; a ti te
+  llega como «Por verificar» en Cobros de tu marca de cobro, con un aviso.
+- Al confirmarlo como «Pagado», su marca se activa 30 días (PLAN_DAYS).
+  También puedes sumar días a mano en /admin → «Pruebas y planes».
+- Configura NV_BILLING_WORKSPACE (tu marca de cobro), PLAN_PRICE, PLAN_CURRENCY,
+  PLAN_DAYS y TRIAL_HOURS (ver .env.example). Sin NV_BILLING_WORKSPACE el
+  cliente ve «Escríbenos para activar tu plan» y tú lo activas desde /admin.
 `,
 );
 

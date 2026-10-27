@@ -46,6 +46,7 @@ import { TeamModule } from "./modules/team/team.module";
 import { TasksModule } from "./modules/tasks/tasks.module";
 import { ReportsModule } from "./modules/reports/reports.module";
 import { PaymentsModule } from "./modules/payments/payments.module";
+import { AccessModule } from "./modules/access/access.module";
 import { AuditModule } from "./modules/audit/audit.module";
 import { AiModule } from "./modules/ai/ai.module";
 import { MessagingModule } from "./modules/messaging/messaging.module";
@@ -105,6 +106,7 @@ import { ProvidersModule } from "./providers/providers.module";
     TasksModule,
     ReportsModule,
     PaymentsModule,
+    AccessModule,
     AuditModule,
     AiModule,
     MessagingModule,

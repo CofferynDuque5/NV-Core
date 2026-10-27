@@ -6,6 +6,8 @@ import { ROLES, type Role } from "@nv/domain";
 import { toast } from "sonner";
 
 import { useServices } from "@/hooks/use-services";
+import { useAdminAccess } from "@/hooks/use-domain-data";
+import { useActivateAccess } from "@/hooks/use-domain-mutations";
 import { useAuthStore } from "@/stores/auth-store";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -20,6 +22,13 @@ export default function AdminPage() {
   const qc = useQueryClient();
   const superAdmin = useAuthStore((s) => s.superAdmin);
   const status = useAuthStore((s) => s.status);
+  const hydrate = useAuthStore((s) => s.hydrate);
+
+  // Opened directly (bookmark, new tab): restore the session first, as the
+  // panel's AuthGate does, instead of asking to sign in again.
+  React.useEffect(() => {
+    if (status === "idle") void hydrate();
+  }, [status, hydrate]);
 
   const users = useQuery({ queryKey: ["admin", "users"], queryFn: () => svc.admin.users(), enabled: superAdmin });
   const workspaces = useQuery({
@@ -48,6 +57,13 @@ export default function AdminPage() {
     onError: (e) => toast.error(e instanceof Error ? e.message : "No se pudo quitar"),
   });
 
+  if (status === "idle" || status === "loading") {
+    return (
+      <Centered>
+        <Loader2 className="size-5 animate-spin text-ink-muted" />
+      </Centered>
+    );
+  }
   if (status !== "authenticated") {
     return <Centered>Inicia sesión para continuar.</Centered>;
   }
@@ -84,6 +100,8 @@ export default function AdminPage() {
           ← Volver al panel
         </Link>
       </header>
+
+      <AccessSection enabled={superAdmin} />
 
       {users.isLoading ? (
         <div className="flex items-center gap-2 py-10 text-ink-muted">
@@ -135,6 +153,75 @@ export default function AdminPage() {
         </div>
       )}
     </div>
+  );
+}
+
+const ACCESS_LABEL = { trial: "En prueba", active: "Activa", expired: "Vencida", unlimited: "Sin límite" } as const;
+const ACCESS_BADGE = {
+  trial: "border-brand/40 text-brand",
+  active: "border-state-success/40 text-state-success",
+  expired: "border-state-danger/40 text-state-danger",
+  unlimited: "border-line-soft text-ink-muted",
+} as const;
+
+/**
+ * Brands created by customers: their free trial / paid state. A plan payment
+ * confirmed in Cobros activates the brand on its own; this is the manual way
+ * (a payment received outside Cobros, a courtesy extension).
+ */
+function AccessSection({ enabled }: { enabled: boolean }) {
+  const access = useAdminAccess(enabled);
+  const activate = useActivateAccess();
+  const [days, setDays] = React.useState(30);
+  const rows = access.data ?? [];
+  const until = (iso?: string) =>
+    iso ? new Date(iso).toLocaleString("es", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) : "—";
+
+  return (
+    <section className="nv-panel space-y-3 p-4" data-testid="admin-access">
+      <div className="flex flex-wrap items-center gap-2">
+        <div className="min-w-0 flex-1">
+          <h2 className="font-semibold text-ink-bright">Pruebas y planes</h2>
+          <p className="text-xs text-ink-muted">
+            Marcas creadas por clientes. Al confirmar su pago en Cobros se activan solas; aquí puedes sumar días a mano.
+          </p>
+        </div>
+        <label className="flex items-center gap-2 text-xs text-ink-muted">
+          Días a sumar
+          <Input
+            type="number"
+            min={1}
+            max={400}
+            value={days}
+            onChange={(e) => setDays(Math.max(1, Math.min(400, Number(e.target.value) || 1)))}
+            className="h-8 w-20"
+          />
+        </label>
+      </div>
+      {rows.length === 0 ? (
+        <p className="text-xs text-ink-faint">{access.isLoading ? "Cargando…" : "Aún no hay marcas en prueba."}</p>
+      ) : (
+        <ul className="divide-y divide-line-soft">
+          {rows.map((r) => (
+            <li key={r.workspaceSlug} className="flex flex-wrap items-center gap-2 py-2 text-sm">
+              <b className="min-w-0 flex-1 truncate font-medium">{r.workspaceSlug}</b>
+              <span className={`rounded-full border px-2 py-0.5 text-xs ${ACCESS_BADGE[r.state]}`}>{ACCESS_LABEL[r.state]}</span>
+              <span className="text-xs text-ink-muted">
+                {r.paidUntil ? `Pagado hasta ${until(r.paidUntil)}` : `Prueba hasta ${until(r.trialEndsAt)}`}
+              </span>
+              <Button
+                size="sm"
+                variant="secondary"
+                disabled={activate.isPending}
+                onClick={() => activate.mutate({ slug: r.workspaceSlug, days })}
+              >
+                +{days} días
+              </Button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
   );
 }
 

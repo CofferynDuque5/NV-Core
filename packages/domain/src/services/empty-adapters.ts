@@ -115,6 +115,12 @@ export const emptyAdapters: Services = {
     workspaces: () => delay([]),
     setMembership: () => notAvailable(),
     removeMembership: () => notAvailable(),
+    access: () => delay([]),
+    activate: () => notAvailable(),
+  },
+  access: {
+    overview: () => delay({ state: "unlimited", plan: { price: 0, currency: "USD", days: 30 }, methods: [] }),
+    pay: () => notAvailable(),
   },
   campaigns: {
     list: () => emptyList(),

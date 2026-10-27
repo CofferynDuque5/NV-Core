@@ -1,4 +1,7 @@
 import type {
+  AccessOverview,
+  AdminAccessRow,
+  WorkspaceAccess,
   AiContentPlanItem,
   AiRecommendationsResult,
   AiUsage,
@@ -198,6 +201,13 @@ export function createHttpAdapters(opts: HttpAdapterOptions): Services {
         del<void>(
           `/admin/memberships/${encodeURIComponent(userId)}/${encodeURIComponent(workspaceSlug)}`,
         ),
+      access: () => get<AdminAccessRow[]>(`/admin/access`),
+      activate: (slug, days) =>
+        post<WorkspaceAccess>(`/admin/access/${encodeURIComponent(slug)}/activate`, { days }),
+    },
+    access: {
+      overview: (id) => get<AccessOverview>(`${ws(id)}/access`),
+      pay: (id, input) => post<AccessOverview>(`${ws(id)}/access/pay`, input),
     },
     campaigns: {
       list: (id) => get<ListResult<Campaign>>(`${ws(id)}/campaigns`),

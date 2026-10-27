@@ -7,6 +7,7 @@ import { PlanGuard } from "./guards/plan.guard";
 import { WorkspaceRegistry } from "./workspace-registry.service";
 import { CryptoService } from "./crypto/crypto.service";
 import { SampleDataService } from "./sample-data.service";
+import { WorkspaceAccessService } from "./access/workspace-access.service";
 
 /** Cross-cutting providers available app-wide. */
 @Global()
@@ -19,6 +20,7 @@ import { SampleDataService } from "./sample-data.service";
     WorkspaceRegistry,
     CryptoService,
     SampleDataService,
+    WorkspaceAccessService,
   ],
   exports: [
     WorkspaceGuard,
@@ -28,6 +30,7 @@ import { SampleDataService } from "./sample-data.service";
     WorkspaceRegistry,
     CryptoService,
     SampleDataService,
+    WorkspaceAccessService,
   ],
 })
 export class CommonModule {}

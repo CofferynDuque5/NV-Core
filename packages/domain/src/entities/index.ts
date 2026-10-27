@@ -981,3 +981,54 @@ export interface ChangelogStatus {
   lastSeenAt: string | null;
   unseenCount: number;
 }
+
+/**
+ * Access of a customer-created brand: a free trial, then paid time.
+ * "unlimited" = built-in or operator brand, never locked.
+ */
+export interface WorkspaceAccess {
+  state: "unlimited" | "trial" | "active" | "expired";
+  trialEndsAt?: string;
+  paidUntil?: string;
+}
+
+/** What the brand pays and where, set by the operator (env), shown after the trial. */
+export interface AccessPlan {
+  price: number;
+  currency: PaymentCurrency;
+  days: number;
+}
+
+/** The brand's own last plan payment, as the customer sees it. */
+export interface AccessPayment {
+  id: string;
+  status: PaymentStatus;
+  amount: number;
+  currency: PaymentCurrency;
+  methodLabel?: string;
+  reference?: string;
+  rejectReason?: string;
+  createdAt: string;
+}
+
+/**
+ * The brand's trial / paid state plus how to pay. `methods` is empty when the
+ * operator has not set a billing brand with active payment methods yet.
+ */
+export interface AccessOverview extends WorkspaceAccess {
+  plan: AccessPlan;
+  methods: PaymentMethod[];
+  payment?: AccessPayment;
+}
+
+export interface AccessPaymentInput {
+  methodId: string;
+  reference: string;
+  note?: string;
+}
+
+/** One brand on a trial or paid plan, for the platform admin. */
+export interface AdminAccessRow extends WorkspaceAccess {
+  workspaceSlug: string;
+  createdAt: string;
+}

@@ -19,6 +19,8 @@ import { useServices } from "@/hooks/use-services";
 import { useWorkspaceStore } from "@/stores/workspace-store";
 import { useAuthStore } from "@/stores/auth-store";
 import { isBackendConfigured } from "@/lib/env";
+import { useAccess } from "@/hooks/use-domain-data";
+import { PlanLock, TrialBanner } from "@/components/access/plan-access";
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const [switcherOpen, setSwitcherOpen] = React.useState(false);
@@ -37,6 +39,14 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     authStatus === "authenticated" &&
     Boolean(routeSlug) &&
     !memberships.some((m) => m.workspaceSlug === routeSlug);
+
+  // Free trial of a customer brand: a banner while it lasts, then a lock
+  // screen with how to pay. The platform admin is never locked out.
+  const superAdmin = useAuthStore((s) => s.superAdmin);
+  const role = memberships.find((m) => m.workspaceSlug === routeSlug)?.role;
+  const access = useAccess(routeSlug, isBackendConfigured() && authStatus === "authenticated" && !noAccess);
+  const locked = access.data?.state === "expired" && !superAdmin;
+  const canPay = role === "Owner" || role === "Admin";
 
   // Hydrate the workspace list (config + user-created) once on mount.
   React.useEffect(() => {
@@ -105,8 +115,15 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                     }
                   />
                 </div>
+              ) : locked && routeSlug && access.data ? (
+                <PlanLock slug={routeSlug} access={access.data} canPay={canPay} />
               ) : (
-                children
+                <>
+                  {routeSlug && access.data ? (
+                    <TrialBanner slug={routeSlug} access={access.data} canPay={canPay} />
+                  ) : null}
+                  {children}
+                </>
               )}
             </div>
           </main>
