@@ -11,6 +11,7 @@ import {
 } from "@nestjs/common";
 import { ApiBearerAuth, ApiTags } from "@nestjs/swagger";
 import { WORKSPACE_KINDS, type Workspace, type WorkspaceKind } from "@nv/domain";
+import { ConfigService } from "@nestjs/config";
 import { IsIn, IsOptional, IsString, MaxLength, MinLength } from "class-validator";
 import { Throttle } from "@nestjs/throttler";
 
@@ -18,6 +19,8 @@ import { CurrentUser } from "../../auth/decorators/current-user.decorator";
 import type { AuthenticatedUser } from "../../auth/auth.types";
 import { WorkspaceRegistry } from "../../common/workspace-registry.service";
 import { WorkspaceGuard } from "../../common/tenant/workspace.guard";
+import { WorkspaceAccessService } from "../../common/access/workspace-access.service";
+import type { AppConfig } from "../../config/configuration";
 
 export class CreateWorkspaceDto {
   @IsString() @MinLength(2) @MaxLength(60) name!: string;
@@ -33,7 +36,11 @@ export class CreateWorkspaceDto {
  */
 @Injectable()
 export class WorkspacesService {
-  constructor(private readonly registry: WorkspaceRegistry) {}
+  constructor(
+    private readonly registry: WorkspaceRegistry,
+    private readonly access: WorkspaceAccessService,
+    private readonly config: ConfigService<AppConfig, true>,
+  ) {}
 
   /** Only the workspaces the user belongs to (no cross-tenant enumeration). */
   listForUser(userId: string): Promise<Workspace[]> {
@@ -46,8 +53,12 @@ export class WorkspacesService {
     return ws;
   }
 
-  create(dto: CreateWorkspaceDto, user: AuthenticatedUser): Promise<Workspace> {
-    return this.registry.create(dto, { userId: user.userId, email: user.email });
+  /** A brand a customer creates starts its free trial; the operator's own brands don't. */
+  async create(dto: CreateWorkspaceDto, user: AuthenticatedUser): Promise<Workspace> {
+    const ws = await this.registry.create(dto, { userId: user.userId, email: user.email });
+    const operator = this.config.get("superAdmins", { infer: true }).includes(user.email.toLowerCase());
+    if (!operator) await this.access.startTrial(ws.slug);
+    return ws;
   }
 }
 

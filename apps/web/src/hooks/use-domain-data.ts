@@ -446,3 +446,24 @@ export function useAuditLogs() {
   const ws = useWorkspace();
   return useQuery({ queryKey: [ws.id, "audit"], queryFn: () => svc.audit.logs(ws.id) });
 }
+
+/**
+ * Free trial / plan of a brand. Keyed by slug (not the active workspace) so
+ * the shell can ask before the page loads; rechecked every minute so the lock
+ * appears when the trial ends and lifts once the payment is confirmed.
+ */
+export function useAccess(slug: string | undefined, enabled = true) {
+  const svc = useServices();
+  return useQuery({
+    queryKey: [slug, "access"],
+    queryFn: () => svc.access.overview(slug!),
+    enabled: !!slug && enabled,
+    refetchInterval: 60_000,
+    retry: false,
+  });
+}
+
+export function useAdminAccess(enabled = true) {
+  const svc = useServices();
+  return useQuery({ queryKey: ["admin", "access"], queryFn: () => svc.admin.access(), enabled });
+}

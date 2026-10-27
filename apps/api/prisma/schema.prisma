@@ -663,6 +663,19 @@ model Workspace {
   createdAt DateTime @default(now())
 }
 
+/// Free trial and paid time of a self-serve brand. Only brands created by a
+/// customer have a row; built-in brands and the operator's own have none and are
+/// never locked.
+model WorkspaceAccess {
+  workspaceSlug String    @id
+  trialEndsAt   DateTime
+  /// Paid access runs until this moment (extended each time a payment is confirmed).
+  paidUntil     DateTime?
+  activatedBy   String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+}
+
 /// Per-brand settings that apply to built-in and created workspaces alike
 /// (built-in ones have no Workspace row). One row per workspace, created on first save.
 model WorkspaceSettings {
@@ -954,9 +967,13 @@ model PaymentRequest {
   paidAt        DateTime?
   verifiedBy    String?
   createdBy     String
+  /// Plan payment of a customer brand (set only in the operator's billing
+  /// brand); confirming it as "pagado" adds paid days to that brand.
+  forWorkspace  String?
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
   @@index([workspaceSlug, status, createdAt])
   @@index([workspaceSlug, contactId])
+  @@index([forWorkspace, createdAt])
 }

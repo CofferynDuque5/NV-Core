@@ -38,6 +38,10 @@ export class AllExceptionsFilter implements ExceptionFilter {
     // "Can't reach database server" P1001, o "table ... does not exist" P2021),
     // en vez de un opaco "Internal server error". No son datos sensibles.
     let code: string | undefined;
+    // A machine-readable code the panel acts on (e.g. "trial_expired").
+    if (typeof payload === "object" && typeof (payload as { code?: unknown }).code === "string") {
+      code = (payload as { code: string }).code;
+    }
     if (!(exception instanceof HttpException)) {
       const err = exception as { message?: unknown; code?: unknown };
       if (err?.message) message = String(err.message).slice(0, 400);

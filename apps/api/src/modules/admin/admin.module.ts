@@ -13,17 +13,25 @@ import {
 } from "@nestjs/common";
 import { ApiBearerAuth, ApiTags } from "@nestjs/swagger";
 import { ROLES, type Role } from "@nv/domain";
-import { IsIn, IsString, MinLength } from "class-validator";
+import { IsIn, IsInt, IsString, Max, Min, MinLength } from "class-validator";
 
 import { AuthModule } from "../../auth/auth.module";
 import { AuthStore } from "../../auth/auth.store";
 import { SuperAdminGuard } from "../../auth/guards/super-admin.guard";
 import { WorkspaceRegistry } from "../../common/workspace-registry.service";
+import { WorkspaceAccessService } from "../../common/access/workspace-access.service";
+import { AuditLogger } from "../../common/audit-logger.service";
+import { CurrentUser } from "../../auth/decorators/current-user.decorator";
+import type { AuthenticatedUser } from "../../auth/auth.types";
 
 export class SetMembershipDto {
   @IsString() @MinLength(3) email!: string;
   @IsString() @MinLength(1) workspaceSlug!: string;
   @IsIn(ROLES) role!: Role;
+}
+
+export class ActivateAccessDto {
+  @IsInt() @Min(1) @Max(400) days!: number;
 }
 
 export interface AdminUserView {
@@ -38,7 +46,22 @@ export class AdminService {
   constructor(
     private readonly store: AuthStore,
     private readonly registry: WorkspaceRegistry,
+    private readonly access: WorkspaceAccessService,
+    private readonly audit: AuditLogger,
   ) {}
+
+  /** Trials and paid brands, for the operator. */
+  accessList() {
+    return this.access.list();
+  }
+
+  /** Add paid days to a brand after confirming its payment. */
+  async activate(slug: string, days: number, actor: string) {
+    if (!(await this.registry.exists(slug))) throw new NotFoundException(`Workspace "${slug}" no existe.`);
+    const state = await this.access.activate(slug, days, actor);
+    await this.audit.record(slug, actor, "access.activate", `+${days} días · hasta ${state.paidUntil}`);
+    return state;
+  }
 
   async users(): Promise<AdminUserView[]> {
     const rows = await this.store.listAllUsers();
@@ -96,6 +119,21 @@ export class AdminController {
   @HttpCode(200)
   setMembership(@Body() dto: SetMembershipDto) {
     return this.service.setMembership(dto);
+  }
+
+  @Get("access")
+  accessList() {
+    return this.service.accessList();
+  }
+
+  @Post("access/:workspaceSlug/activate")
+  @HttpCode(200)
+  activate(
+    @Param("workspaceSlug") slug: string,
+    @Body() dto: ActivateAccessDto,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.service.activate(slug, dto.days, user.email);
   }
 
   @Delete("memberships/:userId/:workspaceSlug")

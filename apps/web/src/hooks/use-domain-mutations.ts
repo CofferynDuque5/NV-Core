@@ -1,6 +1,7 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import type {
+  AccessPaymentInput,
   CreatePaymentRequestInput,
   PaymentMethodInput,
   UpdatePaymentRequestInput,
@@ -1729,5 +1730,31 @@ export function useUpdateWeeklyReportSettings() {
       toast.success("Zona horaria guardada");
     },
     onError: (err: Error) => toast.error(err.message || "No se pudo guardar la zona horaria"),
+  });
+}
+
+export function usePayAccess(slug: string) {
+  const svc = useServices();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: AccessPaymentInput) => svc.access.pay(slug, input),
+    onSuccess: (overview) => {
+      qc.setQueryData([slug, "access"], overview);
+      toast.success("Pago enviado. Te avisamos al confirmarlo.");
+    },
+  });
+}
+
+export function useActivateAccess() {
+  const svc = useServices();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ slug, days }: { slug: string; days: number }) => svc.admin.activate(slug, days),
+    onSuccess: (_s, { slug, days }) => {
+      void qc.invalidateQueries({ queryKey: ["admin", "access"] });
+      void qc.invalidateQueries({ queryKey: [slug, "access"] });
+      toast.success(`Marca activada ${days} días más`);
+    },
+    onError: (err: Error) => toast.error(err.message || "No se pudo activar la marca"),
   });
 }

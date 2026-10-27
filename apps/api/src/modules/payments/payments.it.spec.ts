@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 
 import { PaymentsService } from "./payments.module";
 import { NotificationsService } from "../notifications/notifications.module";
+import { WorkspaceAccessService } from "../../common/access/workspace-access.service";
 
 const url = process.env.IT_DATABASE_URL;
 describe.skipIf(!url)("Cobros manuales contra PostgreSQL real", () => {
@@ -10,7 +11,10 @@ describe.skipIf(!url)("Cobros manuales contra PostgreSQL real", () => {
   const log: string[] = [];
   const audit = { record: async (_ws: string, _a: string, action: string) => void log.push(action) };
   const notifications = new NotificationsService(prisma as never);
-  const payments = new PaymentsService(prisma as never, audit as never, notifications as never);
+  const billing = { trialHours: 24, operatorWorkspace: "", plan: { price: 19, currency: "USD", days: 30 } };
+  const config = { get: () => billing };
+  const access = new WorkspaceAccessService(prisma as never, config as never);
+  const payments = new PaymentsService(prisma as never, audit as never, notifications as never, access, config as never);
   const me = "caja@nv.tv";
 
   it("crea métodos por país y los guarda limpios", async () => {

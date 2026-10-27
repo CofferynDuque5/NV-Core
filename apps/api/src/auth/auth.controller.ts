@@ -38,7 +38,12 @@ export class AuthController {
   /** Sets the refresh cookie and returns the sanitized session (no refresh token in body). */
   private send(res: Response, result: AuthResult) {
     res.cookie(REFRESH_COOKIE, result.refreshToken, this.cookieOptions());
-    return { accessToken: result.accessToken, user: result.user, memberships: result.memberships };
+    return {
+      accessToken: result.accessToken,
+      user: result.user,
+      memberships: result.memberships,
+      superAdmin: result.superAdmin,
+    };
   }
 
   @Public()
