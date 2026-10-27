@@ -1,5 +1,6 @@
 import * as React from "react";
 import {
+  FileText,
   FolderPlus,
   Image as ImageIcon,
   Loader2,
@@ -83,7 +84,7 @@ export default function BibliotecaPage() {
       <input
         ref={inputRef}
         type="file"
-        accept="image/*"
+        accept="image/jpeg,image/png,image/webp,image/gif,video/mp4,video/quicktime,video/webm,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv"
         multiple
         className="hidden"
         onChange={onFiles}
@@ -91,7 +92,7 @@ export default function BibliotecaPage() {
       <PageHeader
         eyebrow="Media Manager"
         title="Biblioteca"
-        description="Gestiona, busca y organiza imágenes para reutilizarlas."
+        description="Imágenes, videos y documentos guardados en tu servidor, listos para reutilizar."
         actions={
           <Button size="sm" onClick={pickFiles} disabled={upload.isPending}>
             {upload.isPending ? (
@@ -246,7 +247,20 @@ export default function BibliotecaPage() {
                   <div className="bg-panel-raised aspect-square">
                     {asset.url ? (
                       asset.type === "video" ? (
-                        <video src={asset.url} className="size-full object-cover" muted />
+                        <video src={asset.url} className="size-full object-cover" muted preload="metadata" />
+                      ) : asset.type === "document" ? (
+                        <a
+                          href={asset.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-ink-muted hover:text-brand grid size-full place-items-center gap-1 p-3 text-center"
+                          title="Abrir documento"
+                        >
+                          <FileText className="size-10" />
+                          <span className="text-[11px] uppercase tracking-wider">
+                            {asset.url.split(".").pop()}
+                          </span>
+                        </a>
                       ) : (
                         <img
                           src={asset.url}
@@ -274,7 +288,7 @@ export default function BibliotecaPage() {
                         >
                           <Pencil className="size-3.5" />
                         </button>
-                        {asset.url ? (
+                        {asset.url && asset.type !== "document" ? (
                           <button
                             onClick={() =>
                               setPublishing({

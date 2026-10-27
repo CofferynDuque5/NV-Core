@@ -1262,7 +1262,7 @@ export function useGoogleDisconnect() {
   });
 }
 
-// ── Media (ImgBB for images, Cloudinary for video) ──────────────────────────
+// ── Media (saved on the app's own server) ──────────────────────────
 export function useCreateFolder() {
   const svc = useServices();
   const ws = useWorkspace();
@@ -1277,10 +1277,47 @@ export function useCreateFolder() {
   });
 }
 
+/** Larger than this never reaches the server (MEDIA_MAX_MB defaults to 100). */
+const MAX_UPLOAD_MB = 100;
+
+function checkUploadSize(file: File): void {
+  if (file.size > MAX_UPLOAD_MB * 1024 * 1024) {
+    throw new Error(`«${file.name}» pesa más de ${MAX_UPLOAD_MB} MB.`);
+  }
+}
+
 /**
- * Biblioteca uploader. Images go to ImgBB (preferred); video/documents (or
- * images when ImgBB isn't configured) fall back to Cloudinary. Optionally files
- * land directly in a folder.
+ * Old path, only when server storage is turned off (MEDIA_STORAGE=off):
+ * images to ImgBB, then Cloudinary for anything else.
+ */
+async function uploadExternally(
+  svc: ReturnType<typeof useServices>,
+  wsId: string,
+  file: File,
+): Promise<{ url: string; kind: "image" | "video" | "document" }> {
+  if (file.type.startsWith("image/")) {
+    try {
+      const { url } = await svc.media.uploadImage(wsId, await fileToBase64(file));
+      return { url, kind: "image" };
+    } catch (imgbbErr) {
+      if (!isNotConfigured(imgbbErr)) throw imgbbErr;
+    }
+  }
+  const sig = await svc.media.uploadSignature(wsId);
+  if (!sig) {
+    throw new Error(
+      "La subida al servidor está desactivada (MEDIA_STORAGE=off) y no hay otro almacenamiento configurado.",
+    );
+  }
+  const uploaded = await uploadToCloudinary(sig, file);
+  const kind =
+    uploaded.resourceType === "video" ? "video" : uploaded.resourceType === "image" ? "image" : "document";
+  return { url: uploaded.secureUrl, kind };
+}
+
+/**
+ * Biblioteca uploader. Files are saved on the app's own server (images, video
+ * and documents), optionally straight into a folder.
  */
 export function useUploadMedia() {
   const svc = useServices();
@@ -1290,42 +1327,15 @@ export function useUploadMedia() {
     mutationFn: async (arg: File | { file: File; folderId?: string | null }) => {
       const file = arg instanceof File ? arg : arg.file;
       const folderId = arg instanceof File ? undefined : (arg.folderId ?? undefined);
-      const isImage = file.type.startsWith("image/");
-
-      // Imágenes → ImgBB (preferido). Si no está configurado, cae a Cloudinary;
-      // si SÍ está configurado pero falla (clave inválida, etc.), se muestra ese
-      // error real en vez del genérico.
-      if (isImage) {
-        try {
-          const base64 = await fileToBase64(file);
-          const { url } = await svc.media.uploadImage(ws.id, base64);
-          return await svc.media.createAsset(ws.id, {
-            type: "image",
-            title: file.name,
-            url,
-            folderId,
-          });
-        } catch (imgbbErr) {
-          if (!isNotConfigured(imgbbErr)) throw imgbbErr;
-          /* ImgBB no configurado → intentar Cloudinary abajo */
-        }
+      checkUploadSize(file);
+      try {
+        const { asset } = await svc.media.uploadFile(ws.id, file, { library: true, folderId });
+        if (asset) return asset;
+      } catch (err) {
+        if (!isNotConfigured(err)) throw err;
       }
-
-      const sig = await svc.media.uploadSignature(ws.id);
-      if (!sig) {
-        throw new Error(
-          isImage
-            ? "Sube imágenes con ImgBB (IMGBB_API_KEY) o Cloudinary (CLOUDINARY_URL)."
-            : "Para video/documentos define CLOUDINARY_URL en el backend.",
-        );
-      }
-      const uploaded = await uploadToCloudinary(sig, file);
-      return svc.media.createAsset(ws.id, {
-        type: uploaded.resourceType === "video" ? "video" : "image",
-        title: file.name,
-        url: uploaded.secureUrl,
-        folderId,
-      });
+      const { url, kind } = await uploadExternally(svc, ws.id, file);
+      return svc.media.createAsset(ws.id, { type: kind, title: file.name, url, folderId });
     },
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: [ws.id, "media"] });
@@ -1335,11 +1345,6 @@ export function useUploadMedia() {
   });
 }
 
-/**
- * Upload a file to Cloudinary and return a CampaignAttachment descriptor
- * ({ url, kind, mime, filename }) for use in campaigns / social publishing.
- * Also registers it in the media library so it shows up in Biblioteca.
- */
 /** Read a File as a base64 data URL (for the ImgBB fallback upload). */
 function fileToBase64(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -1350,56 +1355,31 @@ function fileToBase64(file: File): Promise<string> {
   });
 }
 
+/**
+ * Upload a file for campaigns / social publishing and return a
+ * CampaignAttachment ({ url, kind, mime, filename }). It is saved on the app's
+ * own server and also listed in Biblioteca.
+ */
 export function useUploadCampaignAttachment() {
   const svc = useServices();
   const ws = useWorkspace();
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (file: File): Promise<CampaignAttachment> => {
-      const isImage = file.type.startsWith("image/");
-
-      // Imágenes → ImgBB (preferido). Si no está configurado, cae a Cloudinary;
-      // si SÍ está configurado pero falla, se muestra ese error real.
-      if (isImage) {
-        try {
-          const base64 = await fileToBase64(file);
-          const { url } = await svc.media.uploadImage(ws.id, base64);
-          await svc.media
-            .createAsset(ws.id, { type: "image", title: file.name, url })
-            .catch(() => undefined);
-          void qc.invalidateQueries({ queryKey: [ws.id, "media"] });
-          return { url, kind: "image", mime: file.type || "image/png", filename: file.name };
-        } catch (imgbbErr) {
-          if (!isNotConfigured(imgbbErr)) throw imgbbErr;
-          /* ImgBB no configurado → intentar Cloudinary abajo */
-        }
+      checkUploadSize(file);
+      try {
+        const { file: stored } = await svc.media.uploadFile(ws.id, file, { library: true });
+        void qc.invalidateQueries({ queryKey: [ws.id, "media"] });
+        return { url: stored.url, kind: stored.kind, mime: stored.mime, filename: stored.filename };
+      } catch (err) {
+        if (!isNotConfigured(err)) throw err;
       }
-
-      // Video/documentos (o imagen sin ImgBB) → Cloudinary.
-      const sig = await svc.media.uploadSignature(ws.id);
-      if (!sig) {
-        throw new Error(
-          isImage
-            ? "Sube imágenes con ImgBB (IMGBB_API_KEY) o Cloudinary (CLOUDINARY_URL)."
-            : "Para video/documentos define CLOUDINARY_URL en el backend.",
-        );
-      }
-      const uploaded = await uploadToCloudinary(sig, file);
-      const kind =
-        uploaded.resourceType === "video"
-          ? "video"
-          : uploaded.resourceType === "image"
-            ? "image"
-            : "document";
+      const { url, kind } = await uploadExternally(svc, ws.id, file);
       await svc.media
-        .createAsset(ws.id, {
-          type: kind === "video" ? "video" : "image",
-          title: file.name,
-          url: uploaded.secureUrl,
-        })
+        .createAsset(ws.id, { type: kind, title: file.name, url })
         .catch(() => undefined);
       void qc.invalidateQueries({ queryKey: [ws.id, "media"] });
-      return { url: uploaded.secureUrl, kind, mime: file.type || null, filename: file.name };
+      return { url, kind, mime: file.type || null, filename: file.name };
     },
     onError: (err) => toast.error(errText(err)),
   });

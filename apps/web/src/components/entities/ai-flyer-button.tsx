@@ -13,7 +13,7 @@ const FLYER_SIZES: { id: string; label: string }[] = [
   { id: "1536x1024", label: "Horizontal" },
 ];
 
-/** Convert a data: URL (base64) into a File so it can be uploaded to Cloudinary. */
+/** Convert a data: URL (base64) into a File so it can be uploaded to the server. */
 function dataUrlToFile(dataUrl: string, filename: string): File {
   const [head, body] = dataUrl.split(",");
   const mime = /data:(.*?);base64/.exec(head ?? "")?.[1] ?? "image/png";
@@ -25,10 +25,10 @@ function dataUrlToFile(dataUrl: string, filename: string): File {
 
 /**
  * Inline "Flyer con IA" control for the content editors. Generates an image
- * from a prompt (OpenAI), uploads it to Cloudinary so it becomes a hosted,
+ * from a prompt (OpenAI), saves it on the app's own server so it becomes a hosted,
  * deliverable attachment, and hands it back via `onGenerated` — where it shows
  * in the live preview and is sent with the campaign/post. Falls back to the raw
- * data URL (preview-only) when Cloudinary isn't configured.
+ * data URL (preview-only) when the upload fails.
  */
 export function AiFlyerButton({
   defaultPrompt,
@@ -68,7 +68,7 @@ export function AiFlyerButton({
       if (url.startsWith("http")) {
         onGenerated({ url, kind: "image", mime: "image/png", filename: "flyer-ia.png" });
       } else {
-        // data: URL — upload to Cloudinary so it's deliverable; fall back to the
+        // data: URL — save it on the server so it's deliverable; fall back to the
         // raw data URL (preview works, delivery won't) if upload isn't available.
         try {
           const att = await upload.mutateAsync(dataUrlToFile(url, "flyer-ia.png"));
@@ -76,7 +76,7 @@ export function AiFlyerButton({
         } catch {
           onGenerated({ url, kind: "image", mime: "image/png", filename: "flyer-ia.png" });
           toast.warning(
-            "Flyer generado, pero Cloudinary no está configurado: se usará solo en la vista previa (no se enviará como imagen).",
+            "Flyer generado, pero no se pudo guardar en el servidor: se usará solo en la vista previa (no se enviará como imagen).",
           );
         }
       }

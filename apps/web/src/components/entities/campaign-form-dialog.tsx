@@ -369,7 +369,7 @@ export function CampaignFormDialog({
                 ref={fileInputRef}
                 type="file"
                 multiple
-                accept="image/*"
+                accept="image/jpeg,image/png,image/webp,image/gif,video/mp4,video/quicktime,video/webm,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv"
                 className="hidden"
                 onChange={onPickFiles}
               />
@@ -384,7 +384,7 @@ export function CampaignFormDialog({
                 ) : (
                   <Paperclip className="size-4" />
                 )}
-                {upload.isPending ? "Subiendo…" : "Subir imagen (ImgBB)"}
+                {upload.isPending ? "Subiendo…" : "Subir imagen, video o documento"}
               </button>
               <LibraryPickerButton onPick={(att) => setAttachments((prev) => [...prev, att])} />
               <AiFlyerButton

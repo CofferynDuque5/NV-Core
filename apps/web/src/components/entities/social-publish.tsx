@@ -37,7 +37,7 @@ const pill = (active: boolean) =>
 
 /**
  * Direct "publish now" composer for Facebook / Instagram. Uploads media to
- * Cloudinary and publishes via the Meta Graph API. Reused as a card (Conexiones)
+ * the app's own server and publishes via the Meta Graph API. Reused as a card (Conexiones)
  * and inside a dialog (Biblioteca).
  */
 export function SocialPublishForm({

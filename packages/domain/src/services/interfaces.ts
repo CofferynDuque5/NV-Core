@@ -33,6 +33,7 @@ import type {
   SequencePreviewStep,
   MediaAsset,
   MediaFolder,
+  UploadFileResult,
   Message,
   Notification,
   OnboardingStatus,
@@ -535,6 +536,15 @@ export interface MediaService {
   uploadSignature(workspaceId: string, folder?: string): Promise<MediaUploadSignature | null>;
   /** Upload a base64 image via the backend (ImgBB) and get its public URL. */
   uploadImage(workspaceId: string, image: string): Promise<{ url: string }>;
+  /**
+   * Save a file (image, video or document) on the app's own server and get its
+   * public URL. `library` also adds it to the Biblioteca (optionally in a folder).
+   */
+  uploadFile(
+    workspaceId: string,
+    file: File,
+    options?: { library?: boolean; folderId?: string },
+  ): Promise<UploadFileResult>;
   createAsset(workspaceId: string, input: CreateAssetInput): Promise<MediaAsset>;
   updateAsset(workspaceId: string, id: string, input: UpdateAssetInput): Promise<MediaAsset>;
   removeAsset(workspaceId: string, id: string): Promise<void>;

@@ -451,6 +451,22 @@ export interface MediaAsset {
   hue?: number;
 }
 
+/** A file saved on the app's own server (no Cloudinary). */
+export interface StoredFile {
+  /** Public URL (https in production so WhatsApp/Meta can fetch it). */
+  url: string;
+  kind: "image" | "video" | "document";
+  mime: string;
+  filename: string;
+  size: number;
+}
+
+export interface UploadFileResult {
+  file: StoredFile;
+  /** The Biblioteca entry, when the upload was also saved there. */
+  asset: MediaAsset | null;
+}
+
 export interface MediaFolder {
   id: string;
   label: string;

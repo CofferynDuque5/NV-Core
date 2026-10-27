@@ -78,6 +78,17 @@ export const envSchema = z.object({
   TELEGRAM_SESSION_DIR: z.string().default("data/telegram"),
   // Directory where Baileys stores WhatsApp session credentials (per workspace).
   WHATSAPP_SESSION_DIR: z.string().default("data/whatsapp"),
+
+  // Archivos subidos (imágenes, video, documentos) guardados en este servidor.
+  // "off" desactiva la subida al servidor (quedan ImgBB/Cloudinary si existen).
+  MEDIA_STORAGE: z.enum(["local", "off"]).default("local"),
+  // Carpeta donde se guardan; debe sobrevivir a cada despliegue.
+  MEDIA_DIR: z.string().default("data/uploads"),
+  // Tamaño máximo por archivo, en MB.
+  MEDIA_MAX_MB: z.coerce.number().int().positive().max(2048).default(100),
+  // URL pública con la que se sirven (por defecto API_URL). Debe ser https en
+  // producción para que WhatsApp, Instagram y Facebook puedan descargarlos.
+  MEDIA_PUBLIC_URL: z.string().url().optional(),
   // Workspace that receives inbound messages (WhatsApp/Telegram webhooks).
   INBOUND_WORKSPACE: z.string().optional(),
 
