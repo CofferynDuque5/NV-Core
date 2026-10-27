@@ -77,6 +77,15 @@ test("weekly report: this week so far, with what needs attention, and CSV", asyn
   await expect(payments).toContainText("$ 150.000 COP");
   await expect(payments).toContainText("1 cobro · semana anterior: $ 0 COP (0)");
 
+  // Each brand cuts its weeks at its own midnight.
+  await expect(page.getByTestId("report-provenance")).toContainText("Hora: UTC");
+  await expect(page.locator("#report-zone")).toHaveValue("UTC");
+  await page.selectOption("#report-zone", "America/Bogota");
+  await expect(page.getByText("Zona horaria guardada")).toBeVisible();
+  await expect(page.getByTestId("report-provenance")).toContainText("Hora: Colombia (Bogotá)");
+  await page.reload({ waitUntil: "networkidle" });
+  await expect(page.locator("#report-zone")).toHaveValue("America/Bogota");
+
   const [download] = await Promise.all([page.waitForEvent("download"), page.getByRole("button", { name: "CSV" }).click()]);
   expect(download.suggestedFilename()).toMatch(/^informe-semanal-password-vault-\d{4}-\d{2}-\d{2}-en-curso\.csv$/);
 });

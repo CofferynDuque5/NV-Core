@@ -4,6 +4,7 @@ import type {
   CreatePaymentRequestInput,
   PaymentMethodInput,
   UpdatePaymentRequestInput,
+  WeeklyReportSettings,
   AddMemberInput,
   CampaignAttachment,
   ChannelId,
@@ -1712,5 +1713,21 @@ export function useUpdatePayment() {
       void qc.invalidateQueries({ queryKey: [ws.id, "payments", "list"] });
       toast.success(p.status === "pagado" ? "Pago confirmado" : "Cobro actualizado");
     },
+  });
+}
+
+/** Change the zone the weekly report cuts weeks in; the live week is recomputed. */
+export function useUpdateWeeklyReportSettings() {
+  const svc = useServices();
+  const ws = useWorkspace();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: WeeklyReportSettings) => svc.reports.updateSettings(ws.id, input),
+    onSuccess: (settings) => {
+      qc.setQueryData([ws.id, "reports", "settings"], settings);
+      void qc.invalidateQueries({ queryKey: [ws.id, "reports", "weekly"] });
+      toast.success("Zona horaria guardada");
+    },
+    onError: (err: Error) => toast.error(err.message || "No se pudo guardar la zona horaria"),
   });
 }

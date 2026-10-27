@@ -663,6 +663,16 @@ model Workspace {
   createdAt DateTime @default(now())
 }
 
+/// Per-brand settings that apply to built-in and created workspaces alike
+/// (built-in ones have no Workspace row). One row per workspace, created on first save.
+model WorkspaceSettings {
+  workspaceSlug String   @id
+  /// IANA zone the weekly report cuts weeks in (Monday 00:00 local).
+  timeZone      String   @default("UTC")
+  updatedBy     String?
+  updatedAt     DateTime @updatedAt
+}
+
 /**
  * Connected Google account for a workspace (Calendar/Drive OAuth).
  */

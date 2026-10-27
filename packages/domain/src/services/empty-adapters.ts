@@ -283,6 +283,8 @@ export const emptyAdapters: Services = {
     weekly: () => delay([]),
     weeklyReport: () => notAvailable(),
     currentWeek: () => notAvailable(),
+    settings: () => delay({ timeZone: "UTC" }),
+    updateSettings: () => notAvailable(),
   },
   tasks: {
     list: () => delay([]),

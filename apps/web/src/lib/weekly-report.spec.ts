@@ -41,6 +41,8 @@ describe("weekly report helpers", () => {
     const csv = weeklyReportCsv(report);
     expect(csv.startsWith("\uFEFFseccion,concepto,valor,semana_anterior,detalle\r\n")).toBe(true);
     expect(csv).toContain("Informe,Semana,2026-10-12 a 2026-10-18,,cerrada");
+    expect(csv).toContain("Informe,Zona horaria,UTC,,");
+    expect(weeklyReportCsv({ ...report, timeZone: "America/Lima" })).toContain("Informe,Zona horaria,America/Lima,,");
     expect(csv).toContain("Actividad,Contactos nuevos,3,1,Contactos creados");
     expect(csv).toContain("Leads por origen,instagram,2,,");
     expect(csv).toContain("Necesita atención,Envíos de campañas fallidos,1,,");

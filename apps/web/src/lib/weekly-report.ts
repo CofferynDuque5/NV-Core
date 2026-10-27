@@ -58,6 +58,7 @@ export function weeklyReportCsv(report: WeeklyReport): string {
   const rows: (string | number)[][] = [
     ["Informe", "Semana", `${report.weekStart} a ${report.weekEnd}`, "", report.id === "actual" ? "en curso" : "cerrada"],
     ["Informe", "Generado", report.generatedAt, "", ""],
+    ["Informe", "Zona horaria", report.timeZone ?? "UTC", "", ""],
     ...report.metrics.map((m) => ["Actividad", m.label, m.value, m.previous, m.source]),
     ...report.leadSources.map((l) => ["Leads por origen", leadSourceLabel(l.source), l.count, "", ""]),
     // Raw numbers (no thousands separators) so spreadsheets can add them up.

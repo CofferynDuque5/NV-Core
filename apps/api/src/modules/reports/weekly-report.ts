@@ -1,7 +1,8 @@
 import { PAYMENT_CURRENCIES, type LeadSourceCount, type PaymentCurrency, type WeeklyReport, type WeeklyReportPayments } from "@nv/domain";
 
 /**
- * Pure helpers for the weekly report: week boundaries (Monday 00:00 UTC),
+ * Pure helpers for the weekly report: week boundaries (Monday 00:00 in the
+ * brand's time zone; a week is keyed by its calendar Monday as a UTC-midnight date),
  * lead-source ranking and the notification text. Kept side-effect-free so the
  * calendar math is unit-testable.
  */
@@ -28,6 +29,65 @@ export function lastClosedWeek(now: Date): Date {
 /** YYYY-MM-DD (UTC). */
 export function dayKey(d: Date): string {
   return d.toISOString().slice(0, 10);
+}
+
+/**
+ * How far `tz` is ahead of UTC at `instant`, in ms (Bogotá → -5 h). Read from
+ * Intl, so daylight saving is handled where a zone has it.
+ */
+export function zoneOffsetMs(instant: Date, tz: string): number {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: tz,
+    hourCycle: "h23",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+  }).formatToParts(instant);
+  const n = (type: string) => Number(parts.find((p) => p.type === type)?.value);
+  const asUtc = Date.UTC(n("year"), n("month") - 1, n("day"), n("hour"), n("minute"), n("second"));
+  return asUtc - Math.floor(instant.getTime() / 1000) * 1000;
+}
+
+/** Calendar day (YYYY-MM-DD) that `instant` falls on in `tz`. */
+export function localDayKey(instant: Date, tz: string): string {
+  return dayKey(new Date(instant.getTime() + zoneOffsetMs(instant, tz)));
+}
+
+/** The instant a calendar day starts (00:00) in `tz`. */
+export function zonedMidnight(day: string, tz: string): Date {
+  const utcMidnight = new Date(`${day}T00:00:00.000Z`).getTime();
+  // Guess with the offset at UTC midnight, then correct once in case the
+  // offset differs at the real local midnight (a DST change that day).
+  let t = utcMidnight - zoneOffsetMs(new Date(utcMidnight), tz);
+  t = utcMidnight - zoneOffsetMs(new Date(t), tz);
+  return new Date(t);
+}
+
+/** Monday (as a UTC-midnight date key) of the week `instant` falls in, in `tz`. */
+export function localWeekStart(instant: Date, tz: string): Date {
+  return weekStartOf(new Date(`${localDayKey(instant, tz)}T00:00:00.000Z`));
+}
+
+/** Last week fully ended at `now` in `tz` (its Monday as a UTC-midnight key). */
+export function lastClosedLocalWeek(now: Date, tz: string): Date {
+  return new Date(localWeekStart(now, tz).getTime() - WEEK_MS);
+}
+
+/** Real instants a week covers in `tz`: its Monday 00:00 to the next Monday 00:00. */
+export function weekBounds(weekStart: Date, tz: string): { from: Date; to: Date } {
+  return {
+    from: zonedMidnight(dayKey(weekStart), tz),
+    to: zonedMidnight(dayKey(new Date(weekStart.getTime() + WEEK_MS)), tz),
+  };
+}
+
+/** "dd/mm" of `instant` in `tz`. */
+export function shortDay(instant: Date, tz: string): string {
+  const [, m, d] = localDayKey(instant, tz).split("-");
+  return `${d}/${m}`;
 }
 
 /** Parse a YYYY-MM-DD that must be a Monday; null otherwise. */

@@ -61,6 +61,7 @@ import type {
   PcAgentStatus,
   Task,
   WeeklyReport,
+  WeeklyReportSettings,
   WeeklyReportSummary,
   PaymentMethod,
   PaymentRequest,
@@ -424,6 +425,8 @@ export function createHttpAdapters(opts: HttpAdapterOptions): Services {
       weekly: (id) => get<WeeklyReportSummary[]>(`${ws(id)}/reports/weekly`),
       weeklyReport: (id, week) => get<WeeklyReport>(`${ws(id)}/reports/weekly/${encodeURIComponent(week)}`),
       currentWeek: (id) => get<WeeklyReport>(`${ws(id)}/reports/weekly/actual`),
+      settings: (id) => get<WeeklyReportSettings>(`${ws(id)}/reports/weekly/settings`),
+      updateSettings: (id, input) => put<WeeklyReportSettings>(`${ws(id)}/reports/weekly/settings`, input),
     },
     tasks: {
       list: (id) => get<Task[]>(`${ws(id)}/tasks`),

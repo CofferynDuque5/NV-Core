@@ -1,6 +1,14 @@
 import { describe, expect, it } from "vitest";
 
-import { lastClosedWeek, mergePaymentTotals, noticeMeta, parseWeekStart, rankLeadSources, weekLabel, weekStartOf } from "./weekly-report";
+import {
+  lastClosedLocalWeek,
+  localDayKey,
+  localWeekStart,
+  shortDay,
+  weekBounds,
+  zonedMidnight,
+  lastClosedWeek,
+  mergePaymentTotals, noticeMeta, parseWeekStart, rankLeadSources, weekLabel, weekStartOf } from "./weekly-report";
 
 describe("semanas (lunes a domingo, UTC)", () => {
   it("encuentra el lunes de cualquier día, incluido el domingo", () => {
@@ -24,6 +32,41 @@ describe("semanas (lunes a domingo, UTC)", () => {
   it("nombra la semana aunque cruce de mes", () => {
     expect(weekLabel("2026-10-19", "2026-10-25")).toBe("19 al 25 de oct.");
     expect(weekLabel("2026-10-26", "2026-11-01")).toBe("26 de oct. al 1 de nov.");
+  });
+});
+
+describe("semanas con la hora de la marca", () => {
+  it("la medianoche local de Bogotá, Caracas y Lima cae en su hora UTC", () => {
+    expect(zonedMidnight("2026-10-19", "America/Bogota").toISOString()).toBe("2026-10-19T05:00:00.000Z");
+    expect(zonedMidnight("2026-10-19", "America/Caracas").toISOString()).toBe("2026-10-19T04:00:00.000Z");
+    expect(zonedMidnight("2026-10-19", "America/Lima").toISOString()).toBe("2026-10-19T05:00:00.000Z");
+    expect(zonedMidnight("2026-10-19", "UTC").toISOString()).toBe("2026-10-19T00:00:00.000Z");
+  });
+
+  it("respeta el cambio de horario donde lo hay (Madrid, 25 oct 2026)", () => {
+    expect(zonedMidnight("2026-10-19", "Europe/Madrid").toISOString()).toBe("2026-10-18T22:00:00.000Z");
+    expect(zonedMidnight("2026-10-26", "Europe/Madrid").toISOString()).toBe("2026-10-25T23:00:00.000Z");
+    // That week is one hour longer than 7 days.
+    const { from, to } = weekBounds(new Date("2026-10-19T00:00:00Z"), "Europe/Madrid");
+    expect(to.getTime() - from.getTime()).toBe(7 * 86_400_000 + 3_600_000);
+  });
+
+  it("el domingo 8 pm en Bogotá sigue siendo domingo (en UTC ya es lunes)", () => {
+    const sundayNight = new Date("2026-10-26T01:00:00Z"); // 25 oct, 20:00 en Bogotá
+    expect(localDayKey(sundayNight, "America/Bogota")).toBe("2026-10-25");
+    expect(localWeekStart(sundayNight, "America/Bogota").toISOString()).toBe("2026-10-19T00:00:00.000Z");
+    expect(localWeekStart(sundayNight, "UTC").toISOString()).toBe("2026-10-26T00:00:00.000Z");
+    // So the week of the 19th is not closed yet in Bogotá, but it is in UTC.
+    expect(lastClosedLocalWeek(sundayNight, "America/Bogota").toISOString()).toBe("2026-10-12T00:00:00.000Z");
+    expect(lastClosedLocalWeek(sundayNight, "UTC").toISOString()).toBe("2026-10-19T00:00:00.000Z");
+    expect(shortDay(sundayNight, "America/Bogota")).toBe("25/10");
+  });
+
+  it("la semana en Caracas va del lunes 04:00 UTC al lunes siguiente", () => {
+    expect(weekBounds(new Date("2026-10-19T00:00:00Z"), "America/Caracas")).toEqual({
+      from: new Date("2026-10-19T04:00:00Z"),
+      to: new Date("2026-10-26T04:00:00Z"),
+    });
   });
 });
 

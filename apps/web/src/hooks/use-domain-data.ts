@@ -392,6 +392,12 @@ export function useWeeklyReports() {
   return useQuery({ queryKey: [ws.id, "reports", "weekly"], queryFn: () => svc.reports.weekly(ws.id) });
 }
 
+export function useWeeklyReportSettings() {
+  const svc = useServices();
+  const ws = useWorkspace();
+  return useQuery({ queryKey: [ws.id, "reports", "settings"], queryFn: () => svc.reports.settings(ws.id) });
+}
+
 /** A stored week, or the current week so far when `week` is "actual". */
 export function useWeeklyReport(week: string | null) {
   const svc = useServices();
