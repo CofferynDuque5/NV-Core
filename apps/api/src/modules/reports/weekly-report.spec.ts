@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { lastClosedWeek, noticeMeta, parseWeekStart, rankLeadSources, weekLabel, weekStartOf } from "./weekly-report";
+import { lastClosedWeek, mergePaymentTotals, noticeMeta, parseWeekStart, rankLeadSources, weekLabel, weekStartOf } from "./weekly-report";
 
 describe("semanas (lunes a domingo, UTC)", () => {
   it("encuentra el lunes de cualquier día, incluido el domingo", () => {
@@ -66,5 +66,43 @@ describe("texto del aviso", () => {
         attention: [{ key: "x", label: "x", count: 1, section: "tareas", items: [] }],
       }),
     ).toBe("Semana del 19 al 25 de oct. · 12 contactos nuevos · 1 asunto pendiente");
+  });
+
+  it("cuenta los cobros confirmados, sin sumar monedas", () => {
+    const pay = { amount: 1, previousAmount: 0, previousCount: 0 };
+    expect(
+      noticeMeta({
+        ...base,
+        payments: [
+          { ...pay, currency: "COP", count: 2 },
+          { ...pay, currency: "USDT", count: 1 },
+        ],
+      }),
+    ).toBe("Semana del 19 al 25 de oct. · 12 contactos nuevos (+3) · 3 cobros confirmados · nada pendiente");
+    expect(noticeMeta({ ...base, payments: [{ ...pay, currency: "PEN", count: 1 }] })).toContain("1 cobro confirmado ·");
+  });
+});
+
+describe("cobros por moneda", () => {
+  it("junta la semana y la anterior por moneda, en orden fijo, sin convertir", () => {
+    const decimal = (s: string) => ({ toString: () => s });
+    expect(
+      mergePaymentTotals(
+        [
+          { currency: "USDT", amount: decimal("25.50"), count: 1 },
+          { currency: "COP", amount: decimal("200000.00"), count: 2 },
+        ],
+        [
+          { currency: "PEN", amount: decimal("49.90"), count: 1 },
+          { currency: "COP", amount: 100000, count: 1 },
+        ],
+      ),
+    ).toEqual([
+      { currency: "COP", amount: 200000, count: 2, previousAmount: 100000, previousCount: 1 },
+      { currency: "PEN", amount: 0, count: 0, previousAmount: 49.9, previousCount: 1 },
+      { currency: "USDT", amount: 25.5, count: 1, previousAmount: 0, previousCount: 0 },
+    ]);
+    expect(mergePaymentTotals([], [])).toEqual([]);
+    expect(mergePaymentTotals([{ currency: "COP", amount: null, count: 0 }], [])[0]?.amount).toBe(0);
   });
 });

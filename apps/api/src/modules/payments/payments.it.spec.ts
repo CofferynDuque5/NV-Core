@@ -2,13 +2,15 @@ import { PrismaClient } from "@prisma/client";
 import { describe, expect, it } from "vitest";
 
 import { PaymentsService } from "./payments.module";
+import { NotificationsService } from "../notifications/notifications.module";
 
 const url = process.env.IT_DATABASE_URL;
 describe.skipIf(!url)("Cobros manuales contra PostgreSQL real", () => {
   const prisma = Object.assign(new PrismaClient({ datasourceUrl: url }), { enabled: true });
   const log: string[] = [];
   const audit = { record: async (_ws: string, _a: string, action: string) => void log.push(action) };
-  const payments = new PaymentsService(prisma as never, audit as never);
+  const notifications = new NotificationsService(prisma as never);
+  const payments = new PaymentsService(prisma as never, audit as never, notifications as never);
   const me = "caja@nv.tv";
 
   it("crea métodos por país y los guarda limpios", async () => {
@@ -43,6 +45,18 @@ describe.skipIf(!url)("Cobros manuales contra PostgreSQL real", () => {
 
     const claimed = await payments.update(ws, me, p.id, { status: "por_verificar", methodId: yape.id, reference: "YP-881" });
     expect(claimed).toMatchObject({ status: "por_verificar", methodLabel: "Yape", reference: "YP-881" });
+    // The whole team is told in-app that someone has to check the account.
+    const notices = await prisma.notification.findMany({ where: { workspaceSlug: ws } });
+    expect(notices).toHaveLength(1);
+    expect(notices[0]).toMatchObject({
+      type: "warning",
+      recipient: null,
+      title: "Cobro por verificar: Plan mensual",
+      meta: "Lucía · S/ 49,90 · Yape · ref YP-881 · Revisa la cuenta y confírmalo en Cobros.",
+    });
+    // Editing it while it waits does not notify again.
+    await payments.update(ws, me, p.id, { note: "Mandó captura" });
+    expect(await prisma.notification.count({ where: { workspaceSlug: ws } })).toBe(1);
 
     const paid = await payments.update(ws, "admin@nv.tv", p.id, { status: "pagado" });
     expect(paid.status).toBe("pagado");
@@ -56,6 +70,8 @@ describe.skipIf(!url)("Cobros manuales contra PostgreSQL real", () => {
     const reopened = await payments.update(ws, me, p.id, { status: "por_verificar" });
     expect(reopened.paidAt).toBeUndefined();
     expect(reopened.verifiedBy).toBeUndefined();
+    // Reopening a confirmed payment asks for a new check.
+    expect(await prisma.notification.count({ where: { workspaceSlug: ws } })).toBe(2);
 
     expect((await payments.list(ws, { contactId: contact.id })).map((x) => x.id)).toEqual([p.id]);
     expect(await payments.list(ws, { status: "pagado" })).toEqual([]);

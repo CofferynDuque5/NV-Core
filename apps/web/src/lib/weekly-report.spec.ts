@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { WeeklyReport } from "@nv/domain";
 
-import { metricDelta, weekRangeLabel, weeklyReportCsv, weeklyReportFileName } from "./weekly-report";
+import { metricDelta, paymentLine, weekRangeLabel, weeklyReportCsv, weeklyReportFileName } from "./weekly-report";
 
 const report: WeeklyReport = {
   id: "r1",
@@ -22,6 +22,7 @@ const report: WeeklyReport = {
       items: [{ id: "s1", label: "Promo → VIP", meta: "=HYPERLINK(\"x\")" }],
     },
   ],
+  payments: [{ currency: "COP", amount: 200000, count: 2, previousAmount: 100000, previousCount: 1 }],
 };
 
 describe("weekly report helpers", () => {
@@ -44,6 +45,19 @@ describe("weekly report helpers", () => {
     expect(csv).toContain("Leads por origen,instagram,2,,");
     expect(csv).toContain("Necesita atención,Envíos de campañas fallidos,1,,");
     expect(csv).toContain(`Necesita atención,· Promo → VIP,,,"'=HYPERLINK(""x"")"`);
+    expect(csv).toContain("Cobros confirmados,COP,200000,100000,2 cobros (semana anterior: 1)");
+    // Reports made before payments existed still export.
+    expect(weeklyReportCsv({ ...report, payments: undefined })).not.toContain("Cobros confirmados");
+  });
+
+  it("shows confirmed payments in their own currency", () => {
+    expect(paymentLine(report.payments![0]!)).toEqual({
+      amount: "$ 200.000 COP",
+      detail: "2 cobros · semana anterior: $ 100.000 COP (1)",
+    });
+    expect(paymentLine({ currency: "USDT", amount: 25, count: 1, previousAmount: 0, previousCount: 0 }).detail).toBe(
+      "1 cobro · semana anterior: 0,00 USDT (0)",
+    );
   });
 
   it("marks the current week in the file name", () => {

@@ -30,6 +30,7 @@ import { relativeTime } from "@/lib/utils";
 import {
   SECTION_LABEL,
   metricDelta,
+  paymentLine,
   sectionPath,
   weekRangeLabel,
   weeklyReportCsv,
@@ -200,21 +201,56 @@ export default function InformesPage() {
               )}
             </Panel>
 
-            <Panel data-testid="report-lead-sources">
-              <PanelHeader title="Leads por origen" description="Contactos nuevos, por su origen." />
-              {r.leadSources.length === 0 ? (
-                <p className="px-5 pb-5 pt-3 text-sm text-ink-muted">Sin contactos nuevos esta semana.</p>
-              ) : (
-                <ul className="space-y-1.5 px-5 pb-5 pt-3 text-sm">
-                  {r.leadSources.map((l) => (
-                    <li key={l.source ?? "none"} className="flex items-center justify-between gap-3">
-                      <span className="truncate text-ink">{leadSourceLabel(l.source)}</span>
-                      <span className="font-medium tabular-nums text-ink-bright">{l.count}</span>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </Panel>
+            <div className="space-y-4">
+              <Panel data-testid="report-lead-sources">
+                <PanelHeader title="Leads por origen" description="Contactos nuevos, por su origen." />
+                {r.leadSources.length === 0 ? (
+                  <p className="px-5 pb-5 pt-3 text-sm text-ink-muted">Sin contactos nuevos esta semana.</p>
+                ) : (
+                  <ul className="space-y-1.5 px-5 pb-5 pt-3 text-sm">
+                    {r.leadSources.map((l) => (
+                      <li key={l.source ?? "none"} className="flex items-center justify-between gap-3">
+                        <span className="truncate text-ink">{leadSourceLabel(l.source)}</span>
+                        <span className="font-medium tabular-nums text-ink-bright">{l.count}</span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </Panel>
+
+              {r.payments ? (
+                <Panel data-testid="report-payments">
+                  <PanelHeader
+                    title="Cobros confirmados"
+                    description="Marcados «Pagado», por moneda."
+                  />
+                  {r.payments.length === 0 ? (
+                    <p className="px-5 pb-5 pt-3 text-sm text-ink-muted">Sin cobros confirmados esta semana ni la anterior.</p>
+                  ) : (
+                    <ul className="space-y-2.5 px-5 pb-5 pt-3 text-sm">
+                      {r.payments.map((p) => {
+                        const line = paymentLine(p);
+                        return (
+                          <li key={p.currency}>
+                            <div className="flex items-center justify-between gap-3">
+                              <span className="text-ink">{p.currency}</span>
+                              <span className="font-medium tabular-nums text-ink-bright">{line.amount}</span>
+                            </div>
+                            <p className="text-xs text-ink-muted">{line.detail}</p>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  )}
+                  <Link
+                    to={sectionPath(ws.slug, "cobros")}
+                    className="block border-t border-line-soft px-5 py-2.5 text-xs text-brand hover:underline print:hidden"
+                  >
+                    Ir a Cobros
+                  </Link>
+                </Panel>
+              ) : null}
+            </div>
           </div>
         </>
       )}

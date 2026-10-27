@@ -769,6 +769,17 @@ export interface WeeklyReport {
   metrics: WeeklyReportMetric[];
   leadSources: LeadSourceCount[];
   attention: WeeklyReportAttention[];
+  /** Payments confirmed in the week, per currency (absent in reports made before it existed). */
+  payments?: WeeklyReportPayments[];
+}
+
+/** Money confirmed as received («Pagado») in one currency, next to the week before. */
+export interface WeeklyReportPayments {
+  currency: PaymentCurrency;
+  amount: number;
+  count: number;
+  previousAmount: number;
+  previousCount: number;
 }
 
 /** A row of the report history. */

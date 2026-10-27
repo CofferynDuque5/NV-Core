@@ -1,4 +1,4 @@
-import type { WeeklyReport, WeeklyReportMetric } from "@nv/domain";
+import { formatPaymentAmount, type WeeklyReport, type WeeklyReportMetric, type WeeklyReportPayments } from "@nv/domain";
 
 import { csvField } from "./analytics-export";
 import { leadSourceLabel } from "./attribution";
@@ -40,7 +40,17 @@ export const SECTION_LABEL: Record<string, string> = {
   calendario: "Calendario",
   campanas: "Campañas",
   automatizaciones: "Automatizaciones",
+  cobros: "Cobros",
 };
+
+/** Amount in its own currency, and "2 cobros · semana anterior: $ 100.000 COP (1)". */
+export function paymentLine(p: WeeklyReportPayments): { amount: string; detail: string } {
+  const before = formatPaymentAmount(p.previousAmount, p.currency);
+  return {
+    amount: formatPaymentAmount(p.amount, p.currency),
+    detail: `${p.count} ${p.count === 1 ? "cobro" : "cobros"} · semana anterior: ${before} (${p.previousCount})`,
+  };
+}
 
 export const WEEKLY_CSV_HEADER = ["seccion", "concepto", "valor", "semana_anterior", "detalle"] as const;
 
@@ -50,6 +60,14 @@ export function weeklyReportCsv(report: WeeklyReport): string {
     ["Informe", "Generado", report.generatedAt, "", ""],
     ...report.metrics.map((m) => ["Actividad", m.label, m.value, m.previous, m.source]),
     ...report.leadSources.map((l) => ["Leads por origen", leadSourceLabel(l.source), l.count, "", ""]),
+    // Raw numbers (no thousands separators) so spreadsheets can add them up.
+    ...(report.payments ?? []).map((p) => [
+      "Cobros confirmados",
+      p.currency,
+      p.amount,
+      p.previousAmount,
+      `${p.count} cobros (semana anterior: ${p.previousCount})`,
+    ]),
   ];
   for (const a of report.attention) {
     rows.push(["Necesita atención", a.label, a.count, "", ""]);

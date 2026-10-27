@@ -19,6 +19,34 @@ test("weekly report: this week so far, with what needs attention, and CSV", asyn
   expect(
     (await page.request.post(`${API}/workspaces/${WS}/tasks`, { headers: auth, data: { title: "Llamar a proveedor", dueAt: yesterday } })).ok(),
   ).toBeTruthy();
+  // Payments: one confirmed, one the customer says they paid (waiting for a check).
+  const newPayment = async (concept: string, amount: number) => {
+    const r = await page.request.post(`${API}/workspaces/${WS}/payments`, {
+      headers: auth,
+      data: { concept, amount, currency: "COP" },
+    });
+    expect(r.ok()).toBeTruthy();
+    return ((await r.json()) as { id: string }).id;
+  };
+  const paid = await newPayment("Plan Pro", 150000);
+  expect((await page.request.patch(`${API}/workspaces/${WS}/payments/${paid}`, { headers: auth, data: { status: "pagado" } })).ok()).toBeTruthy();
+  const claimed = await newPayment("Pedido 12", 80000);
+  expect(
+    (
+      await page.request.patch(`${API}/workspaces/${WS}/payments/${claimed}`, {
+        headers: auth,
+        data: { status: "por_verificar", reference: "M777" },
+      })
+    ).ok(),
+  ).toBeTruthy();
+  // The team gets an in-app notice to go check the account.
+  const notices = (await (await page.request.get(`${API}/workspaces/${WS}/notifications`, { headers: auth })).json()) as {
+    title: string;
+    meta?: string;
+  }[];
+  expect(notices).toEqual(
+    expect.arrayContaining([expect.objectContaining({ title: "Cobro por verificar: Pedido 12", meta: expect.stringContaining("ref M777") })]),
+  );
 
   await page.goto("/login", { waitUntil: "networkidle" });
   await page.fill("#email", email);
@@ -40,6 +68,14 @@ test("weekly report: this week so far, with what needs attention, and CSV", asyn
   await expect(attention).toContainText("Tareas vencidas");
   await expect(attention).toContainText("Llamar a proveedor");
   await expect(attention.getByRole("link", { name: "Ir a Tareas" })).toHaveAttribute("href", `/w/${WS}/tareas`);
+  await expect(attention).toContainText("Cobros por verificar");
+  await expect(attention).toContainText("Pedido 12");
+  await expect(attention).toContainText("$ 80.000 COP · ref M777");
+
+  // Money confirmed this week, in its own currency.
+  const payments = page.getByTestId("report-payments");
+  await expect(payments).toContainText("$ 150.000 COP");
+  await expect(payments).toContainText("1 cobro · semana anterior: $ 0 COP (0)");
 
   const [download] = await Promise.all([page.waitForEvent("download"), page.getByRole("button", { name: "CSV" }).click()]);
   expect(download.suggestedFilename()).toMatch(/^informe-semanal-password-vault-\d{4}-\d{2}-\d{2}-en-curso\.csv$/);

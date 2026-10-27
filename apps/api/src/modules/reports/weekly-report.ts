@@ -1,4 +1,4 @@
-import type { LeadSourceCount, WeeklyReport } from "@nv/domain";
+import { PAYMENT_CURRENCIES, type LeadSourceCount, type PaymentCurrency, type WeeklyReport, type WeeklyReportPayments } from "@nv/domain";
 
 /**
  * Pure helpers for the weekly report: week boundaries (Monday 00:00 UTC),
@@ -64,14 +64,50 @@ export function weekLabel(weekStart: string, weekEnd: string): string {
 }
 
 /** One line for the in-app notice: leads with the trend and what is pending. */
-export function noticeMeta(report: Pick<WeeklyReport, "weekStart" | "weekEnd" | "metrics" | "attention">): string {
+export function noticeMeta(
+  report: Pick<WeeklyReport, "weekStart" | "weekEnd" | "metrics" | "attention" | "payments">,
+): string {
   const contacts = report.metrics.find((m) => m.key === "contacts");
   const parts = [`Semana del ${weekLabel(report.weekStart, report.weekEnd)}`];
   if (contacts) {
     const diff = contacts.value - contacts.previous;
     parts.push(`${contacts.value} contactos nuevos${diff === 0 ? "" : ` (${diff > 0 ? "+" : ""}${diff})`}`);
   }
+  const paid = (report.payments ?? []).reduce((a, p) => a + p.count, 0);
+  if (paid > 0) parts.push(`${paid} ${paid === 1 ? "cobro confirmado" : "cobros confirmados"}`);
   const pending = report.attention.reduce((a, x) => a + x.count, 0);
   parts.push(pending === 0 ? "nada pendiente" : `${pending} ${pending === 1 ? "asunto pendiente" : "asuntos pendientes"}`);
   return parts.join(" · ");
+}
+
+/** One currency's confirmed payments, as summed by the database. */
+export interface PaymentSumRow {
+  currency: string;
+  amount: { toString(): string } | number | null;
+  count: number;
+}
+
+/**
+ * Confirmed payments per currency for the week next to the week before.
+ * Currencies are never added together (no exchange rates are invented); a
+ * currency shows up when either week has payments in it.
+ */
+export function mergePaymentTotals(current: PaymentSumRow[], previous: PaymentSumRow[]): WeeklyReportPayments[] {
+  const toNumber = (v: PaymentSumRow["amount"]) => (v == null ? 0 : Number(v.toString()));
+  const byCurrency = new Map<string, WeeklyReportPayments>();
+  const entry = (currency: string) => {
+    let e = byCurrency.get(currency);
+    if (!e) {
+      e = { currency: currency as PaymentCurrency, amount: 0, count: 0, previousAmount: 0, previousCount: 0 };
+      byCurrency.set(currency, e);
+    }
+    return e;
+  };
+  for (const r of current) Object.assign(entry(r.currency), { amount: toNumber(r.amount), count: r.count });
+  for (const r of previous) Object.assign(entry(r.currency), { previousAmount: toNumber(r.amount), previousCount: r.count });
+  const order = (c: string) => {
+    const i = (PAYMENT_CURRENCIES as readonly string[]).indexOf(c);
+    return i === -1 ? PAYMENT_CURRENCIES.length : i;
+  };
+  return [...byCurrency.values()].sort((a, b) => order(a.currency) - order(b.currency) || a.currency.localeCompare(b.currency));
 }
