@@ -20,7 +20,7 @@ async function register(
   workspaceSlug: string,
 ): Promise<string> {
   const res = await request.post(`${API}/auth/register`, {
-    data: { email, password: "password123", name: "Iso Test", workspaceSlug },
+    data: { email, password: "password123", name: "Iso Test", workspaceSlug, acceptTerms: true },
   });
   expect(res.ok(), `register ${email} → ${res.status()}`).toBeTruthy();
   const body = (await res.json()) as {

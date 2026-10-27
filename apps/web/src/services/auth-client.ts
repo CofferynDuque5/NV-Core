@@ -25,6 +25,8 @@ export interface RegisterInput {
   password: string;
   name: string;
   workspaceSlug?: string;
+  /** Must be true: the API refuses sign-ups that don't accept the legal terms. */
+  acceptTerms?: boolean;
 }
 
 export interface LoginInput {

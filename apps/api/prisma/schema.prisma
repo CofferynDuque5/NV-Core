@@ -63,6 +63,9 @@ model User {
   failedLoginAttempts Int            @default(0)
   /// When set and in the future, logins are refused (brute-force lockout).
   lockedUntil         DateTime?
+  /// When the user accepted the legal terms, and which version (TERMS_VERSION).
+  termsAcceptedAt     DateTime?
+  termsVersion        String?
   createdAt           DateTime       @default(now())
   memberships         Membership[]
   refreshTokens       RefreshToken[]

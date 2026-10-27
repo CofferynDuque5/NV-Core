@@ -14,7 +14,7 @@ export async function registerInto(
   opts: { name: string; email: string; workspace: string },
 ): Promise<void> {
   const res = await page.request.post(`${API}/auth/register`, {
-    data: { name: opts.name, email: opts.email, password: PASSWORD, workspaceSlug: opts.workspace },
+    data: { name: opts.name, email: opts.email, password: PASSWORD, workspaceSlug: opts.workspace, acceptTerms: true },
   });
   expect(res.ok(), `register ${opts.email} → ${res.status()}`).toBeTruthy();
   await page.goto("/login", { waitUntil: "networkidle" });

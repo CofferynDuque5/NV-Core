@@ -7,7 +7,7 @@ const WS = "password-vault";
 test("weekly report: this week so far, with what needs attention, and CSV", async ({ page }) => {
   const email = `e2e_report_${Date.now()}@nv.tv`;
   const res = await page.request.post(`${API}/auth/register`, {
-    data: { name: "E2E Informe", email, password: PASSWORD, workspaceSlug: WS },
+    data: { name: "E2E Informe", email, password: PASSWORD, workspaceSlug: WS, acceptTerms: true },
   });
   expect(res.ok()).toBeTruthy();
   const { accessToken } = (await res.json()) as { accessToken: string };

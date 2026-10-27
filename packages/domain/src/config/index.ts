@@ -7,3 +7,4 @@ export * from "./changelog";
 export * from "./plans";
 export * from "./segments";
 export * from "./payments";
+export * from "./legal";

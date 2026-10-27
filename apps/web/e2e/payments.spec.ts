@@ -7,7 +7,7 @@ const WS = "nv-stream";
 test("manual payments: method, request, customer message, verify, duplicate reference blocked", async ({ page }) => {
   const email = `e2e_cobros_${Date.now()}@nv.tv`;
   const res = await page.request.post(`${API}/auth/register`, {
-    data: { name: "E2E Cobros", email, password: PASSWORD, workspaceSlug: WS },
+    data: { name: "E2E Cobros", email, password: PASSWORD, workspaceSlug: WS, acceptTerms: true },
   });
   expect(res.ok()).toBeTruthy();
   const { accessToken } = (await res.json()) as { accessToken: string };
