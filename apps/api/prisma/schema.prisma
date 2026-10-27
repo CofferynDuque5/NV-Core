@@ -138,6 +138,7 @@ model Contact {
 
   @@index([workspaceSlug])
   @@index([workspaceSlug, createdAt])
+  @@index([workspaceSlug, lastContactAt])
 }
 
 model Group {
@@ -509,6 +510,7 @@ model Automation {
   createdAt     DateTime         @default(now())
   waits         AutomationWait[]
   executions    AutomationRun[]
+  inactiveFires AutomationInactiveFire[]
 
   @@index([workspaceSlug])
 }
@@ -559,6 +561,22 @@ model AutomationWait {
 
   @@index([status, resumeAt])
   @@index([automationId, contactHandle, status])
+  @@index([workspaceSlug])
+}
+
+/// A "contact inactive N days" flow already ran for this contact's current
+/// quiet spell (the lastContactAt it saw). It runs again only after the contact
+/// writes again and goes quiet again.
+model AutomationInactiveFire {
+  id            String     @id @default(cuid())
+  workspaceSlug String
+  automation    Automation @relation(fields: [automationId], references: [id], onDelete: Cascade)
+  automationId  String
+  contactId     String
+  lastContactAt DateTime
+  firedAt       DateTime   @default(now())
+
+  @@unique([automationId, contactId])
   @@index([workspaceSlug])
 }
 

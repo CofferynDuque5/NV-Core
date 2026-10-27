@@ -26,4 +26,12 @@ test("automation template: created paused and opened in the editor", async ({ pa
   const row = page.locator("body");
   await expect(row).toContainText("Bienvenida a quien escribe por primera vez");
   await expect(row).toContainText(/pausad/i);
+
+  // The "gone quiet" template uses the inactive-contact trigger, also paused.
+  await page.getByRole("button", { name: "Plantillas" }).first().click();
+  await expect(list).toContainText("Reactivar a quien dejó de escribir");
+  await page.getByRole("button", { name: "Usar Reactivar a quien dejó de escribir" }).click();
+  await expect(page.getByRole("heading", { name: "Reactivar a quien dejó de escribir" })).toBeVisible({ timeout: 10000 });
+  await expect(page.locator("body")).toContainText("30 días sin escribir");
+  await expect(page.locator("body")).toContainText("Mensaje para retomar");
 });

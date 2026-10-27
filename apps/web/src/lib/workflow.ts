@@ -56,6 +56,12 @@ export const NODE_KINDS: NodeKind[] = [
         fields: [{ key: "contains", label: "Solo si contiene (opcional)", placeholder: "precio, info, catálogo" }],
         hint: "Mensajes de WhatsApp o Telegram. Sin palabras clave, cualquier mensaje lo dispara.",
       },
+      {
+        value: "contact.inactive",
+        label: "Un contacto lleva días sin escribir",
+        fields: [{ key: "days", label: "Días sin escribir (1 a 365)", placeholder: "30" }],
+        hint: "Se revisa cada hora. Corre una vez por contacto cada vez que cumple esos días en silencio; solo cuenta a quien los cumplió en la última semana, así no le escribe de golpe a tu lista antigua. Nunca a contactos dados de baja.",
+      },
       { value: "contact.created", label: "Se crea un contacto", hint: N8N_ONLY },
       { value: "campaign.completed", label: "Termina una campaña", hint: N8N_ONLY },
       { value: "post.published", label: "Se publica un post", hint: N8N_ONLY },
@@ -335,6 +341,12 @@ export function validateGraph(graph: Graph): ValidationResult {
   const orphans = graph.nodes.filter((n) => n.type !== "trigger" && !reachable.has(n.id));
   if (orphans.length > 0)
     errors.push(`${orphans.length} nodo(s) sin conectar al disparador.`);
+  const inactive = triggers.find((t) => t.config?.event === "contact.inactive");
+  if (inactive) {
+    const days = Number(String(inactive.config?.days ?? "").trim());
+    if (!Number.isInteger(days) || days < 1 || days > 365)
+      errors.push("Indica cuántos días sin escribir (un número entero de 1 a 365).");
+  }
   return { ok: errors.length === 0, errors };
 }
 

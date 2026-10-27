@@ -537,7 +537,8 @@ export interface AutomationTestResult {
 export interface AutomationRun {
   id: string;
   /** "message" = incoming message; "resume" = continued after a wait step. */
-  trigger: "message" | "resume";
+  /** "inactive" = the contact went N days without writing. */
+  trigger: "message" | "resume" | "inactive";
   contactHandle: string;
   contactName?: string;
   /** ok: did something · skipped: nothing to do · waiting: paused on a wait · error: failed. */

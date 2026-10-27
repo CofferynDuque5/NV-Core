@@ -63,6 +63,8 @@ export function AutomationRunsSheet({
                   </div>
                   {r.trigger === "resume" ? (
                     <p className="mt-1 text-[11px] text-ink-faint">Continuación tras un paso «Esperar».</p>
+                  ) : r.trigger === "inactive" ? (
+                    <p className="mt-1 text-[11px] text-ink-faint">Contacto sin escribir desde hace días.</p>
                   ) : null}
                   {r.error ? <p className="mt-1.5 text-xs text-state-danger">{r.error}</p> : null}
                   <ol className="mt-2 space-y-1 border-l border-line pl-3">

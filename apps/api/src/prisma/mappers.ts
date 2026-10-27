@@ -270,7 +270,7 @@ const RUN_STATUSES = ["ok", "skipped", "waiting", "error"] as const;
 
 export const mapAutomationRun = (r: PAutomationRun): AutomationRun => ({
   id: r.id,
-  trigger: r.trigger === "resume" ? "resume" : "message",
+  trigger: r.trigger === "resume" || r.trigger === "inactive" ? r.trigger : "message",
   contactHandle: r.contactHandle,
   contactName: r.contactName ?? undefined,
   status: (RUN_STATUSES as readonly string[]).includes(r.status) ? (r.status as AutomationRun["status"]) : "error",

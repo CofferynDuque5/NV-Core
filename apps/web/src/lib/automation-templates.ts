@@ -4,8 +4,9 @@ import { autoLayout } from "./workflow";
 
 /**
  * Ready-made flows built only from steps the built-in engine runs
- * (AutomationRunner): incoming message → AI reply / message / contact /
- * team notice / hand-off, with waits and the conditions it fills in.
+ * (AutomationRunner): incoming message or a contact gone quiet → AI reply /
+ * message / contact / team notice / hand-off, with waits and the conditions
+ * it fills in.
  * They are created paused, so nothing is sent until someone reviews and
  * activates them.
  */
@@ -104,6 +105,21 @@ export const AUTOMATION_TEMPLATES: AutomationTemplate[] = [
       }),
     ],
     edges: [e("t", "m"), e("m", "w"), e("w", "f")],
+  },
+  {
+    id: "reactivar",
+    name: "Reactivar a quien dejó de escribir",
+    summary: "A los 30 días sin noticias de un contacto le escribe para retomar la conversación y avisa al equipo.",
+    needs: ["WhatsApp conectado"],
+    nodes: [
+      n("t", "trigger", "30 días sin escribir", { event: "contact.inactive", days: "30" }),
+      n("m", "action", "Mensaje para retomar", {
+        action: "send-message",
+        body: "¡Hola {{nombre}}! Hace tiempo no hablamos. ¿Te podemos ayudar con algo? Responde BAJA si no quieres más mensajes.",
+      }),
+      n("a", "action", "Avisar al equipo", { action: "notify", title: "Contacto inactivo contactado" }),
+    ],
+    edges: [e("t", "m"), e("m", "a")],
   },
 ];
 
