@@ -4,6 +4,7 @@ import * as tls from "node:tls";
 
 import { Injectable, type OnModuleInit, type OnModuleDestroy } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
+import { analyzeGroupRules } from "@nv/domain";
 
 import type { AppConfig } from "../../config/configuration";
 import { PrismaService } from "../../prisma/prisma.service";
@@ -44,6 +45,30 @@ function tlsProbe(host: string, port: number): Promise<void> {
     });
     s.on("error", reject);
   });
+}
+
+/**
+ * Group fields read from a WhatsApp sync: what WhatsApp says now (description,
+ * creator, admins-only) and the requirements its rules ask for, only when
+ * found (so a manual «exige precio» is never switched off by a sync).
+ */
+export function groupRulesFromSync(g: WhatsappGroup) {
+  const description = g.description?.trim() || null;
+  const a = analyzeGroupRules(description, g.onlyAdmins === true);
+  const whenFound: { forbidsAds?: true; requiresPrice?: true; requiresImage?: true } = {};
+  if (a.forbidsAds) whenFound.forbidsAds = true;
+  if (a.requiresPrice) whenFound.requiresPrice = true;
+  if (a.requiresImage) whenFound.requiresImage = true;
+  return {
+    always: {
+      ...(g.description !== undefined ? { description } : {}),
+      ...(g.ownerJid !== undefined ? { ownerJid: g.ownerJid } : {}),
+      onlyAdmins: g.onlyAdmins === true,
+      rulesCheckedAt: new Date(),
+    },
+    whenFound,
+    analysis: a,
+  };
 }
 
 @Injectable()
@@ -164,6 +189,10 @@ export class WhatsappService implements SessionEvents, OnModuleInit, OnModuleDes
     if (!this.prisma.enabled || !groups.length) return;
     const jids = groups.map((g) => g.remoteJid);
     for (const g of groups) {
+      // The description is where groups write their rules: read it on every
+      // sync. A detected requirement is switched on, never off, so a choice
+      // the user made by hand is kept.
+      const rules = groupRulesFromSync(g);
       await this.prisma.group.upsert({
         where: { workspaceSlug_remoteJid: { workspaceSlug, remoteJid: g.remoteJid } },
         create: {
@@ -173,8 +202,10 @@ export class WhatsappService implements SessionEvents, OnModuleInit, OnModuleDes
           members: g.size,
           channel: "wa",
           synced: true,
+          ...rules.always,
+          ...rules.whenFound,
         },
-        update: { name: g.subject, members: g.size, synced: true },
+        update: { name: g.subject, members: g.size, synced: true, ...rules.always, ...rules.whenFound },
       });
     }
     // Prune auto-imported WhatsApp groups this account is no longer in — e.g. after

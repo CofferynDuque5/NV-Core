@@ -35,6 +35,12 @@ export interface WhatsappGroup {
   remoteJid: string;
   subject: string;
   size: number;
+  /** Group description, where groups usually write their rules. */
+  description?: string | null;
+  /** Only admins can send messages ("announce" setting). */
+  onlyAdmins?: boolean;
+  /** Creator's WhatsApp id. */
+  ownerJid?: string | null;
 }
 
 /** Media descriptor for a WhatsApp send (delivered by public URL). */

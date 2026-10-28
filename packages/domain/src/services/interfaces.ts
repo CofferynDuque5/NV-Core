@@ -1,6 +1,9 @@
 import type {
   AccessOverview,
   SampleDataSummary,
+  BrandLinks,
+  GroupPostingSettings,
+  GroupRulesCheck,
   AccessPaymentInput,
   AdminAccessRow,
   WorkspaceAccess,
@@ -117,6 +120,9 @@ export interface CreateCampaignInput {
   postToWaStatus?: boolean;
   rotateAttachments?: boolean;
   targetGroups?: string[];
+  /** currency → amount for {{precio}}. */
+  prices?: Record<string, string>;
+  addFooter?: boolean;
 }
 export type UpdateCampaignInput = Partial<CreateCampaignInput>;
 
@@ -139,7 +145,8 @@ export interface CreateGroupInput {
   remoteJid?: string;
 }
 
-export type UpdateGroupInput = Partial<Pick<CreateGroupInput, "name" | "tags">>;
+export type UpdateGroupInput = Partial<Pick<CreateGroupInput, "name" | "tags" | "description">> &
+  GroupPostingSettings;
 
 export interface CreateTemplateInput {
   name: string;
@@ -247,6 +254,8 @@ export interface CampaignService {
   exportCsv(workspaceId: string): Promise<string>;
   /** Import campaigns from CSV; dedupes by name, resolves recipient groups. */
   importCsv(workspaceId: string, csv: string): Promise<CampaignImportResult>;
+  /** Copy as a new draft (message, images, channels, schedule, prices, groups). */
+  duplicate(workspaceId: string, id: string): Promise<Campaign>;
 }
 
 export interface CreatePostInput {
@@ -313,6 +322,10 @@ export interface GroupService {
   remove(workspaceId: string, id: string): Promise<void>;
   /** Delete auto-synced (imported) groups; optional channel narrows it. */
   clearSynced(workspaceId: string, channel?: "wa" | "tg"): Promise<{ deleted: number }>;
+  /** Read the rules of one group, or of all of them. */
+  checkRules(workspaceId: string, id?: string): Promise<GroupRulesCheck[]>;
+  /** Keep groups out of every campaign (or bring them back). */
+  exclude(workspaceId: string, ids: string[], excluded: boolean): Promise<{ updated: number }>;
   getVars(workspaceId: string, id: string): Promise<Record<string, string>>;
   setVars(
     workspaceId: string,
@@ -963,6 +976,11 @@ export interface AccessService {
   pay(workspaceId: string, input: AccessPaymentInput): Promise<AccessOverview>;
 }
 
+export interface BrandLinksService {
+  get(workspaceId: string): Promise<BrandLinks>;
+  set(workspaceId: string, input: BrandLinks): Promise<BrandLinks>;
+}
+
 export interface SampleDataService {
   summary(workspaceId: string): Promise<SampleDataSummary>;
   /** Owner/Admin: delete only the example records. */
@@ -1046,4 +1064,5 @@ export interface Services {
   billing: BillingService;
   access: AccessService;
   sampleData: SampleDataService;
+  brandLinks: BrandLinksService;
 }

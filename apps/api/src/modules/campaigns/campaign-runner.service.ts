@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 
 import { Injectable, Logger, type OnModuleDestroy, type OnModuleInit } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
-import type { Campaign as PCampaign } from "@prisma/client";
+import type { Campaign as PCampaign, Prisma } from "@prisma/client";
 
 import type { AppConfig } from "../../config/configuration";
 import { PrismaService } from "../../prisma/prisma.service";
@@ -13,6 +13,7 @@ import { ProviderManager } from "../../providers/provider-manager.service";
 import { NotificationsService } from "../notifications/notifications.module";
 import type { MediaAttachment, ProviderId, PublishInput, PublishResult } from "../../providers/provider.types";
 import { builtinVars, renderTemplate } from "./render";
+import { campaignFooter, groupPostingProblems, priceForGroup, usesPriceVar, withFooter, type SocialLink } from "@nv/domain";
 import { resolvePacing, pacingDelay, type PacingOptions } from "./pacing";
 
 const TICK_MS = 30_000;
@@ -300,16 +301,27 @@ export class CampaignRunner implements OnModuleInit, OnModuleDestroy {
     if (!this.prisma.enabled) return [];
     const campaign = await this.prisma.campaign.findFirst({
       where: { id: campaignId, workspaceSlug },
-      include: { targets: { include: { group: { select: { channel: true, workspaceSlug: true } } } } },
+      include: { targets: { include: { group: true } } },
     });
     if (!campaign) return ["Campaña no encontrada."];
     const out: string[] = [];
     const attachments = ((campaign.attachments as Attachment[]) ?? []).filter((a) => a.url);
     if (!campaign.message.trim() && attachments.length === 0) out.push("La campaña no tiene mensaje ni imagen.");
-    const groups = campaign.targets.map((t) => t.group).filter((g) => g && g.workspaceSlug === workspaceSlug);
+    const own = campaign.targets.map((t) => t.group).filter((g) => g && g.workspaceSlug === workspaceSlug);
+    const prices = (campaign.prices as Record<string, string> | null) ?? {};
+    const groups = own.filter(
+      (g) => groupPostingProblems(g!, { hasImage: attachments.length > 0, prices, usesPrice: usesPriceVar(campaign.message) }).length === 0,
+    );
+    if (own.length > 0 && groups.length === 0) {
+      const first = own[0]!;
+      const why = groupPostingProblems(first, { hasImage: attachments.length > 0, prices, usesPrice: usesPriceVar(campaign.message) })[0];
+      out.push(
+        `Ningún grupo elegido acepta esta campaña (por ejemplo «${first.name}»: ${why}). Revisa precios, imagen o los grupos.`,
+      );
+    }
     const channels = campaign.channels as string[];
     const social = channels.filter((c) => c === "fb" || c === "ig");
-    if (groups.length === 0 && social.length === 0 && !campaign.postToWaStatus) {
+    if (own.length === 0 && social.length === 0 && !campaign.postToWaStatus) {
       out.push("Elige al menos un grupo o una red social de destino.");
     }
     const needed = new Set<ProviderId>();
@@ -396,6 +408,12 @@ export class CampaignRunner implements OnModuleInit, OnModuleDestroy {
     const statusMedia = rotate ? (rotated ? [rotated] : []) : withUrl;
     const channels = campaign.channels as string[];
     const results: { ok: boolean }[] = [];
+    const prices = (campaign.prices as Record<string, string> | null) ?? {};
+    // Group messages end with the brand's links and the NV Marketing credit.
+    const footer = campaign.addFooter ? campaignFooter(await this.brandLinks(workspaceSlug)) : null;
+    // Groups this campaign must not go to (kept out, rules, missing price or
+    // photo), with the reason, for the end-of-run notice.
+    const omitted: { name: string; reason: string }[] = [];
 
     // Deliver to every target group via the provider matching its channel:
     // WhatsApp (Baileys/Cloud) or Telegram (bot). Social (fb/ig) is separate.
@@ -422,6 +440,12 @@ export class CampaignRunner implements OnModuleInit, OnModuleDestroy {
       // validated on write, but this guarantees the historial never shows sends
       // to groups that don't belong to this workspace's WhatsApp/Telegram.
       if (!group || group.workspaceSlug !== workspaceSlug) continue;
+      const blocked = groupPostingProblems(group, { hasImage: !!waAttachment, prices, usesPrice: usesPriceVar(campaign.message) });
+      if (blocked.length > 0) {
+        omitted.push({ name: group.name, reason: blocked[0]! });
+        sent += 1;
+        continue;
+      }
       // Latido: demuestra que esta ejecución sigue viva y publica el progreso.
       // Si otro proceso tomó la ejecución (count=0), esta se detiene: nunca dos
       // bucles de envío sobre la misma campaña.
@@ -456,8 +480,13 @@ export class CampaignRunner implements OnModuleInit, OnModuleDestroy {
       // Group.channel defaults to "wa"; only Telegram routes elsewhere.
       const ch = group.channel === "tg" ? "tg" : "wa";
       const provider = ch === "tg" ? "telegram" : "whatsapp";
-      const vars = { ...builtinVars(group.name), ...(await this.groupVars(group.id)) };
-      const text = renderTemplate(campaign.message, vars);
+      const vars = {
+        ...builtinVars(group.name),
+        precio: priceForGroup(group, prices),
+        ...(await this.groupVars(group.id)),
+      };
+      const rendered = renderTemplate(campaign.message, vars);
+      const text = footer ? withFooter(rendered, footer) : rendered;
       const to = group.remoteJid ?? group.id;
       // SEGURO 3 — reserva del chat ANTES de enviar: la fila «en curso» es única
       // por (campaña, chat, ejecución) en la base de datos. Si ya existe (otro
@@ -563,7 +592,7 @@ export class CampaignRunner implements OnModuleInit, OnModuleDestroy {
       },
     });
     await this.audit.record(workspaceSlug, "system", "campaign.run", campaignId);
-    await this.noticeResult(workspaceSlug, campaign.name, runKey, okCount, failedCount);
+    await this.noticeResult(workspaceSlug, campaign.name, runKey, okCount, failedCount, omitted);
     this.events.emit("campaign.completed", {
       workspaceSlug,
       campaignId,
@@ -584,9 +613,26 @@ export class CampaignRunner implements OnModuleInit, OnModuleDestroy {
     runKey: string,
     ok: number,
     failed: number,
+    omitted: { name: string; reason: string }[] = [],
   ): Promise<void> {
     const total = ok + failed;
-    if (total === 0) return;
+    const skippedNote = omitted.length
+      ? ` ${omitted.length === 1 ? "1 grupo omitido" : `${omitted.length} grupos omitidos`}: ${omitted
+          .slice(0, 3)
+          .map((o) => `${o.name} (${o.reason})`)
+          .join("; ")}${omitted.length > 3 ? "…" : ""}.`
+      : "";
+    if (total === 0) {
+      if (omitted.length === 0) return;
+      await this.notifications
+        .create(workspaceSlug, {
+          type: "warning",
+          title: `Campaña «${name}»: no se envió a ningún grupo`,
+          meta: skippedNote.trim(),
+        })
+        .catch(() => undefined);
+      return;
+    }
     try {
       let reason = "";
       if (failed > 0) {
@@ -600,7 +646,7 @@ export class CampaignRunner implements OnModuleInit, OnModuleDestroy {
       await this.notifications.create(workspaceSlug, {
         type: failed === 0 ? "success" : ok === 0 ? "error" : "warning",
         title: failed === 0 ? `Campaña «${name}» enviada` : `Campaña «${name}»: ${failed} de ${total} envíos fallaron`,
-        meta: `${ok} de ${total} enviados.${reason} Detalle en Historial.`,
+        meta: `${ok} de ${total} enviados.${reason}${skippedNote} Detalle en Historial.`,
       });
     } catch (err) {
       this.logger.warn(`No se pudo avisar del resultado de la campaña: ${(err as Error).message}`);
@@ -655,6 +701,26 @@ export class CampaignRunner implements OnModuleInit, OnModuleDestroy {
           runKey,
         },
       });
+      // A published post is filed under the campaign, so it shows in
+      // Publicaciones and the calendar next to the group sends.
+      if (r.ok) {
+        try {
+          await this.prisma.post.create({
+            data: {
+              workspaceSlug,
+              campaignId: campaign.id,
+              channel: target === "facebook" ? "fb" : "ig",
+              title: campaign.name,
+              copy: text,
+              attachments: attachments.filter((a) => a.url) as unknown as Prisma.InputJsonValue,
+              status: "sent",
+              scheduledAt: new Date(),
+            },
+          });
+        } catch (err) {
+          this.logger.warn(`No se pudo guardar la publicación en la campaña: ${(err as Error).message}`);
+        }
+      }
       results.push({ ok: r.ok });
     }
   }
@@ -699,6 +765,14 @@ export class CampaignRunner implements OnModuleInit, OnModuleDestroy {
       },
     });
     results.push({ ok: r.ok });
+  }
+
+  /** The brand's social links and website for the message footer. */
+  private async brandLinks(workspaceSlug: string): Promise<{ socialLinks: SocialLink[]; website: string | null }> {
+    const row = await this.prisma.workspaceSettings
+      ?.findUnique({ where: { workspaceSlug }, select: { socialLinks: true, website: true } })
+      .catch(() => null);
+    return { socialLinks: (row?.socialLinks as SocialLink[] | null) ?? [], website: row?.website ?? null };
   }
 
   private async groupVars(groupId: string): Promise<Record<string, string>> {

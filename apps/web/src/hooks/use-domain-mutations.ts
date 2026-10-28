@@ -2,6 +2,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import type {
   AccessPaymentInput,
+  BrandLinks,
   CreatePaymentRequestInput,
   PaymentMethodInput,
   UpdatePaymentRequestInput,
@@ -1771,5 +1772,65 @@ export function useRemoveSampleData(slug: string) {
       void qc.invalidateQueries({ queryKey: [slug] });
       toast.success("Datos de ejemplo eliminados. Tus propios registros siguen intactos.");
     },
+  });
+}
+
+/** Copy a campaign as a new draft (same message, images, groups and prices). */
+export function useDuplicateCampaign() {
+  const svc = useServices();
+  const ws = useWorkspace();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => svc.campaigns.duplicate(ws.id, id),
+    onSuccess: (c) => {
+      invalidateCampaigns(qc, ws.id);
+      toast.success(`Creada «${c.name}» como borrador.`);
+    },
+    onError: (err) => toast.error(errText(err)),
+  });
+}
+
+/** Read the rules of one group (id) or of every group (no id). */
+export function useCheckGroupRules() {
+  const svc = useServices();
+  const ws = useWorkspace();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id?: string) => svc.groups.checkRules(ws.id, id),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: [ws.id, "groups"] }),
+    onError: (err) => toast.error(errText(err)),
+  });
+}
+
+/** Keep groups out of every campaign, or bring them back. */
+export function useExcludeGroups() {
+  const svc = useServices();
+  const ws = useWorkspace();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ ids, excluded }: { ids: string[]; excluded: boolean }) => svc.groups.exclude(ws.id, ids, excluded),
+    onSuccess: (r, v) => {
+      void qc.invalidateQueries({ queryKey: [ws.id, "groups"] });
+      toast.success(
+        v.excluded
+          ? `${r.updated === 1 ? "1 grupo apartado" : `${r.updated} grupos apartados`}: ninguna campaña publicará ahí.`
+          : `${r.updated === 1 ? "1 grupo vuelve" : `${r.updated} grupos vuelven`} a estar disponibles.`,
+      );
+    },
+    onError: (err) => toast.error(errText(err)),
+  });
+}
+
+export function useSaveBrandLinks() {
+  const svc = useServices();
+  const ws = useWorkspace();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: BrandLinks) => svc.brandLinks.set(ws.id, input),
+    onSuccess: (links) => {
+      qc.setQueryData([ws.id, "brand-links"], links);
+      toast.success("Redes y web guardadas.");
+    },
+    onError: (err) => toast.error(errText(err)),
   });
 }

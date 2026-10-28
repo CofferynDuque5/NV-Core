@@ -7,6 +7,7 @@ import {
   Megaphone,
   Pause,
   Clock,
+  Copy,
   Pencil,
   Play,
   Plus,
@@ -20,6 +21,7 @@ import { isScheduled, scheduleLabel } from "@/lib/schedule";
 import { useCampaigns } from "@/hooks/use-domain-data";
 import {
   useDeleteCampaign,
+  useDuplicateCampaign,
   useExportCampaigns,
   useImportCampaigns,
   usePauseCampaign,
@@ -57,6 +59,7 @@ export function CampanasContent({ showHeader = true }: { showHeader?: boolean })
   const campaigns = useCampaigns();
   const del = useDeleteCampaign();
   const run = useRunCampaign();
+  const duplicate = useDuplicateCampaign();
   const pause = usePauseCampaign();
   const resume = useResumeCampaign();
   const exportCampaigns = useExportCampaigns();
@@ -229,6 +232,19 @@ export function CampanasContent({ showHeader = true }: { showHeader?: boolean })
                       title="Editar"
                     >
                       <Pencil className="size-4" />
+                    </button>
+                    <button
+                      onClick={() => duplicate.mutate(c.id)}
+                      disabled={duplicate.isPending && duplicate.variables === c.id}
+                      className="rounded-md p-1.5 text-ink-faint transition-colors hover:bg-panel-high hover:text-ink"
+                      title="Duplicar"
+                      aria-label={`Duplicar ${c.name}`}
+                    >
+                      {duplicate.isPending && duplicate.variables === c.id ? (
+                        <Loader2 className="size-4 animate-spin" />
+                      ) : (
+                        <Copy className="size-4" />
+                      )}
                     </button>
                     <button
                       onClick={() => remove(c)}

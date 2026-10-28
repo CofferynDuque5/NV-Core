@@ -483,6 +483,9 @@ export class BaileysSession {
         remoteJid: String(g.id),
         subject: String(g.subject ?? g.id),
         size: Number(g.size ?? g.participants?.length ?? 0),
+        description: typeof g.desc === "string" ? g.desc : null,
+        onlyAdmins: g.announce === true,
+        ownerJid: g.owner ? String(g.owner) : null,
       }));
     } catch (err) {
       this.logger.warn(`No se pudieron sincronizar grupos: ${(err as Error).message}`);

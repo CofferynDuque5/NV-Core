@@ -1,4 +1,4 @@
-import type { Group } from "@nv/domain";
+import { GROUP_COUNTRIES, groupPostingProblems, type Group } from "@nv/domain";
 
 /**
  * Pure helpers for the Grupos screen and the campaign group picker.
@@ -29,4 +29,32 @@ export function filterGroups(
     const hay = `${g.name} ${g.remoteJid ?? ""}`.toLowerCase();
     return hay.includes(q);
   });
+}
+
+/** Where a group stands for campaigns, ignoring price/photo (those depend on each campaign). */
+export type GroupPostingStatus = "apto" | "apartado" | "no-apto";
+
+export function groupStatus(g: Group): { status: GroupPostingStatus; reasons: string[] } {
+  if (g.excluded) return { status: "apartado", reasons: ["Apartado: nunca se publica aquí."] };
+  const reasons = groupPostingProblems({ ...g, requiresPrice: false, requiresImage: false }, { hasImage: true });
+  return { status: reasons.length ? "no-apto" : "apto", reasons };
+}
+
+/** "Venezuela · Bs (por el nombre)" for the group's country, or null. */
+export function countryLine(g: Group): string | null {
+  const id = g.detectedCountry ?? g.country;
+  const c = id ? GROUP_COUNTRIES[id] : null;
+  if (!c) return null;
+  const how = g.countrySource === "nombre" ? " (por el nombre)" : g.countrySource === "creador" ? " (por el creador)" : "";
+  return `${c.name} · ${c.symbol}${how}`;
+}
+
+/** Requirement badges shown next to a group. */
+export function requirementLabels(g: Group): string[] {
+  const out: string[] = [];
+  if (g.requiresPrice) out.push("Exige precio");
+  if (g.requiresImage) out.push("Exige foto");
+  if (g.onlyAdmins) out.push("Solo admins");
+  if (g.forbidsAds) out.push("Prohíbe publicidad");
+  return out;
 }

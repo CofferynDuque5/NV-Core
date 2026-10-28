@@ -118,6 +118,10 @@ export const emptyAdapters: Services = {
     access: () => delay([]),
     activate: () => notAvailable(),
   },
+  brandLinks: {
+    get: () => delay({ socialLinks: [], website: null }),
+    set: () => notAvailable(),
+  },
   sampleData: {
     summary: () => delay({ present: false, counts: { contacts: 0, segments: 0, forms: 0, funnels: 0, sequences: 0, affiliates: 0, automations: 0 } }),
     remove: () => notAvailable(),
@@ -139,6 +143,7 @@ export const emptyAdapters: Services = {
     clearLogs: () => delay({ deleted: 0 }),
     exportCsv: () => delay(""),
     importCsv: () => notAvailable(),
+    duplicate: () => notAvailable(),
   },
   posts: {
     list: () => emptyList(),
@@ -169,6 +174,8 @@ export const emptyAdapters: Services = {
     update: () => notAvailable(),
     remove: () => notAvailable(),
     clearSynced: () => delay({ deleted: 0 }),
+    checkRules: () => delay([]),
+    exclude: () => delay({ updated: 0 }),
     getVars: () => delay({}),
     setVars: () => notAvailable(),
   },

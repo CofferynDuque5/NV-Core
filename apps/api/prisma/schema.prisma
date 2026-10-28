@@ -157,6 +157,22 @@ model Group {
   remoteJid     String?
   /// True when the row was populated from a WhatsApp sync (vs. manual CRUD).
   synced        Boolean   @default(false)
+  /// «Apartado»: campaigns never post here (team, university, news groups…).
+  excluded      Boolean   @default(false)
+  /// What the group is about (GROUP_CATEGORIES in @nv/domain).
+  category      String?
+  /// The group's rules ask for a price / a photo in every post.
+  requiresPrice Boolean   @default(false)
+  requiresImage Boolean   @default(false)
+  /// The group's rules ban ads; only admins can write (WhatsApp setting).
+  forbidsAds    Boolean   @default(false)
+  onlyAdmins    Boolean   @default(false)
+  /// ISO country chosen by the user; when null it is detected (name, creator).
+  country       String?
+  /// Creator of the WhatsApp group, read on sync (its prefix hints the country).
+  ownerJid      String?
+  /// Last time the rules were read and checked.
+  rulesCheckedAt DateTime?
   createdAt     DateTime  @default(now())
 
   variables       GroupVariable[]
@@ -345,6 +361,10 @@ model Campaign {
   runKey             String?
   /// Heartbeat of the in-flight run; a stale heartbeat means the process died.
   runHeartbeatAt     DateTime?
+  /// Price per currency for {{precio}}: { "VES": "350", "COP": "40.000" }.
+  prices             Json           @default("{}")
+  /// Append the brand's links and the NV Marketing credit to group messages.
+  addFooter          Boolean        @default(true)
   createdAt          DateTime       @default(now())
 
   posts    Post[]
@@ -682,6 +702,9 @@ model WorkspaceSettings {
   workspaceSlug String   @id
   /// IANA zone the weekly report cuts weeks in (Monday 00:00 local).
   timeZone      String   @default("UTC")
+  /// Brand links for the campaign footer: [{ label, url }].
+  socialLinks   Json     @default("[]")
+  website       String?
   updatedBy     String?
   updatedAt     DateTime @updatedAt
 }

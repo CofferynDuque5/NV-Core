@@ -482,3 +482,10 @@ export function useSampleData(slug: string | undefined) {
     retry: false,
   });
 }
+
+/** The brand's social links and website (footer of group messages). */
+export function useBrandLinks() {
+  const svc = useServices();
+  const ws = useWorkspace();
+  return useQuery({ queryKey: [ws.id, "brand-links"], queryFn: () => svc.brandLinks.get(ws.id) });
+}
