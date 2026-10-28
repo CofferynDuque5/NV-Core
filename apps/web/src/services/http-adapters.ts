@@ -1,6 +1,8 @@
 import type {
   AccessOverview,
   SampleDataSummary,
+  BrandLinks,
+  GroupRulesCheck,
   AdminAccessRow,
   WorkspaceAccess,
   AiContentPlanItem,
@@ -206,6 +208,10 @@ export function createHttpAdapters(opts: HttpAdapterOptions): Services {
       activate: (slug, days) =>
         post<WorkspaceAccess>(`/admin/access/${encodeURIComponent(slug)}/activate`, { days }),
     },
+    brandLinks: {
+      get: (id) => get<BrandLinks>(`${ws(id)}/brand-links`),
+      set: (id, input) => put<BrandLinks>(`${ws(id)}/brand-links`, input),
+    },
     sampleData: {
       summary: (id) => get<SampleDataSummary>(`${ws(id)}/sample-data`),
       remove: (id) => del<SampleDataSummary>(`${ws(id)}/sample-data`),
@@ -227,6 +233,7 @@ export function createHttpAdapters(opts: HttpAdapterOptions): Services {
       clearLogs: (id) => del<{ deleted: number }>(`${ws(id)}/campaigns/logs`),
       exportCsv: (id) => get<{ csv: string }>(`${ws(id)}/campaigns/export`).then((r) => r.csv),
       importCsv: (id, csv) => post<CampaignImportResult>(`${ws(id)}/campaigns/import`, { csv }),
+      duplicate: (id, cid) => post<Campaign>(`${ws(id)}/campaigns/${cid}/duplicate`, {}),
     },
     posts: {
       list: (id) => get<ListResult<Post>>(`${ws(id)}/posts`),
@@ -269,6 +276,11 @@ export function createHttpAdapters(opts: HttpAdapterOptions): Services {
           `${ws(id)}/groups/clear-synced${channel ? `?channel=${channel}` : ""}`,
           {},
         ),
+      checkRules: async (id, gid) =>
+        gid
+          ? [await post<GroupRulesCheck>(`${ws(id)}/groups/${gid}/check-rules`, {})]
+          : post<GroupRulesCheck[]>(`${ws(id)}/groups/check-rules`, {}),
+      exclude: (id, ids, excluded) => post<{ updated: number }>(`${ws(id)}/groups/exclude`, { ids, excluded }),
       getVars: (id, gid) => get<Record<string, string>>(`${ws(id)}/groups/${gid}/vars`),
       setVars: (id, gid, vars) => put<Record<string, string>>(`${ws(id)}/groups/${gid}/vars`, vars),
     },

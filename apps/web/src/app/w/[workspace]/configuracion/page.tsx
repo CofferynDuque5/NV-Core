@@ -11,8 +11,9 @@ import { ListSkeleton } from "@/components/common/skeletons";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { TeamTab } from "@/components/settings/team-tab";
 import { BillingTab } from "@/components/settings/billing-tab";
+import { BrandLinksTab } from "@/components/settings/brand-links-tab";
 
-const TABS = ["equipo", "roles", "permisos", "facturacion", "logs"] as const;
+const TABS = ["equipo", "redes", "roles", "permisos", "facturacion", "logs"] as const;
 
 export default function ConfiguracionPage() {
   const logs = useAuditLogs();
@@ -35,12 +36,13 @@ export default function ConfiguracionPage() {
       <PageHeader
         eyebrow="Sistema"
         title="Configuración"
-        description="Equipo, roles, permisos y auditoría de tu workspace."
+        description="Equipo, redes y web de la marca, roles, permisos y auditoría de tu workspace."
       />
 
       <Tabs value={activeTab} onValueChange={onTabChange}>
-        <TabsList>
+        <TabsList className="max-w-full justify-start overflow-x-auto">
           <TabsTrigger value="equipo">Equipo</TabsTrigger>
+          <TabsTrigger value="redes">Redes y web</TabsTrigger>
           <TabsTrigger value="roles">Roles</TabsTrigger>
           <TabsTrigger value="permisos">Permisos</TabsTrigger>
           <TabsTrigger value="facturacion">Facturación</TabsTrigger>
@@ -50,6 +52,10 @@ export default function ConfiguracionPage() {
         {/* Team */}
         <TabsContent value="equipo">
           <TeamTab />
+        </TabsContent>
+
+        <TabsContent value="redes">
+          <BrandLinksTab />
         </TabsContent>
 
         {/* Roles */}

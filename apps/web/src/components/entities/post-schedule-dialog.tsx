@@ -4,6 +4,7 @@ import { Loader2, Paperclip } from "lucide-react";
 import { CHANNEL_LIST, type CampaignAttachment, type ChannelId } from "@nv/domain";
 
 import { useCreatePost, useUploadCampaignAttachment } from "@/hooks/use-domain-mutations";
+import { useCampaigns } from "@/hooks/use-domain-data";
 import { surfaceForChannel } from "@/lib/content-preview";
 import { FormDialog, errorMessage } from "./form-dialog";
 import { ContentPreview } from "./content-preview";
@@ -21,6 +22,7 @@ export function PostScheduleDialog({
   defaultDate,
   defaultTime,
   defaultChannel,
+  defaultCampaignId,
 }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
@@ -30,7 +32,11 @@ export function PostScheduleDialog({
   defaultTime?: string;
   /** Channel to preselect (e.g. the workspace's most-used channel). */
   defaultChannel?: ChannelId;
+  /** Campaign to file the post under (e.g. opened from a campaign). */
+  defaultCampaignId?: string;
 }) {
+  const campaigns = useCampaigns({ enabled: open });
+  const [campaignId, setCampaignId] = React.useState("");
   const mutation = useCreatePost();
   const upload = useUploadCampaignAttachment();
   const fileInputRef = React.useRef<HTMLInputElement>(null);
@@ -52,8 +58,9 @@ export function PostScheduleDialog({
     setTime(defaultTime ?? "12:00");
     setCopy("");
     setAttachments([]);
+    setCampaignId(defaultCampaignId ?? "");
     setError(null);
-  }, [open, defaultDate, defaultTime, defaultChannel]);
+  }, [open, defaultDate, defaultTime, defaultChannel, defaultCampaignId]);
 
   async function onPickFiles(e: React.ChangeEvent<HTMLInputElement>) {
     const files = Array.from(e.target.files ?? []);
@@ -83,6 +90,7 @@ export function PostScheduleDialog({
         attachments,
         status: scheduledAt ? "scheduled" : "draft",
         scheduledAt,
+        campaignId: campaignId || undefined,
       },
       {
         onSuccess: () => onOpenChange(false),
@@ -107,7 +115,24 @@ export function PostScheduleDialog({
         <Label htmlFor="p-title">Título</Label>
         <Input id="p-title" required value={title} onChange={(e) => setTitle(e.target.value)} />
       </div>
-      <div className="grid grid-cols-3 gap-3">
+      <div className="space-y-1.5">
+        <Label htmlFor="p-campaign">Campaña</Label>
+        <select
+          id="p-campaign"
+          value={campaignId}
+          onChange={(e) => setCampaignId(e.target.value)}
+          className="flex h-9 w-full rounded-lg border border-line-soft bg-panel-raised px-3 text-sm text-ink focus-visible:border-brand/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/25"
+        >
+          <option value="">Sin campaña</option>
+          {(campaigns.data?.items ?? []).map((c) => (
+            <option key={c.id} value={c.id}>
+              {c.name}
+            </option>
+          ))}
+        </select>
+        <p className="text-[11px] text-ink-faint">Guárdala dentro de una campaña para verla junto a sus envíos.</p>
+      </div>
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
         <div className="space-y-1.5">
           <Label htmlFor="p-channel">Canal</Label>
           <select

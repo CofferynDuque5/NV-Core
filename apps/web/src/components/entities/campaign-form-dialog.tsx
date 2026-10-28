@@ -2,6 +2,13 @@ import * as React from "react";
 import { Loader2, Paperclip, Sparkles, X } from "lucide-react";
 import {
   CAMPAIGN_STATUSES,
+  CURRENCY_LABEL,
+  GROUP_COUNTRIES,
+  campaignFooter,
+  groupPostingProblems,
+  priceForGroup,
+  usesPriceVar,
+  withFooter,
   type Campaign,
   type CampaignAttachment,
   type CampaignStatus,
@@ -9,7 +16,7 @@ import {
 } from "@nv/domain";
 
 import { cn } from "@/lib/utils";
-import { filterGroups, groupCategories } from "@/lib/groups";
+import { filterGroups, groupCategories, groupStatus } from "@/lib/groups";
 import { formatTime12h } from "@/lib/schedule";
 import {
   useCreateCampaign,
@@ -17,7 +24,7 @@ import {
   useUpdateCampaign,
   useUploadCampaignAttachment,
 } from "@/hooks/use-domain-mutations";
-import { useGroups, useTemplates } from "@/hooks/use-domain-data";
+import { useBrandLinks, useCampaigns, useGroups, useTemplates } from "@/hooks/use-domain-data";
 import { FormDialog, errorMessage } from "./form-dialog";
 import { ContentPreview } from "./content-preview";
 import { AiFlyerButton } from "./ai-flyer-button";
@@ -78,6 +85,8 @@ export function CampaignFormDialog({
   const upload = useUploadCampaignAttachment();
   const groups = useGroups();
   const templates = useTemplates();
+  const campaigns = useCampaigns({ enabled: open });
+  const brandLinks = useBrandLinks();
   const generate = useGenerateVariants();
   const pending = create.isPending || update.isPending;
   const fileInputRef = React.useRef<HTMLInputElement>(null);
@@ -100,6 +109,8 @@ export function CampaignFormDialog({
   const [rotateAttachments, setRotateAttachments] = React.useState(false);
   const [socialFormat, setSocialFormat] = React.useState("feed");
   const [attachments, setAttachments] = React.useState<CampaignAttachment[]>([]);
+  const [prices, setPrices] = React.useState<Record<string, string>>({});
+  const [addFooter, setAddFooter] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
 
   React.useEffect(() => {
@@ -129,6 +140,8 @@ export function CampaignFormDialog({
     setRotateAttachments(campaign?.rotateAttachments ?? false);
     setSocialFormat(campaign?.socialFormat ?? "feed");
     setAttachments(campaign?.attachments ?? []);
+    setPrices(campaign?.prices ?? {});
+    setAddFooter(campaign?.addFooter ?? true);
     setError(null);
   }, [open, campaign]);
 
@@ -231,6 +244,8 @@ export function CampaignFormDialog({
       socialFormat: ig ? socialFormat : undefined,
       postToWaStatus,
       rotateAttachments,
+      prices: Object.fromEntries(Object.entries(prices).filter(([, v]) => v.trim())),
+      addFooter,
       ...(campaign?.accent ? { accent: campaign.accent } : {}),
     };
 
@@ -244,13 +259,50 @@ export function CampaignFormDialog({
 
   const groupItems = groups.data?.items ?? [];
   const groupCats = groupCategories(groupItems);
-  const visibleGroups = filterGroups(groupItems, { q: groupQuery, category: groupCategory });
+  // Groups a campaign can use come first; kept-out and rule-blocked ones go last.
+  const visibleGroups = filterGroups(groupItems, { q: groupQuery, category: groupCategory }).sort(
+    (a, b) => Number(groupStatus(a).status !== "apto") - Number(groupStatus(b).status !== "apto"),
+  );
   const selectedGroups = groupItems.filter((g) => targetGroups.includes(g.id));
   const hasWaGroup = selectedGroups.some((g) => g.channel === "wa");
   const hasTgGroup = selectedGroups.some((g) => g.channel === "tg");
 
+  const hasImage = attachments.some((a) => a.url);
+  /** Why this campaign as written cannot go to `g` (empty = it can). */
+  const groupProblems = (g: (typeof groupItems)[number]) => groupPostingProblems(g, { hasImage, prices, usesPrice: usesPriceVar(message) });
+  // Currencies the chosen groups need, plus any price already typed.
+  const neededCurrencies = [
+    ...new Set([
+      ...selectedGroups
+        .map((g) => GROUP_COUNTRIES[g.detectedCountry ?? g.country ?? ""]?.currency)
+        .filter((c): c is string => Boolean(c)),
+      ...Object.keys(prices),
+    ]),
+  ];
+  const noCountry = selectedGroups.filter((g) => !(g.detectedCountry ?? g.country)).length;
+  const blocked = selectedGroups.filter((g) => groupProblems(g).length > 0);
+  const footer = campaignFooter(brandLinks.data ?? {});
+  // The preview shows the first chosen group: its price, and the footer if on.
+  const previewGroup = selectedGroups.find((g) => groupProblems(g).length === 0) ?? selectedGroups[0];
+  const previewPrice = previewGroup ? priceForGroup(previewGroup, prices) : "";
+  const previewText = previewPrice ? message.replace(/\{\{\s*precio\s*\}\}/g, previewPrice) : message;
+  const previewMessage = addFooter && previewGroup ? withFooter(previewText, footer) : previewText;
+  const otherCampaigns = (campaigns.data?.items ?? []).filter(
+    (c) => c.id !== campaign?.id && (c.targetGroups?.length ?? 0) > 0,
+  );
+
+  function takeGroupsFrom(id: string) {
+    const src = otherCampaigns.find((c) => c.id === id);
+    if (!src) return;
+    const known = new Set(groupItems.map((g) => g.id));
+    setTargetGroups((src.targetGroups ?? []).filter((gid) => known.has(gid)));
+  }
+
   function setAllVisible(selected: boolean) {
-    const visibleIds = visibleGroups.map((g) => g.id);
+    // «Seleccionar» skips groups kept out or whose rules forbid posting.
+    const visibleIds = visibleGroups
+      .filter((g) => !selected || groupStatus(g).status === "apto")
+      .map((g) => g.id);
     setTargetGroups((prev) =>
       selected
         ? Array.from(new Set([...prev, ...visibleIds]))
@@ -359,7 +411,8 @@ export function CampaignFormDialog({
               <p className="text-ink-faint text-[11px]">
                 Variables disponibles: <code className="text-ink-muted">{"{{grupo}}"}</code>{" "}
                 <code className="text-ink-muted">{"{{fecha}}"}</code>{" "}
-                <code className="text-ink-muted">{"{{hora}}"}</code>
+                <code className="text-ink-muted">{"{{hora}}"}</code>{" "}
+                <code className="text-ink-muted">{"{{precio}}"}</code> (en la moneda de cada grupo)
               </p>
             </div>
 
@@ -557,13 +610,13 @@ export function CampaignFormDialog({
                       </select>
                     ) : null}
                   </div>
-                  <div className="flex items-center gap-2 text-[11px]">
+                  <div className="flex flex-wrap items-center gap-2 text-[11px]">
                     <button
                       type="button"
                       onClick={() => setAllVisible(true)}
                       className="border-line-soft text-ink-muted hover:border-brand/60 hover:text-ink rounded-md border px-2 py-0.5 transition-colors"
                     >
-                      Seleccionar todos ({visibleGroups.length})
+                      Seleccionar aptos ({visibleGroups.filter((g) => groupStatus(g).status === "apto").length})
                     </button>
                     <button
                       type="button"
@@ -572,6 +625,21 @@ export function CampaignFormDialog({
                     >
                       Ninguno
                     </button>
+                    {otherCampaigns.length > 0 ? (
+                      <select
+                        aria-label="Usar grupos de otra campaña"
+                        value=""
+                        onChange={(e) => takeGroupsFrom(e.target.value)}
+                        className="border-line-soft bg-panel-high text-ink-muted ml-auto h-7 max-w-[14rem] rounded-md border px-2 text-[11px]"
+                      >
+                        <option value="">Usar grupos de otra campaña…</option>
+                        {otherCampaigns.map((c) => (
+                          <option key={c.id} value={c.id}>
+                            {c.name} ({c.targetGroups?.length ?? 0})
+                          </option>
+                        ))}
+                      </select>
+                    ) : null}
                   </div>
                   <div className="border-line-soft bg-panel max-h-64 space-y-0.5 overflow-y-auto rounded-md border p-1">
                     {visibleGroups.length === 0 ? (
@@ -579,18 +647,41 @@ export function CampaignFormDialog({
                         Sin resultados.
                       </p>
                     ) : (
-                      visibleGroups.map((g) => (
+                      visibleGroups.map((g) => {
+                        const st = groupStatus(g);
+                        const chosen = targetGroups.includes(g.id);
+                        // A kept-out or rule-blocked group can still be unticked, never ticked.
+                        const locked = st.status !== "apto" && !chosen;
+                        const issue = chosen ? groupProblems(g)[0] : st.reasons[0];
+                        return (
                         <label
                           key={g.id}
-                          className="hover:bg-panel-high flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-sm"
+                          title={issue}
+                          className={cn(
+                            "hover:bg-panel-high flex items-center gap-2 rounded-md px-2 py-1.5 text-sm",
+                            locked ? "cursor-not-allowed opacity-50" : "cursor-pointer",
+                          )}
                         >
                           <input
                             type="checkbox"
-                            checked={targetGroups.includes(g.id)}
+                            checked={chosen}
+                            disabled={locked}
                             onChange={() => toggleGroup(g.id)}
                             className="border-line-strong accent-brand size-4 rounded"
                           />
-                          <span className="text-ink min-w-0 flex-1 truncate">{g.name}</span>
+                          <span className="min-w-0 flex-1">
+                            <span className="text-ink block truncate">{g.name}</span>
+                            {issue ? (
+                              <span
+                                className={cn(
+                                  "block truncate text-[10px]",
+                                  chosen ? "text-state-warning" : "text-ink-faint",
+                                )}
+                              >
+                                {issue}
+                              </span>
+                            ) : null}
+                          </span>
                           <span
                             className={
                               g.channel === "tg"
@@ -610,12 +701,83 @@ export function CampaignFormDialog({
                           ))}
                           <span className="text-ink-faint shrink-0 text-[11px]">{g.members}</span>
                         </label>
-                      ))
+                        );
+                      })
                     )}
                   </div>
                 </div>
               )}
             </div>
+
+            {blocked.length > 0 ? (
+              <p className="border-state-warning/40 bg-state-warning/10 text-ink rounded-lg border px-3 py-2 text-xs" data-testid="blocked-groups">
+                {blocked.length === 1 ? "1 grupo elegido se omitirá" : `${blocked.length} grupos elegidos se omitirán`} si no
+                lo corriges: {blocked
+                  .slice(0, 3)
+                  .map((g) => `«${g.name}» (${groupProblems(g)[0]?.replace(/\.$/, "")})`)
+                  .join("; ")}
+                {blocked.length > 3 ? "…" : "."}
+              </p>
+            ) : null}
+
+            {selectedGroups.length > 0 ? (
+              <div className="space-y-1.5">
+                <Label>Precio por moneda</Label>
+                <p className="text-ink-faint text-[11px]">
+                  Escribe el precio en cada moneda. En el mensaje usa{" "}
+                  <code className="text-ink-muted">{"{{precio}}"}</code>: cada grupo verá el de su país (Venezuela en Bs,
+                  Colombia en pesos, España en euros). No convertimos monedas.
+                </p>
+                {neededCurrencies.length > 0 ? (
+                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                    {neededCurrencies.map((cur) => (
+                      <div key={cur} className="flex items-center gap-2">
+                        <Label htmlFor={`cp-price-${cur}`} className="text-ink-muted w-36 shrink-0 text-xs">
+                          {CURRENCY_LABEL[cur] ?? cur}
+                        </Label>
+                        <Input
+                          id={`cp-price-${cur}`}
+                          inputMode="decimal"
+                          value={prices[cur] ?? ""}
+                          onChange={(e) => setPrices((p) => ({ ...p, [cur]: e.target.value }))}
+                          placeholder="Ej: 350"
+                          className="h-8"
+                        />
+                      </div>
+                    ))}
+                  </div>
+                ) : null}
+                {noCountry > 0 ? (
+                  <p className="text-state-warning text-[11px]">
+                    {noCountry === 1 ? "1 grupo no tiene país" : `${noCountry} grupos no tienen país`}: indícalo en Grupos →
+                    Configurar para saber en qué moneda va el precio.
+                  </p>
+                ) : null}
+              </div>
+            ) : null}
+
+            {selectedGroups.length > 0 ? (
+              <div className="space-y-1.5">
+                <Label>Pie del mensaje</Label>
+                <label className="border-line-soft bg-panel-raised flex cursor-pointer items-start gap-2.5 rounded-lg border px-3 py-2.5">
+                  <input
+                    type="checkbox"
+                    checked={addFooter}
+                    onChange={(e) => setAddFooter(e.target.checked)}
+                    className="border-line-strong accent-brand mt-0.5 size-4 rounded"
+                  />
+                  <span className="min-w-0 flex-1">
+                    <span className="text-ink block text-sm">Agregar redes, web y firma de NV Marketing</span>
+                    <span className="text-ink-faint block whitespace-pre-line text-[11px]">{footer}</span>
+                    {(brandLinks.data?.socialLinks.length ?? 0) === 0 && !brandLinks.data?.website ? (
+                      <span className="text-ink-faint block text-[11px]">
+                        Agrega tus redes y tu web en Configuración → Redes y web.
+                      </span>
+                    ) : null}
+                  </span>
+                </label>
+              </div>
+            ) : null}
 
             <div className="space-y-1.5">
               <Label>Estado de WhatsApp</Label>
@@ -692,9 +854,9 @@ export function CampaignFormDialog({
           <div className="space-y-1.5 lg:sticky lg:top-0">
             <Label>Vista previa</Label>
             <ContentPreview
-              message={message}
+              message={previewMessage}
               attachments={attachments}
-              groupName={selectedGroups[0]?.name}
+              groupName={previewGroup?.name}
               hasWaGroup={hasWaGroup}
               hasTgGroup={hasTgGroup}
               waStatus={postToWaStatus}

@@ -75,6 +75,7 @@ function makeRunner(
       ),
     },
     groupVariable: { findMany: vi.fn(async () => []) },
+    post: { create: vi.fn(async ({ data }: { data: AnyRec }) => ({ id: "post-row", ...data })) },
   };
 
   const providers = {
@@ -424,6 +425,32 @@ describe("CampaignRunner.run", () => {
     expect(sendLogs.map((l) => l.target).sort()).toEqual(["facebook", "instagram"]);
   });
 
+  it("files each published Instagram/Facebook post under the campaign", async () => {
+    const c = campaign({ channels: ["wa", "ig"], targets: [] });
+    const publish = vi.fn(async () => ({ ok: true, id: "p1", format: null }));
+    const { runner, prisma } = makeRunner({ campaign: c, publish });
+
+    await runner.run("w1", "c1");
+
+    expect(prisma.post.create).toHaveBeenCalledTimes(1);
+    expect(prisma.post.create.mock.calls[0]![0].data).toMatchObject({
+      campaignId: "c1",
+      channel: "ig",
+      title: "Promo",
+      status: "sent",
+    });
+  });
+
+  it("does not file a post whose publish failed", async () => {
+    const c = campaign({ channels: ["ig"], targets: [] });
+    const publish = vi.fn(async () => ({ ok: false, error: "token vencido" }));
+    const { runner, prisma } = makeRunner({ campaign: c, publish });
+
+    await runner.run("w1", "c1");
+
+    expect(prisma.post.create).not.toHaveBeenCalled();
+  });
+
   it("publishes to the WhatsApp Status when postToWaStatus is set", async () => {
     const c = campaign({ channels: ["wa"], targets: [], postToWaStatus: true });
     const publish = vi.fn(async () => ({ ok: true, id: "status.1", format: "status" }));
@@ -696,5 +723,66 @@ describe("CampaignRunner.problems (antes de «Enviar ahora»)", () => {
     });
     (providers as AnyRec).status = vi.fn();
     expect(await runner.problems("w1", "c1")).toEqual(["Elige al menos un grupo o una red social de destino."]);
+  });
+});
+
+describe("CampaignRunner.run: reglas de grupo, precio y pie", () => {
+  beforeEach(() => {
+    process.env.WHATSAPP_GROUP_DELAY_MS = "0";
+  });
+  afterEach(() => {
+    delete process.env.WHATSAPP_GROUP_DELAY_MS;
+  });
+
+  it("omite grupos que no aplican, pone el precio en la moneda del grupo y agrega el pie", async () => {
+    const c = campaign({
+      message: "Combo Netflix a {{precio}}",
+      addFooter: true,
+      prices: { VES: "350" },
+      targets: [
+        { group: { id: "g1", name: "Ventas Caracas", remoteJid: "1@g.us", requiresPrice: true } },
+        { group: { id: "g2", name: "Grupo Uni", remoteJid: "2@g.us", category: "universidad" } },
+        { group: { id: "g3", name: "Ofertas Madrid", remoteJid: "3@g.us", requiresPrice: true } },
+      ],
+    });
+    const { runner, prisma, providers, sendLogs, notifications } = makeRunner({ campaign: c });
+    (prisma as AnyRec).workspaceSettings = {
+      findUnique: vi.fn(async () => ({
+        socialLinks: [{ label: "Instagram", url: "https://instagram.com/tienda" }],
+        website: "https://tienda.com",
+      })),
+    };
+
+    await runner.run("w1", "c1");
+
+    expect(providers.sendMessage).toHaveBeenCalledTimes(1);
+    expect(providers.sendMessage).toHaveBeenCalledWith("w1", "whatsapp", {
+      to: "1@g.us",
+      body:
+        "Combo Netflix a Bs 350\n\nInstagram: https://instagram.com/tienda\nWeb: https://tienda.com\n" +
+        "Mensaje enviado con NV Marketing https://nvmarketing.nvcorx.com/",
+    });
+    expect(sendLogs).toHaveLength(1);
+    const meta = (notifications.create.mock.calls[0]![1] as { meta: string }).meta;
+    expect(meta).toContain("2 grupos omitidos");
+    expect(meta).toContain("Grupo Uni (Es un grupo de «Universidad o estudios»");
+    expect(meta).toContain("Ofertas Madrid (Exige precio y la campaña no tiene precio en Euros (€).)");
+  });
+
+  it("sin pie cuando la campaña lo desactiva", async () => {
+    const c = campaign({ addFooter: false, targets: [{ group: { id: "g1", name: "A", remoteJid: "1@g.us" } }] });
+    const { runner, providers } = makeRunner({ campaign: c });
+    await runner.run("w1", "c1");
+    expect(providers.sendMessage).toHaveBeenCalledWith("w1", "whatsapp", { to: "1@g.us", body: "Hola" });
+  });
+
+  it("«Enviar ahora» avisa si ningún grupo acepta la campaña", async () => {
+    const { runner, providers } = makeRunner({
+      campaign: campaign({ targets: [{ groupId: "g1", group: { id: "g1", name: "Equipo", channel: "wa", excluded: true } }] }),
+    });
+    (providers as AnyRec).status = vi.fn(async () => ({ state: "connected" }));
+    expect(await runner.problems("w1", "c1")).toEqual([
+      "Ningún grupo elegido acepta esta campaña (por ejemplo «Equipo»: Apartado: nunca se publica aquí.). Revisa precios, imagen o los grupos.",
+    ]);
   });
 });

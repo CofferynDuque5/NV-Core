@@ -18,6 +18,7 @@ import { ApiBearerAuth, ApiPropertyOptional, ApiTags } from "@nestjs/swagger";
 import {
   CAMPAIGN_STATUSES,
   CHANNEL_IDS,
+  PRICE_CURRENCIES,
   type Campaign,
   type CampaignAttachment,
   type CampaignImportResult,
@@ -31,6 +32,7 @@ import {
   IsDateString,
   IsIn,
   IsInt,
+  IsObject,
   IsOptional,
   IsString,
   Max,
@@ -152,6 +154,16 @@ export class CreateCampaignDto {
   @IsArray()
   @IsString({ each: true })
   targetGroups?: string[];
+
+  @ApiPropertyOptional({ description: "Precio por moneda para {{precio}}: { VES: \"350\" }" })
+  @IsOptional()
+  @IsObject()
+  prices?: Record<string, string>;
+
+  @ApiPropertyOptional({ description: "Añadir redes, web y crédito de NV Marketing" })
+  @IsOptional()
+  @IsBoolean()
+  addFooter?: boolean;
 }
 
 export class ImportCampaignsDto {
@@ -184,6 +196,19 @@ export class UpdateCampaignDto {
   @IsOptional() @IsBoolean() postToWaStatus?: boolean;
   @IsOptional() @IsBoolean() rotateAttachments?: boolean;
   @IsOptional() @IsArray() @IsString({ each: true }) targetGroups?: string[];
+  @IsOptional() @IsObject() prices?: Record<string, string>;
+  @IsOptional() @IsBoolean() addFooter?: boolean;
+}
+
+/** Known currencies only, trimmed, without empty amounts. */
+export function cleanPrices(raw: Record<string, unknown> | undefined): Record<string, string> | undefined {
+  if (!raw) return undefined;
+  const out: Record<string, string> = {};
+  for (const [k, v] of Object.entries(raw)) {
+    const amount = typeof v === "string" || typeof v === "number" ? String(v).trim().slice(0, 40) : "";
+    if (PRICE_CURRENCIES.includes(k) && amount) out[k] = amount;
+  }
+  return out;
 }
 
 const WITH_COUNT = {
@@ -259,6 +284,8 @@ export class CampaignsService {
       socialFormat: dto.socialFormat,
       postToWaStatus: dto.postToWaStatus,
       rotateAttachments: dto.rotateAttachments,
+      prices: cleanPrices(dto.prices),
+      addFooter: dto.addFooter,
     };
   }
 
@@ -307,6 +334,8 @@ export class CampaignsService {
         socialFormat: dto.socialFormat,
         postToWaStatus: dto.postToWaStatus ?? false,
         rotateAttachments: dto.rotateAttachments ?? false,
+        prices: cleanPrices(dto.prices) ?? {},
+        addFooter: dto.addFooter ?? true,
       },
     });
     if (dto.targetGroups) await this.setTargets(workspaceId, created.id, dto.targetGroups);
@@ -348,6 +377,43 @@ export class CampaignsService {
     if (dto.targetGroups) await this.setTargets(workspaceId, id, dto.targetGroups);
     await this.audit.record(workspaceId, actor, "campaign.update", id);
     const row = await this.prisma.campaign.findUnique({ where: { id }, ...WITH_COUNT });
+    return mapCampaign(row!);
+  }
+
+  /**
+   * Copy a campaign as a new draft: same message, images, channels, schedule,
+   * prices and groups; no run history, progress or schedule activation.
+   */
+  async duplicate(workspaceId: string, actor: string, id: string): Promise<Campaign> {
+    const src = await this.db().campaign.findFirst({
+      where: { id, workspaceSlug: workspaceId },
+      include: { targets: { select: { groupId: true } } },
+    });
+    if (!src) throw new NotFoundException("Campaña no encontrada.");
+    await this.plans.assertWithinLimit(workspaceId, "campaigns", 1);
+    const created = await this.prisma.campaign.create({
+      data: {
+        workspaceSlug: workspaceId,
+        name: `${src.name} (copia)`.slice(0, 200),
+        status: "borrador",
+        channels: src.channels,
+        accent: src.accent,
+        message: src.message,
+        scheduleType: src.scheduleType,
+        scheduleAt: src.scheduleAt,
+        scheduleTimes: src.scheduleTimes,
+        scheduleDays: src.scheduleDays,
+        attachments: src.attachments ?? [],
+        rotateAttachments: src.rotateAttachments,
+        socialFormat: src.socialFormat,
+        postToWaStatus: src.postToWaStatus,
+        prices: src.prices ?? {},
+        addFooter: src.addFooter,
+        targets: { create: src.targets.map((t) => ({ groupId: t.groupId })) },
+      },
+    });
+    await this.audit.record(workspaceId, actor, "campaign.duplicate", `${id} → ${created.id}`);
+    const row = await this.prisma.campaign.findUnique({ where: { id: created.id }, ...WITH_COUNT });
     return mapCampaign(row!);
   }
 
@@ -666,6 +732,17 @@ export class CampaignsController {
     @Param("id") id: string,
   ) {
     return this.service.remove(workspaceId, user.email, id);
+  }
+
+  @Post(":id/duplicate")
+  @Roles("Owner", "Admin", "Editor")
+  @UseGuards(RolesGuard)
+  duplicate(
+    @WorkspaceId() workspaceId: string,
+    @CurrentUser() user: AuthenticatedUser,
+    @Param("id") id: string,
+  ) {
+    return this.service.duplicate(workspaceId, user.email, id);
   }
 
   @Post(":id/run")

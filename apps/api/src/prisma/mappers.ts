@@ -58,6 +58,7 @@ import type {
   AffiliateEvent,
   Template,
 } from "@nv/domain";
+import { detectGroupCountry } from "@nv/domain";
 
 const iso = (d: Date | null | undefined): string | undefined => d?.toISOString();
 
@@ -108,6 +109,19 @@ export const mapGroup = (g: PGroup): Group => ({
   lastActivityAt: iso(g.createdAt),
   remoteJid: g.remoteJid ?? undefined,
   synced: g.synced,
+  excluded: g.excluded,
+  category: g.category,
+  requiresPrice: g.requiresPrice,
+  requiresImage: g.requiresImage,
+  forbidsAds: g.forbidsAds,
+  onlyAdmins: g.onlyAdmins,
+  country: g.country,
+  ownerJid: g.ownerJid,
+  rulesCheckedAt: iso(g.rulesCheckedAt) ?? null,
+  ...(() => {
+    const d = detectGroupCountry(g);
+    return { detectedCountry: d.country, countrySource: d.source };
+  })(),
 });
 
 export const mapSegment = (s: PSegment, count = 0): Segment => ({
@@ -205,6 +219,8 @@ export const mapCampaign = (
   rotateAttachments: c.rotateAttachments ?? false,
   lastRunAt: iso(c.lastRunAt) ?? null,
   targetGroups: c.targets?.map((t) => t.groupId) ?? [],
+  prices: (c.prices as Record<string, string> | null) ?? {},
+  addFooter: c.addFooter ?? true,
 });
 
 export const mapPost = (p: PPost & { campaign?: { name: string } | null }): Post => ({

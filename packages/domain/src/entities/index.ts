@@ -138,6 +138,10 @@ export interface Campaign {
   rotateAttachments?: boolean;
   /** Ids of the WhatsApp groups this campaign targets. */
   targetGroups?: string[];
+  /** Price per currency for {{precio}}: { VES: "350", COP: "40.000" }. */
+  prices?: Record<string, string>;
+  /** Add the brand links + NV Marketing credit to group messages. */
+  addFooter?: boolean;
   lastRunAt?: string | null;
 }
 
@@ -252,6 +256,51 @@ export interface Group {
   remoteJid?: string;
   /** True when populated from a WhatsApp sync. */
   synced?: boolean;
+  /** «Apartado»: campaigns never post here. */
+  excluded?: boolean;
+  /** GROUP_CATEGORIES id. */
+  category?: string | null;
+  /** Its rules ask for a price / a photo in every post. */
+  requiresPrice?: boolean;
+  requiresImage?: boolean;
+  /** Its rules ban ads; only admins can write. */
+  forbidsAds?: boolean;
+  onlyAdmins?: boolean;
+  /** Country set by the user (null → detected). */
+  country?: string | null;
+  /** Country in use (set or detected) and how it was found. */
+  detectedCountry?: string | null;
+  countrySource?: "manual" | "nombre" | "creador" | null;
+  /** Creator's WhatsApp id (read on sync). */
+  ownerJid?: string | null;
+  rulesCheckedAt?: string | null;
+}
+
+/** Group fields the user edits to decide where campaigns go. */
+export interface GroupPostingSettings {
+  excluded?: boolean;
+  category?: string | null;
+  requiresPrice?: boolean;
+  requiresImage?: boolean;
+  forbidsAds?: boolean;
+  country?: string | null;
+}
+
+/** Result of reading a group's rules. */
+export interface GroupRulesCheck {
+  group: Group;
+  /** Plain-language findings. */
+  notes: string[];
+  /** Where the rules came from: WhatsApp now, or the saved description. */
+  source: "whatsapp" | "guardado";
+  /** Campaigns can post here (not apartado, rules allow it). */
+  canPost: boolean;
+}
+
+/** Brand links appended to group messages. */
+export interface BrandLinks {
+  socialLinks: { label: string; url: string }[];
+  website: string | null;
 }
 
 export interface SegmentRule {
