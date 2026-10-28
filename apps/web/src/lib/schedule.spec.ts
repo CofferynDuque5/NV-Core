@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { Campaign } from "@nv/domain";
 
-import { formatTime12h, isScheduled, scheduleLabel } from "./schedule";
+import { dateRangeLabel, formatTime12h, isScheduled, scheduleLabel } from "./schedule";
 
 function c(partial: Partial<Campaign>): Campaign {
   return {
@@ -50,5 +50,14 @@ describe("schedule helpers", () => {
 
   it("isScheduled is true with scheduleTimes even without scheduleAt", () => {
     expect(isScheduled(c({ scheduleAt: null, scheduleTimes: ["09:00"] }))).toBe(true);
+  });
+
+  it("adds the «desde / hasta» range to daily and weekly labels", () => {
+    expect(
+      scheduleLabel(c({ scheduleType: "daily", scheduleAt: "08:00", startDate: "2026-10-28", endDate: "2026-10-30" })),
+    ).toBe("Diario · 8:00 AM · del 28 al 30 de oct.");
+    expect(dateRangeLabel("2026-10-30", "2026-11-02")).toBe("del 30 de oct. al 2 de nov.");
+    expect(dateRangeLabel(null, "2026-10-30")).toBe("hasta el 30 de oct.");
+    expect(dateRangeLabel(null, null)).toBe("");
   });
 });

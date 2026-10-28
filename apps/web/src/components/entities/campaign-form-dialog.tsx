@@ -17,7 +17,7 @@ import {
 
 import { cn } from "@/lib/utils";
 import { filterGroups, groupCategories, groupStatus } from "@/lib/groups";
-import { formatTime12h } from "@/lib/schedule";
+import { dateRangeLabel, formatTime12h } from "@/lib/schedule";
 import {
   useCreateCampaign,
   useGenerateVariants,
@@ -105,6 +105,8 @@ export function CampaignFormDialog({
   const [time, setTime] = React.useState(""); // daily/weekly → the time being added
   const [scheduleTimes, setScheduleTimes] = React.useState<string[]>([]); // daily/weekly → HH:MM[]
   const [scheduleDays, setScheduleDays] = React.useState<number[]>([]);
+  const [startDate, setStartDate] = React.useState(""); // daily/weekly → "YYYY-MM-DD"
+  const [endDate, setEndDate] = React.useState("");
   const [targetGroups, setTargetGroups] = React.useState<string[]>([]);
   const [groupQuery, setGroupQuery] = React.useState("");
   const [groupCategory, setGroupCategory] = React.useState("");
@@ -138,6 +140,8 @@ export function CampaignFormDialog({
             : [],
     );
     setScheduleDays(campaign?.scheduleDays ?? []);
+    setStartDate(campaign?.startDate ?? "");
+    setEndDate(campaign?.endDate ?? "");
     setTargetGroups(campaign?.targetGroups ?? []);
     setFb(campaign?.channels?.includes("fb") ?? false);
     setIg(campaign?.channels?.includes("ig") ?? false);
@@ -255,6 +259,9 @@ export function CampaignFormDialog({
       scheduleAt,
       scheduleTimes: scheduleType === "once" ? undefined : times,
       scheduleDays: scheduleType === "weekly" ? scheduleDays : undefined,
+      // «Desde / hasta» only applies to daily/weekly; null clears it.
+      startDate: scheduleType === "once" ? null : startDate || null,
+      endDate: scheduleType === "once" ? null : endDate || null,
       targetGroups,
       attachments,
       socialFormat: ig ? socialFormat : undefined,
@@ -598,6 +605,40 @@ export function CampaignFormDialog({
                         ).
                       </p>
                     )}
+                  </div>
+                  <div className="space-y-1.5" data-testid="campaign-date-range">
+                    <Label className="text-ink-muted text-xs">Publicar solo entre estas fechas (opcional)</Label>
+                    <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                      <div className="space-y-1">
+                        <Label htmlFor="cp-start-date" className="text-ink-faint text-[11px]">
+                          Desde
+                        </Label>
+                        <Input
+                          id="cp-start-date"
+                          type="date"
+                          value={startDate}
+                          max={endDate || undefined}
+                          onChange={(e) => setStartDate(e.target.value)}
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <Label htmlFor="cp-end-date" className="text-ink-faint text-[11px]">
+                          Hasta
+                        </Label>
+                        <Input
+                          id="cp-end-date"
+                          type="date"
+                          value={endDate}
+                          min={startDate || undefined}
+                          onChange={(e) => setEndDate(e.target.value)}
+                        />
+                      </div>
+                    </div>
+                    <p className="text-ink-faint text-[11px]">
+                      {startDate || endDate
+                        ? `Publicará ${dateRangeLabel(startDate, endDate)}${endDate ? " y luego se marcará como completada" : ""}.`
+                        : "Sin fechas, publica todos los días hasta que la pauses."}
+                    </p>
                   </div>
                 </div>
               )}

@@ -35,6 +35,7 @@ import {
   IsObject,
   IsOptional,
   IsString,
+  Matches,
   Max,
   MaxLength,
   Min,
@@ -44,6 +45,7 @@ import {
 import { Type } from "class-transformer";
 
 import { MediaAttachmentDto } from "../../common/dto/media-attachment.dto";
+import { DAY_RE, checkDateRange } from "./date-range";
 import { parseCsv, toCsv } from "../../common/csv";
 import { ListResultDto } from "../../common/dto/list-result.dto";
 import { WorkspaceId } from "../../common/tenant/workspace.decorator";
@@ -127,6 +129,16 @@ export class CreateCampaignDto {
   @IsString({ each: true })
   scheduleTimes?: string[];
 
+  @ApiPropertyOptional({ description: "daily/weekly → desde (YYYY-MM-DD); null lo quita" })
+  @IsOptional()
+  @Matches(DAY_RE, { message: "startDate debe ser AAAA-MM-DD" })
+  startDate?: string | null;
+
+  @ApiPropertyOptional({ description: "daily/weekly → hasta (YYYY-MM-DD, inclusive); null lo quita" })
+  @IsOptional()
+  @Matches(DAY_RE, { message: "endDate debe ser AAAA-MM-DD" })
+  endDate?: string | null;
+
   @ApiPropertyOptional({ isArray: true, type: MediaAttachmentDto })
   @IsOptional()
   @IsArray()
@@ -187,6 +199,8 @@ export class UpdateCampaignDto {
   @Max(6, { each: true })
   scheduleDays?: number[];
   @IsOptional() @IsArray() @IsString({ each: true }) scheduleTimes?: string[];
+  @IsOptional() @Matches(DAY_RE, { message: "startDate debe ser AAAA-MM-DD" }) startDate?: string | null;
+  @IsOptional() @Matches(DAY_RE, { message: "endDate debe ser AAAA-MM-DD" }) endDate?: string | null;
   @IsOptional()
   @IsArray()
   @ValidateNested({ each: true })
@@ -280,6 +294,8 @@ export class CampaignsService {
       scheduleAt: dto.scheduleAt,
       scheduleTimes: dto.scheduleTimes,
       scheduleDays: dto.scheduleDays,
+      startDate: dto.startDate,
+      endDate: dto.endDate,
       attachments: dto.attachments as object | undefined,
       socialFormat: dto.socialFormat,
       postToWaStatus: dto.postToWaStatus,
@@ -310,6 +326,7 @@ export class CampaignsService {
 
   async create(workspaceId: string, actor: string, dto: CreateCampaignDto): Promise<Campaign> {
     await this.plans.assertWithinLimit(workspaceId, "campaigns", 1);
+    checkDateRange(dto.startDate, dto.endDate);
     const created = await this.db().campaign.create({
       data: {
         workspaceSlug: workspaceId,
@@ -330,6 +347,8 @@ export class CampaignsService {
         scheduleAt: dto.scheduleAt,
         scheduleTimes: dto.scheduleTimes ?? [],
         scheduleDays: dto.scheduleDays ?? [],
+        startDate: dto.startDate ?? null,
+        endDate: dto.endDate ?? null,
         attachments: (dto.attachments as object) ?? [],
         socialFormat: dto.socialFormat,
         postToWaStatus: dto.postToWaStatus ?? false,
@@ -354,6 +373,10 @@ export class CampaignsService {
       where: { id, workspaceSlug: workspaceId },
     });
     if (!existing) throw new NotFoundException("Campaña no encontrada.");
+    checkDateRange(
+      dto.startDate === undefined ? existing.startDate : dto.startDate,
+      dto.endDate === undefined ? existing.endDate : dto.endDate,
+    );
     // Activate a campaign that (now) carries a schedule but is still a draft, so
     // the runner fires it. Merges with the stored values since the update is partial.
     const status = CampaignsService.scheduledStatus(

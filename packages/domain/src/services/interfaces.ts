@@ -119,6 +119,9 @@ export interface CreateCampaignInput {
   scheduleAt?: string;
   scheduleTimes?: string[];
   scheduleDays?: number[];
+  /** "YYYY-MM-DD"; null clears it. */
+  startDate?: string | null;
+  endDate?: string | null;
   attachments?: Campaign["attachments"];
   socialFormat?: string;
   postToWaStatus?: boolean;

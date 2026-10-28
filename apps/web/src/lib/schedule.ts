@@ -38,16 +38,37 @@ export function isScheduled(c: Campaign): boolean {
   return Boolean(c.scheduleAt) || (c.scheduleTimes?.length ?? 0) > 0;
 }
 
+const MONTHS = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sept", "oct", "nov", "dic"];
+
+function dayLabel(day: string): string {
+  const [, m, d] = day.split("-").map(Number) as [number, number, number];
+  return `${d} de ${MONTHS[m - 1] ?? ""}.`;
+}
+
+/** "del 28 al 30 de oct." / "desde el 28 de oct." / "hasta el 30 de oct." ("" with no dates). */
+export function dateRangeLabel(start?: string | null, end?: string | null): string {
+  if (start && end) {
+    const [, m1, d1] = start.split("-").map(Number) as [number, number, number];
+    const [, m2] = end.split("-").map(Number) as [number, number, number];
+    return m1 === m2 ? `del ${d1} al ${dayLabel(end)}` : `del ${dayLabel(start)} al ${dayLabel(end)}`;
+  }
+  if (start) return `desde el ${dayLabel(start)}`;
+  if (end) return `hasta el ${dayLabel(end)}`;
+  return "";
+}
+
 /** Human label of when a campaign will send, with AM/PM (supports varias horas). */
 export function scheduleLabel(c: Campaign): string {
+  const range = dateRangeLabel(c.startDate, c.endDate);
+  const withRange = (label: string) => (range ? `${label} · ${range}` : label);
   if (c.scheduleType === "daily") {
     const times = scheduleTimesOf(c).map(formatTime12h).join(", ");
-    return `Diario · ${times || "—"}`;
+    return withRange(`Diario · ${times || "—"}`);
   }
   if (c.scheduleType === "weekly") {
     const days = (c.scheduleDays ?? []).map((d) => WEEKDAYS[d] ?? "").filter(Boolean).join(", ");
     const times = scheduleTimesOf(c).map(formatTime12h).join(", ");
-    return `Semanal · ${days || "—"} · ${times || "—"}`;
+    return withRange(`Semanal · ${days || "—"} · ${times || "—"}`);
   }
   // one-off: scheduleAt is an ISO datetime
   if (!c.scheduleAt) return "Sin programar";
