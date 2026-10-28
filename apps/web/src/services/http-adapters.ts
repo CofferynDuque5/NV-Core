@@ -36,6 +36,9 @@ import type {
   ConversationPage,
   CredentialStatus,
   GoogleStatus,
+  MetaCheck,
+  MetaConnectStatus,
+  MetaPage,
   Group,
   Integration,
   ListResult,
@@ -431,6 +434,11 @@ export function createHttpAdapters(opts: HttpAdapterOptions): Services {
       googleAuthUrl: (id) =>
         get<{ url: string }>(`${ws(id)}/integrations/google/auth-url`).then((r) => r.url),
       googleDisconnect: (id) => del<void>(`${ws(id)}/integrations/google`),
+      metaStatus: (id) => get<MetaConnectStatus>(`${ws(id)}/integrations/meta/status`),
+      metaAuthUrl: (id) => get<{ url: string }>(`${ws(id)}/integrations/meta/auth-url`).then((r) => r.url),
+      metaPages: (id, input) => post<MetaPage[]>(`${ws(id)}/integrations/meta/pages`, input),
+      metaConnect: (id, input) => post<MetaPage>(`${ws(id)}/integrations/meta/connect`, input),
+      metaCheck: (id) => post<MetaCheck>(`${ws(id)}/integrations/meta/check`, {}),
       credentials: (id) => get<Record<string, CredentialStatus>>(`${ws(id)}/credentials`),
       saveCredential: (id, provider, data) =>
         post<{ ok: boolean }>(`${ws(id)}/credentials/${provider}`, { data }).then(() => undefined),

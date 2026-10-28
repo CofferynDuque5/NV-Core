@@ -39,6 +39,7 @@ import type { AuthenticatedUser } from "../../auth/auth.types";
 import { NotificationsModule, NotificationsService } from "../notifications/notifications.module";
 import {
   ATTENTION_ITEMS,
+  CAMPAIGN_WINDOW_MS,
   DAY_MS,
   WEEK_MS,
   dayKey,
@@ -47,9 +48,12 @@ import {
   mergePaymentTotals,
   noticeMeta,
   parseWeekStart,
+  phoneKey,
   rankLeadSources,
   shortDay,
+  summarizeInbox,
   weekBounds,
+  type InboxConversationRow,
 } from "./weekly-report";
 
 /** How often the sweep checks for weeks without a report. */
@@ -60,6 +64,8 @@ const FIRST_SWEEP_MS = 60_000;
 const HISTORY = 26;
 
 type Range = { gte: Date; lt: Date };
+/** Conversations read per week for the Inbox section (a busy brand's week fits). */
+const INBOX_ROWS = 5000;
 
 export class WeeklyReportSettingsDto {
   @ApiProperty({ enum: REPORT_TIME_ZONES.map((z) => z.id) })
@@ -301,7 +307,7 @@ export class ReportsService implements OnModuleInit, OnModuleDestroy {
         _count: { _all: true },
       });
 
-    const [values, previous, leadRows, attention, paidNow, paidBefore] = await Promise.all([
+    const [values, previous, leadRows, attention, paidNow, paidBefore, inbox] = await Promise.all([
       Promise.all(counters.map((c) => c.count(cur))),
       Promise.all(counters.map((c) => c.count(prev))),
       this.prisma.$queryRaw<{ source: string | null; n: number }[]>(Prisma.sql`
@@ -313,6 +319,7 @@ export class ReportsService implements OnModuleInit, OnModuleDestroy {
       this.attention(workspaceSlug, cur, now, tz),
       paidIn(cur),
       paidIn(prev),
+      this.inbox(workspaceSlug, cur, prev),
     ]);
     const sums = (rows: Awaited<ReturnType<typeof paidIn>>) =>
       rows.map((g) => ({ currency: g.currency, amount: g._sum.amount, count: g._count._all }));
@@ -335,7 +342,57 @@ export class ReportsService implements OnModuleInit, OnModuleDestroy {
       leadSources: rankLeadSources(leadRows),
       attention,
       payments: mergePaymentTotals(sums(paidNow), sums(paidBefore)),
+      inbox: { ...inbox, messagesIn: values[counters.findIndex((c) => c.key === "messagesIn")] ?? 0 },
     };
+  }
+
+  /**
+   * New conversations of the week (and of the span before), with their first
+   * customer message and first answer, plus what the panel did that could
+   * have brought them: confirmed campaign sends and form/funnel contacts.
+   */
+  private async inbox(workspaceSlug: string, cur: Range, prev: Range) {
+    const conversations = (r: Range) =>
+      this.prisma.$queryRaw<InboxConversationRow[]>(Prisma.sql`
+        SELECT c."channel"::text AS channel, c."createdAt", c."contactHandle",
+          (SELECT MIN(m."createdAt") FROM "Message" m WHERE m."conversationId" = c.id AND m."direction" = 'in') AS "firstIn",
+          (SELECT MIN(o."createdAt") FROM "Message" o WHERE o."conversationId" = c.id AND o."direction" = 'out'
+             AND o."createdAt" >= COALESCE(
+               (SELECT MIN(i."createdAt") FROM "Message" i WHERE i."conversationId" = c.id AND i."direction" = 'in'),
+               c."createdAt")) AS "firstOut"
+        FROM "Conversation" c
+        WHERE c."workspaceSlug" = ${workspaceSlug} AND c."createdAt" >= ${r.gte} AND c."createdAt" < ${r.lt}
+        ORDER BY c."createdAt" ASC
+        LIMIT ${INBOX_ROWS}
+      `);
+    const [rows, previousRows, sends, formContacts] = await Promise.all([
+      conversations(cur),
+      conversations(prev),
+      this.prisma.sendLog.findMany({
+        where: {
+          workspaceSlug,
+          ok: true,
+          createdAt: { gte: new Date(prev.gte.getTime() - CAMPAIGN_WINDOW_MS), lt: cur.lt },
+        },
+        select: { createdAt: true },
+        orderBy: { createdAt: "desc" },
+        take: INBOX_ROWS * 4,
+      }),
+      this.prisma.contact.findMany({
+        where: { workspaceSlug, phone: { not: null }, NOT: { attribution: { equals: Prisma.DbNull } } },
+        select: { phone: true },
+        orderBy: { createdAt: "desc" },
+        take: INBOX_ROWS * 4,
+      }),
+    ]);
+    const formPhones = new Set(formContacts.map((c) => phoneKey(c.phone)).filter((k): k is string => k !== null));
+    return summarizeInbox({
+      rows,
+      previousRows,
+      messagesIn: 0,
+      sendTimes: sends.map((s) => s.createdAt),
+      formPhones,
+    });
   }
 
   /** What needs someone: open items now, and failures inside the week. Empty entries are left out. */

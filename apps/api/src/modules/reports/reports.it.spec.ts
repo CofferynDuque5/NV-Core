@@ -19,7 +19,7 @@ describe.skipIf(!url)("Informe semanal contra PostgreSQL real", () => {
     const ig = { source: "instagram", via: "form" };
     await prisma.contact.createMany({
       data: [
-        { workspaceSlug: ws, name: "A", createdAt: at("12T09:00:00"), attribution: ig },
+        { workspaceSlug: ws, name: "A", phone: "+58 412 555 0001", createdAt: at("12T09:00:00"), attribution: ig },
         { workspaceSlug: ws, name: "B", createdAt: at("14T09:00:00"), attribution: ig },
         { workspaceSlug: ws, name: "C", createdAt: at("18T23:00:00") },
         { workspaceSlug: ws, name: "D", createdAt: at("08T09:00:00") },
@@ -28,7 +28,7 @@ describe.skipIf(!url)("Informe semanal contra PostgreSQL real", () => {
     });
     // Inbox: one waiting for a reply, one answered, one asking for a person.
     const waiting = await prisma.conversation.create({
-      data: { workspaceSlug: ws, channel: "wa", contactName: "Lucía", createdAt: at("13T10:00:00") },
+      data: { workspaceSlug: ws, channel: "wa", contactName: "Lucía", contactHandle: "584125550001", createdAt: at("13T10:00:00") },
     });
     const answered = await prisma.conversation.create({
       data: { workspaceSlug: ws, channel: "wa", contactName: "Pedro", createdAt: at("13T11:00:00") },
@@ -116,6 +116,21 @@ describe.skipIf(!url)("Informe semanal contra PostgreSQL real", () => {
       { source: "instagram", count: 2 },
       { source: null, count: 1 },
     ]);
+    // Inbox: Lucía wrote from a form contact's phone; Pedro got a reply in 5 min.
+    expect(report.inbox).toMatchObject({
+      conversations: 3,
+      previousConversations: 0,
+      messagesIn: 3,
+      answered: 1,
+      medianReplyMinutes: 5,
+      afterCampaign: 0,
+      fromForms: 1,
+      fromPanel: 1,
+      byChannel: [
+        { channel: "wa", count: 2 },
+        { channel: "tg", count: 1 },
+      ],
+    });
     const a = Object.fromEntries(report.attention.map((x) => [x.key, x]));
     expect(a.overdueTasks?.items[0]).toMatchObject({ label: "Llamar a proveedor", meta: "vencía 10/10" });
     expect(a.unanswered?.items.map((i) => i.label)).toEqual(["Lucía", "Marta"]);

@@ -1,4 +1,12 @@
-import { formatPaymentAmount, type WeeklyReport, type WeeklyReportMetric, type WeeklyReportPayments } from "@nv/domain";
+import {
+  CHANNELS,
+  formatPaymentAmount,
+  type ChannelId,
+  type WeeklyReport,
+  type WeeklyReportInbox,
+  type WeeklyReportMetric,
+  type WeeklyReportPayments,
+} from "@nv/domain";
 
 import { csvField } from "./analytics-export";
 import { leadSourceLabel } from "./attribution";
@@ -69,6 +77,7 @@ export function weeklyReportCsv(report: WeeklyReport): string {
       p.previousAmount,
       `${p.count} cobros (semana anterior: ${p.previousCount})`,
     ]),
+    ...inboxCsvRows(report.inbox),
   ];
   for (const a of report.attention) {
     rows.push(["Necesita atención", a.label, a.count, "", ""]);
@@ -80,4 +89,64 @@ export function weeklyReportCsv(report: WeeklyReport): string {
 
 export function weeklyReportFileName(workspace: string, report: WeeklyReport): string {
   return `informe-semanal-${workspace}-${report.weekStart}${report.id === "actual" ? "-en-curso" : ""}.csv`;
+}
+
+/** "8 min", "2 h 5 min", "3 d". */
+export function minutesLabel(min: number): string {
+  if (min < 60) return `${Math.max(0, Math.round(min))} min`;
+  if (min < 24 * 60) {
+    const h = Math.floor(min / 60);
+    const m = Math.round(min % 60);
+    return m ? `${h} h ${m} min` : `${h} h`;
+  }
+  return `${Math.round(min / (24 * 60))} d`;
+}
+
+const pct = (part: number, total: number) => (total > 0 ? Math.round((part / total) * 100) : 0);
+
+export function channelLabel(id: string): string {
+  return CHANNELS[id as ChannelId]?.name ?? id;
+}
+
+/**
+ * Plain answer to "is the panel worth it?" from the week's Inbox numbers.
+ * Only states what was counted; never estimates sales or money.
+ */
+export function inboxVerdict(i: WeeklyReportInbox): { tone: "good" | "neutral" | "empty"; headline: string; lines: string[] } {
+  if (i.conversations === 0) {
+    return {
+      tone: "empty",
+      headline: "Sin conversaciones nuevas esta semana",
+      lines: ["Conecta WhatsApp, Instagram o Telegram y lanza una campaña: aquí verás cuántas conversaciones trae el panel."],
+    };
+  }
+  const lines = [
+    `${i.fromPanel} de ${i.conversations} conversaciones nuevas (${pct(i.fromPanel, i.conversations)} %) llegaron gracias al panel: ` +
+      `${i.afterCampaign} en las 48 h después de una campaña y ${i.fromForms} de contactos que entraron por tus formularios.`,
+  ];
+  let answered = `Respondiste ${i.answered} de ${i.conversations} (${pct(i.answered, i.conversations)} %)`;
+  if (i.medianReplyMinutes !== null) answered += `; la primera respuesta tardó normalmente ${minutesLabel(i.medianReplyMinutes)}`;
+  lines.push(`${answered}.`);
+  const diff = i.fromPanel - i.previousFromPanel;
+  if (diff !== 0) lines.push(`Frente a la semana anterior: ${diff > 0 ? "+" : "-"}${Math.abs(diff)} (antes ${i.previousFromPanel}).`);
+  return i.fromPanel > 0
+    ? { tone: "good", headline: "Sí: el panel te está trayendo conversaciones", lines }
+    : {
+        tone: "neutral",
+        headline: "Todavía no se nota el panel en el Inbox",
+        lines: [...lines, "Lanza una campaña o comparte un formulario y compara la próxima semana."],
+      };
+}
+
+function inboxCsvRows(i: WeeklyReportInbox | undefined): (string | number)[][] {
+  if (!i) return [];
+  return [
+    ["Inbox", "Conversaciones nuevas", i.conversations, i.previousConversations, ""],
+    ["Inbox", "Gracias al panel", i.fromPanel, i.previousFromPanel, "después de una campaña (48 h) o desde un formulario"],
+    ["Inbox", "Después de una campaña", i.afterCampaign, "", "empezaron hasta 48 h después de un envío confirmado"],
+    ["Inbox", "Desde formularios", i.fromForms, "", "el teléfono coincide con un contacto de formulario o embudo"],
+    ["Inbox", "Respondidas", i.answered, "", ""],
+    ["Inbox", "Primera respuesta (mediana, min)", i.medianReplyMinutes ?? "", "", ""],
+    ...i.byChannel.map((c) => ["Inbox por canal", channelLabel(c.channel), c.count, "", ""]),
+  ];
 }

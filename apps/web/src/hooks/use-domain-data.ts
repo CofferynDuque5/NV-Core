@@ -358,6 +358,15 @@ export function useGoogleStatus() {
   });
 }
 
+export function useMetaStatus() {
+  const svc = useServices();
+  const ws = useWorkspace();
+  return useQuery({
+    queryKey: [ws.id, "integrations", "meta"],
+    queryFn: () => svc.integrations.metaStatus(ws.id),
+  });
+}
+
 export function useBilling() {
   const svc = useServices();
   const ws = useWorkspace();
