@@ -213,6 +213,8 @@ export const mapCampaign = (
   scheduleAt: c.scheduleAt ?? null,
   scheduleTimes: c.scheduleTimes ?? [],
   scheduleDays: c.scheduleDays ?? [],
+  startDate: c.startDate ?? null,
+  endDate: c.endDate ?? null,
   attachments: (c.attachments as Campaign["attachments"]) ?? [],
   socialFormat: c.socialFormat ?? null,
   postToWaStatus: c.postToWaStatus ?? false,

@@ -133,6 +133,10 @@ export interface Campaign {
   scheduleTimes?: string[];
   /** weekly → days of week (0=Sun … 6=Sat). */
   scheduleDays?: number[];
+  /** daily/weekly → only sends from this day ("YYYY-MM-DD", inclusive). */
+  startDate?: string | null;
+  /** daily/weekly → last day it sends ("YYYY-MM-DD", inclusive); then it completes. */
+  endDate?: string | null;
   attachments?: CampaignAttachment[];
   /** IG format: "feed" | "reel" | "story" | "carousel". */
   socialFormat?: string | null;

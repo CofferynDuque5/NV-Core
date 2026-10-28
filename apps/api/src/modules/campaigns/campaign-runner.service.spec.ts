@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { CampaignRunner, UNCONFIRMED, slotRunKey } from "./campaign-runner.service";
+import { checkDateRange, inDateRange, localDayKey } from "./date-range";
 
 /**
  * Covers the campaign send loop — a money path that had no test. Two angles:
@@ -205,6 +206,48 @@ describe("CampaignRunner.isDue", () => {
     const base = campaign({ scheduleType: "weekly", status: "activa", scheduleAt: `${hh}:${mm}` });
     expect(isDue({ ...base, scheduleDays: [at.getDay()] }, at)).toBe(true);
     expect(isDue({ ...base, scheduleDays: [(at.getDay() + 1) % 7] }, at)).toBe(false);
+  });
+
+  it("only sends between «desde» and «hasta» (inclusive)", () => {
+    const at = new Date();
+    const hh = String(at.getHours()).padStart(2, "0");
+    const mm = String(at.getMinutes()).padStart(2, "0");
+    const today = localDayKey(at);
+    const shift = (days: number) => localDayKey(new Date(at.getTime() + days * 86_400_000));
+    const c = campaign({ scheduleType: "daily", status: "activa", scheduleAt: `${hh}:${mm}` });
+    expect(isDue({ ...c, startDate: today, endDate: today }, at)).toBe(true);
+    expect(isDue({ ...c, startDate: shift(-2), endDate: shift(2) }, at)).toBe(true);
+    expect(isDue({ ...c, startDate: shift(1) }, at)).toBe(false); // not started yet
+    expect(isDue({ ...c, endDate: shift(-1) }, at)).toBe(false); // already ended
+  });
+});
+
+describe("CampaignRunner.finishEndedRanges", () => {
+  it("completes campaigns whose «hasta» day has passed and tells the team", async () => {
+    const { runner, prisma, notifications } = makeRunner();
+    const p = prisma as unknown as {
+      campaign: { findMany: ReturnType<typeof vi.fn>; updateMany: ReturnType<typeof vi.fn> };
+    };
+    p.campaign.findMany.mockResolvedValueOnce([{ id: "c1", workspaceSlug: "w1", name: "Promo 28-30", endDate: "2026-10-30" }]);
+    const done = await runner.finishEndedRanges(new Date(2026, 9, 31, 9, 0));
+    expect(done).toBe(1);
+    const where = p.campaign.findMany.mock.calls.at(-1)![0].where;
+    expect(where.endDate).toEqual({ not: null, lt: "2026-10-31" });
+    expect(p.campaign.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({ data: { status: "completada" } }),
+    );
+    expect(notifications.create).toHaveBeenCalledWith("w1", expect.objectContaining({ title: "Campaña «Promo 28-30» terminada" }));
+  });
+});
+
+describe("date range helpers", () => {
+  it("compares calendar days and rejects an end before the start", () => {
+    expect(inDateRange("2026-10-28", "2026-10-28", "2026-10-30")).toBe(true);
+    expect(inDateRange("2026-10-31", "2026-10-28", "2026-10-30")).toBe(false);
+    expect(inDateRange("2026-10-27", "2026-10-28", null)).toBe(false);
+    expect(inDateRange("2026-10-27", null, null)).toBe(true);
+    expect(() => checkDateRange("2026-10-30", "2026-10-28")).toThrow(/antes/);
+    expect(() => checkDateRange("2026-10-28", "2026-10-28")).not.toThrow();
   });
 });
 

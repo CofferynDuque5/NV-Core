@@ -15,6 +15,7 @@ import type { MediaAttachment, ProviderId, PublishInput, PublishResult } from ".
 import { builtinVars, renderTemplate } from "./render";
 import { campaignFooter, groupPostingProblems, priceForGroup, usesPriceVar, withFooter, type SocialLink } from "@nv/domain";
 import { resolvePacing, pacingDelay, type PacingOptions } from "./pacing";
+import { inDateRange, localDayKey } from "./date-range";
 
 const TICK_MS = 30_000;
 /** Minimum spacing between two runs of the same campaign (double click / retries). */
@@ -191,6 +192,8 @@ export class CampaignRunner implements OnModuleInit, OnModuleDestroy {
         ? "once"
         : null;
     }
+    // «Desde / hasta»: outside the campaign's date range nothing is sent.
+    if (!inDateRange(localDayKey(now), c.startDate, c.endDate)) return null;
     if (c.scheduleType === "weekly" && !(c.scheduleDays ?? []).includes(now.getDay())) return null;
     const times = c.scheduleTimes?.length ? c.scheduleTimes : at ? [at] : [];
     for (const t of times) {
@@ -209,6 +212,7 @@ export class CampaignRunner implements OnModuleInit, OnModuleDestroy {
   private async tick(): Promise<void> {
     const now = new Date();
     await this.recoverInterruptedRuns(now);
+    await this.finishEndedRanges(now);
     const candidates = await this.prisma.campaign.findMany({
       where: { status: { in: ["programada", "activa"] } },
     });
@@ -239,6 +243,43 @@ export class CampaignRunner implements OnModuleInit, OnModuleDestroy {
       };
       await this.jobs.dispatch("campaign.run", c.workspaceSlug, payload);
     }
+  }
+
+  /**
+   * A daily/weekly campaign whose «hasta» day has passed is done: mark it
+   * completed (once nothing is in flight) and tell the team.
+   */
+  async finishEndedRanges(now = new Date()): Promise<number> {
+    if (!this.prisma.enabled) return 0;
+    const ended = await this.prisma.campaign.findMany({
+      where: {
+        status: { in: ["programada", "activa"] },
+        scheduleType: { in: ["daily", "weekly"] },
+        endDate: { not: null, lt: localDayKey(now) },
+        runKey: null,
+      },
+      select: { id: true, workspaceSlug: true, name: true, endDate: true },
+    });
+    let done = 0;
+    for (const c of ended) {
+      const { count } = await this.prisma.campaign.updateMany({
+        where: { id: c.id, status: { in: ["programada", "activa"] }, runKey: null },
+        data: { status: "completada" },
+      });
+      if (count !== 1) continue;
+      done++;
+      await this.audit.record(c.workspaceSlug, "system", "campaign.range_ended", c.id);
+      try {
+        await this.notifications.create(c.workspaceSlug, {
+          type: "info",
+          title: `Campaña «${c.name}» terminada`,
+          meta: `Llegó a su fecha final (${c.endDate}). Puedes duplicarla para repetirla.`,
+        });
+      } catch {
+        /* a failed notice never blocks the sweep */
+      }
+    }
+    return done;
   }
 
   /**

@@ -336,6 +336,10 @@ model Campaign {
   scheduleTimes      String[]       @default([])
   /// weekly → days of week (0=Sun … 6=Sat).
   scheduleDays       Int[]
+  /// daily/weekly → first and last day it may send ("YYYY-MM-DD", inclusive,
+  /// the server's calendar day like the HH:MM times). Null = no limit.
+  startDate          String?
+  endDate            String?
   /// Uploaded media descriptors [{ path, filename, mime, kind, url }]. First is
   /// used for WhatsApp; all are used for IG carousel.
   attachments        Json           @default("[]")
