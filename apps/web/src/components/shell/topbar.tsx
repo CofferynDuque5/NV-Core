@@ -38,10 +38,11 @@ export function Topbar() {
       {/* Command trigger */}
       <button
         onClick={() => openCommand(true)}
-        className="group flex h-9 w-full max-w-md items-center gap-2.5 rounded-lg border border-line-soft bg-panel px-3 text-left text-sm text-ink-faint transition-colors hover:border-line-bright"
+        aria-label="Buscar"
+        className="group flex h-9 w-9 shrink-0 items-center justify-center gap-2.5 rounded-lg border border-line-soft bg-panel text-left text-sm text-ink-faint transition-colors hover:border-line-bright sm:w-full sm:max-w-md sm:shrink sm:justify-start sm:px-3"
       >
         <Search className="size-4" />
-        <span className="flex-1 truncate">Buscar o ejecutar…</span>
+        <span className="hidden flex-1 truncate sm:block">Buscar o ejecutar…</span>
         <kbd className="hidden items-center gap-0.5 rounded border border-line-strong bg-panel-raised px-1.5 py-0.5 text-[10px] font-medium text-ink-muted sm:inline-flex">
           ⌘K
         </kbd>
@@ -53,11 +54,13 @@ export function Topbar() {
           <span className="hidden sm:inline">Crear</span>
         </Button>
 
-        <ThemeToggle />
+        <div className="hidden sm:block">
+          <ThemeToggle />
+        </div>
 
         <button
           onClick={() => navigate(`/w/${ws.slug}/novedades`)}
-          className="relative grid size-9 place-items-center rounded-lg border border-line-soft bg-panel text-ink-muted transition-colors hover:border-line-bright hover:text-ink"
+          className="relative hidden size-9 sm:grid place-items-center rounded-lg border border-line-soft bg-panel text-ink-muted transition-colors hover:border-line-bright hover:text-ink"
           title="Novedades"
           aria-label={unseen > 0 ? `Novedades, ${unseen} sin leer` : "Novedades"}
         >

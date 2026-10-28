@@ -109,6 +109,14 @@ export class ConsentDto {
   source!: string;
 }
 
+/** Contacts scanned for an accent-free match (newest brands stay far below). */
+const ACCENT_SCAN_LIMIT = 20_000;
+
+/** Lowercase without accents: «Ramírez» → «ramirez». */
+export function foldAccents(text: string): string {
+  return text.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+}
+
 @Injectable()
 export class ContactsService {
   constructor(
@@ -131,6 +139,7 @@ export class ContactsService {
     // Search/stage run in the DB so results are authoritative across the whole
     // workspace — never limited to the current page (the old client-side filter
     // over the first 100 rows silently missed matches beyond it).
+    const accentIds = q ? await this.accentInsensitiveMatches(workspaceId, q) : [];
     const where: Prisma.ContactWhereInput = {
       workspaceSlug: workspaceId,
       ...(query.stage ? { stage: query.stage } : {}),
@@ -142,6 +151,7 @@ export class ContactsService {
               { email: { contains: q, mode: "insensitive" } },
               { phone: { contains: q, mode: "insensitive" } },
               { tags: { has: q } },
+              ...(accentIds.length > 0 ? [{ id: { in: accentIds } }] : []),
             ],
           }
         : {}),
@@ -156,6 +166,26 @@ export class ContactsService {
       this.prisma.contact.count({ where }),
     ]);
     return new ListResultDto(rows.map(mapContact), total);
+  }
+
+  /**
+   * Contacts whose name or company match `q` ignoring accents, so «ramirez»
+   * finds «Ramírez» (and the other way round). Folding happens here rather
+   * than in SQL so it does not depend on the database encoding; only two short
+   * columns are read, and the result only widens the search.
+   */
+  private async accentInsensitiveMatches(workspaceId: string, q: string): Promise<string[]> {
+    const needle = foldAccents(q);
+    if (!/[a-z]/.test(needle)) return [];
+    const rows = await this.prisma.contact.findMany({
+      where: { workspaceSlug: workspaceId },
+      select: { id: true, name: true, company: true },
+      take: ACCENT_SCAN_LIMIT,
+    });
+    return rows
+      .filter((r) => foldAccents(`${r.name} ${r.company ?? ""}`).includes(needle))
+      .slice(0, 500)
+      .map((r) => r.id);
   }
 
   private static readonly EXPORT_COLUMNS = [

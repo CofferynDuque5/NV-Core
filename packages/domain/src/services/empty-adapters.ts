@@ -118,6 +118,10 @@ export const emptyAdapters: Services = {
     access: () => delay([]),
     activate: () => notAvailable(),
   },
+  sampleData: {
+    summary: () => delay({ present: false, counts: { contacts: 0, segments: 0, forms: 0, funnels: 0, sequences: 0, affiliates: 0, automations: 0 } }),
+    remove: () => notAvailable(),
+  },
   access: {
     overview: () => delay({ state: "unlimited", plan: { price: 0, currency: "USD", days: 30 }, methods: [] }),
     pay: () => notAvailable(),

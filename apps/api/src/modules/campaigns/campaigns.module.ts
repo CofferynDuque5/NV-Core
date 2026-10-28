@@ -55,6 +55,7 @@ import { Roles } from "../../auth/decorators/roles.decorator";
 import { CurrentUser } from "../../auth/decorators/current-user.decorator";
 import type { AuthenticatedUser } from "../../auth/auth.types";
 import { ProvidersModule } from "../../providers/providers.module";
+import { NotificationsModule } from "../notifications/notifications.module";
 import { CampaignRunner } from "./campaign-runner.service";
 import { LIST_CAP } from "../../common/query-limits";
 
@@ -676,6 +677,10 @@ export class CampaignsController {
     // (minutos, por el ritmo anti-ban) y el navegador/hosting la reintentaba,
     // lo que lanzaba la misma campaña dos veces.
     await this.service.get(workspaceId, id); // 404 si no existe
+    // Say up front why it can't go (no WhatsApp session, no groups…) instead
+    // of queueing a run whose every send fails in the background.
+    const problems = await this.runner.problems(workspaceId, id);
+    if (problems.length > 0) throw new BadRequestException(`No se puede enviar todavía: ${problems.join(" ")}`);
     await this.runner.enqueue(workspaceId, id);
     return this.service.get(workspaceId, id);
   }
@@ -698,7 +703,7 @@ export class CampaignsController {
 }
 
 @Module({
-  imports: [ProvidersModule],
+  imports: [ProvidersModule, NotificationsModule],
   controllers: [CampaignsController],
   providers: [CampaignsService, CampaignRunner],
   exports: [CampaignRunner],

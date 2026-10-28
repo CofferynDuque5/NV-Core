@@ -334,3 +334,46 @@ describe("AuthService · team invitations", () => {
     expect(store.markInvitationAccepted).toHaveBeenCalledWith("inv1");
   });
 });
+
+describe("AuthService perfil", () => {
+  const userStore = async () => {
+    const user = { id: "u1", email: "u1@x.com", name: "Uno", passwordHash: await hashPassword("vieja-clave-1"), createdAt: "", failedLoginAttempts: 0, lockedUntil: null };
+    const store = {
+      findUserById: vi.fn(async () => user),
+      membershipsOf: vi.fn(async () => [{ workspaceSlug: "w1", role: "Owner" }]),
+      updateName: vi.fn(async (_id: string, name: string) => {
+        user.name = name;
+      }),
+      updatePassword: vi.fn(async () => undefined),
+      revokeAllRefreshTokens: vi.fn(async () => undefined),
+      createRefreshToken: vi.fn(async () => undefined),
+    };
+    return { user, store };
+  };
+  const service = (store: unknown) => {
+    const config = { get: vi.fn((k: string) => (k === "superAdmins" ? [] : { refreshTtlDays: 30, accessTtl: "15m" })) };
+    return new AuthService(store as AuthStore, { signAsync: vi.fn(async () => "jwt") } as never, config as never, {} as never, {} as never);
+  };
+
+  it("cambia el nombre limpiando espacios", async () => {
+    const { store } = await userStore();
+    const view = await service(store).updateName("u1", "  Ana   Torres ");
+    expect(store.updateName).toHaveBeenCalledWith("u1", "Ana Torres");
+    expect(view.user.name).toBe("Ana Torres");
+  });
+
+  it("rechaza cambiar la contraseña si la actual no coincide", async () => {
+    const { store } = await userStore();
+    await expect(service(store).changePassword("u1", "otra", "nueva-clave-9")).rejects.toBeInstanceOf(BadRequestException);
+    expect(store.updatePassword).not.toHaveBeenCalled();
+  });
+
+  it("cambia la contraseña, cierra las demás sesiones y entrega una nueva", async () => {
+    const { store } = await userStore();
+    const res = await service(store).changePassword("u1", "vieja-clave-1", "nueva-clave-9");
+    expect(store.updatePassword).toHaveBeenCalledWith("u1", expect.any(String));
+    expect(store.revokeAllRefreshTokens).toHaveBeenCalledWith("u1");
+    expect(store.createRefreshToken).toHaveBeenCalled();
+    expect(res.accessToken).toBe("jwt");
+  });
+});

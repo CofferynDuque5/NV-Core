@@ -10,7 +10,8 @@ import { AuditLogger } from "../../common/audit-logger.service";
 import { EventBus } from "../../core/events/event-bus.service";
 import { JobManager } from "../../core/jobs/job-manager.service";
 import { ProviderManager } from "../../providers/provider-manager.service";
-import type { MediaAttachment, PublishInput, PublishResult } from "../../providers/provider.types";
+import { NotificationsService } from "../notifications/notifications.module";
+import type { MediaAttachment, ProviderId, PublishInput, PublishResult } from "../../providers/provider.types";
 import { builtinVars, renderTemplate } from "./render";
 import { resolvePacing, pacingDelay, type PacingOptions } from "./pacing";
 
@@ -91,6 +92,7 @@ export class CampaignRunner implements OnModuleInit, OnModuleDestroy {
     private readonly jobs: JobManager,
     private readonly events: EventBus,
     private readonly audit: AuditLogger,
+    private readonly notifications: NotificationsService,
   ) {
     this.pacing = resolvePacing(process.env);
     // Retry policy for transient/rate-limited sends (exponential backoff).
@@ -288,6 +290,43 @@ export class CampaignRunner implements OnModuleInit, OnModuleDestroy {
   }
 
   /** «Enviar ahora»: encola la ejecución y devuelve al instante (la petición HTTP no espera minutos). */
+  /**
+   * Why «Enviar ahora» can't work right now, in words the user can act on
+   * (nothing to send, no destination, a channel not connected). Empty when
+   * the campaign can go. Without this the send was queued and every message
+   * failed quietly into the Historial.
+   */
+  async problems(workspaceSlug: string, campaignId: string): Promise<string[]> {
+    if (!this.prisma.enabled) return [];
+    const campaign = await this.prisma.campaign.findFirst({
+      where: { id: campaignId, workspaceSlug },
+      include: { targets: { include: { group: { select: { channel: true, workspaceSlug: true } } } } },
+    });
+    if (!campaign) return ["Campaña no encontrada."];
+    const out: string[] = [];
+    const attachments = ((campaign.attachments as Attachment[]) ?? []).filter((a) => a.url);
+    if (!campaign.message.trim() && attachments.length === 0) out.push("La campaña no tiene mensaje ni imagen.");
+    const groups = campaign.targets.map((t) => t.group).filter((g) => g && g.workspaceSlug === workspaceSlug);
+    const channels = campaign.channels as string[];
+    const social = channels.filter((c) => c === "fb" || c === "ig");
+    if (groups.length === 0 && social.length === 0 && !campaign.postToWaStatus) {
+      out.push("Elige al menos un grupo o una red social de destino.");
+    }
+    const needed = new Set<ProviderId>();
+    for (const g of groups) needed.add(g?.channel === "tg" ? "telegram" : "whatsapp");
+    if (campaign.postToWaStatus) needed.add("whatsapp");
+    if (channels.includes("fb")) needed.add("facebook");
+    if (channels.includes("ig")) needed.add("instagram");
+    const label: Record<string, string> = { whatsapp: "WhatsApp", telegram: "Telegram", facebook: "Facebook", instagram: "Instagram" };
+    for (const id of needed) {
+      const st = await this.providers.status(workspaceSlug, id).catch(() => null);
+      if (st?.state !== "connected") {
+        out.push(`${label[id] ?? id} no está conectado${st?.detail ? ` (${st.detail})` : ""}. Conéctalo en Conexiones.`);
+      }
+    }
+    return out;
+  }
+
   async enqueue(workspaceSlug: string, campaignId: string): Promise<void> {
     // The key is fixed BEFORE dispatch so a job retry continues this same run.
     const payload: CampaignRunPayload = { workspaceSlug, campaignId, runKey: `manual:${randomUUID()}` };
@@ -524,6 +563,7 @@ export class CampaignRunner implements OnModuleInit, OnModuleDestroy {
       },
     });
     await this.audit.record(workspaceSlug, "system", "campaign.run", campaignId);
+    await this.noticeResult(workspaceSlug, campaign.name, runKey, okCount, failedCount);
     this.events.emit("campaign.completed", {
       workspaceSlug,
       campaignId,
@@ -531,6 +571,40 @@ export class CampaignRunner implements OnModuleInit, OnModuleDestroy {
       ok: allOk,
     });
     return { status: "completed", ok: allOk, sent: okCount, failed: failedCount };
+  }
+
+  /**
+   * Tell the team how the run went (in-app only): how many went out and, when
+   * some failed, the first reason — so a broken session is seen at once
+   * instead of only in the Historial. A failed notice never fails the run.
+   */
+  private async noticeResult(
+    workspaceSlug: string,
+    name: string,
+    runKey: string,
+    ok: number,
+    failed: number,
+  ): Promise<void> {
+    const total = ok + failed;
+    if (total === 0) return;
+    try {
+      let reason = "";
+      if (failed > 0) {
+        const first = await this.prisma.sendLog.findFirst({
+          where: { workspaceSlug, runKey, ok: false },
+          select: { error: true, groupName: true },
+          orderBy: { createdAt: "asc" },
+        });
+        if (first?.error) reason = ` Motivo${first.groupName ? ` (${first.groupName})` : ""}: ${first.error.slice(0, 160)}`;
+      }
+      await this.notifications.create(workspaceSlug, {
+        type: failed === 0 ? "success" : ok === 0 ? "error" : "warning",
+        title: failed === 0 ? `Campaña «${name}» enviada` : `Campaña «${name}»: ${failed} de ${total} envíos fallaron`,
+        meta: `${ok} de ${total} enviados.${reason} Detalle en Historial.`,
+      });
+    } catch (err) {
+      this.logger.warn(`No se pudo avisar del resultado de la campaña: ${(err as Error).message}`);
+    }
   }
 
   /**

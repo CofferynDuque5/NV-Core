@@ -102,7 +102,7 @@ export function ProvidersAdapters() {
       ) : providers.length === 0 ? (
         <EmptyState icon={Plug} title="Sin proveedores" description="No se pudieron cargar los proveedores." />
       ) : (
-        <div className="grid gap-3 sm:grid-cols-2">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           {providers.map((p) => (
             <div key={p.id} className="rounded-xl border border-line-soft bg-panel p-4">
               <div className="mb-2 flex items-center justify-between">

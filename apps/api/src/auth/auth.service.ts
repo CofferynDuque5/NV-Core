@@ -216,6 +216,36 @@ export class AuthService {
     };
   }
 
+  /** The signed-in user's own account details for the profile page. */
+  async profile(userId: string) {
+    const session = await this.me(userId);
+    const extra = await this.store.profileOf(userId);
+    return { ...session.user, createdAt: extra?.createdAt ?? null, emailVerified: extra?.emailVerified ?? false };
+  }
+
+  async updateName(userId: string, name: string) {
+    const clean = name.replace(/\s+/g, " ").trim();
+    if (clean.length < 2) throw new BadRequestException("Escribe tu nombre (mínimo 2 letras).");
+    await this.store.updateName(userId, clean);
+    return this.me(userId);
+  }
+
+  /**
+   * Change the password from inside the panel. The current password is
+   * required; every other session is closed and this one gets fresh tokens.
+   */
+  async changePassword(userId: string, currentPassword: string, newPassword: string): Promise<AuthResult> {
+    const user = await this.store.findUserById(userId);
+    if (!user) throw new NotFoundException("Usuario no encontrado.");
+    if (!(await verifyPassword(currentPassword, user.passwordHash))) {
+      throw new BadRequestException("La contraseña actual no es correcta.");
+    }
+    if (currentPassword === newPassword) throw new BadRequestException("La nueva contraseña debe ser distinta de la actual.");
+    await this.store.updatePassword(user.id, await hashPassword(newPassword));
+    await this.store.revokeAllRefreshTokens(user.id);
+    return this.issueTokens(user);
+  }
+
   /** Whether an email is a platform super-admin. */
   isSuperAdmin(email: string): boolean {
     return this.config.get("superAdmins", { infer: true }).includes(email.toLowerCase());

@@ -10,7 +10,6 @@ import {
 
 import { AuthStore } from "../auth/auth.store";
 import { PrismaService } from "../prisma/prisma.service";
-import { SampleDataService } from "./sample-data.service";
 
 /** Slugify a name into a URL-safe slug. Pure — unit tested. */
 export function slugify(name: string): string {
@@ -54,7 +53,6 @@ export class WorkspaceRegistry {
   constructor(
     private readonly prisma: PrismaService,
     private readonly store: AuthStore,
-    private readonly samples: SampleDataService,
   ) {}
 
   private mapDb(row: DbWorkspaceRow): Workspace {
@@ -137,9 +135,6 @@ export class WorkspaceRegistry {
       },
     });
     await this.store.upsertMembership(creator.userId, slug, "Owner");
-    // Deja el workspace con datos de ejemplo editables (contactos, segmentos,
-    // embudos, secuencias, afiliados, automatizaciones) para que no esté vacío.
-    await this.samples.seedIfEmpty(slug).catch(() => undefined);
     return this.mapDb(row);
   }
 }

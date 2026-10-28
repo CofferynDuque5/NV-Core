@@ -1,4 +1,4 @@
-import { Body, Controller, Get, HttpCode, Post, Req, Res } from "@nestjs/common";
+import { Body, Controller, Get, HttpCode, Patch, Post, Req, Res } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { ApiBearerAuth, ApiTags } from "@nestjs/swagger";
 import { Throttle } from "@nestjs/throttler";
@@ -10,7 +10,7 @@ import { CurrentUser } from "./decorators/current-user.decorator";
 import { Public } from "./decorators/public.decorator";
 import { RegisterDto } from "./dto/register.dto";
 import { LoginDto } from "./dto/login.dto";
-import { ForgotPasswordDto, ResetPasswordDto, VerifyEmailDto } from "./dto/password.dto";
+import { ChangePasswordDto, ForgotPasswordDto, ResetPasswordDto, UpdateProfileDto, VerifyEmailDto } from "./dto/password.dto";
 import type { AuthenticatedUser } from "./auth.types";
 
 const REFRESH_COOKIE = "nv_refresh";
@@ -82,6 +82,31 @@ export class AuthController {
   @Get("me")
   me(@CurrentUser() user: AuthenticatedUser) {
     return this.auth.me(user.userId);
+  }
+
+  @ApiBearerAuth()
+  @Get("profile")
+  profile(@CurrentUser() user: AuthenticatedUser) {
+    return this.auth.profile(user.userId);
+  }
+
+  @ApiBearerAuth()
+  @Patch("profile")
+  updateProfile(@CurrentUser() user: AuthenticatedUser, @Body() dto: UpdateProfileDto) {
+    return this.auth.updateName(user.userId, dto.name);
+  }
+
+  // Closes every other session and returns a fresh one for this browser.
+  @ApiBearerAuth()
+  @Throttle({ default: { limit: 5, ttl: 60_000 } })
+  @HttpCode(200)
+  @Post("change-password")
+  async changePassword(
+    @CurrentUser() user: AuthenticatedUser,
+    @Body() dto: ChangePasswordDto,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    return this.send(res, await this.auth.changePassword(user.userId, dto.currentPassword, dto.newPassword));
   }
 
   @Public()

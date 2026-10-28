@@ -1,7 +1,7 @@
 import { HttpException, HttpStatus } from "@nestjs/common";
 import { describe, expect, it, vi } from "vitest";
 
-import { ContactsService } from "./contacts.module";
+import { ContactsService, foldAccents } from "./contacts.module";
 import type { PrismaService } from "../../prisma/prisma.service";
 
 interface Note {
@@ -51,8 +51,9 @@ function makeService(opts: { contactExists?: boolean; notes?: Note[] } = {}) {
 }
 
 describe("ContactsService.list (server-side search + stage)", () => {
-  function makeListService() {
-    const findMany = vi.fn(async (_args: Record<string, unknown>) => [] as unknown[]);
+  function makeListService(people: { id: string; name: string; company?: string | null }[] = []) {
+    // The accent-free pass reads only id/name/company; the page query gets [].
+    const findMany = vi.fn(async (args: Record<string, unknown>) => (args.select ? people : []) as unknown[]);
     const count = vi.fn(async (_args: Record<string, unknown>) => 0);
     const prisma = { enabled: true, contact: { findMany, count } };
     const service = new ContactsService(
@@ -76,7 +77,7 @@ describe("ContactsService.list (server-side search + stage)", () => {
   it("builds an OR search across name/company/email/phone/tags", async () => {
     const { service, findMany } = makeListService();
     await service.list("w1", { page: 1, pageSize: 100, q: "  ana  " } as never);
-    const where = (findMany.mock.calls[0]![0] as { where: { OR?: unknown[] } }).where;
+    const where = (findMany.mock.calls.find((c) => !(c[0] as { select?: unknown }).select)![0] as { where: { OR?: unknown[] } }).where;
     expect(Array.isArray(where.OR)).toBe(true);
     expect(where.OR).toEqual([
       { name: { contains: "ana", mode: "insensitive" } },
@@ -85,6 +86,17 @@ describe("ContactsService.list (server-side search + stage)", () => {
       { phone: { contains: "ana", mode: "insensitive" } },
       { tags: { has: "ana" } },
     ]);
+  });
+
+  it("also matches names written without accents («ramirez» → «Ramírez»)", async () => {
+    const { service, findMany } = makeListService([
+      { id: "c7", name: "Luis Ramírez" },
+      { id: "c8", name: "Ana Torres", company: "Ramos SA" },
+    ]);
+    await service.list("w1", { page: 1, pageSize: 100, q: "ramirez" } as never);
+    const page = findMany.mock.calls.find((c) => !(c[0] as { select?: unknown }).select)!;
+    const where = (page[0] as { where: { OR: unknown[] } }).where;
+    expect(where.OR).toContainEqual({ id: { in: ["c7"] } });
   });
 
   it("filters by stage in the where clause", async () => {
@@ -224,5 +236,11 @@ describe("ContactsService notes", () => {
     await service.removeNote("w1", "a", "c1", "n1");
     expect(notes).toHaveLength(0);
     await expect(service.removeNote("w1", "a", "c1", "n1")).rejects.toThrow(/no encontrada/);
+  });
+});
+
+describe("foldAccents", () => {
+  it("quita tildes y pasa a minúsculas", () => {
+    expect(foldAccents("José RAMÍREZ Núñez")).toBe("jose ramirez nunez");
   });
 });

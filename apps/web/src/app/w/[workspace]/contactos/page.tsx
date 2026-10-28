@@ -1,4 +1,5 @@
 import * as React from "react";
+import { useSearchParams } from "react-router-dom";
 import { CONTACT_STAGES, type Contact as ContactEntity, type ContactStage } from "@nv/domain";
 import { Columns3, Contact, Download, Loader2, Pencil, Plus, Search, Send, Table2, Trash2, Upload } from "lucide-react";
 
@@ -59,8 +60,15 @@ export default function ContactosPage() {
 
   const PAGE_SIZE = 100;
   const [view, setView] = React.useState<"table" | "board">("board");
-  const [q, setQ] = React.useState("");
-  const [debouncedQ, setDebouncedQ] = React.useState("");
+  // `?q=` (from the global search) pre-fills the search box.
+  const [searchParams] = useSearchParams();
+  const initialQ = searchParams.get("q") ?? "";
+  const [q, setQ] = React.useState(initialQ);
+  const [debouncedQ, setDebouncedQ] = React.useState(initialQ);
+  React.useEffect(() => {
+    const next = searchParams.get("q");
+    if (next !== null) setQ(next);
+  }, [searchParams]);
   const [stage, setStage] = React.useState<ContactStage | "">("");
   const [page, setPage] = React.useState(1);
   const [dialogOpen, setDialogOpen] = React.useState(false);

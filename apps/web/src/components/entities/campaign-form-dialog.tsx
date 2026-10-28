@@ -270,7 +270,7 @@ export function CampaignFormDialog({
       size="2xl"
       submitLabel={isEdit ? "Guardar cambios" : "Crear campaña"}
     >
-      <div className="grid gap-x-8 gap-y-6 lg:grid-cols-[minmax(0,1fr)_20rem]">
+      <div className="grid grid-cols-1 gap-x-8 gap-y-6 lg:grid-cols-[minmax(0,1fr)_20rem]">
         {/* ── Columna izquierda: edición ─────────────────────────────── */}
         <div className="min-w-0 space-y-6">
           {/* Sección: Contenido */}

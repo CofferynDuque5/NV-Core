@@ -163,7 +163,7 @@ export default function InformesPage() {
         )
       ) : (
         <>
-          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4 print:grid-cols-4" data-testid="report-metrics">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4 print:grid-cols-4" data-testid="report-metrics">
             {r.metrics.map((m) => {
               const look = METRIC_ICON[m.key] ?? { icon: Send, accent: "#5F86F2" };
               const d = metricDelta(m);
@@ -183,7 +183,7 @@ export default function InformesPage() {
             })}
           </div>
 
-          <div className="grid gap-4 lg:grid-cols-3 print:block print:space-y-4">
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-3 print:block print:space-y-4">
             <Panel className="lg:col-span-2 print:![break-inside:auto]" data-testid="report-attention">
               <PanelHeader
                 title="Necesita atención"

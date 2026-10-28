@@ -110,7 +110,7 @@ export function PlanPayForm({ slug, access, canPay }: { slug: string; access: Ac
           {canPay ? (
             <form className="space-y-3" onSubmit={submit}>
               <p className="text-sm font-medium">2. Cuéntanos cómo pagaste</p>
-              <div className="grid gap-3 sm:grid-cols-2">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <div className="space-y-1.5">
                   <Label htmlFor="plan-method">Método</Label>
                   <select id="plan-method" className={selectCls} value={methodId} onChange={(e) => setMethodId(e.target.value)}>

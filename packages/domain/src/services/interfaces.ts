@@ -1,5 +1,6 @@
 import type {
   AccessOverview,
+  SampleDataSummary,
   AccessPaymentInput,
   AdminAccessRow,
   WorkspaceAccess,
@@ -962,6 +963,12 @@ export interface AccessService {
   pay(workspaceId: string, input: AccessPaymentInput): Promise<AccessOverview>;
 }
 
+export interface SampleDataService {
+  summary(workspaceId: string): Promise<SampleDataSummary>;
+  /** Owner/Admin: delete only the example records. */
+  remove(workspaceId: string): Promise<SampleDataSummary>;
+}
+
 export interface WorkspaceService {
   /** All workspaces (built-in config + user-created). */
   list(): Promise<Workspace[]>;
@@ -1038,4 +1045,5 @@ export interface Services {
   messaging: MessagingService;
   billing: BillingService;
   access: AccessService;
+  sampleData: SampleDataService;
 }

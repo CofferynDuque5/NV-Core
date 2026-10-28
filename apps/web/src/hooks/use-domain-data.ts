@@ -11,12 +11,13 @@ import { useWorkspace } from "./use-workspace";
  * flow in every screen. No data is fabricated.
  */
 
-export function useCampaigns() {
+export function useCampaigns(opts: { enabled?: boolean } = {}) {
   const svc = useServices();
   const ws = useWorkspace();
   return useQuery({
     queryKey: [ws.id, "campaigns"],
     queryFn: () => svc.campaigns.list(ws.id),
+    enabled: opts.enabled ?? true,
   });
 }
 
@@ -74,6 +75,7 @@ export function useCalendarEvents(month: string) {
 
 export function useContacts(
   query: { q?: string; stage?: string; page?: number; pageSize?: number } = {},
+  opts: { enabled?: boolean } = {},
 ) {
   const svc = useServices();
   const ws = useWorkspace();
@@ -93,6 +95,7 @@ export function useContacts(
         page: query.page,
         pageSize: query.pageSize,
       }),
+    enabled: opts.enabled ?? true,
     placeholderData: (prev) => prev, // keep previous page visible while refetching (no flicker)
   });
 }
@@ -107,10 +110,10 @@ export function useContactNotes(contactId: string | null) {
   });
 }
 
-export function useGroups() {
+export function useGroups(opts: { enabled?: boolean } = {}) {
   const svc = useServices();
   const ws = useWorkspace();
-  return useQuery({ queryKey: [ws.id, "groups"], queryFn: () => svc.groups.list(ws.id) });
+  return useQuery({ queryKey: [ws.id, "groups"], queryFn: () => svc.groups.list(ws.id), enabled: opts.enabled ?? true });
 }
 
 export function useGroupVars(groupId: string | null) {
@@ -466,4 +469,16 @@ export function useAccess(slug: string | undefined, enabled = true) {
 export function useAdminAccess(enabled = true) {
   const svc = useServices();
   return useQuery({ queryKey: ["admin", "access"], queryFn: () => svc.admin.access(), enabled });
+}
+
+/** Example records still loaded in the brand (from older versions). */
+export function useSampleData(slug: string | undefined) {
+  const svc = useServices();
+  return useQuery({
+    queryKey: [slug, "sample-data"],
+    queryFn: () => svc.sampleData.summary(slug!),
+    enabled: !!slug,
+    staleTime: 5 * 60_000,
+    retry: false,
+  });
 }

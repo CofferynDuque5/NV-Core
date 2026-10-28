@@ -1758,3 +1758,18 @@ export function useActivateAccess() {
     onError: (err: Error) => toast.error(err.message || "No se pudo activar la marca"),
   });
 }
+
+/** Owner/Admin: remove the example contacts, flows and automations. */
+export function useRemoveSampleData(slug: string) {
+  const svc = useServices();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () => svc.sampleData.remove(slug),
+    onSuccess: (summary) => {
+      qc.setQueryData([slug, "sample-data"], summary);
+      // Every list that may have held an example record.
+      void qc.invalidateQueries({ queryKey: [slug] });
+      toast.success("Datos de ejemplo eliminados. Tus propios registros siguen intactos.");
+    },
+  });
+}

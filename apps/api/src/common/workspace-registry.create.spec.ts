@@ -37,7 +37,6 @@ describe("WorkspaceRegistry.create", () => {
     const registry = new WorkspaceRegistry(
       prisma as unknown as PrismaService,
       store as unknown as AuthStore,
-      { seedIfEmpty: async () => undefined } as any,
     );
 
     const ws = await registry.create(
@@ -57,7 +56,6 @@ describe("WorkspaceRegistry.create", () => {
     const registry = new WorkspaceRegistry(
       prisma as unknown as PrismaService,
       store as unknown as AuthStore,
-      { seedIfEmpty: async () => undefined } as any,
     );
     const a = await registry.create({ name: "Marca" }, { userId: "u", email: "u@x.com" });
     const b = await registry.create({ name: "Marca" }, { userId: "u", email: "u@x.com" });
@@ -71,7 +69,6 @@ describe("WorkspaceRegistry.create", () => {
     const registry = new WorkspaceRegistry(
       prisma as unknown as PrismaService,
       store as unknown as AuthStore,
-      { seedIfEmpty: async () => undefined } as any,
     );
     // "fitness" is a built-in workspace slug → the DB one must differ.
     const ws = await registry.create({ name: "Fitness" }, { userId: "u", email: "u@x.com" });

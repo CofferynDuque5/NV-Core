@@ -1,5 +1,7 @@
-import { useNavigate } from "react-router-dom";
-import { LogIn, LogOut, MessageSquarePlus, Settings, ShieldCheck, User } from "lucide-react";
+import { useNavigate, useParams } from "react-router-dom";
+import { LogIn, LogOut, MessageSquarePlus, Moon, Settings, ShieldCheck, Sparkles, Sun, User } from "lucide-react";
+
+import { useTheme } from "@/providers/theme-provider";
 
 import { useAuthStore } from "@/stores/auth-store";
 import { useUiStore } from "@/stores/ui-store";
@@ -28,6 +30,10 @@ export function UserMenu() {
   const superAdmin = useAuthStore((s) => s.superAdmin);
   const logout = useAuthStore((s) => s.logout);
   const openFeedback = useUiStore((s) => s.openFeedback);
+  const { workspace } = useParams<{ workspace?: string }>();
+  const { resolvedTheme, setTheme } = useTheme();
+  const isDark = resolvedTheme === "dark";
+  const inBrand = (path: string) => (workspace ? `/w/${workspace}/${path}` : null);
 
   function onLogout() {
     logout();
@@ -50,11 +56,22 @@ export function UserMenu() {
             <DropdownMenuLabel>{user.name}</DropdownMenuLabel>
             <div className="px-2.5 pb-2 text-xs text-ink-muted">{user.email}</div>
             <DropdownMenuSeparator />
-            <DropdownMenuItem>
-              <User /> Perfil
-            </DropdownMenuItem>
-            <DropdownMenuItem>
-              <Settings /> Preferencias
+            {workspace ? (
+              <>
+                <DropdownMenuItem onClick={() => navigate(inBrand("perfil")!)}>
+                  <User /> Mi perfil
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => navigate(`${inBrand("perfil")!}#preferencias`)}>
+                  <Settings /> Preferencias
+                </DropdownMenuItem>
+                {/* On phones the topbar hides these two buttons. */}
+                <DropdownMenuItem className="sm:hidden" onClick={() => navigate(inBrand("novedades")!)}>
+                  <Sparkles /> Novedades
+                </DropdownMenuItem>
+              </>
+            ) : null}
+            <DropdownMenuItem className="sm:hidden" onClick={() => setTheme(isDark ? "light" : "dark")}>
+              {isDark ? <Sun /> : <Moon />} {isDark ? "Modo claro" : "Modo oscuro"}
             </DropdownMenuItem>
             <DropdownMenuItem onClick={openFeedback}>
               <MessageSquarePlus /> Enviar comentarios

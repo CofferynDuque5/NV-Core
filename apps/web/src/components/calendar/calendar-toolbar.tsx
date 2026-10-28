@@ -37,7 +37,7 @@ export function CalendarToolbar({
 }) {
   return (
     <div className="flex flex-wrap items-center justify-between gap-3">
-      <div className="flex items-center gap-2">
+      <div className="flex max-w-full flex-wrap items-center gap-2">
         <div className="flex items-center rounded-lg border border-line-soft bg-panel">
           <Button variant="ghost" size="icon" onClick={onPrev} aria-label="Anterior" title="Anterior (←)">
             <ChevronLeft className="size-4" />
@@ -52,7 +52,7 @@ export function CalendarToolbar({
         <h2 className="font-display text-lg font-semibold text-ink-bright">{label}</h2>
       </div>
 
-      <div className="flex items-center gap-2">
+      <div className="flex max-w-full flex-wrap items-center gap-2">
         <div className="flex items-center rounded-lg border border-line-soft bg-panel p-0.5" role="tablist">
           {VIEWS.map((v) => (
             <button
