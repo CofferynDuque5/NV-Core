@@ -8,7 +8,8 @@ import {
   weekBounds,
   zonedMidnight,
   lastClosedWeek,
-  mergePaymentTotals, noticeMeta, parseWeekStart, rankLeadSources, weekLabel, weekStartOf } from "./weekly-report";
+  mergePaymentTotals, noticeMeta, parseWeekStart, phoneKey, rankLeadSources, summarizeInbox, weekLabel, weekStartOf,
+  type InboxConversationRow } from "./weekly-report";
 
 describe("semanas (lunes a domingo, UTC)", () => {
   it("encuentra el lunes de cualquier día, incluido el domingo", () => {
@@ -147,5 +148,62 @@ describe("cobros por moneda", () => {
     ]);
     expect(mergePaymentTotals([], [])).toEqual([]);
     expect(mergePaymentTotals([{ currency: "COP", amount: null, count: 0 }], [])[0]?.amount).toBe(0);
+  });
+});
+
+describe("summarizeInbox", () => {
+  const at = (iso: string) => new Date(iso);
+  const row = (o: Partial<InboxConversationRow> & { createdAt: Date }): InboxConversationRow => ({
+    channel: "wa",
+    contactHandle: null,
+    firstIn: o.createdAt,
+    firstOut: null,
+    ...o,
+  });
+
+  it("counts answers and the median first-reply time", () => {
+    const s = summarizeInbox({
+      rows: [
+        row({ createdAt: at("2026-10-19T10:00:00Z"), firstOut: at("2026-10-19T10:10:00Z") }),
+        row({ createdAt: at("2026-10-19T11:00:00Z"), firstOut: at("2026-10-19T11:30:00Z") }),
+        row({ createdAt: at("2026-10-19T12:00:00Z"), firstOut: at("2026-10-19T12:20:00Z"), channel: "ig" }),
+        row({ createdAt: at("2026-10-19T13:00:00Z") }),
+      ],
+      previousRows: [row({ createdAt: at("2026-10-12T10:00:00Z") })],
+      messagesIn: 9,
+      sendTimes: [],
+      formPhones: new Set(),
+    });
+    expect(s).toMatchObject({ conversations: 4, previousConversations: 1, answered: 3, medianReplyMinutes: 20, messagesIn: 9 });
+    expect(s.byChannel).toEqual([
+      { channel: "wa", count: 3 },
+      { channel: "ig", count: 1 },
+    ]);
+  });
+
+  it("credits the panel within 48 h after a confirmed send, or for a form contact, counting each once", () => {
+    const s = summarizeInbox({
+      rows: [
+        // 47 h after the send → after a campaign.
+        row({ createdAt: at("2026-10-21T11:00:00Z") }),
+        // 49 h after → not.
+        row({ createdAt: at("2026-10-21T13:00:00Z") }),
+        // Before any send, but the phone came from a form ("0412…" vs "+58 412…").
+        row({ createdAt: at("2026-10-18T09:00:00Z"), contactHandle: "+58 412 555 1234" }),
+        // Both: counted once in fromPanel.
+        row({ createdAt: at("2026-10-19T13:00:00Z"), contactHandle: "04125551234" }),
+      ],
+      previousRows: [row({ createdAt: at("2026-10-19T14:00:00Z") })],
+      messagesIn: 0,
+      sendTimes: [at("2026-10-19T12:00:00Z")],
+      formPhones: new Set([phoneKey("0412-555-1234")!]),
+    });
+    expect(s).toMatchObject({ afterCampaign: 2, fromForms: 2, fromPanel: 3, previousFromPanel: 1, medianReplyMinutes: null });
+  });
+
+  it("ignores handles that are not phones", () => {
+    expect(phoneKey("@mi.tienda")).toBeNull();
+    expect(phoneKey("123")).toBeNull();
+    expect(phoneKey("+57 300 123 4567")).toBe("3001234567");
   });
 });

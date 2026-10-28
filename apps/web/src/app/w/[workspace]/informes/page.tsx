@@ -14,10 +14,11 @@ import {
   MessageSquareReply,
   Send,
   UserPlus,
+  Sparkles,
   Workflow,
 } from "lucide-react";
 
-import { REPORT_TIME_ZONES, reportTimeZoneLabel } from "@nv/domain";
+import { REPORT_TIME_ZONES, reportTimeZoneLabel, type WeeklyReportInbox } from "@nv/domain";
 
 import { useWeeklyReport, useWeeklyReportSettings, useWeeklyReports } from "@/hooks/use-domain-data";
 import { useUpdateWeeklyReportSettings } from "@/hooks/use-domain-mutations";
@@ -33,7 +34,10 @@ import { downloadCsv, printReport } from "@/lib/download";
 import { relativeTime } from "@/lib/utils";
 import {
   SECTION_LABEL,
+  channelLabel,
+  inboxVerdict,
   metricDelta,
+  minutesLabel,
   paymentLine,
   sectionPath,
   weekRangeLabel,
@@ -183,6 +187,8 @@ export default function InformesPage() {
             })}
           </div>
 
+          {r.inbox ? <InboxValue inbox={r.inbox} workspace={ws.slug} /> : null}
+
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-3 print:block print:space-y-4">
             <Panel className="lg:col-span-2 print:![break-inside:auto]" data-testid="report-attention">
               <PanelHeader
@@ -283,5 +289,75 @@ export default function InformesPage() {
         </>
       )}
     </div>
+  );
+}
+
+/** "Is the panel worth it?": the week's new Inbox conversations and what brought them. */
+function InboxValue({ inbox, workspace }: { inbox: WeeklyReportInbox; workspace: string }) {
+  const v = inboxVerdict(inbox);
+  const stats: { label: string; value: string; hint: string }[] = [
+    { label: "Conversaciones nuevas", value: String(inbox.conversations), hint: `Semana anterior: ${inbox.previousConversations}` },
+    { label: "Gracias al panel", value: String(inbox.fromPanel), hint: `Semana anterior: ${inbox.previousFromPanel}` },
+    { label: "Después de una campaña", value: String(inbox.afterCampaign), hint: "Hasta 48 h después de un envío confirmado" },
+    { label: "Desde formularios", value: String(inbox.fromForms), hint: "Su teléfono entró por un formulario o embudo" },
+    { label: "Respondidas", value: String(inbox.answered), hint: `${inbox.messagesIn} mensajes recibidos en total` },
+    {
+      label: "Primera respuesta",
+      value: inbox.medianReplyMinutes === null ? "—" : minutesLabel(inbox.medianReplyMinutes),
+      hint: "Tiempo típico (mediana)",
+    },
+  ];
+  return (
+    <Panel data-testid="report-inbox" className="[break-inside:avoid]">
+      <PanelHeader
+        title="¿El panel vale la pena?"
+        description="Conversaciones nuevas del Inbox y cuántas llegaron gracias a tus campañas y formularios."
+        action={
+          <Link to={sectionPath(workspace, "inbox")} className="text-xs text-brand hover:underline print:hidden">
+            Ir al Inbox
+          </Link>
+        }
+      />
+      <div className="space-y-4 px-5 pb-5 pt-3">
+        <div
+          className={
+            "rounded-lg border px-4 py-3 " +
+            (v.tone === "good"
+              ? "border-state-success/30 bg-state-success/10"
+              : v.tone === "neutral"
+                ? "border-state-warning/30 bg-state-warning/10"
+                : "border-line-soft bg-panel-raised")
+          }
+        >
+          <div className="flex items-center gap-2 text-sm font-semibold text-ink-bright" data-testid="inbox-verdict">
+            <Sparkles className="size-4 text-brand" /> {v.headline}
+          </div>
+          <ul className="mt-1.5 space-y-1 text-sm text-ink-muted">
+            {v.lines.map((l) => (
+              <li key={l}>{l}</li>
+            ))}
+          </ul>
+        </div>
+        <dl className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-6 print:grid-cols-6">
+          {stats.map((s) => (
+            <div key={s.label} className="rounded-lg border border-line-soft bg-panel-raised px-3 py-2.5">
+              <dt className="text-[11px] text-ink-faint">{s.label}</dt>
+              <dd className="text-lg font-semibold tabular-nums text-ink-bright">{s.value}</dd>
+              <dd className="text-[11px] leading-snug text-ink-muted">{s.hint}</dd>
+            </div>
+          ))}
+        </dl>
+        {inbox.byChannel.length > 0 ? (
+          <div className="flex flex-wrap items-center gap-2 text-xs text-ink-muted">
+            <span className="text-ink-faint">Por canal:</span>
+            {inbox.byChannel.map((c) => (
+              <span key={c.channel} className="rounded-full border border-line-soft px-2.5 py-0.5">
+                {channelLabel(c.channel)} · <span className="font-medium text-ink-bright">{c.count}</span>
+              </span>
+            ))}
+          </div>
+        ) : null}
+      </div>
+    </Panel>
   );
 }

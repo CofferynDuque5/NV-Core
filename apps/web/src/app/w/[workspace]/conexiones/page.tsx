@@ -14,6 +14,7 @@ import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ConnectionDialog } from "@/components/entities/connection-dialog";
 import { GoogleConnectCard } from "@/components/entities/google-connect-card";
+import { MetaConnectCard, MetaConnectDialog, useMetaReturn } from "@/components/entities/meta-connect";
 import { WhatsAppPanel } from "@/components/entities/whatsapp-panel";
 import { TelegramPanel } from "@/components/entities/telegram-panel";
 import { PcAgentCard } from "@/components/entities/pc-agent-card";
@@ -104,6 +105,13 @@ function ConexionTab() {
   const confirm = useConfirm();
   const [dialogChannel, setDialogChannel] = React.useState<ChannelId | null>(null);
   const [deletingId, setDeletingId] = React.useState<string | null>(null);
+  const [metaPick, clearMetaPick] = useMetaReturn();
+  const [metaOpen, setMetaOpen] = React.useState(false);
+  React.useEffect(() => {
+    if (metaPick) setMetaOpen(true);
+  }, [metaPick]);
+  // Facebook and Instagram connect together, by picking a Page (no ids by hand).
+  const openChannel = (ch: ChannelId) => (ch === "fb" || ch === "ig" ? setMetaOpen(true) : setDialogChannel(ch));
 
   const byChannel = new Map<ChannelId, Connection>();
   for (const c of connections.data ?? []) byChannel.set(c.channel, c);
@@ -123,6 +131,8 @@ function ConexionTab() {
   return (
     <div className="space-y-6">
       <WhatsAppPanel />
+
+      <MetaConnectCard onConnect={() => setMetaOpen(true)} />
 
       <TelegramPanel />
 
@@ -156,7 +166,7 @@ function ConexionTab() {
               </div>
               {conn ? (
                 <div className="flex items-center gap-1">
-                  <Button variant="ghost" size="sm" onClick={() => setDialogChannel(ch.id)}>
+                  <Button variant="ghost" size="sm" onClick={() => openChannel(ch.id)}>
                     Reconectar
                   </Button>
                   <button
@@ -173,7 +183,7 @@ function ConexionTab() {
                   </button>
                 </div>
               ) : (
-                <Button variant="secondary" size="sm" onClick={() => setDialogChannel(ch.id)}>
+                <Button variant="secondary" size="sm" onClick={() => openChannel(ch.id)}>
                   Conectar
                 </Button>
               )}
@@ -207,9 +217,23 @@ function ConexionTab() {
       </Panel>
 
       <p className="flex items-center gap-1.5 text-xs text-ink-faint">
-        <Plug className="size-3.5" /> El flujo OAuth real (Meta Graph, Google, Telegram…) se
-        habilitará en la fase de proveedores.
+        <Plug className="size-3.5" /> Facebook e Instagram se conectan con «Continuar con Facebook» o con un token; Google, con
+        su botón de arriba.
       </p>
+
+      <MetaConnectDialog
+        open={metaOpen}
+        pick={metaPick}
+        onOpenChange={(v) => {
+          setMetaOpen(v);
+          if (!v) clearMetaPick();
+        }}
+        onManual={() => {
+          setMetaOpen(false);
+          clearMetaPick();
+          setDialogChannel("fb");
+        }}
+      />
 
       <ConnectionDialog
         channel={dialogChannel}

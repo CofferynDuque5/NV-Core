@@ -41,6 +41,7 @@ import { ConnectionsModule } from "./modules/connections/connections.module";
 import { CredentialsModule } from "./modules/credentials/credentials.module";
 import { IntegrationsModule } from "./modules/integrations/integrations.module";
 import { GoogleModule } from "./modules/integrations/google/google.module";
+import { MetaConnectModule } from "./modules/social/meta-connect";
 import { NotificationsModule } from "./modules/notifications/notifications.module";
 import { TeamModule } from "./modules/team/team.module";
 import { TasksModule } from "./modules/tasks/tasks.module";
@@ -104,6 +105,7 @@ import { ProvidersModule } from "./providers/providers.module";
     CredentialsModule,
     IntegrationsModule,
     GoogleModule,
+    MetaConnectModule,
     NotificationsModule,
     TeamModule,
     TasksModule,

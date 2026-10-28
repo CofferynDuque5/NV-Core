@@ -842,6 +842,31 @@ export interface WeeklyReport {
   payments?: WeeklyReportPayments[];
   /** Zone the week was cut in (IANA id). Absent in older reports, which used UTC. */
   timeZone?: string;
+  /** What the Inbox received and how much of it came from the panel (absent in older reports). */
+  inbox?: WeeklyReportInbox;
+}
+
+/**
+ * The week's new Inbox conversations and what brought them. "From the panel"
+ * means it started within 48 h after a campaign message or publication went
+ * out, or came from a contact that signed up through a form or funnel.
+ */
+export interface WeeklyReportInbox {
+  conversations: number;
+  previousConversations: number;
+  messagesIn: number;
+  /** New conversations that got an answer (team, AI or automation). */
+  answered: number;
+  /** Median minutes from the first customer message to the first answer; null with none answered. */
+  medianReplyMinutes: number | null;
+  /** Started within 48 h after a campaign send that the channel confirmed. */
+  afterCampaign: number;
+  /** From contacts that arrived through a form or funnel. */
+  fromForms: number;
+  /** Either of the two above, each conversation counted once. */
+  fromPanel: number;
+  previousFromPanel: number;
+  byChannel: { channel: string; count: number }[];
 }
 
 /** Per-brand settings of the weekly report. */
@@ -1123,4 +1148,26 @@ export interface UserProfile {
   name: string;
   createdAt: string | null;
   emailVerified: boolean;
+}
+
+/** A Facebook Page a Meta token manages, with its linked Instagram professional account. */
+export interface MetaPage {
+  id: string;
+  name: string;
+  category?: string;
+  instagram: { id: string; username: string | null } | null;
+}
+
+/** Whether «Continuar con Facebook» is available and what is connected. */
+export interface MetaConnectStatus {
+  /** META_APP_ID and META_APP_SECRET are set on the server. */
+  oauth: boolean;
+  facebook: { id: string } | null;
+  instagram: { id: string } | null;
+}
+
+/** Live answer from Meta for the saved connections. */
+export interface MetaCheck {
+  facebook: { ok: boolean; name?: string; error?: string };
+  instagram: { ok: boolean; name?: string; error?: string };
 }

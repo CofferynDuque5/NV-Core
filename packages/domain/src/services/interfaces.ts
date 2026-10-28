@@ -58,6 +58,9 @@ import type {
   TeamMember,
   AuditLogEntry,
   Workspace,
+  MetaCheck,
+  MetaConnectStatus,
+  MetaPage,
 } from "../entities";
 import type { ChannelId, ContactStage, Role, WorkspaceKind } from "../enums";
 import type { PlanId, PlanLimits } from "../config/plans";
@@ -682,6 +685,19 @@ export interface IntegrationService {
   /** Returns the Google consent URL to redirect the browser to. */
   googleAuthUrl(workspaceId: string): Promise<string>;
   googleDisconnect(workspaceId: string): Promise<void>;
+  /** Facebook/Instagram: what is connected and whether «Continuar con Facebook» is set up. */
+  metaStatus(workspaceId: string): Promise<MetaConnectStatus>;
+  /** Facebook Login URL to send the browser to. */
+  metaAuthUrl(workspaceId: string): Promise<string>;
+  /** Pages a pasted token (or a «Continuar con Facebook» pick) manages. */
+  metaPages(workspaceId: string, input: { token?: string; pick?: string }): Promise<MetaPage[]>;
+  /** Save a Page (and its Instagram) as the brand's Facebook/Instagram connections. */
+  metaConnect(
+    workspaceId: string,
+    input: { token?: string; pick?: string; pageId: string; instagram?: boolean },
+  ): Promise<MetaPage>;
+  /** Ask Meta whether the saved connections still work. */
+  metaCheck(workspaceId: string): Promise<MetaCheck>;
   /** Which providers have credentials stored (masked previews only). */
   credentials(workspaceId: string): Promise<Record<string, CredentialStatus>>;
   /** Save (encrypted) the API keys/tokens the user pasted for a provider. */

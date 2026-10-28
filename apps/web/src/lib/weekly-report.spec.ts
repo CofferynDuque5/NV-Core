@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { WeeklyReport } from "@nv/domain";
 
-import { metricDelta, paymentLine, weekRangeLabel, weeklyReportCsv, weeklyReportFileName } from "./weekly-report";
+import { inboxVerdict, metricDelta, minutesLabel, paymentLine, weekRangeLabel, weeklyReportCsv, weeklyReportFileName } from "./weekly-report";
 
 const report: WeeklyReport = {
   id: "r1",
@@ -67,5 +67,41 @@ describe("weekly report helpers", () => {
     expect(weeklyReportFileName("perla-tour", { ...report, id: "actual" })).toBe(
       "informe-semanal-perla-tour-2026-10-12-en-curso.csv",
     );
+  });
+});
+
+describe("inboxVerdict", () => {
+  const base = {
+    conversations: 10,
+    previousConversations: 6,
+    messagesIn: 30,
+    answered: 8,
+    medianReplyMinutes: 75,
+    afterCampaign: 4,
+    fromForms: 2,
+    fromPanel: 5,
+    previousFromPanel: 2,
+    byChannel: [{ channel: "wa", count: 10 }],
+  };
+
+  it("says how many came from the panel, how fast they were answered and the change", () => {
+    const v = inboxVerdict(base);
+    expect(v.tone).toBe("good");
+    expect(v.lines[0]).toContain("5 de 10 conversaciones nuevas (50 %)");
+    expect(v.lines[0]).toContain("4 en las 48 h después de una campaña y 2 de contactos");
+    expect(v.lines[1]).toBe("Respondiste 8 de 10 (80 %); la primera respuesta tardó normalmente 1 h 15 min.");
+    expect(v.lines[2]).toBe("Frente a la semana anterior: +3 (antes 2).");
+  });
+
+  it("is honest when nothing came from the panel or nothing arrived", () => {
+    expect(inboxVerdict({ ...base, fromPanel: 0, afterCampaign: 0, fromForms: 0, previousFromPanel: 0 }).tone).toBe("neutral");
+    expect(inboxVerdict({ ...base, conversations: 0 }).tone).toBe("empty");
+  });
+
+  it("exports the Inbox section to CSV", () => {
+    const csv = weeklyReportCsv({ ...report, inbox: base });
+    expect(csv).toContain("Inbox,Gracias al panel,5,2,");
+    expect(csv).toContain("Inbox por canal,WhatsApp,10");
+    expect(minutesLabel(3000)).toBe("2 d");
   });
 });

@@ -1,4 +1,4 @@
-import { PAYMENT_CURRENCIES, type LeadSourceCount, type PaymentCurrency, type WeeklyReport, type WeeklyReportPayments } from "@nv/domain";
+import { PAYMENT_CURRENCIES, type LeadSourceCount, type PaymentCurrency, type WeeklyReport, type WeeklyReportInbox, type WeeklyReportPayments } from "@nv/domain";
 
 /**
  * Pure helpers for the weekly report: week boundaries (Monday 00:00 in the
@@ -170,4 +170,100 @@ export function mergePaymentTotals(current: PaymentSumRow[], previous: PaymentSu
     return i === -1 ? PAYMENT_CURRENCIES.length : i;
   };
   return [...byCurrency.values()].sort((a, b) => order(a.currency) - order(b.currency) || a.currency.localeCompare(b.currency));
+}
+
+/** A campaign send counts for conversations that start up to this long after it. */
+export const CAMPAIGN_WINDOW_MS = 48 * 60 * 60 * 1000;
+
+/** One new conversation of the week, with its first customer message and first answer. */
+export interface InboxConversationRow {
+  channel: string;
+  createdAt: Date;
+  contactHandle: string | null;
+  firstIn: Date | null;
+  firstOut: Date | null;
+}
+
+/**
+ * Comparable key for a phone: its last 10 digits (so "+58 412…" and "0412…"
+ * match), or null when it has too few digits to be a phone.
+ */
+export function phoneKey(v: string | null | undefined): string | null {
+  const digits = (v ?? "").replace(/\D/g, "");
+  return digits.length >= 7 ? digits.slice(-10) : null;
+}
+
+function median(values: number[]): number | null {
+  if (values.length === 0) return null;
+  const s = [...values].sort((a, b) => a - b);
+  const mid = Math.floor(s.length / 2);
+  return s.length % 2 ? s[mid]! : (s[mid - 1]! + s[mid]!) / 2;
+}
+
+/** How many rows started within the campaign window after a send, or from a form contact. */
+function panelFlags(rows: InboxConversationRow[], sendTimes: Date[], formPhones: Set<string>) {
+  const sends = sendTimes.map((d) => d.getTime()).sort((a, b) => a - b);
+  // Latest send at or before t (binary search), so a busy week stays cheap.
+  const lastSendBefore = (t: number): number | null => {
+    let lo = 0;
+    let hi = sends.length - 1;
+    let found: number | null = null;
+    while (lo <= hi) {
+      const mid = (lo + hi) >> 1;
+      if (sends[mid]! <= t) {
+        found = sends[mid]!;
+        lo = mid + 1;
+      } else hi = mid - 1;
+    }
+    return found;
+  };
+  return rows.map((r) => {
+    const start = (r.firstIn ?? r.createdAt).getTime();
+    const sent = lastSendBefore(start);
+    const afterCampaign = sent !== null && start - sent < CAMPAIGN_WINDOW_MS;
+    const key = phoneKey(r.contactHandle);
+    const fromForm = key !== null && formPhones.has(key);
+    return { afterCampaign, fromForm };
+  });
+}
+
+/**
+ * The Inbox section of the report: new conversations, how many got an answer
+ * and how fast, and how many the panel brought in (after a campaign send or
+ * from a form/funnel contact). Pure, so the attribution rules are unit-tested.
+ */
+export function summarizeInbox(input: {
+  rows: InboxConversationRow[];
+  previousRows: InboxConversationRow[];
+  messagesIn: number;
+  sendTimes: Date[];
+  formPhones: Set<string>;
+}): WeeklyReportInbox {
+  const { rows } = input;
+  const flags = panelFlags(rows, input.sendTimes, input.formPhones);
+  const previousFlags = panelFlags(input.previousRows, input.sendTimes, input.formPhones);
+  const replyMinutes: number[] = [];
+  let answered = 0;
+  for (const r of rows) {
+    if (!r.firstOut) continue;
+    answered++;
+    if (r.firstIn && r.firstOut >= r.firstIn) replyMinutes.push((r.firstOut.getTime() - r.firstIn.getTime()) / 60000);
+  }
+  const channels = new Map<string, number>();
+  for (const r of rows) channels.set(r.channel, (channels.get(r.channel) ?? 0) + 1);
+  const med = median(replyMinutes);
+  return {
+    conversations: rows.length,
+    previousConversations: input.previousRows.length,
+    messagesIn: input.messagesIn,
+    answered,
+    medianReplyMinutes: med === null ? null : Math.round(med),
+    afterCampaign: flags.filter((f) => f.afterCampaign).length,
+    fromForms: flags.filter((f) => f.fromForm).length,
+    fromPanel: flags.filter((f) => f.afterCampaign || f.fromForm).length,
+    previousFromPanel: previousFlags.filter((f) => f.afterCampaign || f.fromForm).length,
+    byChannel: [...channels.entries()]
+      .map(([channel, count]) => ({ channel, count }))
+      .sort((a, b) => b.count - a.count || a.channel.localeCompare(b.channel)),
+  };
 }

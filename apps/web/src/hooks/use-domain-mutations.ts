@@ -1267,6 +1267,51 @@ export function useGoogleDisconnect() {
   });
 }
 
+// ── Facebook / Instagram (Meta) ───────────────────────────────────────────────
+export function useMetaLogin() {
+  const svc = useServices();
+  const ws = useWorkspace();
+  return useMutation({
+    mutationFn: () => svc.integrations.metaAuthUrl(ws.id),
+    onSuccess: (url) => {
+      if (url) window.location.assign(url);
+    },
+    onError: (err) => toast.error(errText(err)),
+  });
+}
+
+export function useMetaPages() {
+  const svc = useServices();
+  const ws = useWorkspace();
+  return useMutation({
+    mutationFn: (input: { token?: string; pick?: string }) => svc.integrations.metaPages(ws.id, input),
+  });
+}
+
+export function useMetaConnect() {
+  const svc = useServices();
+  const ws = useWorkspace();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { token?: string; pick?: string; pageId: string; instagram?: boolean }) =>
+      svc.integrations.metaConnect(ws.id, input),
+    onSuccess: (page) => {
+      void qc.invalidateQueries({ queryKey: [ws.id, "integrations", "meta"] });
+      void qc.invalidateQueries({ queryKey: [ws.id, "connections"] });
+      toast.success(page.instagram ? `${page.name} e Instagram conectados` : `${page.name} conectada`);
+    },
+  });
+}
+
+export function useMetaCheck() {
+  const svc = useServices();
+  const ws = useWorkspace();
+  return useMutation({
+    mutationFn: () => svc.integrations.metaCheck(ws.id),
+    onError: (err) => toast.error(errText(err)),
+  });
+}
+
 // ── Media (saved on the app's own server) ──────────────────────────
 export function useCreateFolder() {
   const svc = useServices();
