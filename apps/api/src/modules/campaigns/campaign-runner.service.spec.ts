@@ -87,6 +87,7 @@ function makeRunner(
     emit: vi.fn((event: string, payload: unknown) => emitted.push({ event, payload })),
   };
   const audit = { record: vi.fn() };
+  const notifications = { create: vi.fn() };
 
   const runner = new CampaignRunner(
     {} as never,
@@ -95,8 +96,9 @@ function makeRunner(
     jobs as never,
     events as never,
     audit as never,
+    notifications as never,
   );
-  return { runner, prisma, providers, jobs, events, audit, sendLogs, updates, emitted };
+  return { runner, prisma, providers, jobs, events, audit, notifications, sendLogs, updates, emitted };
 }
 
 const campaign = (over: AnyRec = {}): AnyRec => {
@@ -297,10 +299,14 @@ describe("CampaignRunner.run", () => {
         { group: { id: "g2", name: "Grupo B", remoteJid: "2@g.us" } },
       ],
     });
-    const { runner, providers, sendLogs, updates, emitted } = makeRunner({ campaign: c });
+    const { runner, providers, sendLogs, updates, emitted, notifications } = makeRunner({ campaign: c });
 
     await runner.run("w1", "c1");
 
+    expect(notifications.create).toHaveBeenCalledWith(
+      "w1",
+      expect.objectContaining({ type: "success", title: "Campaña «Promo» enviada", meta: expect.stringContaining("2 de 2") }),
+    );
     expect(providers.sendMessage).toHaveBeenCalledTimes(2);
     expect(sendLogs).toHaveLength(2);
     expect(sendLogs.every((l) => l.ok === true)).toBe(true);
@@ -378,10 +384,17 @@ describe("CampaignRunner.run", () => {
     const send = vi.fn(async () => {
       throw new Error("proveedor caído");
     });
-    const { runner, sendLogs, updates } = makeRunner({ campaign: c, send });
+    const { runner, sendLogs, updates, prisma, notifications } = makeRunner({ campaign: c, send });
+    prisma.sendLog.findFirst.mockImplementation(async (args?: { where?: AnyRec }) =>
+      args?.where?.ok === false ? { error: "proveedor caído", groupName: "A" } : null,
+    );
 
     await runner.run("w1", "c1");
 
+    expect(notifications.create).toHaveBeenCalledWith(
+      "w1",
+      expect.objectContaining({ type: "error", meta: expect.stringContaining("Motivo (A): proveedor caído") }),
+    );
     expect(sendLogs).toHaveLength(1);
     expect(sendLogs[0]!.ok).toBe(false);
     expect(sendLogs[0]!.error).toMatch(/caído/);
@@ -638,5 +651,50 @@ describe("CampaignRunner — ejecuciones que sobreviven reinicios", () => {
       where: { error: "en curso…", createdAt: { lt: new Date("2026-10-24T11:30:00Z") } },
       data: { ok: false, error: UNCONFIRMED },
     });
+  });
+});
+
+describe("CampaignRunner.problems (antes de «Enviar ahora»)", () => {
+  const withStatus = (states: Record<string, string>) => {
+    const ctx = makeRunner({
+      campaign: campaign({
+        channels: ["wa", "ig"],
+        targets: [{ groupId: "g1", group: { id: "g1", channel: "wa" } }],
+      }),
+    });
+    (ctx.providers as AnyRec).status = vi.fn(async (_w: string, id: string) => ({
+      state: states[id] ?? "disconnected",
+      detail: states[id] ? undefined : "Sesión cerrada",
+    }));
+    return ctx;
+  };
+
+  it("no reporta nada cuando hay mensaje, destino y canales conectados", async () => {
+    const { runner } = withStatus({ whatsapp: "connected", instagram: "connected" });
+    expect(await runner.problems("w1", "c1")).toEqual([]);
+  });
+
+  it("dice qué canal falta conectar, con el motivo", async () => {
+    const { runner } = withStatus({ whatsapp: "connected" });
+    expect(await runner.problems("w1", "c1")).toEqual([
+      "Instagram no está conectado (Sesión cerrada). Conéctalo en Conexiones.",
+    ]);
+  });
+
+  it("pide mensaje y destino cuando la campaña está vacía", async () => {
+    const { runner, providers } = makeRunner({ campaign: campaign({ message: "  ", channels: ["wa"], targets: [] }) });
+    (providers as AnyRec).status = vi.fn();
+    expect(await runner.problems("w1", "c1")).toEqual([
+      "La campaña no tiene mensaje ni imagen.",
+      "Elige al menos un grupo o una red social de destino.",
+    ]);
+  });
+
+  it("ignora grupos de otra marca al decidir qué conectar", async () => {
+    const { runner, providers } = makeRunner({
+      campaign: campaign({ targets: [{ groupId: "g9", group: { id: "g9", channel: "wa", workspaceSlug: "otra" } }] }),
+    });
+    (providers as AnyRec).status = vi.fn();
+    expect(await runner.problems("w1", "c1")).toEqual(["Elige al menos un grupo o una red social de destino."]);
   });
 });

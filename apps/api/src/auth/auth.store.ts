@@ -256,6 +256,16 @@ export class AuthStore {
     await this.prisma.user.update({ where: { id: userId }, data: { passwordHash } });
   }
 
+  async updateName(userId: string, name: string): Promise<void> {
+    await this.prisma.user.update({ where: { id: userId }, data: { name } });
+  }
+
+  /** Account details shown on the profile page (never the password hash). */
+  async profileOf(userId: string): Promise<{ createdAt: string; emailVerified: boolean } | undefined> {
+    const u = await this.prisma.user.findUnique({ where: { id: userId }, select: { createdAt: true, emailVerifiedAt: true } });
+    return u ? { createdAt: u.createdAt.toISOString(), emailVerified: !!u.emailVerifiedAt } : undefined;
+  }
+
   async setEmailVerified(userId: string): Promise<void> {
     await this.prisma.user.update({ where: { id: userId }, data: { emailVerifiedAt: new Date() } });
   }

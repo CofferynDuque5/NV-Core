@@ -3,34 +3,138 @@ import { Injectable, Logger } from "@nestjs/common";
 import { PrismaService } from "../prisma/prisma.service";
 
 /**
- * Rellena un workspace con datos de ejemplo REALISTAS (enfocados en la venta de
- * cuentas de streaming) para que ninguna sección aparezca vacía: contactos,
- * segmentos, formularios, embudos, secuencias, afiliados y automatizaciones
- * (agente de ventas, cobros y soporte). Todo es editable por el usuario.
- *
- * Es idempotente: si el workspace ya tiene contactos, no hace nada (así no pisa
- * lo que el usuario haya editado).
+ * Example streaming-shop data that older versions loaded into every new brand
+ * (contacts, segments, forms, funnels, sequences, affiliates and three
+ * automations marked «activo»). New brands no longer get it: invented
+ * contacts mixed with real ones, inflated the metrics and could even be
+ * messaged. This service now only finds and removes what was loaded, matched
+ * by the exact names (contacts by name and phone together), so the
+ * user's own records are never touched.
  */
+export const SAMPLE_RECORDS = {
+  // Name + phone pairs exactly as they were loaded (some had no email).
+  contacts: [
+    ["Julio Ramírez", "+584121112233"],
+    ["María González", "+584129109871"],
+    ["Carlos Pérez", "+584141233233"],
+    ["Ana Torres", "+584125556677"],
+    ["Luis Ramírez", "+584126393214"],
+    ["Daniela Suárez", "+584127778899"],
+    ["Pedro Martínez", "+584128889900"],
+    ["Gabriela Rojas", "+584123334455"],
+    ["José Fernández", "+584124445566"],
+    ["Valentina Díaz", "+584122223344"],
+  ],
+  segments: ["Clientes activos", "Leads nuevos (7 días)", "En riesgo / por renovar", "Interesados en Netflix"],
+  forms: ["Pedir cuenta de streaming", "Lista de espera combos"],
+  funnels: ["Embudo de venta streaming", "Reactivación de inactivos"],
+  sequences: ["Bienvenida nuevos clientes", "Recuperar carrito / interesados"],
+  affiliates: ["Pedro (revendedor)", "Laura (influencer)"],
+  automations: ["🤖 Agente de Ventas (IA)", "💳 Cobros y Renovaciones", "🛟 Soporte automático"],
+} as const;
+
+/** Example records were all created in one go, seconds apart. */
+const SEED_WINDOW_MS = 5 * 60_000;
+
+export interface SampleDataSummary {
+  present: boolean;
+  counts: Record<keyof typeof SAMPLE_RECORDS, number>;
+}
+
 @Injectable()
 export class SampleDataService {
   private readonly logger = new Logger(SampleDataService.name);
 
   constructor(private readonly prisma: PrismaService) {}
 
-  /** Siembra datos de ejemplo si el workspace está vacío. */
-  async seedIfEmpty(workspaceSlug: string): Promise<void> {
-    if (!this.prisma.enabled) return;
-    try {
-      const contacts = await this.prisma.contact.count({ where: { workspaceSlug } });
-      if (contacts > 0) return; // ya tiene datos; no tocar
-      await this.seed(workspaceSlug);
-      this.logger.log(`Datos de ejemplo cargados en "${workspaceSlug}".`);
-    } catch (err) {
-      this.logger.warn(`No se pudieron cargar datos de ejemplo: ${(err as Error).message}`);
-    }
+  /**
+   * When the examples were loaded: the oldest example contact or automation
+   * (both have distinctive values). Every other example record must have been
+   * created within minutes of it, so a segment the user named «Clientes
+   * activos» later on is never mistaken for an example.
+   */
+  private async loadedAround(ws: string): Promise<{ gte: Date; lte: Date } | null> {
+    const r = SAMPLE_RECORDS;
+    const [contact, automation] = await Promise.all([
+      this.prisma.contact.findFirst({
+        where: { workspaceSlug: ws, OR: r.contacts.map(([name, phone]) => ({ name, phone })) },
+        orderBy: { createdAt: "asc" },
+        select: { createdAt: true },
+      }),
+      this.prisma.automation.findFirst({
+        where: { workspaceSlug: ws, name: { in: [...r.automations] } },
+        orderBy: { createdAt: "asc" },
+        select: { createdAt: true },
+      }),
+    ]);
+    const times = [contact?.createdAt, automation?.createdAt].filter((d): d is Date => !!d).map((d) => d.getTime());
+    if (times.length === 0) return null;
+    const at = Math.min(...times);
+    return { gte: new Date(at - SEED_WINDOW_MS), lte: new Date(at + SEED_WINDOW_MS) };
   }
 
-  private async seed(ws: string): Promise<void> {
+  private where(ws: string, createdAt: { gte: Date; lte: Date }) {
+    const r = SAMPLE_RECORDS;
+    const named = (names: readonly string[]) => ({ workspaceSlug: ws, name: { in: [...names] }, createdAt });
+    return {
+      contacts: { workspaceSlug: ws, OR: r.contacts.map(([name, phone]) => ({ name, phone })), createdAt },
+      segments: named(r.segments),
+      forms: named(r.forms),
+      funnels: named(r.funnels),
+      sequences: named(r.sequences),
+      affiliates: named(r.affiliates),
+      automations: named(r.automations),
+    };
+  }
+
+  /** How many example records the brand still has. */
+  async summary(ws: string): Promise<SampleDataSummary> {
+    const zero = { contacts: 0, segments: 0, forms: 0, funnels: 0, sequences: 0, affiliates: 0, automations: 0 };
+    if (!this.prisma.enabled) return { present: false, counts: zero };
+    const around = await this.loadedAround(ws);
+    if (!around) return { present: false, counts: zero };
+    const w = this.where(ws, around);
+    const [contacts, segments, forms, funnels, sequences, affiliates, automations] = await Promise.all([
+      this.prisma.contact.count({ where: w.contacts }),
+      this.prisma.segment.count({ where: w.segments }),
+      this.prisma.form.count({ where: w.forms }),
+      this.prisma.funnel.count({ where: w.funnels }),
+      this.prisma.sequence.count({ where: w.sequences }),
+      this.prisma.affiliate.count({ where: w.affiliates }),
+      this.prisma.automation.count({ where: w.automations }),
+    ]);
+    const counts = { contacts, segments, forms, funnels, sequences, affiliates, automations };
+    return { present: Object.values(counts).some((n) => n > 0), counts };
+  }
+
+  /** Delete the example records (only those) and return how many went. */
+  async remove(ws: string): Promise<SampleDataSummary> {
+    const before = await this.summary(ws);
+    const around = before.present ? await this.loadedAround(ws) : null;
+    if (!around) return before;
+    const w = this.where(ws, around);
+    // Automations first so nothing fires mid-cleanup; contacts last.
+    const steps: [string, () => Promise<unknown>][] = [
+      ["automations", () => this.prisma.automation.deleteMany({ where: w.automations })],
+      ["sequences", () => this.prisma.sequence.deleteMany({ where: w.sequences })],
+      ["funnels", () => this.prisma.funnel.deleteMany({ where: w.funnels })],
+      ["forms", () => this.prisma.form.deleteMany({ where: w.forms })],
+      ["segments", () => this.prisma.segment.deleteMany({ where: w.segments })],
+      ["affiliates", () => this.prisma.affiliate.deleteMany({ where: w.affiliates })],
+      ["contacts", () => this.prisma.contact.deleteMany({ where: w.contacts })],
+    ];
+    for (const [name, run] of steps) {
+      try {
+        await run();
+      } catch (err) {
+        this.logger.warn(`No se pudieron quitar ${name} de ejemplo en "${ws}": ${(err as Error).message}`);
+      }
+    }
+    return this.summary(ws);
+  }
+
+  /** The old example data (kept for tests and for comparing against what was loaded). */
+  async seed(ws: string): Promise<void> {
     const now = Date.now();
     const daysAgo = (d: number) => new Date(now - d * 86_400_000);
 

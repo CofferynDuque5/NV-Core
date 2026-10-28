@@ -73,7 +73,7 @@ export default function CobrosPage() {
         }
       />
 
-      <div className="grid gap-3 sm:grid-cols-3">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
         <KpiCard
           label="Por verificar"
           value={String(counts.por_verificar)}
@@ -190,7 +190,7 @@ export default function CobrosPage() {
             methodsByCountry(allMethods).map((g) => (
               <section key={g.country} className="space-y-2">
                 <h2 className="text-xs font-semibold uppercase tracking-wider text-ink-faint">{g.label}</h2>
-                <div className="grid gap-3 md:grid-cols-2" data-testid={`methods-${g.country}`}>
+                <div className="grid grid-cols-1 gap-3 md:grid-cols-2" data-testid={`methods-${g.country}`}>
                   {g.methods.map((m) => (
                     <MethodCard
                       key={m.id}

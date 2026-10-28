@@ -2,6 +2,7 @@
 import { create } from "zustand";
 
 import {
+  AuthError,
   authClient,
   type AuthUser,
   type LoginInput,
@@ -30,6 +31,13 @@ interface AuthState {
   refreshSession: () => Promise<string>;
 
   hasMembership: (workspaceSlug: string) => boolean;
+
+  /** Profile page: change the display name. */
+  updateName: (name: string) => Promise<void>;
+  /** Profile page: change the password (other sessions are closed). */
+  changePassword: (currentPassword: string, newPassword: string) => Promise<void>;
+  /** Runs an authenticated call, renewing the session once on 401. */
+  withToken: <T>(fn: (token: string) => Promise<T>) => Promise<T>;
 }
 
 export const useAuthStore = create<AuthState>((set, get) => ({
@@ -102,4 +110,24 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   },
 
   hasMembership: (workspaceSlug) => get().memberships.some((m) => m.workspaceSlug === workspaceSlug),
+
+  withToken: async (fn) => {
+    const token = get().token ?? (await get().refreshSession());
+    try {
+      return await fn(token);
+    } catch (err) {
+      if (!(err instanceof AuthError) || err.status !== 401) throw err;
+      return fn(await get().refreshSession());
+    }
+  },
+
+  updateName: async (name) => {
+    const res = await get().withToken((t) => authClient.updateProfile(t, name));
+    set({ user: res.user, memberships: res.memberships, superAdmin: res.superAdmin });
+  },
+
+  changePassword: async (currentPassword, newPassword) => {
+    const res = await get().withToken((t) => authClient.changePassword(t, currentPassword, newPassword));
+    set({ token: res.accessToken, user: res.user, memberships: res.memberships, superAdmin: res.superAdmin });
+  },
 }));

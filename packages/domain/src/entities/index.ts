@@ -1032,3 +1032,26 @@ export interface AdminAccessRow extends WorkspaceAccess {
   workspaceSlug: string;
   createdAt: string;
 }
+
+/** Example records older versions loaded into new brands, still present. */
+export interface SampleDataSummary {
+  present: boolean;
+  counts: {
+    contacts: number;
+    segments: number;
+    forms: number;
+    funnels: number;
+    sequences: number;
+    affiliates: number;
+    automations: number;
+  };
+}
+
+/** The signed-in user's own account (profile page). */
+export interface UserProfile {
+  id: string;
+  email: string;
+  name: string;
+  createdAt: string | null;
+  emailVerified: boolean;
+}

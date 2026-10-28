@@ -1,4 +1,4 @@
-import type { Role } from "@nv/domain";
+import type { Role, UserProfile } from "@nv/domain";
 
 import { API_URL } from "@/lib/env";
 
@@ -127,6 +127,18 @@ export const authClient = {
     request<null>("/auth/reset-password", {
       method: "POST",
       body: JSON.stringify({ token, password }),
+    }),
+
+  profile: (token: string) => request<UserProfile>("/auth/profile", { token }),
+
+  updateProfile: (token: string, name: string) =>
+    request<SessionView>("/auth/profile", { method: "PATCH", token, body: JSON.stringify({ name }) }),
+
+  changePassword: (token: string, currentPassword: string, newPassword: string) =>
+    request<AuthResult>("/auth/change-password", {
+      method: "POST",
+      token,
+      body: JSON.stringify({ currentPassword, newPassword }),
     }),
 
   verifyEmail: (token: string) =>

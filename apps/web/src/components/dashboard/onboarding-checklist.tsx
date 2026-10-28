@@ -111,7 +111,7 @@ export function OnboardingChecklist() {
       </div>
 
       {/* Steps */}
-      <ul className="grid gap-2 p-4 sm:grid-cols-2">
+      <ul className="grid grid-cols-1 gap-2 p-4 sm:grid-cols-2">
         {data.steps.map((step) => {
           const meta = STEP_META[step.key];
           const Icon = step.done ? Check : meta.icon;

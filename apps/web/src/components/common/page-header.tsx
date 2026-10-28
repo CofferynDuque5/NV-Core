@@ -23,7 +23,7 @@ export function PageHeader({ eyebrow, title, description, actions, className }: 
         </h1>
         {description ? <p className="text-sm text-ink-muted">{description}</p> : null}
       </div>
-      {actions ? <div className="flex items-center gap-2">{actions}</div> : null}
+      {actions ? <div className="flex max-w-full flex-wrap items-center gap-2">{actions}</div> : null}
     </div>
   );
 }

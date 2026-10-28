@@ -25,6 +25,7 @@ describe.skipIf(!url)("CampaignRunner contra PostgreSQL real", () => {
       { register: vi.fn(), dispatch: vi.fn(async (_t: string, _w: string, p: unknown) => dispatched.push(p)) } as never,
       { emit: vi.fn() } as never,
       { record: vi.fn() } as never,
+      { create: vi.fn() } as never,
     );
     return { runner, sent, dispatched };
   };

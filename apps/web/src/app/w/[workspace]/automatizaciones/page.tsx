@@ -96,11 +96,11 @@ export default function AutomatizacionesPage() {
         {(data) => (
           <div className="space-y-2">
             {data.items.map((a) => (
-              <Panel key={a.id} className="flex items-center gap-3 p-4">
+              <Panel key={a.id} className="flex flex-wrap items-center gap-3 p-4">
                 <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-brand/12 text-brand">
                   <Workflow className="size-4" />
                 </span>
-                <div className="min-w-0 flex-1">
+                <div className="min-w-[12rem] flex-1">
                   <div className="flex items-center gap-2">
                     <span className="truncate text-sm font-semibold text-ink-bright">{a.name}</span>
                     <Badge variant={a.status === "activo" ? "success" : "neutral"}>{a.status}</Badge>

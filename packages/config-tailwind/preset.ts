@@ -117,6 +117,13 @@ const preset = {
           from: { opacity: "0", transform: "translateY(-8px) scale(.98)" },
           to: { opacity: "1", transform: "translateY(0) scale(1)" },
         },
+        // Centered dialogs: the keyframes carry the centering translate, since
+        // an animated transform replaces the element's own translate classes
+        // (without it the dialog flashes off-center while it opens).
+        dialogIn: {
+          from: { opacity: "0", transform: "translate(-50%, calc(-50% - 8px)) scale(.98)" },
+          to: { opacity: "1", transform: "translate(-50%, -50%) scale(1)" },
+        },
         riseIn: {
           from: { opacity: "0", transform: "translateY(10px)" },
           to: { opacity: "1", transform: "translateY(0)" },
@@ -130,6 +137,7 @@ const preset = {
         fadein: "fadein .2s ease",
         "slide-in-right": "slideInRight .28s ease",
         "pop-in": "popIn .16s ease",
+        "dialog-in": "dialogIn .16s ease",
         "rise-in": "riseIn .3s ease",
         "pulse-dot": "pulseDot 1.6s ease-in-out infinite",
         shimmer: "shimmer 1.6s infinite",

@@ -48,8 +48,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const locked = access.data?.state === "expired" && !superAdmin;
   const canPay = role === "Owner" || role === "Admin";
 
-  // Hydrate the workspace list (config + user-created) once on mount.
+  // Hydrate the workspace list (config + user-created) once signed in: asking
+  // before the session is restored answers 401 and leaves the list empty.
   React.useEffect(() => {
+    if (isBackendConfigured() && authStatus !== "authenticated") return;
     let active = true;
     services.workspaces
       .list()
@@ -60,7 +62,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     return () => {
       active = false;
     };
-  }, [services, setWorkspaces]);
+  }, [services, setWorkspaces, authStatus]);
 
   return (
     <AuthGate>

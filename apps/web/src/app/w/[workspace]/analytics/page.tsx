@@ -97,7 +97,7 @@ function Segmented<T extends string | number>({
   ariaLabel: string;
 }) {
   return (
-    <div role="tablist" aria-label={ariaLabel} className="inline-flex rounded-lg border border-line-soft bg-panel p-0.5">
+    <div role="tablist" aria-label={ariaLabel} className="inline-flex max-w-full overflow-x-auto rounded-lg border border-line-soft bg-panel p-0.5">
       {options.map((o) => (
         <button
           key={String(o.value)}
@@ -105,7 +105,7 @@ function Segmented<T extends string | number>({
           aria-selected={value === o.value}
           onClick={() => onChange(o.value)}
           className={cn(
-            "rounded-md px-3 py-1.5 text-xs font-medium transition-colors",
+            "shrink-0 whitespace-nowrap rounded-md px-3 py-1.5 text-xs font-medium transition-colors",
             value === o.value ? "bg-brand/15 text-ink-bright" : "text-ink-muted hover:text-ink",
           )}
         >
@@ -198,7 +198,7 @@ export default function AnalyticsPage() {
               <span className="text-ink-faint">Actualizado:</span> {relativeTime(snap.generatedAt)}
             </span>
           ) : null}
-          <div className="ml-auto flex items-center gap-1 print:hidden">
+          <div className="ml-auto flex max-w-full flex-wrap items-center gap-1 print:hidden">
             <Button
               variant="ghost"
               size="sm"

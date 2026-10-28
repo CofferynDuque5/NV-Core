@@ -1,5 +1,6 @@
 import type {
   AccessOverview,
+  SampleDataSummary,
   AdminAccessRow,
   WorkspaceAccess,
   AiContentPlanItem,
@@ -204,6 +205,10 @@ export function createHttpAdapters(opts: HttpAdapterOptions): Services {
       access: () => get<AdminAccessRow[]>(`/admin/access`),
       activate: (slug, days) =>
         post<WorkspaceAccess>(`/admin/access/${encodeURIComponent(slug)}/activate`, { days }),
+    },
+    sampleData: {
+      summary: (id) => get<SampleDataSummary>(`${ws(id)}/sample-data`),
+      remove: (id) => del<SampleDataSummary>(`${ws(id)}/sample-data`),
     },
     access: {
       overview: (id) => get<AccessOverview>(`${ws(id)}/access`),

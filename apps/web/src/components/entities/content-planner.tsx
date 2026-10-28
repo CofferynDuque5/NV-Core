@@ -116,7 +116,7 @@ export function ContentPlanner() {
       />
       <div className="space-y-4 p-4">
         {/* Controls */}
-        <div className="grid gap-3 sm:grid-cols-2">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <div className="space-y-1.5 sm:col-span-2">
             <Label htmlFor="cp-topic">Tema o negocio</Label>
             <Input

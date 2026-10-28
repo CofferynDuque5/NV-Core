@@ -160,8 +160,8 @@ export function GruposContent({ showHeader = true }: { showHeader?: boolean }) {
                 </span>
               </div>
 
-              <Panel className="overflow-hidden">
-                <table className="w-full text-sm">
+              <Panel className="overflow-x-auto">
+                <table className="w-full min-w-[560px] text-sm">
                   <thead>
                     <tr className="border-b border-line text-left text-xs text-ink-faint">
                       {COLUMNS.map((c, i) => (

@@ -12,7 +12,10 @@ import {
   Zap,
 } from "lucide-react";
 
+import { Link } from "react-router-dom";
+
 import { useWorkspace } from "@/hooks/use-workspace";
+import { useAuthStore } from "@/stores/auth-store";
 import {
   useAnalytics,
   useCampaigns,
@@ -21,6 +24,7 @@ import {
 } from "@/hooks/use-domain-data";
 import { PageHeader } from "@/components/common/page-header";
 import { OnboardingChecklist } from "@/components/dashboard/onboarding-checklist";
+import { SampleDataBanner } from "@/components/dashboard/sample-data-banner";
 import { Panel, PanelHeader } from "@/components/common/panel";
 import { KpiCard } from "@/components/common/kpi-card";
 import { EmptyState } from "@/components/common/empty-state";
@@ -47,6 +51,7 @@ export default function DashboardPage() {
   const campaigns = useCampaigns();
   const notifications = useNotifications();
   const analytics = useAnalytics(7);
+  const firstName = useAuthStore((s) => s.user?.name.split(" ")[0]);
 
   const activePosts = posts.data ?? [];
   const activeCampaigns = (campaigns.data?.items ?? []).filter(
@@ -62,17 +67,17 @@ export default function DashboardPage() {
     <div className="space-y-6">
       <PageHeader
         eyebrow={ws.name}
-        title="Hola 👋"
-        description="Este es el resumen operativo de tu workspace."
+        title={firstName ? `Hola, ${firstName} 👋` : "Hola 👋"}
+        description="Lo que pasa hoy en tu marca: publicaciones, campañas y avisos."
         actions={
           <>
             <Button variant="secondary" size="sm" asChild>
-              <a href={`/w/${ws.slug}/calendario`}>Ver agenda</a>
+              <Link to={`/w/${ws.slug}/calendario`}>Ver agenda</Link>
             </Button>
             <Button size="sm" asChild>
-              <a href={`/w/${ws.slug}/campanas`}>
+              <Link to={`/w/${ws.slug}/campanas`}>
                 <Megaphone className="size-4" /> Campañas
-              </a>
+              </Link>
             </Button>
           </>
         }
@@ -80,6 +85,7 @@ export default function DashboardPage() {
 
       {/* Guided onboarding — hides itself once dismissed or when the DB has no signal */}
       <OnboardingChecklist />
+      <SampleDataBanner slug={ws.slug} />
 
       {/* KPI tiles — every value is real; metrics show em-dash until the backend has data */}
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
@@ -97,7 +103,7 @@ export default function DashboardPage() {
             description="Agenda del día por canal"
             action={
               <Button variant="ghost" size="sm" asChild>
-                <a href={`/w/${ws.slug}/calendario`}>Ver agenda →</a>
+                <Link to={`/w/${ws.slug}/calendario`}>Ver agenda →</Link>
               </Button>
             }
           />
@@ -111,7 +117,7 @@ export default function DashboardPage() {
                 description="Programa tu primera publicación desde el Calendario o el Campaign Builder."
                 action={
                   <Button size="sm" asChild>
-                    <a href={`/w/${ws.slug}/builder`}>Crear publicación</a>
+                    <Link to={`/w/${ws.slug}/builder`}>Crear publicación</Link>
                   </Button>
                 }
                 compact
@@ -144,11 +150,11 @@ export default function DashboardPage() {
 
         {/* Alerts */}
         <Panel>
-          <PanelHeader title="Alertas" description="Estado del sistema" />
+          <PanelHeader title="Alertas" description="Avisos y errores que piden tu atención" />
           <div className="p-4">
             {notifications.isLoading ? (
               <ListSkeleton rows={3} />
-            ) : (notifications.data ?? []).length === 0 ? (
+            ) : alerts.length === 0 ? (
               <EmptyState
                 icon={AlertTriangle}
                 title="Todo en orden"
@@ -157,7 +163,7 @@ export default function DashboardPage() {
               />
             ) : (
               <ul className="space-y-2">
-                {(notifications.data ?? []).slice(0, 5).map((n) => (
+                {alerts.slice(0, 5).map((n) => (
                   <li key={n.id} className="flex items-start gap-2.5 rounded-xl bg-panel-raised p-3">
                     <span
                       className="mt-1.5 size-2 shrink-0 rounded-full"
@@ -183,7 +189,7 @@ export default function DashboardPage() {
             title="Campañas activas"
             action={
               <Button variant="ghost" size="sm" asChild>
-                <a href={`/w/${ws.slug}/campanas`}>Todas →</a>
+                <Link to={`/w/${ws.slug}/campanas`}>Todas →</Link>
               </Button>
             }
           />
@@ -197,7 +203,7 @@ export default function DashboardPage() {
                 description="Crea tu primera campaña para empezar a publicar de forma omnicanal."
                 action={
                   <Button size="sm" asChild>
-                    <a href={`/w/${ws.slug}/campanas`}>Nueva campaña</a>
+                    <Link to={`/w/${ws.slug}/campanas`}>Nueva campaña</Link>
                   </Button>
                 }
                 compact
@@ -233,9 +239,9 @@ export default function DashboardPage() {
           <PanelHeader title="Accesos rápidos" />
           <div className="grid grid-cols-2 gap-2 p-4">
             {QUICK_ACTIONS.map((qa) => (
-              <a
+              <Link
                 key={qa.label}
-                href={`/w/${ws.slug}/${qa.href}`}
+                to={`/w/${ws.slug}/${qa.href}`}
                 className="flex flex-col items-start gap-2 rounded-xl border border-line-soft bg-panel-raised p-3 transition-colors hover:border-line-bright"
               >
                 <span
@@ -245,7 +251,7 @@ export default function DashboardPage() {
                   <qa.icon className="size-4" />
                 </span>
                 <span className="text-xs font-medium text-ink">{qa.label}</span>
-              </a>
+              </Link>
             ))}
           </div>
         </Panel>
@@ -258,7 +264,7 @@ export default function DashboardPage() {
           description="Analytics de rendimiento"
           action={
             <Button variant="ghost" size="sm" asChild>
-              <a href={`/w/${ws.slug}/analytics`}>Ver Analytics →</a>
+              <Link to={`/w/${ws.slug}/analytics`}>Ver Analytics →</Link>
             </Button>
           }
         />

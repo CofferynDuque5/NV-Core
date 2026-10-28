@@ -239,8 +239,8 @@ export function HistorialContent({ showHeader = true }: { showHeader?: boolean }
                 </div>
               </div>
 
-              <Panel className="overflow-hidden">
-                <table className="w-full text-sm">
+              <Panel className="overflow-x-auto">
+                <table className="w-full min-w-[560px] text-sm">
                   <thead>
                     <tr className="border-line text-ink-faint border-b text-left text-xs">
                       {COLUMNS.map((c, i) => (

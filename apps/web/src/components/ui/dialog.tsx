@@ -34,13 +34,13 @@ const DialogContent = React.forwardRef<
     <DialogPrimitive.Content
       ref={ref}
       className={cn(
-        "fixed left-1/2 top-1/2 z-50 grid w-full max-w-lg -translate-x-1/2 -translate-y-1/2 gap-4",
-        "rounded-2xl border border-line-strong bg-panel-high p-6 shadow-panel duration-200",
+        "fixed left-1/2 top-1/2 z-50 grid w-[calc(100%-1.5rem)] max-w-lg -translate-x-1/2 -translate-y-1/2 gap-4",
+        "rounded-2xl border border-line-strong bg-panel-high p-4 shadow-panel duration-200 sm:p-6",
         // Tall forms must stay usable on short viewports: cap height and scroll
         // inside the dialog so the footer/submit is always reachable. Clip stray
         // horizontal overflow (long tokens/URLs) instead of a sideways scrollbar.
         "max-h-[calc(100dvh-2rem)] overflow-y-auto overflow-x-hidden",
-        "animate-pop-in",
+        "animate-dialog-in",
         className,
       )}
       {...props}
