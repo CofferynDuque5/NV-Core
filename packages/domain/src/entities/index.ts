@@ -1175,3 +1175,37 @@ export interface MetaCheck {
   facebook: { ok: boolean; name?: string; error?: string };
   instagram: { ok: boolean; name?: string; error?: string };
 }
+
+/** A user as the super-admin «Usuarios» panel shows them. */
+export interface AdminLoginUser {
+  id: string;
+  email: string;
+  name: string;
+  /** The shared «Ver demo» account. */
+  demo: boolean;
+  createdAt: string;
+  lastLoginAt: string | null;
+  /** Last time the panel renewed their session (they had it open). */
+  lastSeenAt: string | null;
+  loginCount: number;
+  emailVerified: boolean;
+  workspaces: string[];
+}
+
+/** One sign-in, newest first. */
+export interface AdminLoginEvent {
+  id: string;
+  at: string;
+  /** "password", "register" or "demo". */
+  method: string;
+  email: string;
+  name: string;
+  ip: string | null;
+  /** "Chrome · Windows". */
+  device: string;
+}
+
+export interface AdminLogins {
+  users: AdminLoginUser[];
+  events: AdminLoginEvent[];
+}

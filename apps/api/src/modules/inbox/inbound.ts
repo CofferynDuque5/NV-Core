@@ -30,7 +30,18 @@ export interface InboundMessage {
   contactHandle: string;
   contactName: string;
   text: string;
+  /** "in" (default) = the contact wrote; "out" = sent from the phone. */
+  direction?: "in" | "out";
+  /** When it was sent (default: now). */
+  at?: Date;
+  /** Platform message id, so each message is stored once. */
+  externalId?: string | null;
+  /** History replayed after linking: stored, never treated as new. */
+  history?: boolean;
 }
+
+/** A reply sent from the panel comes back from WhatsApp; within this window it's the same message. */
+export const ECHO_WINDOW_MS = 2 * 60_000;
 
 /**
  * Parse a WhatsApp Cloud API webhook body into inbound messages. Pure — tested.

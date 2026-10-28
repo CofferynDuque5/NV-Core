@@ -10,10 +10,25 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { PasswordInput } from "@/components/ui/password-input";
 import { Label } from "@/components/ui/label";
+import { demoTarget } from "@/lib/demo";
 
 export default function LoginPage() {
   const navigate = useNavigate();
   const login = useAuthStore((s) => s.login);
+  const startDemo = useAuthStore((s) => s.startDemo);
+  const [demoPending, setDemoPending] = React.useState(false);
+
+  async function onDemo() {
+    setError(null);
+    setDemoPending(true);
+    try {
+      await startDemo();
+      navigate(demoTarget(), { replace: true });
+    } catch (err) {
+      setError(err instanceof Error && err.message ? err.message : "La demo no está disponible ahora mismo.");
+      setDemoPending(false);
+    }
+  }
 
   const [email, setEmail] = React.useState("");
   const [password, setPassword] = React.useState("");
@@ -95,6 +110,15 @@ export default function LoginPage() {
           Entrar
         </Button>
       </form>
+      {isBackendConfigured() ? (
+        <div className="mt-4 border-t border-line-soft pt-4 text-center">
+          <Button variant="secondary" className="w-full" onClick={onDemo} disabled={demoPending} data-testid="demo-button">
+            {demoPending ? <Loader2 className="size-4 animate-spin" /> : null}
+            Ver demo sin registrarme
+          </Button>
+          <p className="mt-2 text-xs text-ink-faint">Una marca de ejemplo, solo para mirar. No se guarda nada.</p>
+        </div>
+      ) : null}
     </AuthShell>
   );
 }

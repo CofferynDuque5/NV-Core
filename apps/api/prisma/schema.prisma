@@ -66,10 +66,32 @@ model User {
   /// When the user accepted the legal terms, and which version (TERMS_VERSION).
   termsAcceptedAt     DateTime?
   termsVersion        String?
+  /// Last successful sign-in, how many there were, and the last time the session was renewed.
+  lastLoginAt         DateTime?
+  loginCount          Int            @default(0)
+  lastSeenAt          DateTime?
+  /// The shared «Ver demo» account: read-only, hidden from customer counts.
+  demo                Boolean        @default(false)
   createdAt           DateTime       @default(now())
   memberships         Membership[]
   refreshTokens       RefreshToken[]
   authTokens          AuthToken[]
+  loginEvents         LoginEvent[]
+}
+
+/// One row per successful sign-in, for the super-admin «Usuarios» panel. Kept 90 days.
+model LoginEvent {
+  id        String   @id @default(cuid())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId    String
+  /// "password" or "demo".
+  method    String   @default("password")
+  ip        String?
+  userAgent String?
+  at        DateTime @default(now())
+
+  @@index([at])
+  @@index([userId, at])
 }
 
 /**
@@ -640,8 +662,11 @@ model Message {
   conversationId String
   direction      String
   text           String
+  /// Platform message id (WhatsApp), so a message replayed by the session is stored once.
+  externalId     String?
   createdAt      DateTime     @default(now())
 
+  @@unique([conversationId, externalId])
   @@index([conversationId])
   @@index([conversationId, createdAt])
 }

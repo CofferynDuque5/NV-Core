@@ -49,6 +49,7 @@ import { ReportsModule } from "./modules/reports/reports.module";
 import { PaymentsModule } from "./modules/payments/payments.module";
 import { AccessModule } from "./modules/access/access.module";
 import { SampleDataModule } from "./modules/sample-data/sample-data.module";
+import { DemoModule } from "./modules/demo/demo.module";
 import { BrandModule } from "./modules/brand/brand.module";
 import { ProductsModule } from "./modules/products/products.module";
 import { AuditModule } from "./modules/audit/audit.module";
@@ -113,6 +114,7 @@ import { ProvidersModule } from "./providers/providers.module";
     PaymentsModule,
     AccessModule,
     SampleDataModule,
+    DemoModule,
     BrandModule,
     ProductsModule,
     AuditModule,

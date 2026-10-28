@@ -1,6 +1,7 @@
 import {
   CanActivate,
   ExecutionContext,
+  ForbiddenException,
   Injectable,
   UnauthorizedException,
 } from "@nestjs/common";
@@ -10,6 +11,12 @@ import type { Request } from "express";
 
 import { IS_PUBLIC_KEY } from "../decorators/public.decorator";
 import type { AuthenticatedUser, JwtPayload } from "../auth.types";
+
+const READ_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
+
+/** Shown when a demo visitor tries to change something. */
+export const DEMO_READ_ONLY =
+  "Estás viendo la demo: aquí no se guardan cambios. Crea tu cuenta gratis para usar el panel con tu marca.";
 
 /**
  * Global authentication guard. Validates the `Authorization: Bearer <jwt>`
@@ -33,13 +40,18 @@ export class JwtAuthGuard implements CanActivate {
     const token = this.extractToken(request);
     if (!token) throw new UnauthorizedException("Falta el token de autenticación.");
 
+    let payload: JwtPayload;
     try {
-      const payload = await this.jwt.verifyAsync<JwtPayload>(token);
-      request.user = { userId: payload.sub, email: payload.email, name: payload.name };
-      return true;
+      payload = await this.jwt.verifyAsync<JwtPayload>(token);
     } catch {
       throw new UnauthorizedException("Token inválido o expirado.");
     }
+    request.user = { userId: payload.sub, email: payload.email, name: payload.name, demo: payload.demo === true };
+    // The «Ver demo» account looks at everything and changes nothing.
+    if (payload.demo === true && !READ_METHODS.has(request.method.toUpperCase())) {
+      throw new ForbiddenException(DEMO_READ_ONLY);
+    }
+    return true;
   }
 
   private extractToken(request: Request): string | undefined {

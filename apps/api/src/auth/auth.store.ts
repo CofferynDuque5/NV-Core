@@ -2,7 +2,10 @@ import { Injectable } from "@nestjs/common";
 import type { Role } from "@nv/domain";
 
 import { PrismaService } from "../prisma/prisma.service";
-import type { InvitationRecord, MembershipRecord, UserRecord } from "./auth.types";
+import type { InvitationRecord, LoginMeta, MembershipRecord, UserRecord } from "./auth.types";
+
+/** How long the sign-in log is kept. */
+const LOGIN_HISTORY_MS = 90 * 86_400_000;
 
 /**
  * Identity store backed by Prisma/PostgreSQL (User + Membership tables).
@@ -23,6 +26,7 @@ export class AuthStore {
     createdAt: Date;
     failedLoginAttempts?: number;
     lockedUntil?: Date | null;
+    demo?: boolean;
   }): UserRecord {
     return {
       id: u.id,
@@ -32,7 +36,66 @@ export class AuthStore {
       createdAt: u.createdAt.toISOString(),
       failedLoginAttempts: u.failedLoginAttempts ?? 0,
       lockedUntil: u.lockedUntil ? u.lockedUntil.toISOString() : null,
+      demo: u.demo ?? false,
     };
+  }
+
+  /**
+   * A successful sign-in: remember when, count it and log it (with IP and
+   * browser) for the super-admin panel. Login history older than 90 days is
+   * dropped. Best-effort: never blocks the sign-in.
+   */
+  async recordLogin(userId: string, method: string, meta: LoginMeta = {}, now = new Date()): Promise<void> {
+    try {
+      await this.prisma.user.update({
+        where: { id: userId },
+        data: { lastLoginAt: now, lastSeenAt: now, loginCount: { increment: 1 } },
+      });
+      await this.prisma.loginEvent.create({
+        data: {
+          userId,
+          method,
+          ip: meta.ip?.slice(0, 64) ?? null,
+          userAgent: meta.userAgent?.slice(0, 300) ?? null,
+          at: now,
+        },
+      });
+      await this.prisma.loginEvent.deleteMany({ where: { at: { lt: new Date(now.getTime() - LOGIN_HISTORY_MS) } } });
+    } catch {
+      /* tracking must never stop someone from signing in */
+    }
+  }
+
+  /** The session was renewed (the panel is open): last time we saw the user. */
+  async touchSeen(userId: string, now = new Date()): Promise<void> {
+    await this.prisma.user.update({ where: { id: userId }, data: { lastSeenAt: now } }).catch(() => undefined);
+  }
+
+  /** Every user with sign-in data, and the latest sign-ins (super-admin panel). */
+  async loginOverview(limit = 200) {
+    const [users, events] = await Promise.all([
+      this.prisma.user.findMany({
+        select: {
+          id: true,
+          email: true,
+          name: true,
+          demo: true,
+          createdAt: true,
+          lastLoginAt: true,
+          lastSeenAt: true,
+          loginCount: true,
+          emailVerifiedAt: true,
+          memberships: { select: { workspaceSlug: true, role: true } },
+        },
+        orderBy: [{ lastSeenAt: { sort: "desc", nulls: "last" } }, { createdAt: "desc" }],
+      }),
+      this.prisma.loginEvent.findMany({
+        orderBy: { at: "desc" },
+        take: limit,
+        select: { id: true, at: true, method: true, ip: true, userAgent: true, user: { select: { email: true, name: true } } },
+      }),
+    ]);
+    return { users, events };
   }
 
   async findUserByEmail(email: string): Promise<UserRecord | undefined> {

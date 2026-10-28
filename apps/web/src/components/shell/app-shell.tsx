@@ -21,6 +21,7 @@ import { useAuthStore } from "@/stores/auth-store";
 import { isBackendConfigured } from "@/lib/env";
 import { useAccess } from "@/hooks/use-domain-data";
 import { PlanLock, TrialBanner } from "@/components/access/plan-access";
+import { DemoBanner } from "@/components/access/demo-banner";
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const [switcherOpen, setSwitcherOpen] = React.useState(false);
@@ -121,6 +122,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 <PlanLock slug={routeSlug} access={access.data} canPay={canPay} />
               ) : (
                 <>
+                  <DemoBanner />
                   {routeSlug && access.data ? (
                     <TrialBanner slug={routeSlug} access={access.data} canPay={canPay} />
                   ) : null}

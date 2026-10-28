@@ -21,10 +21,14 @@ interface AuthState {
   memberships: Membership[];
   /** Platform super-admin (controls all users/roles). */
   superAdmin: boolean;
+  /** Read-only «Ver demo» session: the panel shows a banner and the server refuses changes. */
+  demo: boolean;
 
   /** Restore the session from the httpOnly refresh cookie (call once on mount). */
   hydrate: () => Promise<void>;
   login: (input: LoginInput) => Promise<void>;
+  /** Open the read-only demo (no account). */
+  startDemo: () => Promise<void>;
   register: (input: RegisterInput) => Promise<void>;
   logout: () => void;
   /** Rotate the refresh cookie and return a fresh access token (throws on failure). */
@@ -46,6 +50,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   user: null,
   memberships: [],
   superAdmin: false,
+  demo: false,
 
   hydrate: async () => {
     if (!isBackendConfigured()) {
@@ -64,9 +69,10 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         user: res.user,
         memberships: res.memberships,
         superAdmin: res.superAdmin,
+      demo: res.demo === true,
       });
     } catch {
-      set({ status: "unauthenticated", token: null, user: null, memberships: [], superAdmin: false });
+      set({ status: "unauthenticated", token: null, user: null, memberships: [], superAdmin: false, demo: false });
     }
   },
 
@@ -78,6 +84,19 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       user: res.user,
       memberships: res.memberships,
       superAdmin: res.superAdmin,
+      demo: res.demo === true,
+    });
+  },
+
+  startDemo: async () => {
+    const res = await authClient.demo();
+    set({
+      status: "authenticated",
+      token: res.accessToken,
+      user: res.user,
+      memberships: res.memberships,
+      superAdmin: false,
+      demo: true,
     });
   },
 
@@ -89,12 +108,13 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       user: res.user,
       memberships: res.memberships,
       superAdmin: res.superAdmin,
+      demo: res.demo === true,
     });
   },
 
   logout: () => {
     void authClient.logout().catch(() => undefined);
-    set({ status: "unauthenticated", token: null, user: null, memberships: [], superAdmin: false });
+    set({ status: "unauthenticated", token: null, user: null, memberships: [], superAdmin: false, demo: false });
   },
 
   refreshSession: async () => {
@@ -105,6 +125,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       user: res.user,
       memberships: res.memberships,
       superAdmin: res.superAdmin,
+      demo: res.demo === true,
     });
     return res.accessToken;
   },
@@ -123,11 +144,11 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
   updateName: async (name) => {
     const res = await get().withToken((t) => authClient.updateProfile(t, name));
-    set({ user: res.user, memberships: res.memberships, superAdmin: res.superAdmin });
+    set({ user: res.user, memberships: res.memberships, superAdmin: res.superAdmin, demo: res.demo === true });
   },
 
   changePassword: async (currentPassword, newPassword) => {
     const res = await get().withToken((t) => authClient.changePassword(t, currentPassword, newPassword));
-    set({ token: res.accessToken, user: res.user, memberships: res.memberships, superAdmin: res.superAdmin });
+    set({ token: res.accessToken, user: res.user, memberships: res.memberships, superAdmin: res.superAdmin, demo: res.demo === true });
   },
 }));

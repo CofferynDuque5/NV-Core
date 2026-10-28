@@ -11,6 +11,7 @@ import { useActivateAccess } from "@/hooks/use-domain-mutations";
 import { useAuthStore } from "@/stores/auth-store";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { LoginsSection } from "@/components/admin/logins-section";
 
 /**
  * Platform super-admin panel (global, not workspace-scoped). Lists every user
@@ -85,7 +86,7 @@ export default function AdminPage() {
   const wsList = workspaces.data ?? [];
 
   return (
-    <div className="mx-auto max-w-5xl space-y-6 p-6">
+    <div className="mx-auto max-w-6xl space-y-6 p-6">
       <header className="flex items-center gap-3">
         <span className="grid size-11 place-items-center rounded-xl bg-brand/15 text-brand">
           <UserCog className="size-6" />
@@ -93,7 +94,7 @@ export default function AdminPage() {
         <div>
           <h1 className="text-xl font-bold text-ink-bright">Admin general</h1>
           <p className="text-sm text-ink-muted">
-            Controla a todos los usuarios y sus roles en cualquier workspace.
+            Quién usa el panel, pruebas y planes, y los roles de cada usuario en cualquier marca.
           </p>
         </div>
         <Link to="/" className="ml-auto text-sm text-ink-muted hover:text-ink hover:underline">
@@ -101,7 +102,11 @@ export default function AdminPage() {
         </Link>
       </header>
 
+      <LoginsSection enabled={superAdmin} />
+
       <AccessSection enabled={superAdmin} />
+
+      <h2 className="pt-2 font-semibold text-ink-bright">Roles por marca</h2>
 
       {users.isLoading ? (
         <div className="flex items-center gap-2 py-10 text-ink-muted">

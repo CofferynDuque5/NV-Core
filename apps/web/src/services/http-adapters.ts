@@ -5,6 +5,7 @@ import type {
   BrandLinks,
   GroupRulesCheck,
   AdminAccessRow,
+  AdminLogins,
   WorkspaceAccess,
   AiContentPlanItem,
   AiRecommendationsResult,
@@ -211,6 +212,7 @@ export function createHttpAdapters(opts: HttpAdapterOptions): Services {
           `/admin/memberships/${encodeURIComponent(userId)}/${encodeURIComponent(workspaceSlug)}`,
         ),
       access: () => get<AdminAccessRow[]>(`/admin/access`),
+      logins: () => get<AdminLogins>(`/admin/logins`),
       activate: (slug, days) =>
         post<WorkspaceAccess>(`/admin/access/${encodeURIComponent(slug)}/activate`, { days }),
     },

@@ -16,6 +16,7 @@ import { WhatsappGateway } from "./whatsapp.gateway";
 import {
   loadBaileys,
   type SessionAlert,
+  type SessionChatMessage,
   type SessionEvents,
   type WhatsappAttachment,
   type WhatsappGroup,
@@ -165,12 +166,14 @@ export class WhatsappService implements SessionEvents, OnModuleInit, OnModuleDes
     void this.persistGroups(workspaceSlug, groups);
   }
 
-  /** A direct inbound message → publish for the Inbox to persist (decoupled). */
-  onInbound(
-    workspaceSlug: string,
-    msg: { contactHandle: string; contactName: string; text: string },
-  ): void {
+  /** A direct chat message → publish for the Inbox to persist (decoupled). */
+  onInbound(workspaceSlug: string, msg: SessionChatMessage): void {
     this.events.emit("session.inbound", { workspaceSlug, channel: "wa", ...msg });
+  }
+
+  /** Contact names from WhatsApp → the Inbox replaces bare numbers with them. */
+  onContactNames(workspaceSlug: string, names: { handle: string; name: string }[]): void {
+    this.events.emit("session.contact-names", { workspaceSlug, channel: "wa", names });
   }
 
   /** A connection problem → persist a notification and push the live status. */

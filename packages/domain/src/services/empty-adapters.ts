@@ -115,6 +115,7 @@ export const emptyAdapters: Services = {
   admin: {
     users: () => delay([]),
     workspaces: () => delay([]),
+    logins: () => delay({ users: [], events: [] }),
     setMembership: () => notAvailable(),
     removeMembership: () => notAvailable(),
     access: () => delay([]),

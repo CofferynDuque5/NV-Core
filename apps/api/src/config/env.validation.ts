@@ -24,6 +24,8 @@ export const envSchema = z.object({
   // Allow public registration to claim Owner of an unclaimed built-in workspace.
   // Off by default (secure); "true"/"1" to enable open self-serve claiming.
   ALLOW_OPEN_WORKSPACE_CLAIM: z.string().optional(),
+  /** "false" turns off the public read-only demo («Ver demo»). */
+  DEMO_ENABLED: z.string().optional(),
   // Bootstrap admin (también super-admin de la plataforma).
   NV_ADMIN_EMAIL: z.string().optional(),
   // Super-admins de la plataforma (emails separados por coma): controlan a

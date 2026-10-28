@@ -18,6 +18,8 @@ export interface AuthResult {
   user: AuthUser;
   memberships: Membership[];
   superAdmin: boolean;
+  /** The read-only «Ver demo» session. */
+  demo?: boolean;
 }
 
 export interface RegisterInput {
@@ -87,6 +89,7 @@ export interface SessionView {
   user: AuthUser;
   memberships: Membership[];
   superAdmin: boolean;
+  demo?: boolean;
 }
 
 /**
@@ -106,6 +109,9 @@ export const authClient = {
 
   login: (input: LoginInput) =>
     request<AuthResult>("/auth/login", { method: "POST", body: JSON.stringify(input) }),
+
+  /** «Ver demo»: a read-only session on the example brand, no account needed. */
+  demo: () => request<AuthResult>("/auth/demo", { method: "POST" }),
 
   /** Exchange the refresh cookie for a fresh access token (rotates the cookie). */
   refresh: () => {

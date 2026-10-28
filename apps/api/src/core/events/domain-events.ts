@@ -24,6 +24,18 @@ export interface DomainEventMap {
     contactHandle: string;
     contactName: string;
     text: string;
+    /** "in" (default) = the contact wrote; "out" = sent from the phone. */
+    direction?: "in" | "out";
+    at?: Date;
+    externalId?: string | null;
+    /** History replayed after linking: stored, never treated as a new message. */
+    history?: boolean;
+  };
+  /** Names learnt from a live session's contact list (phone → name). */
+  "session.contact-names": {
+    workspaceSlug: string;
+    channel: "wa" | "tg";
+    names: { handle: string; name: string }[];
   };
   "message.sent": {
     workspaceSlug: string;

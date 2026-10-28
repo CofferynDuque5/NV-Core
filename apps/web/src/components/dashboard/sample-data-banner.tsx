@@ -36,8 +36,10 @@ export function SampleDataBanner({ slug }: { slug: string }) {
   const remove = useRemoveSampleData(slug);
   const role = useAuthStore((s) => s.memberships.find((m) => m.workspaceSlug === slug)?.role);
   const superAdmin = useAuthStore((s) => s.superAdmin);
+  const demo = useAuthStore((s) => s.demo);
   const [open, setOpen] = React.useState(false);
-  if (!data?.present) return null;
+  // The demo brand is example data on purpose.
+  if (!data?.present || demo) return null;
   const canRemove = superAdmin || role === "Owner" || role === "Admin";
   const what = describeSample(data.counts);
 

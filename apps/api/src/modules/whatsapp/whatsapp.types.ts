@@ -51,6 +51,21 @@ export interface WhatsappAttachment {
   filename?: string | null;
 }
 
+/** A chat message as a live session reports it to the Inbox. */
+export interface SessionChatMessage {
+  contactHandle: string;
+  contactName: string;
+  text: string;
+  /** "in" (default) = the contact wrote; "out" = sent from the phone. */
+  direction?: "in" | "out";
+  /** When it was sent (default: now). */
+  at?: Date;
+  /** Platform message id, so each message is stored once. */
+  externalId?: string | null;
+  /** Part of the history sent after linking: stored, but not treated as new. */
+  history?: boolean;
+}
+
 /** Callbacks a BaileysSession uses to report changes back to the service. */
 export interface SessionEvents {
   onQr(workspaceSlug: string, dataUrl: string): void;
@@ -61,11 +76,10 @@ export interface SessionEvents {
   ): void;
   /** Full group list after a sync, so the service can persist it. */
   onGroups(workspaceSlug: string, groups: WhatsappGroup[]): void;
-  /** A direct (1:1) inbound message, for the Inbox. */
-  onInbound(
-    workspaceSlug: string,
-    msg: { contactHandle: string; contactName: string; text: string },
-  ): void;
+  /** A direct (1:1) chat message (received, or sent from the phone), for the Inbox. */
+  onInbound(workspaceSlug: string, msg: SessionChatMessage): void;
+  /** Names from the WhatsApp contact list, to replace bare numbers in the Inbox. */
+  onContactNames?(workspaceSlug: string, names: { handle: string; name: string }[]): void;
   /** A connection problem worth alerting the user about (disconnect, gave up…). */
   onAlert(workspaceSlug: string, alert: SessionAlert): void;
 }

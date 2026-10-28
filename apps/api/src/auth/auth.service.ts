@@ -6,6 +6,7 @@ import {
   HttpStatus,
   Injectable,
   NotFoundException,
+  ServiceUnavailableException,
   UnauthorizedException,
 } from "@nestjs/common";
 import { JwtService } from "@nestjs/jwt";
@@ -21,6 +22,7 @@ import { generateRefreshToken, hashToken } from "./token.util";
 import type {
   InvitationRecord,
   JwtPayload,
+  LoginMeta,
   MembershipView,
   PublicUser,
   UserRecord,
@@ -35,6 +37,8 @@ export interface AuthResult {
   user: PublicUser;
   memberships: MembershipView[];
   superAdmin: boolean;
+  /** The read-only «Ver demo» session. */
+  demo?: boolean;
 }
 
 /** Sanitized session view returned in the response body. */
@@ -43,6 +47,8 @@ export interface SessionView {
   memberships: MembershipView[];
   /** True when the user is a platform super-admin (NV_SUPER_ADMINS / NV_ADMIN_EMAIL). */
   superAdmin: boolean;
+  /** The read-only «Ver demo» session. */
+  demo?: boolean;
 }
 
 @Injectable()
@@ -55,7 +61,7 @@ export class AuthService {
     private readonly plans: PlanService,
   ) {}
 
-  async register(dto: RegisterDto): Promise<AuthResult> {
+  async register(dto: RegisterDto, meta: LoginMeta = {}): Promise<AuthResult> {
     if (dto.acceptTerms !== true) {
       throw new BadRequestException("Debes aceptar los Términos legales para crear tu cuenta.");
     }
@@ -90,6 +96,7 @@ export class AuthService {
 
     // Best-effort verification email (no-op if Resend isn't configured).
     await this.sendVerificationEmail(user.id, user.email, user.name);
+    await this.store.recordLogin(user.id, "register", meta);
     return this.issueTokens(user);
   }
 
@@ -153,7 +160,7 @@ export class AuthService {
   private static readonly MAX_FAILED_LOGINS = 5;
   private static readonly LOCK_DURATION_MS = 15 * 60_000; // 15 minutes
 
-  async login(dto: LoginDto): Promise<AuthResult> {
+  async login(dto: LoginDto, meta: LoginMeta = {}): Promise<AuthResult> {
     const user = await this.store.findUserByEmail(dto.email);
 
     // Refuse while locked — even with the correct password — until the window
@@ -186,6 +193,7 @@ export class AuthService {
     if (user.failedLoginAttempts > 0 || user.lockedUntil) {
       await this.store.clearFailedLogins(user.id);
     }
+    await this.store.recordLogin(user.id, user.demo ? "demo" : "password", meta);
     return this.issueTokens(user);
   }
 
@@ -198,6 +206,7 @@ export class AuthService {
     await this.store.revokeRefreshToken(hash);
     const user = await this.store.findUserById(record.userId);
     if (!user) throw new UnauthorizedException("Usuario no encontrado.");
+    await this.store.touchSeen(user.id);
     return this.issueTokens(user);
   }
 
@@ -213,6 +222,7 @@ export class AuthService {
       user: { id: user.id, email: user.email, name: user.name },
       memberships: memberships.map((m) => ({ workspaceSlug: m.workspaceSlug, role: m.role })),
       superAdmin: this.isSuperAdmin(user.email),
+      demo: user.demo === true,
     };
   }
 
@@ -374,7 +384,12 @@ export class AuthService {
 
   private async issueTokens(user: UserRecord): Promise<AuthResult> {
     const memberships = await this.store.membershipsOf(user.id);
-    const payload: JwtPayload = { sub: user.id, email: user.email, name: user.name };
+    const payload: JwtPayload = {
+      sub: user.id,
+      email: user.email,
+      name: user.name,
+      ...(user.demo ? { demo: true } : {}),
+    };
     // Access token: secret + short expiry come from JwtModule config (AuthModule).
     const accessToken = await this.jwt.signAsync(payload);
 
@@ -390,6 +405,18 @@ export class AuthService {
       user: { id: user.id, email: user.email, name: user.name },
       memberships: memberships.map((m) => ({ workspaceSlug: m.workspaceSlug, role: m.role })),
       superAdmin: this.isSuperAdmin(user.email),
+      demo: user.demo === true,
     };
+  }
+
+  /**
+   * «Ver demo»: a session on the shared read-only demo account, without a
+   * password. The account and its example brand are prepared at startup.
+   */
+  async demoSession(email: string, meta: LoginMeta = {}): Promise<AuthResult> {
+    const user = await this.store.findUserByEmail(email);
+    if (!user?.demo) throw new ServiceUnavailableException("La demo no está disponible ahora mismo.");
+    await this.store.recordLogin(user.id, "demo", meta);
+    return this.issueTokens(user);
   }
 }

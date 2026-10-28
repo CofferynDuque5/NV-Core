@@ -116,6 +116,8 @@ describe("AuthService login lockout", () => {
       }),
       membershipsOf: vi.fn(async () => []),
       createRefreshToken: vi.fn(async () => undefined),
+      recordLogin: vi.fn(async () => undefined),
+      touchSeen: vi.fn(async () => undefined),
     };
     const jwt = { signAsync: vi.fn(async () => "access-token") };
     const config = { get: vi.fn((k: string) => (k === "superAdmins" ? [] : { refreshTtlDays: 7 })) };
@@ -282,6 +284,8 @@ describe("AuthService · team invitations", () => {
       workspaceHasMembers: vi.fn(async () => true),
       createAuthToken: vi.fn(async () => undefined),
       createRefreshToken: vi.fn(async () => undefined),
+      recordLogin: vi.fn(async () => undefined),
+      touchSeen: vi.fn(async () => undefined),
       membershipsOf: vi.fn(async () => memberships.filter((m) => m.userId === "bob")),
     };
     const jwt = { signAsync: vi.fn(async () => "access-token") };
@@ -347,6 +351,8 @@ describe("AuthService perfil", () => {
       updatePassword: vi.fn(async () => undefined),
       revokeAllRefreshTokens: vi.fn(async () => undefined),
       createRefreshToken: vi.fn(async () => undefined),
+      recordLogin: vi.fn(async () => undefined),
+      touchSeen: vi.fn(async () => undefined),
     };
     return { user, store };
   };
@@ -375,5 +381,34 @@ describe("AuthService perfil", () => {
     expect(store.revokeAllRefreshTokens).toHaveBeenCalledWith("u1");
     expect(store.createRefreshToken).toHaveBeenCalled();
     expect(res.accessToken).toBe("jwt");
+  });
+});
+
+describe("AuthService · sign-in log and demo", () => {
+  function make(user: Record<string, unknown> | undefined) {
+    const store = {
+      findUserByEmail: vi.fn(async () => user),
+      membershipsOf: vi.fn(async () => [{ userId: "u1", workspaceSlug: "nv-demo", role: "Visor" }]),
+      createRefreshToken: vi.fn(async () => undefined),
+      recordLogin: vi.fn(async () => undefined),
+      clearFailedLogins: vi.fn(async () => undefined),
+    };
+    const jwt = { signAsync: vi.fn(async (p: Record<string, unknown>) => JSON.stringify(p)) };
+    const config = { get: vi.fn((k: string) => (k === "auth" ? { refreshTtlDays: 7 } : k === "superAdmins" ? [] : undefined)) };
+    const service = new AuthService(store as never, jwt as never, config as never, {} as never, {} as never);
+    return { service, store, jwt };
+  }
+
+  it("opens the demo as a read-only session and logs it", async () => {
+    const { service, store } = make({ id: "u1", email: "demo@demo.nvmarketing.invalid", name: "Visitante", passwordHash: "x", demo: true, failedLoginAttempts: 0, lockedUntil: null });
+    const session = await service.demoSession("demo@demo.nvmarketing.invalid", { ip: "1.2.3.4", userAgent: "Chrome" });
+    expect(session.demo).toBe(true);
+    expect(JSON.parse(session.accessToken)).toMatchObject({ demo: true });
+    expect(store.recordLogin).toHaveBeenCalledWith("u1", "demo", { ip: "1.2.3.4", userAgent: "Chrome" });
+  });
+
+  it("never opens a real account as the demo", async () => {
+    const { service } = make({ id: "u2", email: "x@y.com", name: "X", passwordHash: "x", failedLoginAttempts: 0, lockedUntil: null });
+    await expect(service.demoSession("x@y.com")).rejects.toThrow(/demo no está disponible/);
   });
 });
