@@ -259,15 +259,29 @@ function missingEngines() {
   return targets.filter((t) => !fs.existsSync(path.join(dir, "libquery_engine-" + t + ".so.node")));
 }
 
-// Genera el cliente de Prisma si no existe o si le falta el motor de esta
-// plataforma (p. ej. el hosting cambió de OpenSSL 1.0 a 1.1/3.0). Best-effort:
-// si falla, la app igual arranca.
+// El cliente generado guarda una copia del schema. Si no coincide con el de esta
+// versión, el cliente es de una versión anterior: le faltan modelos nuevos
+// (p. ej. "Cannot read properties of undefined (reading 'findUnique')").
+function staleClient() {
+  try {
+    const dir = path.dirname(require.resolve(".prisma/client/default", { paths: [__dirname] }));
+    const norm = (s) => s.replace(/\\s+/g, ""); // Prisma reformatea su copia
+    return norm(fs.readFileSync(path.join(dir, "schema.prisma"), "utf8")) !== norm(fs.readFileSync(schema, "utf8"));
+  } catch (_) {
+    return false; // sin copia legible: lo decide missingEngines()
+  }
+}
+
+// Genera el cliente de Prisma si no existe, si es de una versión anterior del
+// schema o si le falta el motor de esta plataforma (p. ej. el hosting cambió de
+// OpenSSL 1.0 a 1.1/3.0). Best-effort: si falla, la app igual arranca.
 function ensurePrismaClient() {
   let missing;
   try {
     require.resolve(".prisma/client/default", { paths: [__dirname] });
     missing = missingEngines();
-    if (missing.length === 0) return; // ya está generado y completo
+    if (staleClient()) missing.push("(schema nuevo)");
+    if (missing.length === 0) return; // ya está generado, completo y al día
   } catch (_) {
     missing = ["(cliente no generado)"];
   }
