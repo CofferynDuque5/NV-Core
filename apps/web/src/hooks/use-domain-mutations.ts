@@ -1,6 +1,8 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import type {
+  CreateProductInput,
+  UpdateWorkspaceInput,
   AccessPaymentInput,
   BrandLinks,
   CreatePaymentRequestInput,
@@ -1830,6 +1832,69 @@ export function useSaveBrandLinks() {
     onSuccess: (links) => {
       qc.setQueryData([ws.id, "brand-links"], links);
       toast.success("Redes y web guardadas.");
+    },
+    onError: (err) => toast.error(errText(err)),
+  });
+}
+
+/** Edit the open brand (name, color, tagline, type, goals); refreshes the brand list. */
+export function useUpdateWorkspace() {
+  const svc = useServices();
+  const ws = useWorkspace();
+  const setWorkspaces = useWorkspaceStore((s) => s.setWorkspaces);
+  const workspaces = useWorkspaceStore((s) => s.workspaces);
+  return useMutation({
+    mutationFn: (input: UpdateWorkspaceInput) => svc.workspaces.update(ws.slug, input),
+    onSuccess: (updated) => {
+      setWorkspaces(
+        workspaces.some((w) => w.slug === updated.slug)
+          ? workspaces.map((w) => (w.slug === updated.slug ? updated : w))
+          : [...workspaces, updated],
+      );
+    },
+    onError: (err) => toast.error(errText(err)),
+  });
+}
+
+/** Delete a brand and all its data; refreshes the brand list and the session. */
+export function useDeleteWorkspace() {
+  const svc = useServices();
+  const setWorkspaces = useWorkspaceStore((s) => s.setWorkspaces);
+  const refreshSession = useAuthStore((s) => s.refreshSession);
+  return useMutation({
+    mutationFn: ({ slug, confirmName }: { slug: string; confirmName: string }) => svc.workspaces.remove(slug, confirmName),
+    onSuccess: async () => {
+      const list = await svc.workspaces.list().catch(() => null);
+      if (list) setWorkspaces(list);
+      await refreshSession().catch(() => undefined);
+      toast.success("Marca eliminada con todos sus datos.");
+    },
+  });
+}
+
+export function useSaveProduct() {
+  const svc = useServices();
+  const ws = useWorkspace();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, input }: { id?: string; input: CreateProductInput }) =>
+      id ? svc.products.update(ws.id, id, input) : svc.products.create(ws.id, input),
+    onSuccess: (p, v) => {
+      void qc.invalidateQueries({ queryKey: [ws.id, "products"] });
+      toast.success(v.id ? `«${p.name}» actualizado.` : `«${p.name}» agregado a la Tienda.`);
+    },
+  });
+}
+
+export function useDeleteProduct() {
+  const svc = useServices();
+  const ws = useWorkspace();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => svc.products.remove(ws.id, id),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: [ws.id, "products"] });
+      toast.success("Producto eliminado.");
     },
     onError: (err) => toast.error(errText(err)),
   });

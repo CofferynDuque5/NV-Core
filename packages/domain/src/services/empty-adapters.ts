@@ -31,6 +31,8 @@ export const emptyAdapters: Services = {
   workspaces: {
     list: () => delay([...WORKSPACES]),
     create: () => notAvailable(),
+    update: () => notAvailable(),
+    remove: () => notAvailable(),
   },
   onboarding: {
     status: () =>
@@ -121,6 +123,12 @@ export const emptyAdapters: Services = {
   brandLinks: {
     get: () => delay({ socialLinks: [], website: null }),
     set: () => notAvailable(),
+  },
+  products: {
+    list: () => delay([]),
+    create: () => notAvailable(),
+    update: () => notAvailable(),
+    remove: () => notAvailable(),
   },
   sampleData: {
     summary: () => delay({ present: false, counts: { contacts: 0, segments: 0, forms: 0, funnels: 0, sequences: 0, affiliates: 0, automations: 0 } }),

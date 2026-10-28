@@ -24,7 +24,8 @@ import {
   useUpdateCampaign,
   useUploadCampaignAttachment,
 } from "@/hooks/use-domain-mutations";
-import { useBrandLinks, useCampaigns, useGroups, useTemplates } from "@/hooks/use-domain-data";
+import { useBrandLinks, useCampaigns, useGroups, useProducts, useTemplates } from "@/hooks/use-domain-data";
+import { productMessage } from "@/lib/products";
 import { FormDialog, errorMessage } from "./form-dialog";
 import { ContentPreview } from "./content-preview";
 import { AiFlyerButton } from "./ai-flyer-button";
@@ -74,10 +75,13 @@ export function CampaignFormDialog({
   open,
   onOpenChange,
   campaign,
+  draft,
 }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
   campaign?: Campaign | null;
+  /** Prefill for a new campaign (e.g. «Crear campaña» from a Tienda product). */
+  draft?: Pick<Campaign, "name" | "message" | "prices" | "attachments"> | null;
 }) {
   const isEdit = Boolean(campaign);
   const create = useCreateCampaign();
@@ -87,6 +91,7 @@ export function CampaignFormDialog({
   const templates = useTemplates();
   const campaigns = useCampaigns({ enabled: open });
   const brandLinks = useBrandLinks();
+  const products = useProducts({ enabled: open });
   const generate = useGenerateVariants();
   const pending = create.isPending || update.isPending;
   const fileInputRef = React.useRef<HTMLInputElement>(null);
@@ -116,10 +121,10 @@ export function CampaignFormDialog({
   React.useEffect(() => {
     if (!open) return;
     const type = campaign?.scheduleType ?? "once";
-    setName(campaign?.name ?? "");
+    setName(campaign?.name ?? draft?.name ?? "");
     setStatus(campaign?.status ?? "borrador");
     setProgress(campaign?.progress ?? 0);
-    setMessage(campaign?.message ?? "");
+    setMessage(campaign?.message ?? draft?.message ?? "");
     setScheduleType(type);
     setDateTime(type === "once" ? isoToLocalInput(campaign?.scheduleAt) : "");
     setTime("20:00"); // default the picker to 8:00 PM, ready to add
@@ -139,11 +144,22 @@ export function CampaignFormDialog({
     setPostToWaStatus(campaign?.postToWaStatus ?? false);
     setRotateAttachments(campaign?.rotateAttachments ?? false);
     setSocialFormat(campaign?.socialFormat ?? "feed");
-    setAttachments(campaign?.attachments ?? []);
-    setPrices(campaign?.prices ?? {});
+    setAttachments(campaign?.attachments ?? draft?.attachments ?? []);
+    setPrices(campaign?.prices ?? draft?.prices ?? {});
     setAddFooter(campaign?.addFooter ?? true);
     setError(null);
-  }, [open, campaign]);
+  }, [open, campaign, draft]);
+
+  /** Fill the message, prices and photo from a Tienda product. */
+  function fillFromProduct(id: string) {
+    const p = products.data?.find((x) => x.id === id);
+    if (!p) return;
+    setMessage(productMessage(p));
+    setPrices(p.prices);
+    if (!name.trim()) setName(p.name);
+    const cover = p.images[0];
+    if (cover && !attachments.some((a) => a.url === cover.url)) setAttachments((prev) => [cover, ...prev]);
+  }
 
   async function onPickFiles(e: React.ChangeEvent<HTMLInputElement>) {
     const files = Array.from(e.target.files ?? []);
@@ -366,7 +382,24 @@ export function CampaignFormDialog({
             <div className="space-y-1.5">
               <div className="flex items-center justify-between gap-2">
                 <Label htmlFor="cp-message">Mensaje</Label>
-                <div className="flex items-center gap-1.5">
+                <div className="flex flex-wrap items-center justify-end gap-1.5">
+                  {(products.data?.length ?? 0) > 0 ? (
+                    <select
+                      aria-label="Usar producto de la Tienda"
+                      value=""
+                      onChange={(e) => fillFromProduct(e.target.value)}
+                      className="border-line-soft bg-panel-raised text-ink-muted h-7 max-w-[11rem] rounded-md border px-2 text-xs"
+                    >
+                      <option value="">Usar producto…</option>
+                      {products.data
+                        ?.filter((p) => p.active)
+                        .map((p) => (
+                          <option key={p.id} value={p.id}>
+                            {p.name}
+                          </option>
+                        ))}
+                    </select>
+                  ) : null}
                   {(templates.data?.items.length ?? 0) > 0 ? (
                     <select
                       aria-label="Usar plantilla"

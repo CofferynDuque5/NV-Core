@@ -20,6 +20,7 @@ import {
   Plug,
   Send,
   Settings,
+  ShoppingBag,
   Sparkles,
   Store,
   Users,
@@ -52,6 +53,7 @@ const MAP: Record<string, LucideIcon> = {
   Plug,
   Send,
   Settings,
+  ShoppingBag,
   LifeBuoy,
 };
 
@@ -72,6 +74,7 @@ export interface NavRenderItem {
  */
 export const EXTRA_NAV_ITEMS: Record<string, NavRenderItem[]> = {
   PRINCIPAL: [
+    { module: "tienda", label: "Tienda", icon: "ShoppingBag" },
     { module: "tareas", label: "Tareas", icon: "KanbanSquare" },
     { module: "cobros", label: "Cobros", icon: "BadgeDollarSign" },
     { module: "historial", label: "Historial", icon: "History" },

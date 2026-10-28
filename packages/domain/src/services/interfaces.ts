@@ -1,4 +1,5 @@
 import type {
+  Product,
   AccessOverview,
   SampleDataSummary,
   BrandLinks,
@@ -876,6 +877,28 @@ export interface CreateWorkspaceInput {
   kind?: WorkspaceKind;
   accent?: string;
   tagline?: string;
+  goals?: string[];
+}
+
+/** Brand edits; name, kind, color and tagline only apply to brands users created. */
+export type UpdateWorkspaceInput = Partial<CreateWorkspaceInput>;
+
+export interface CreateProductInput {
+  name: string;
+  description?: string | null;
+  category?: string | null;
+  prices?: Record<string, string>;
+  images?: Product["images"];
+  sku?: string | null;
+  stock?: number | null;
+  active?: boolean;
+}
+
+export interface ProductService {
+  list(workspaceId: string): Promise<Product[]>;
+  create(workspaceId: string, input: CreateProductInput): Promise<Product>;
+  update(workspaceId: string, id: string, input: Partial<CreateProductInput>): Promise<Product>;
+  remove(workspaceId: string, id: string): Promise<void>;
 }
 
 export interface WhatsappStatus {
@@ -991,6 +1014,9 @@ export interface WorkspaceService {
   /** All workspaces (built-in config + user-created). */
   list(): Promise<Workspace[]>;
   create(input: CreateWorkspaceInput): Promise<Workspace>;
+  update(slug: string, input: UpdateWorkspaceInput): Promise<Workspace>;
+  /** Deletes the brand and all its data; `confirmName` must equal its name. */
+  remove(slug: string, confirmName: string): Promise<void>;
 }
 
 export interface OnboardingService {
@@ -1065,4 +1091,5 @@ export interface Services {
   access: AccessService;
   sampleData: SampleDataService;
   brandLinks: BrandLinksService;
+  products: ProductService;
 }

@@ -50,6 +50,7 @@ const AyudaPage = React.lazy(() => import("@/app/w/[workspace]/ayuda/page"));
 const NovedadesPage = React.lazy(() => import("@/app/w/[workspace]/novedades/page"));
 const EstadoPage = React.lazy(() => import("@/app/w/[workspace]/estado/page"));
 const PerfilPage = React.lazy(() => import("@/app/w/[workspace]/perfil/page"));
+const TiendaPage = React.lazy(() => import("@/app/w/[workspace]/tienda/page"));
 
 function RouteFallback() {
   return (
@@ -128,6 +129,14 @@ export function AppRoutes() {
         element={
           <WorkspacePage>
             <DashboardPage />
+          </WorkspacePage>
+        }
+      />
+      <Route
+        path="/w/:workspace/tienda"
+        element={
+          <WorkspacePage>
+            <TiendaPage />
           </WorkspacePage>
         }
       />

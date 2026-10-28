@@ -44,6 +44,10 @@ export interface Workspace {
   tagline?: string;
   /** Core modules enabled for this workspace. */
   enabledModules: ModuleId[];
+  /** What the brand wants to achieve first (see WORKSPACE_GOALS). */
+  goals?: string[];
+  /** Built-in demo brand (cannot be renamed or deleted). */
+  builtin?: boolean;
 }
 
 export interface User {
@@ -298,6 +302,22 @@ export interface GroupRulesCheck {
 }
 
 /** Brand links appended to group messages. */
+/** A product or service in the brand's Tienda. */
+export interface Product {
+  id: string;
+  name: string;
+  description: string | null;
+  category: string | null;
+  /** currency → amount text, e.g. { VES: "350", USD: "10" }. */
+  prices: Record<string, string>;
+  images: CampaignAttachment[];
+  sku: string | null;
+  stock: number | null;
+  active: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface BrandLinks {
   socialLinks: { label: string; url: string }[];
   website: string | null;

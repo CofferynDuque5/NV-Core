@@ -89,3 +89,78 @@ export const MODULE_META: Record<ModuleId, { label: string; description: string 
   conexiones: { label: "Conexiones", description: "Proveedores & OAuth" },
   configuracion: { label: "Configuración", description: "Equipo, roles y sistema" },
 };
+
+/**
+ * Answers to «¿Qué quieres lograr primero?». Each goal pins the screens it
+ * needs to the top of the sidebar (in this order) and sets the dashboard's
+ * next steps. `modules` are route segments under /w/:workspace/.
+ */
+export const WORKSPACE_GOALS: {
+  id: string;
+  label: string;
+  modules: string[];
+  steps: { title: string; href: string; cta: string }[];
+}[] = [
+  {
+    id: "difusion",
+    label: "Difundir por WhatsApp / Telegram",
+    modules: ["campanas", "grupos", "conexiones"],
+    steps: [
+      { title: "Conecta tu WhatsApp", href: "conexiones", cta: "Conectar" },
+      { title: "Revisa las reglas de tus grupos y aparta los que no uses", href: "grupos", cta: "Ver grupos" },
+      { title: "Crea tu primera campaña a grupos", href: "campanas", cta: "Nueva campaña" },
+    ],
+  },
+  {
+    id: "leads",
+    label: "Captar clientes con formularios",
+    modules: ["formularios", "embudos", "contactos"],
+    steps: [
+      { title: "Crea un formulario para captar datos", href: "formularios", cta: "Crear formulario" },
+      { title: "Arma un embudo con tu oferta", href: "embudos", cta: "Crear embudo" },
+      { title: "Revisa los contactos que llegan", href: "contactos", cta: "Ver contactos" },
+    ],
+  },
+  {
+    id: "ventas",
+    label: "Vender y cobrar",
+    modules: ["tienda", "cobros", "inbox"],
+    steps: [
+      { title: "Carga tus productos y precios en la Tienda", href: "tienda", cta: "Abrir Tienda" },
+      { title: "Configura cómo te pagan (pago móvil, Binance, Zinli…)", href: "cobros", cta: "Configurar cobros" },
+      { title: "Responde a tus clientes desde el Inbox", href: "inbox", cta: "Abrir Inbox" },
+    ],
+  },
+  {
+    id: "automatizar",
+    label: "Automatizar seguimientos",
+    modules: ["automatizaciones", "secuencias", "segmentos"],
+    steps: [
+      { title: "Activa una automatización de plantilla", href: "automatizaciones", cta: "Ver plantillas" },
+      { title: "Crea una secuencia de seguimiento", href: "secuencias", cta: "Crear secuencia" },
+      { title: "Agrupa a tus clientes en segmentos", href: "segmentos", cta: "Crear segmento" },
+    ],
+  },
+  {
+    id: "contenido",
+    label: "Crear contenido con IA",
+    modules: ["ai", "builder", "biblioteca"],
+    steps: [
+      { title: "Genera tu primer texto con IA", href: "ai", cta: "Abrir AI Studio" },
+      { title: "Diseña una pieza en el editor", href: "builder", cta: "Abrir editor" },
+      { title: "Sube tus fotos a la Biblioteca", href: "biblioteca", cta: "Subir" },
+    ],
+  },
+  {
+    id: "redes",
+    label: "Publicar en redes sociales",
+    modules: ["calendario", "conexiones", "analytics"],
+    steps: [
+      { title: "Conecta Instagram y Facebook", href: "conexiones", cta: "Conectar" },
+      { title: "Programa tu primera publicación", href: "calendario", cta: "Abrir calendario" },
+      { title: "Mira qué funciona en Analytics", href: "analytics", cta: "Ver Analytics" },
+    ],
+  },
+];
+
+export const WORKSPACE_GOAL_IDS = WORKSPACE_GOALS.map((g) => g.id);

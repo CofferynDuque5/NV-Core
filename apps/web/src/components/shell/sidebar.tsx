@@ -1,5 +1,4 @@
 import { Link, useLocation } from "react-router-dom";
-import { NAV_SECTIONS } from "@nv/domain";
 import { ChevronLeft, ChevronsUpDown } from "lucide-react";
 
 import { cn } from "@/lib/utils";
@@ -12,7 +11,8 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { EXTRA_NAV_ITEMS, getNavIcon } from "./sidebar-icon";
+import { getNavIcon } from "./sidebar-icon";
+import { navSectionsFor } from "@/lib/goal-nav";
 
 export function Sidebar({ onOpenSwitcher }: { onOpenSwitcher: () => void }) {
   const collapsed = useUiStore((s) => s.navCollapsed);
@@ -103,7 +103,7 @@ export function Sidebar({ onOpenSwitcher }: { onOpenSwitcher: () => void }) {
 
       {/* Nav */}
       <nav className="mt-2 flex-1 space-y-4 overflow-y-auto px-2.5 pb-4">
-        {NAV_SECTIONS.map((section) => (
+        {navSectionsFor(ws.goals).map((section) => (
           <div key={section.label}>
             {!collapsed ? (
               <div className="px-2 pb-1.5 pt-1 text-[10px] font-semibold tracking-[0.16em] text-ink-faint">
@@ -113,7 +113,7 @@ export function Sidebar({ onOpenSwitcher }: { onOpenSwitcher: () => void }) {
               <div className="mx-2 mb-1.5 mt-1 h-px bg-line" />
             )}
             <ul className="space-y-0.5">
-              {[...section.items, ...(EXTRA_NAV_ITEMS[section.label] ?? [])].map((item) => {
+              {section.items.map((item) => {
                 const href = `/w/${ws.slug}/${item.module}`;
                 const active = pathname === href || pathname.startsWith(`${href}/`);
                 const Icon = getNavIcon(item.icon);

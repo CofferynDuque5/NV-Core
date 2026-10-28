@@ -1,23 +1,36 @@
+import { rm } from "node:fs/promises";
+import { join } from "node:path";
 import {
+  BadRequestException,
   Body,
   Controller,
+  Delete,
   Get,
+  HttpCode,
   Injectable,
+  Logger,
   Module,
   NotFoundException,
   Param,
+  Patch,
   Post,
   UseGuards,
 } from "@nestjs/common";
+import { Prisma } from "@prisma/client";
 import { ApiBearerAuth, ApiTags } from "@nestjs/swagger";
-import { WORKSPACE_KINDS, type Workspace, type WorkspaceKind } from "@nv/domain";
+import { WORKSPACE_GOAL_IDS, WORKSPACE_KINDS, type Workspace, type WorkspaceKind } from "@nv/domain";
 import { ConfigService } from "@nestjs/config";
-import { IsIn, IsOptional, IsString, MaxLength, MinLength } from "class-validator";
+import { IsArray, IsIn, IsOptional, IsString, Matches, MaxLength, MinLength } from "class-validator";
 import { Throttle } from "@nestjs/throttler";
 
 import { CurrentUser } from "../../auth/decorators/current-user.decorator";
 import type { AuthenticatedUser } from "../../auth/auth.types";
-import { WorkspaceRegistry } from "../../common/workspace-registry.service";
+import { WorkspaceRegistry, cleanGoals } from "../../common/workspace-registry.service";
+import { AuditLogger } from "../../common/audit-logger.service";
+import { PrismaService } from "../../prisma/prisma.service";
+import { RolesGuard } from "../../auth/guards/roles.guard";
+import { Roles } from "../../auth/decorators/roles.decorator";
+import { resolveMediaDir, WORKSPACE_DIR_RE } from "../media/local-storage";
 import { WorkspaceGuard } from "../../common/tenant/workspace.guard";
 import { WorkspaceAccessService } from "../../common/access/workspace-access.service";
 import type { AppConfig } from "../../config/configuration";
@@ -27,6 +40,33 @@ export class CreateWorkspaceDto {
   @IsOptional() @IsIn(WORKSPACE_KINDS) kind?: WorkspaceKind;
   @IsOptional() @IsString() accent?: string;
   @IsOptional() @IsString() @MaxLength(80) tagline?: string;
+  @IsOptional() @IsArray() @IsIn(WORKSPACE_GOAL_IDS, { each: true }) goals?: string[];
+}
+
+export class UpdateWorkspaceDto {
+  @IsOptional() @IsString() @MinLength(2) @MaxLength(60) name?: string;
+  @IsOptional() @IsIn(WORKSPACE_KINDS) kind?: WorkspaceKind;
+  @IsOptional() @IsString() @Matches(/^#[0-9a-fA-F]{6}$/) accent?: string;
+  @IsOptional() @IsString() @MaxLength(80) tagline?: string;
+  @IsOptional() @IsArray() @IsIn(WORKSPACE_GOAL_IDS, { each: true }) goals?: string[];
+}
+
+export class DeleteWorkspaceDto {
+  @IsString() confirmName!: string;
+}
+
+/**
+ * Every table that holds a brand's rows, from Prisma's own model list: models
+ * with a `workspaceSlug` (or `workspaceId`) column. Rows that hang off those
+ * (targets, variables…) go with them through their foreign keys.
+ */
+export function workspaceTables(): { table: string; column: string }[] {
+  const out: { table: string; column: string }[] = [];
+  for (const m of Prisma.dmmf.datamodel.models) {
+    const f = m.fields.find((x) => x.kind === "scalar" && (x.name === "workspaceSlug" || x.name === "workspaceId"));
+    if (f && m.name !== "Workspace") out.push({ table: m.dbName ?? m.name, column: f.dbName ?? f.name });
+  }
+  return out;
 }
 
 /**
@@ -36,10 +76,14 @@ export class CreateWorkspaceDto {
  */
 @Injectable()
 export class WorkspacesService {
+  private readonly logger = new Logger(WorkspacesService.name);
+
   constructor(
     private readonly registry: WorkspaceRegistry,
     private readonly access: WorkspaceAccessService,
     private readonly config: ConfigService<AppConfig, true>,
+    private readonly prisma: PrismaService,
+    private readonly audit: AuditLogger,
   ) {}
 
   /** Only the workspaces the user belongs to (no cross-tenant enumeration). */
@@ -50,12 +94,88 @@ export class WorkspacesService {
   async get(slug: string): Promise<Workspace> {
     const ws = await this.registry.resolve(slug);
     if (!ws) throw new NotFoundException(`Workspace "${slug}" no encontrado`);
-    return ws;
+    const [withGoals] = await this.registry.withGoals([ws]);
+    return withGoals!;
+  }
+
+  /**
+   * Edit a brand. Goals work on every brand (they live in its settings);
+   * name, type, color and tagline only on brands a customer created — the
+   * built-in demo brands come from the app's config.
+   */
+  async update(slug: string, dto: UpdateWorkspaceDto, actor: string): Promise<Workspace> {
+    const ws = await this.get(slug);
+    const identity = dto.name !== undefined || dto.kind !== undefined || dto.accent !== undefined || dto.tagline !== undefined;
+    if (identity) {
+      if (ws.builtin) throw new BadRequestException("Esta marca de demostración no se puede renombrar.");
+      await this.prisma.workspace.update({
+        where: { slug },
+        data: {
+          ...(dto.name !== undefined ? { name: dto.name.trim() } : {}),
+          ...(dto.kind !== undefined ? { kind: dto.kind } : {}),
+          ...(dto.accent !== undefined ? { accent: dto.accent } : {}),
+          ...(dto.tagline !== undefined ? { tagline: dto.tagline.trim() || null } : {}),
+        },
+      });
+    }
+    if (dto.goals !== undefined) {
+      const goals = cleanGoals(dto.goals);
+      await this.prisma.workspaceSettings.upsert({
+        where: { workspaceSlug: slug },
+        create: { workspaceSlug: slug, goals, updatedBy: actor },
+        update: { goals, updatedBy: actor },
+      });
+    }
+    await this.audit.record(slug, actor, "workspace.update", Object.keys(dto).join(","));
+    return this.get(slug);
+  }
+
+  /**
+   * Delete a brand a customer created, with all its data and uploaded files.
+   * The caller must type the brand's exact name. Built-in brands can't be deleted.
+   */
+  async remove(slug: string, confirmName: string, actor: string): Promise<void> {
+    const ws = await this.get(slug);
+    if (ws.builtin) throw new BadRequestException("Las marcas de demostración no se pueden eliminar.");
+    if (confirmName.trim() !== ws.name) throw new BadRequestException("Escribe el nombre exacto de la marca para confirmar.");
+    // Several passes: a row another table still points to is retried once
+    // the rows pointing to it are gone.
+    let pending = workspaceTables();
+    for (let pass = 0; pass < 6 && pending.length > 0; pass++) {
+      const failed: typeof pending = [];
+      for (const t of pending) {
+        try {
+          await this.prisma.$executeRawUnsafe(`DELETE FROM "${t.table}" WHERE "${t.column}" = $1`, slug);
+        } catch {
+          failed.push(t);
+        }
+      }
+      pending = failed;
+    }
+    if (pending.length > 0) {
+      this.logger.error(`No se pudo borrar todo de ${slug}: ${pending.map((t) => t.table).join(", ")}`);
+      throw new BadRequestException("No se pudo eliminar la marca por completo. Intenta de nuevo.");
+    }
+    await this.prisma.workspace.delete({ where: { slug } });
+    const media = this.config.get("media", { infer: true });
+    if (media?.dir && WORKSPACE_DIR_RE.test(slug)) {
+      await rm(join(resolveMediaDir(media.dir), slug), { recursive: true, force: true }).catch(() => undefined);
+    }
+    this.logger.log(`Marca ${slug} eliminada por ${actor}`);
   }
 
   /** A brand a customer creates starts its free trial; the operator's own brands don't. */
   async create(dto: CreateWorkspaceDto, user: AuthenticatedUser): Promise<Workspace> {
     const ws = await this.registry.create(dto, { userId: user.userId, email: user.email });
+    if (dto.goals?.length) {
+      const goals = cleanGoals(dto.goals);
+      await this.prisma.workspaceSettings.upsert({
+        where: { workspaceSlug: ws.slug },
+        create: { workspaceSlug: ws.slug, goals, updatedBy: user.email },
+        update: { goals },
+      });
+      ws.goals = goals;
+    }
     const operator = this.config.get("superAdmins", { infer: true }).includes(user.email.toLowerCase());
     if (!operator) await this.access.startTrial(ws.slug);
     return ws;
@@ -85,6 +205,22 @@ export class WorkspacesController {
   @Get(":workspace")
   get(@Param("workspace") slug: string): Promise<Workspace> {
     return this.service.get(slug);
+  }
+
+  @UseGuards(WorkspaceGuard, RolesGuard)
+  @Roles("Owner", "Admin")
+  @Patch(":workspace")
+  update(@Param("workspace") slug: string, @Body() dto: UpdateWorkspaceDto, @CurrentUser() user: AuthenticatedUser) {
+    return this.service.update(slug, dto, user.email);
+  }
+
+  @UseGuards(WorkspaceGuard, RolesGuard)
+  @Roles("Owner")
+  @Throttle({ default: { limit: 5, ttl: 60_000 } })
+  @Delete(":workspace")
+  @HttpCode(204)
+  remove(@Param("workspace") slug: string, @Body() dto: DeleteWorkspaceDto, @CurrentUser() user: AuthenticatedUser) {
+    return this.service.remove(slug, dto.confirmName, user.email);
   }
 }
 

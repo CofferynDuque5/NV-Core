@@ -705,6 +705,9 @@ model WorkspaceSettings {
   /// Brand links for the campaign footer: [{ label, url }].
   socialLinks   Json     @default("[]")
   website       String?
+  /// What the brand wants to achieve first (onboarding «¿Qué quieres lograr
+  /// primero?»); orders the sidebar and the dashboard's next steps.
+  goals         String[] @default([])
   updatedBy     String?
   updatedAt     DateTime @updatedAt
 }
@@ -999,4 +1002,26 @@ model PaymentRequest {
   @@index([workspaceSlug, status, createdAt])
   @@index([workspaceSlug, contactId])
   @@index([forWorkspace, createdAt])
+}
+
+/// A product or service in the brand's Tienda (catalog). Prices are per
+/// currency, typed by the user (never converted).
+model Product {
+  id            String   @id @default(cuid())
+  workspaceSlug String
+  name          String
+  description   String?
+  category      String?
+  /// currency → amount text, e.g. { "VES": "350", "USD": "10" }.
+  prices        Json     @default("{}")
+  /// Uploaded images [{ path, filename, mime, kind, url }]; first is the cover.
+  images        Json     @default("[]")
+  sku           String?
+  /// null = not tracked.
+  stock         Int?
+  active        Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([workspaceSlug])
 }

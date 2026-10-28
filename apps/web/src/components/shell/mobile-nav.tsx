@@ -1,12 +1,12 @@
 import { Link, useLocation } from "react-router-dom";
-import { NAV_SECTIONS } from "@nv/domain";
 import { ChevronsUpDown } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { useUiStore } from "@/stores/ui-store";
 import { useWorkspace } from "@/hooks/use-workspace";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
-import { EXTRA_NAV_ITEMS, getNavIcon } from "./sidebar-icon";
+import { getNavIcon } from "./sidebar-icon";
+import { navSectionsFor } from "@/lib/goal-nav";
 import { BrandTile } from "./brand-mark";
 
 export function MobileNav({ onOpenSwitcher }: { onOpenSwitcher: () => void }) {
@@ -45,13 +45,13 @@ export function MobileNav({ onOpenSwitcher }: { onOpenSwitcher: () => void }) {
         </div>
 
         <nav className="mt-2 flex-1 space-y-4 overflow-y-auto px-3 pb-6">
-          {NAV_SECTIONS.map((section) => (
+          {navSectionsFor(ws.goals).map((section) => (
             <div key={section.label}>
               <div className="px-2 pb-1.5 pt-1 text-[10px] font-semibold tracking-[0.16em] text-ink-faint">
                 {section.label}
               </div>
               <ul className="space-y-0.5">
-                {[...section.items, ...(EXTRA_NAV_ITEMS[section.label] ?? [])].map((item) => {
+                {section.items.map((item) => {
                   const href = `/w/${ws.slug}/${item.module}`;
                   const active = pathname === href || pathname.startsWith(`${href}/`);
                   const Icon = getNavIcon(item.icon);
