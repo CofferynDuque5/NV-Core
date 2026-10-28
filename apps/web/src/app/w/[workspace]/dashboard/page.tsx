@@ -25,6 +25,7 @@ import {
 import { PageHeader } from "@/components/common/page-header";
 import { OnboardingChecklist } from "@/components/dashboard/onboarding-checklist";
 import { SampleDataBanner } from "@/components/dashboard/sample-data-banner";
+import { GoalSteps } from "@/components/dashboard/goal-steps";
 import { Panel, PanelHeader } from "@/components/common/panel";
 import { KpiCard } from "@/components/common/kpi-card";
 import { EmptyState } from "@/components/common/empty-state";
@@ -84,6 +85,7 @@ export default function DashboardPage() {
       />
 
       {/* Guided onboarding — hides itself once dismissed or when the DB has no signal */}
+      <GoalSteps />
       <OnboardingChecklist />
       <SampleDataBanner slug={ws.slug} />
 

@@ -65,6 +65,20 @@ export function CommandPalette() {
       ),
       // Web-only destinations without a domain module (see EXTRA_NAV_ITEMS).
       {
+        module: "tienda",
+        label: "Tienda",
+        section: "PRINCIPAL",
+        icon: "ShoppingBag",
+        description: "Catálogo de productos, descripciones y precios",
+      },
+      {
+        module: "perfil",
+        label: "Mi perfil",
+        section: "SISTEMA",
+        icon: "Settings",
+        description: "Tu nombre, contraseña y preferencias",
+      },
+      {
         module: "cobros",
         label: "Cobros",
         section: "PRINCIPAL",

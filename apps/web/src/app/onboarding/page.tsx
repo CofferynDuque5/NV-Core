@@ -1,7 +1,7 @@
 import * as React from "react";
 import { Navigate, useNavigate } from "react-router-dom";
 import { ArrowLeft, ArrowRight, Check, Loader2, Rocket } from "lucide-react";
-import { WORKSPACE_KINDS, type WorkspaceKind } from "@nv/domain";
+import { WORKSPACE_GOALS, WORKSPACE_KINDS, type WorkspaceKind } from "@nv/domain";
 
 import { cn } from "@/lib/utils";
 import { isBackendConfigured } from "@/lib/env";
@@ -12,14 +12,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 
-const GOALS: { id: string; label: string }[] = [
-  { id: "difusion", label: "Difundir por WhatsApp / Telegram" },
-  { id: "leads", label: "Captar clientes con formularios" },
-  { id: "ventas", label: "Vender y cobrar" },
-  { id: "automatizar", label: "Automatizar seguimientos" },
-  { id: "contenido", label: "Crear contenido con IA" },
-  { id: "redes", label: "Publicar en redes sociales" },
-];
+const GOALS = WORKSPACE_GOALS;
 
 const STEPS = ["Categoría", "Identidad", "Objetivos"] as const;
 
@@ -93,13 +86,9 @@ export default function OnboardingPage() {
         kind,
         accent,
         tagline: KIND_META[kind].desc,
+        // Saved on the brand: they order the menu and the dashboard's next steps.
+        goals,
       });
-      try {
-        // Remember the chosen goals to personalize the dashboard later.
-        localStorage.setItem(`nv.onboarding.${ws.slug}`, JSON.stringify({ goals }));
-      } catch {
-        /* ignore storage errors */
-      }
       navigate(`/w/${ws.slug}/dashboard`, { replace: true });
     } catch (err) {
       setError(err instanceof Error ? err.message : "No se pudo crear el workspace.");
@@ -241,7 +230,7 @@ export default function OnboardingPage() {
                   ¿Qué quieres lograr primero?
                 </h1>
                 <p className="text-ink-muted mt-1 text-sm">
-                  Elige una o varias. Adaptaremos tu inicio a ello.
+                  Elige una o varias. Tu menú y tu inicio se ordenan según esto; puedes cambiarlo luego en Configuración → Marca.
                 </p>
                 <div className="mt-5 grid gap-2 sm:grid-cols-2">
                   {GOALS.map((g) => {

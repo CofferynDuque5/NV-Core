@@ -1,5 +1,5 @@
 import { useNavigate } from "react-router-dom";
-import { ArrowRight, Check, Plus } from "lucide-react";
+import { ArrowRight, Check, Plus, Settings } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { isBackendConfigured } from "@/lib/env";
@@ -36,6 +36,11 @@ export function WorkspaceSwitcher({
     onOpenChange(false);
   }
 
+  function manage(slug: string) {
+    navigate(`/w/${slug}/configuracion?tab=marca`);
+    onOpenChange(false);
+  }
+
   function createWorkspace() {
     onOpenChange(false);
     navigate("/onboarding");
@@ -48,58 +53,74 @@ export function WorkspaceSwitcher({
           <p className="text-ink-faint text-[11px] font-semibold uppercase tracking-[0.2em]">
             Business Operating System
           </p>
-          <DialogTitle className="font-display text-xl">Elige tu workspace</DialogTitle>
+          <DialogTitle className="font-display text-xl">Tus marcas</DialogTitle>
           <DialogDescription>
-            Cada empresa comparte el mismo Core y suma sus módulos especializados.
+            Cambia de marca, o abre su configuración para editarla, ajustar sus objetivos o
+            eliminarla.
           </DialogDescription>
         </DialogHeader>
 
         <div className="grid max-h-[52vh] grid-cols-1 gap-2 overflow-y-auto pr-1 sm:grid-cols-2">
           {visible.map((w) => {
             const isActive = w.id === active.id;
+            const role = memberships.find((m) => m.workspaceSlug === w.slug)?.role;
             return (
-              <button
-                key={w.id}
-                onClick={() => go(w.slug)}
-                className={cn(
-                  "group flex items-center gap-3 rounded-xl border px-3 py-3 text-left transition-colors",
-                  isActive
-                    ? "border-brand/50 bg-brand/8"
-                    : "border-line-soft bg-panel hover:border-line-bright",
-                )}
-              >
-                <span
-                  className="grid size-9 shrink-0 place-items-center rounded-lg text-xs font-extrabold text-white"
-                  style={{ background: w.accent }}
-                >
-                  {w.initials}
-                </span>
-                <span className="min-w-0 flex-1">
-                  <span className="flex items-center gap-1.5">
-                    <span className="text-ink-bright truncate text-sm font-semibold">{w.name}</span>
-                    {isActive ? (
-                      <span className="bg-brand/15 text-brand inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 text-[9px] font-bold uppercase">
-                        <Check className="size-2.5" /> Actual
-                      </span>
-                    ) : null}
-                  </span>
-                  <span className="text-ink-muted block truncate text-xs">
-                    {w.enabledModules.length} módulos + Core
-                  </span>
-                </span>
-                <ArrowRight
+              <div key={w.id} className="relative">
+                <button
+                  onClick={() => go(w.slug)}
                   className={cn(
-                    "text-ink-faint group-hover:text-ink-muted size-4 shrink-0 transition-transform group-hover:translate-x-0.5",
+                    "group flex w-full items-center gap-3 rounded-xl border py-3 pl-3 pr-12 text-left transition-colors",
+                    isActive
+                      ? "border-brand/50 bg-brand/8"
+                      : "border-line-soft bg-panel hover:border-line-bright",
                   )}
-                />
-              </button>
+                >
+                  <span
+                    className="grid size-9 shrink-0 place-items-center rounded-lg text-xs font-extrabold text-white"
+                    style={{ background: w.accent }}
+                  >
+                    {w.initials}
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="flex items-center gap-1.5">
+                      <span className="text-ink-bright truncate text-sm font-semibold">
+                        {w.name}
+                      </span>
+                      {isActive ? (
+                        <span className="bg-brand/15 text-brand inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 text-[9px] font-bold uppercase">
+                          <Check className="size-2.5" /> Actual
+                        </span>
+                      ) : null}
+                    </span>
+                    <span className="text-ink-muted block truncate text-xs">
+                      {[role, w.tagline].filter(Boolean).join(" · ") || "Marca"}
+                    </span>
+                  </span>
+                  <ArrowRight
+                    className={cn(
+                      "text-ink-faint group-hover:text-ink-muted size-4 shrink-0 transition-transform group-hover:translate-x-0.5",
+                    )}
+                  />
+                </button>
+                {role === "Owner" || role === "Admin" ? (
+                  <button
+                    type="button"
+                    onClick={() => manage(w.slug)}
+                    className="text-ink-faint hover:bg-panel-high hover:text-ink absolute right-9 top-1/2 -translate-y-1/2 rounded-md p-1.5"
+                    title={`Configurar ${w.name}`}
+                    aria-label={`Configurar ${w.name}`}
+                  >
+                    <Settings className="size-4" />
+                  </button>
+                ) : null}
+              </div>
             );
           })}
         </div>
 
         {visible.length === 0 ? (
           <p className="text-ink-muted py-2 text-center text-sm">
-            Aún no tienes workspaces. Crea el tuyo para empezar.
+            Aún no tienes marcas. Crea la tuya para empezar.
           </p>
         ) : null}
 
@@ -107,7 +128,7 @@ export function WorkspaceSwitcher({
           onClick={createWorkspace}
           className="border-line-strong text-ink-muted hover:border-brand/50 hover:text-brand flex items-center justify-center gap-2 rounded-xl border border-dashed py-2.5 text-sm font-medium transition-colors"
         >
-          <Plus className="size-4" /> Crear workspace
+          <Plus className="size-4" /> Crear marca
         </button>
       </DialogContent>
     </Dialog>

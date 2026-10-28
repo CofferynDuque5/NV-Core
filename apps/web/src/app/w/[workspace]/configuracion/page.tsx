@@ -12,8 +12,9 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { TeamTab } from "@/components/settings/team-tab";
 import { BillingTab } from "@/components/settings/billing-tab";
 import { BrandLinksTab } from "@/components/settings/brand-links-tab";
+import { BrandTab } from "@/components/settings/brand-tab";
 
-const TABS = ["equipo", "redes", "roles", "permisos", "facturacion", "logs"] as const;
+const TABS = ["marca", "equipo", "redes", "roles", "permisos", "facturacion", "logs"] as const;
 
 export default function ConfiguracionPage() {
   const logs = useAuditLogs();
@@ -36,11 +37,12 @@ export default function ConfiguracionPage() {
       <PageHeader
         eyebrow="Sistema"
         title="Configuración"
-        description="Equipo, redes y web de la marca, roles, permisos y auditoría de tu workspace."
+        description="Tu marca y sus objetivos, el equipo, redes y web, roles, permisos y auditoría."
       />
 
       <Tabs value={activeTab} onValueChange={onTabChange}>
         <TabsList className="max-w-full justify-start overflow-x-auto">
+          <TabsTrigger value="marca">Marca</TabsTrigger>
           <TabsTrigger value="equipo">Equipo</TabsTrigger>
           <TabsTrigger value="redes">Redes y web</TabsTrigger>
           <TabsTrigger value="roles">Roles</TabsTrigger>
@@ -48,6 +50,10 @@ export default function ConfiguracionPage() {
           <TabsTrigger value="facturacion">Facturación</TabsTrigger>
           <TabsTrigger value="logs">Logs</TabsTrigger>
         </TabsList>
+
+        <TabsContent value="marca">
+          <BrandTab />
+        </TabsContent>
 
         {/* Team */}
         <TabsContent value="equipo">

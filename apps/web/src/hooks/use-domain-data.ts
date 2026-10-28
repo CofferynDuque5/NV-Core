@@ -489,3 +489,14 @@ export function useBrandLinks() {
   const ws = useWorkspace();
   return useQuery({ queryKey: [ws.id, "brand-links"], queryFn: () => svc.brandLinks.get(ws.id) });
 }
+
+/** The brand's Tienda (catalog). */
+export function useProducts(opts: { enabled?: boolean } = {}) {
+  const svc = useServices();
+  const ws = useWorkspace();
+  return useQuery({
+    queryKey: [ws.id, "products"],
+    queryFn: () => svc.products.list(ws.id),
+    enabled: opts.enabled ?? true,
+  });
+}

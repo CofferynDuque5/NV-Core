@@ -36,6 +36,7 @@ describe("WorkspaceRegistry.listForUser", () => {
       workspace: {
         findUnique: vi.fn(async ({ where }: { where: { slug: string } }) => dbRows[where.slug] ?? null),
       },
+      workspaceSettings: { findMany: vi.fn(async () => [{ workspaceSlug: "acme", goals: ["ventas"] }]) },
     };
     const store = {
       membershipsOf: vi.fn(async (userId: string) =>
@@ -47,6 +48,8 @@ describe("WorkspaceRegistry.listForUser", () => {
     const list = await registry.listForUser("u1");
     expect(list.map((w) => w.slug)).toEqual(["acme"]);
     expect(list.map((w) => w.slug)).not.toContain("rival");
+    // The brand's goals come along (they order its menu).
+    expect(list[0]!.goals).toEqual(["ventas"]);
   });
 
   it("returns nothing for a user with no memberships", async () => {

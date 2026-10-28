@@ -4,6 +4,7 @@ import {
   MODULE_IDS,
   WORKSPACE_KINDS,
   WORKSPACES,
+  WORKSPACE_GOAL_IDS,
   type Workspace,
   type WorkspaceKind,
 } from "@nv/domain";
@@ -43,6 +44,11 @@ export interface CreateWorkspaceInput {
   tagline?: string;
 }
 
+/** Keep only known goals, once each, in the order given. */
+export function cleanGoals(goals: readonly string[] | undefined): string[] {
+  return [...new Set((goals ?? []).filter((g) => WORKSPACE_GOAL_IDS.includes(g)))];
+}
+
 /**
  * Single source of truth for workspaces: the 14 built-in (config) ones plus any
  * user-created ones stored in the DB. Guards and controllers resolve tenants
@@ -73,10 +79,26 @@ export class WorkspaceRegistry {
   /** Resolve a workspace by slug (config first, then DB). */
   async resolve(slug: string): Promise<Workspace | null> {
     const builtin = getWorkspaceBySlug(slug);
-    if (builtin) return builtin;
+    if (builtin) return { ...builtin, builtin: true };
     if (!this.prisma.enabled) return null;
     const row = await this.prisma.workspace.findUnique({ where: { slug } });
     return row ? this.mapDb(row) : null;
+  }
+
+  /** The same workspaces with their goals (kept in WorkspaceSettings, so built-in brands have them too). */
+  async withGoals(list: Workspace[]): Promise<Workspace[]> {
+    if (!this.prisma.enabled || list.length === 0) return list;
+    let rows: { workspaceSlug: string; goals: string[] }[] = [];
+    try {
+      rows = await this.prisma.workspaceSettings.findMany({
+        where: { workspaceSlug: { in: list.map((w) => w.slug) } },
+        select: { workspaceSlug: true, goals: true },
+      });
+    } catch {
+      // Goals only personalize the menu: a brand without them still opens.
+    }
+    const goals = new Map(rows.map((r) => [r.workspaceSlug, r.goals ?? []]));
+    return list.map((w) => ({ ...w, goals: goals.get(w.slug) ?? [] }));
   }
 
   async exists(slug: string): Promise<boolean> {
@@ -106,7 +128,7 @@ export class WorkspaceRegistry {
     if (!this.prisma.enabled) return [...WORKSPACES];
     const memberships = await this.store.membershipsOf(userId);
     const resolved = await Promise.all(memberships.map((m) => this.resolve(m.workspaceSlug)));
-    return resolved.filter((w): w is Workspace => w !== null);
+    return this.withGoals(resolved.filter((w): w is Workspace => w !== null));
   }
 
   /** Create a DB workspace with a unique slug; the creator becomes Owner. */

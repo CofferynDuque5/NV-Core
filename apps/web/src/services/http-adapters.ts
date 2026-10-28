@@ -1,4 +1,5 @@
 import type {
+  Product,
   AccessOverview,
   SampleDataSummary,
   BrandLinks,
@@ -147,7 +148,7 @@ function createClient(opts: HttpAdapterOptions) {
   const post = <T>(path: string, body: unknown) => send<T>("POST", path, body);
   const patch = <T>(path: string, body: unknown) => send<T>("PATCH", path, body);
   const put = <T>(path: string, body: unknown) => send<T>("PUT", path, body);
-  const del = <T>(path: string) => send<T>("DELETE", path);
+  const del = <T>(path: string, body?: unknown) => send<T>("DELETE", path, body);
 
   return { get, post, patch, put, del };
 }
@@ -160,6 +161,8 @@ export function createHttpAdapters(opts: HttpAdapterOptions): Services {
     workspaces: {
       list: () => get<Workspace[]>(`/workspaces`),
       create: (input) => post<Workspace>(`/workspaces`, input),
+      update: (slug, input) => patch<Workspace>(`/workspaces/${slug}`, input),
+      remove: (slug, confirmName) => del<void>(`/workspaces/${slug}`, { confirmName }),
     },
     onboarding: {
       status: (id) => get<OnboardingStatus>(`/workspaces/${id}/onboarding`),
@@ -211,6 +214,12 @@ export function createHttpAdapters(opts: HttpAdapterOptions): Services {
     brandLinks: {
       get: (id) => get<BrandLinks>(`${ws(id)}/brand-links`),
       set: (id, input) => put<BrandLinks>(`${ws(id)}/brand-links`, input),
+    },
+    products: {
+      list: (id) => get<Product[]>(`${ws(id)}/products`),
+      create: (id, input) => post<Product>(`${ws(id)}/products`, input),
+      update: (id, pid, input) => patch<Product>(`${ws(id)}/products/${pid}`, input),
+      remove: (id, pid) => del<void>(`${ws(id)}/products/${pid}`),
     },
     sampleData: {
       summary: (id) => get<SampleDataSummary>(`${ws(id)}/sample-data`),
