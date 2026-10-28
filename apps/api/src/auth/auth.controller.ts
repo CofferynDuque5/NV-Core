@@ -1,4 +1,4 @@
-import { Body, Controller, Get, HttpCode, Patch, Post, Req, Res } from "@nestjs/common";
+import { Body, Controller, Get, HttpCode, NotFoundException, Patch, Post, Req, Res } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { ApiBearerAuth, ApiTags } from "@nestjs/swagger";
 import { Throttle } from "@nestjs/throttler";
@@ -11,7 +11,7 @@ import { Public } from "./decorators/public.decorator";
 import { RegisterDto } from "./dto/register.dto";
 import { LoginDto } from "./dto/login.dto";
 import { ChangePasswordDto, ForgotPasswordDto, ResetPasswordDto, UpdateProfileDto, VerifyEmailDto } from "./dto/password.dto";
-import type { AuthenticatedUser } from "./auth.types";
+import type { AuthenticatedUser, LoginMeta } from "./auth.types";
 
 const REFRESH_COOKIE = "nv_refresh";
 
@@ -43,22 +43,40 @@ export class AuthController {
       user: result.user,
       memberships: result.memberships,
       superAdmin: result.superAdmin,
+      ...(result.demo ? { demo: true } : {}),
     };
+  }
+
+  /** IP (behind cPanel/Passenger's proxy) and browser of a sign-in. */
+  private meta(req: Request): LoginMeta {
+    const forwarded = String(req.headers["x-forwarded-for"] ?? "").split(",")[0]?.trim();
+    return { ip: forwarded || req.ip || null, userAgent: String(req.headers["user-agent"] ?? "") || null };
   }
 
   @Public()
   @Throttle({ default: { limit: 10, ttl: 60_000 } })
   @Post("register")
-  async register(@Body() dto: RegisterDto, @Res({ passthrough: true }) res: Response) {
-    return this.send(res, await this.auth.register(dto));
+  async register(@Body() dto: RegisterDto, @Req() req: Request, @Res({ passthrough: true }) res: Response) {
+    return this.send(res, await this.auth.register(dto, this.meta(req)));
   }
 
   @Public()
   @Throttle({ default: { limit: 10, ttl: 60_000 } })
   @HttpCode(200)
   @Post("login")
-  async login(@Body() dto: LoginDto, @Res({ passthrough: true }) res: Response) {
-    return this.send(res, await this.auth.login(dto));
+  async login(@Body() dto: LoginDto, @Req() req: Request, @Res({ passthrough: true }) res: Response) {
+    return this.send(res, await this.auth.login(dto, this.meta(req)));
+  }
+
+  /** «Ver demo»: opens the shared read-only demo, no account needed. */
+  @Public()
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
+  @HttpCode(200)
+  @Post("demo")
+  async demo(@Req() req: Request, @Res({ passthrough: true }) res: Response) {
+    const demo = this.config.get("demo", { infer: true });
+    if (!demo.enabled) throw new NotFoundException("La demo está desactivada.");
+    return this.send(res, await this.auth.demoSession(demo.email, this.meta(req)));
   }
 
   @Public()

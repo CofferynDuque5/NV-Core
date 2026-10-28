@@ -26,6 +26,8 @@ export interface AppConfig {
   security: { encryptionKey: string };
   /** Emails that are platform super-admins (control all users/roles). */
   superAdmins: string[];
+  /** «Ver demo»: a shared read-only account with an example brand. */
+  demo: { enabled: boolean; email: string; slug: string };
   /** Optional bearer token protecting the Prometheus /metrics endpoint. */
   metricsToken?: string;
   sentry: { dsn?: string };
@@ -122,6 +124,12 @@ export function buildConfig(env: Env): AppConfig {
           .filter(Boolean),
       ),
     ),
+    demo: {
+      // On unless DEMO_ENABLED=false: the demo account can't change anything.
+      enabled: !["false", "0", "no"].includes((env.DEMO_ENABLED ?? "").trim().toLowerCase()),
+      email: "demo@demo.nvmarketing.invalid",
+      slug: "nv-demo",
+    },
     metricsToken: env.METRICS_TOKEN,
     sentry: { dsn: env.SENTRY_DSN },
     database: { url: env.DATABASE_URL },

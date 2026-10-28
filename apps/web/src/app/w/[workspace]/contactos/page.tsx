@@ -32,6 +32,8 @@ import { Badge } from "@/components/ui/badge";
 import { ContactFormDialog } from "@/components/entities/contact-form-dialog";
 import { CrmBoard } from "@/components/crm/crm-board";
 import { ContactDetailDrawer } from "@/components/crm/contact-detail-drawer";
+import { SampleDataBanner } from "@/components/dashboard/sample-data-banner";
+import { useWorkspace } from "@/hooks/use-workspace";
 
 const COLUMNS = ["Contacto", "Teléfono", "Empresa", "Etiquetas", "Etapa", ""];
 
@@ -48,6 +50,7 @@ function StageBadge({ stage }: { stage: ContactStage }) {
 }
 
 export default function ContactosPage() {
+  const ws = useWorkspace();
   const openCompose = useUiStore((s) => s.openCompose);
   const del = useDeleteContact();
   const move = useMoveContactStage();
@@ -147,6 +150,7 @@ export default function ContactosPage() {
           </>
         }
       />
+      <SampleDataBanner slug={ws.slug} />
 
       {/* Filters + view toggle */}
       <div className="flex flex-wrap items-center gap-2">

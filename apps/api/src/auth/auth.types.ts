@@ -11,6 +11,8 @@ export interface UserRecord {
   failedLoginAttempts: number;
   /** ISO time until which logins are locked, or null. */
   lockedUntil: string | null;
+  /** The shared read-only «Ver demo» account. */
+  demo?: boolean;
 }
 
 /** A user's membership in a workspace, with their role. */
@@ -36,6 +38,14 @@ export interface JwtPayload {
   sub: string;
   email: string;
   name: string;
+  /** Set on the «Ver demo» account: every write is refused. */
+  demo?: boolean;
+}
+
+/** Where a sign-in came from, for the super-admin «Usuarios» panel. */
+export interface LoginMeta {
+  ip?: string | null;
+  userAgent?: string | null;
 }
 
 /** What guards attach to `request.user`. */
@@ -43,6 +53,7 @@ export interface AuthenticatedUser {
   userId: string;
   email: string;
   name: string;
+  demo?: boolean;
 }
 
 /** Public shape of a user (no secrets). */

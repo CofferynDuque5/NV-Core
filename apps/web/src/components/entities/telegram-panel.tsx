@@ -1,14 +1,14 @@
 
 import * as React from "react";
 import { io, type Socket } from "socket.io-client";
-import { Loader2, Plug, QrCode, RefreshCw, Send, Unplug } from "lucide-react";
+import { KeyRound, Loader2, Plug, QrCode, RefreshCw, Send, Unplug } from "lucide-react";
 import type { TelegramStatus } from "@nv/domain";
 
 import { API_URL } from "@/lib/env";
 import { relativeTime } from "@/lib/utils";
 import { useWorkspace } from "@/hooks/use-workspace";
 import { useAuthStore } from "@/stores/auth-store";
-import { useTelegramStatus } from "@/hooks/use-domain-data";
+import { useIntegrations, useTelegramStatus } from "@/hooks/use-domain-data";
 import {
   useTelegramConnect,
   useTelegramDisconnect,
@@ -21,6 +21,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { Panel, PanelHeader } from "@/components/common/panel";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { CredentialDialog } from "./credential-dialog";
 
 const STATUS_META: Record<TelegramStatus["status"], { label: string; dot: string }> = {
   connected: { label: "Conectado", dot: "bg-state-success" },
@@ -43,6 +44,16 @@ export function TelegramPanel() {
   const confirm = useConfirm();
   const [qr, setQr] = React.useState<string | null>(null);
   const [password, setPassword] = React.useState("");
+  const [keysOpen, setKeysOpen] = React.useState(false);
+  // API ID + API Hash (my.telegram.org) can be pasted right here; without them
+  // «Conectar» opens that form instead of failing with an error.
+  const integration = useIntegrations().data?.find((i) => i.id === "telegram") ?? null;
+  const hasKeys = integration?.connected ?? true;
+
+  function onConnect() {
+    if (!hasKeys) setKeysOpen(true);
+    else connect.mutate();
+  }
 
   const status = statusQuery.data;
   const state = status?.status ?? "disconnected";
@@ -99,10 +110,18 @@ export function TelegramPanel() {
 
           <div className="flex flex-wrap gap-2 pt-1">
             {state === "disconnected" ? (
-              <Button size="sm" onClick={() => connect.mutate()} disabled={connect.isPending}>
-                {connect.isPending ? <Loader2 className="size-4 animate-spin" /> : <Plug className="size-4" />}
-                Conectar
-              </Button>
+              <>
+                <Button size="sm" onClick={onConnect} disabled={connect.isPending}>
+                  {connect.isPending ? <Loader2 className="size-4 animate-spin" /> : <Plug className="size-4" />}
+                  Conectar
+                </Button>
+                {integration ? (
+                  <Button size="sm" variant="outline" onClick={() => setKeysOpen(true)} data-testid="telegram-keys">
+                    <KeyRound className="size-4" />
+                    {hasKeys ? "Cambiar API ID y Hash" : "Poner API ID y Hash"}
+                  </Button>
+                ) : null}
+              </>
             ) : (
               <>
                 <Button
@@ -170,9 +189,9 @@ export function TelegramPanel() {
           ) : null}
 
           <p className="text-[11px] text-ink-faint">
-            Requiere <code>TELEGRAM_API_ID</code> y <code>TELEGRAM_API_HASH</code> (gratis en
-            my.telegram.org). Escanea el QR desde Telegram → Ajustes → Dispositivos → Vincular
-            dispositivo.
+            {hasKeys
+              ? "Pulsa «Conectar» y escanea el QR desde Telegram → Ajustes → Dispositivos → Vincular dispositivo."
+              : "Primero pon tu API ID y API Hash (gratis en my.telegram.org › API development tools). Después pulsa «Conectar» y escanea el QR desde Telegram → Ajustes → Dispositivos → Vincular dispositivo."}
           </p>
         </div>
 
@@ -202,6 +221,7 @@ export function TelegramPanel() {
           )}
         </div>
       </div>
+      <CredentialDialog integration={integration} open={keysOpen} onOpenChange={setKeysOpen} />
     </Panel>
   );
 }

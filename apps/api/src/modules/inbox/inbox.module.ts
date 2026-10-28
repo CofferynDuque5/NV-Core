@@ -58,9 +58,12 @@ import { RolesGuard } from "../../auth/guards/roles.guard";
 import { Roles } from "../../auth/decorators/roles.decorator";
 import { Public } from "../../auth/decorators/public.decorator";
 import { ProviderManager } from "../../providers/provider-manager.service";
+import { phoneKey } from "../consent/consent.service";
+import { isBareName, isSampleContact, phoneFromHandle } from "./inbox-contacts";
 import { ProvidersModule } from "../../providers/providers.module";
 import { EventBus } from "../../core/events/event-bus.service";
 import {
+  ECHO_WINDOW_MS,
   parseTelegramInbound,
   parseWhatsAppInbound,
   verifyMetaSignature,
@@ -191,7 +194,16 @@ export class InboxService implements OnModuleInit {
         contactHandle: p.contactHandle,
         contactName: p.contactName,
         text: p.text,
-      });
+        direction: p.direction,
+        at: p.at,
+        externalId: p.externalId,
+        history: p.history,
+      }).catch((err: unknown) => this.logger.warn(`Mensaje no guardado: ${(err as Error).message}`));
+    });
+    this.events.on("session.contact-names", (p) => {
+      void this.applyContactNames(p.workspaceSlug, p.channel, p.names).catch((err: unknown) =>
+        this.logger.warn(`Nombres de contactos no aplicados: ${(err as Error).message}`),
+      );
     });
   }
 
@@ -209,9 +221,13 @@ export class InboxService implements OnModuleInit {
   }
 
   /**
-   * Persist an inbound message into an EXPLICIT workspace: find (by channel +
-   * handle) or create its conversation, then append it. Used by live sessions
-   * (Baileys/Telegram) which already know their workspace.
+   * Persist a chat message into an EXPLICIT workspace: find (by channel +
+   * handle) or create its conversation, then append it with its real date.
+   * Used by live sessions (Baileys/Telegram) which already know their
+   * workspace. A message seen before (same platform id, or the echo of a reply
+   * sent from the panel) is stored once. Only NEW messages from the contact
+   * count as "message.received" (automations, AI replies, opt-outs); history
+   * and messages sent from the phone are just stored.
    */
   async recordInboundFor(slug: string, msg: InboundMessage): Promise<void> {
     if (!this.prisma.enabled) return;
@@ -219,6 +235,16 @@ export class InboxService implements OnModuleInit {
       this.logger.warn(`Mensaje entrante ignorado: workspace "${slug}" no existe.`);
       return;
     }
+    const direction = msg.direction ?? "in";
+    const at = msg.at ?? new Date();
+    const fromContact = direction === "in" && !isBareName(msg.contactName, msg.contactHandle);
+
+    // WhatsApp chats become CRM contacts (and take their name from the CRM).
+    const contact =
+      msg.channel === "wa" && direction === "in"
+        ? await this.ensureContact(slug, msg.contactHandle, fromContact ? msg.contactName : null, at)
+        : null;
+    const bestName = fromContact ? msg.contactName : (contact?.name ?? null);
 
     let conversation = await this.prisma.conversation.findFirst({
       where: { workspaceSlug: slug, channel: msg.channel, contactHandle: msg.contactHandle },
@@ -228,34 +254,140 @@ export class InboxService implements OnModuleInit {
         data: {
           workspaceSlug: slug,
           channel: msg.channel,
-          contactName: msg.contactName,
+          contactName: bestName ?? msg.contactName ?? msg.contactHandle,
           contactHandle: msg.contactHandle,
         },
       });
-    } else if (
-      // Mejora el nombre si el chat se creó con el número (sin pushName todavía)
-      // y ahora llega el nombre real del contacto. Así deja de verse el número.
-      msg.contactName &&
-      msg.contactName !== msg.contactHandle &&
-      (!conversation.contactName || conversation.contactName === conversation.contactHandle)
-    ) {
+    } else if (bestName && isBareName(conversation.contactName, conversation.contactHandle)) {
+      // The chat was created with the number: now the real name is known.
       conversation = await this.prisma.conversation.update({
         where: { id: conversation.id },
-        data: { contactName: msg.contactName },
+        data: { contactName: bestName },
       });
     }
-    await this.prisma.message.create({
-      data: { conversationId: conversation.id, direction: "in", text: msg.text },
-    });
+
+    if (await this.alreadyStored(conversation.id, direction, msg.text, at, msg.externalId)) return;
+    try {
+      await this.prisma.message.create({
+        data: {
+          conversationId: conversation.id,
+          direction,
+          text: msg.text,
+          externalId: msg.externalId ?? null,
+          createdAt: at,
+        },
+      });
+    } catch (err) {
+      // Same message delivered twice at once (history + live): keep one.
+      if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") return;
+      throw err;
+    }
+    if (direction !== "in" || msg.history) return;
     this.logger.log(`Mensaje entrante (${msg.channel}) de ${msg.contactHandle} → ${slug}.`);
     // Decouple: publish the domain event (n8n + other modules can react).
     this.events.emit("message.received", {
       workspaceSlug: slug,
       channel: msg.channel,
       contactHandle: msg.contactHandle,
-      contactName: msg.contactName,
+      contactName: conversation.contactName,
       text: msg.text,
     });
+  }
+
+  /**
+   * Was this message stored already? By platform id when there is one; for
+   * messages we sent, also the echo of a reply typed in the panel (same text,
+   * sent within two minutes), which comes back from WhatsApp with its own id.
+   */
+  private async alreadyStored(
+    conversationId: string,
+    direction: "in" | "out",
+    text: string,
+    at: Date,
+    externalId?: string | null,
+  ): Promise<boolean> {
+    if (externalId) {
+      const seen = await this.prisma.message.findFirst({ where: { conversationId, externalId }, select: { id: true } });
+      if (seen) return true;
+    }
+    if (direction !== "out") return false;
+    const echo = await this.prisma.message.findFirst({
+      where: {
+        conversationId,
+        direction: "out",
+        text,
+        createdAt: { gte: new Date(at.getTime() - ECHO_WINDOW_MS), lte: new Date(at.getTime() + ECHO_WINDOW_MS) },
+      },
+      select: { id: true, externalId: true },
+    });
+    if (echo && externalId && !echo.externalId) {
+      await this.prisma.message.update({ where: { id: echo.id }, data: { externalId } }).catch(() => undefined);
+    }
+    return Boolean(echo);
+  }
+
+  /**
+   * The CRM contact for a WhatsApp number: found by phone, or created as a
+   * Lead tagged «whatsapp». A real name replaces one that was only the number.
+   * The old example contacts are never linked (their numbers may be real).
+   */
+  private async ensureContact(slug: string, handle: string, name: string | null, at: Date) {
+    const key = phoneKey(handle);
+    const phone = phoneFromHandle(handle);
+    if (!key || !phone) return null;
+    const candidates = await this.prisma.contact.findMany({
+      where: { workspaceSlug: slug, phone: { contains: key.slice(-2) } },
+      orderBy: { createdAt: "asc" },
+    });
+    const matches = candidates.filter((c) => phoneKey(c.phone) === key && !isSampleContact(c.name, c.phone));
+    const found = matches[0];
+    if (found) {
+      if (name && isBareName(found.name)) {
+        return this.prisma.contact.update({ where: { id: found.id }, data: { name } });
+      }
+      return found;
+    }
+    return this.prisma.contact.create({
+      data: {
+        workspaceSlug: slug,
+        name: name ?? phone,
+        phone,
+        tags: ["whatsapp"],
+        stage: "Lead",
+        lastContactAt: at,
+      },
+    });
+  }
+
+  /** Names from the WhatsApp contact list → chats and contacts that only showed the number. */
+  async applyContactNames(slug: string, channel: "wa" | "tg", names: { handle: string; name: string }[]): Promise<number> {
+    if (!this.prisma.enabled || !names.length) return 0;
+    const byHandle = new Map(names.filter((n) => !isBareName(n.name)).map((n) => [n.handle, n.name]));
+    if (!byHandle.size) return 0;
+    const convs = await this.prisma.conversation.findMany({
+      where: { workspaceSlug: slug, channel, contactHandle: { in: [...byHandle.keys()] } },
+      select: { id: true, contactName: true, contactHandle: true },
+    });
+    let updated = 0;
+    for (const c of convs) {
+      const name = byHandle.get(c.contactHandle ?? "");
+      if (!name || !isBareName(c.contactName, c.contactHandle)) continue;
+      await this.prisma.conversation.update({ where: { id: c.id }, data: { contactName: name } });
+      updated++;
+      if (channel !== "wa") continue;
+      const key = phoneKey(c.contactHandle);
+      if (!key) continue;
+      const contacts = await this.prisma.contact.findMany({
+        where: { workspaceSlug: slug, phone: { contains: key.slice(-2) } },
+        select: { id: true, name: true, phone: true },
+      });
+      for (const ct of contacts) {
+        if (phoneKey(ct.phone) === key && isBareName(ct.name)) {
+          await this.prisma.contact.update({ where: { id: ct.id }, data: { name } });
+        }
+      }
+    }
+    return updated;
   }
 
   /**

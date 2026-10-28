@@ -7,6 +7,7 @@ import type {
   GroupRulesCheck,
   AccessPaymentInput,
   AdminAccessRow,
+  AdminLogins,
   WorkspaceAccess,
   AnalyticsSnapshot,
   Task,
@@ -1009,6 +1010,8 @@ export interface AdminService {
   access(): Promise<AdminAccessRow[]>;
   /** Add paid days to a brand (after checking its payment). */
   activate(workspaceSlug: string, days: number): Promise<WorkspaceAccess>;
+  /** Every user with their last access, and the latest sign-ins. */
+  logins(): Promise<AdminLogins>;
 }
 
 /** Free trial and plan payment of a customer brand (open after the trial ends). */

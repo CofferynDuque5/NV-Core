@@ -12,7 +12,7 @@ import {
   UseGuards,
 } from "@nestjs/common";
 import { ApiBearerAuth, ApiTags } from "@nestjs/swagger";
-import { ROLES, type Role } from "@nv/domain";
+import { ROLES, type AdminLogins, type Role } from "@nv/domain";
 import { IsIn, IsInt, IsString, Max, Min, MinLength } from "class-validator";
 
 import { AuthModule } from "../../auth/auth.module";
@@ -39,6 +39,34 @@ export interface AdminUserView {
   email: string;
   name: string;
   memberships: { workspaceSlug: string; role: Role }[];
+}
+
+/** "Chrome · Windows" from a browser's user agent (enough to recognise a device). */
+export function describeDevice(ua: string | null | undefined): string {
+  if (!ua) return "—";
+  const browser = /Edg\//.test(ua)
+    ? "Edge"
+    : /OPR\/|Opera/.test(ua)
+      ? "Opera"
+      : /Chrome\//.test(ua)
+        ? "Chrome"
+        : /Firefox\//.test(ua)
+          ? "Firefox"
+          : /Safari\//.test(ua)
+            ? "Safari"
+            : "Navegador";
+  const os = /Android/.test(ua)
+    ? "Android"
+    : /iPhone|iPad|iOS/.test(ua)
+      ? "iPhone/iPad"
+      : /Windows/.test(ua)
+        ? "Windows"
+        : /Mac OS X|Macintosh/.test(ua)
+          ? "Mac"
+          : /Linux/.test(ua)
+            ? "Linux"
+            : "otro sistema";
+  return `${browser} · ${os}`;
 }
 
 @Injectable()
@@ -77,6 +105,35 @@ export class AdminService {
     return this.registry.listAll();
   }
 
+  /** Who signs in: every user with their last access, plus the latest sign-ins. */
+  async logins(): Promise<AdminLogins> {
+    const { users, events } = await this.store.loginOverview();
+    const iso = (d: Date | null) => (d ? d.toISOString() : null);
+    return {
+      users: users.map((u) => ({
+        id: u.id,
+        email: u.email,
+        name: u.name,
+        demo: u.demo,
+        createdAt: u.createdAt.toISOString(),
+        lastLoginAt: iso(u.lastLoginAt),
+        lastSeenAt: iso(u.lastSeenAt),
+        loginCount: u.loginCount,
+        emailVerified: Boolean(u.emailVerifiedAt),
+        workspaces: u.memberships.map((m) => m.workspaceSlug),
+      })),
+      events: events.map((e) => ({
+        id: e.id,
+        at: e.at.toISOString(),
+        method: e.method,
+        email: e.user.email,
+        name: e.user.name,
+        ip: e.ip,
+        device: describeDevice(e.userAgent),
+      })),
+    };
+  }
+
   /** Assign (or change) a user's role in any workspace. */
   async setMembership(dto: SetMembershipDto): Promise<{ ok: true }> {
     const user = await this.store.findUserByEmail(dto.email.toLowerCase().trim());
@@ -113,6 +170,11 @@ export class AdminController {
   @Get("workspaces")
   workspaces() {
     return this.service.workspaces();
+  }
+
+  @Get("logins")
+  logins() {
+    return this.service.logins();
   }
 
   @Post("memberships")

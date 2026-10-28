@@ -11,6 +11,7 @@ import {
   type WhatsappGroup,
   type WhatsappStatusValue,
 } from "./whatsapp.types";
+import { chatJid, contactLid, contactName, contactPnJid, historyMessages, toChatMessage } from "./chat-message";
 import { MAX_RECONNECT_ATTEMPTS, backoffDelay, classifyDisconnect } from "./reconnect-policy";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -37,6 +38,10 @@ export class BaileysSession {
   /** Last failure reason, surfaced in the panel (null when healthy). */
   lastError: string | null = null;
   private readonly contacts = new Set<string>();
+  /** "@lid" chat id → phone-number JID, learnt from messages and the contact list. */
+  private readonly lidToPn = new Map<string, string>();
+  /** Phone (E.164) → contact name, from the contact list. */
+  private readonly names = new Map<string, string>();
   /** The user pressed "Conectar": if the stored creds turn out dead, go straight to a fresh QR. */
   private userInitiated = false;
   /** Keeps the cross-process owner lock fresh while this process runs the socket. */
@@ -188,7 +193,7 @@ export class BaileysSession {
         this.trackContacts(h?.contacts ?? []);
         this.seedInboxFromHistory(h?.messages ?? []);
       });
-      this.sock.ev.on("messages.upsert", (u: any) => this.onIncomingMessages(u));
+      this.sock.ev.on("messages.upsert", (u: any) => void this.onIncomingMessages(u));
       this.sock.ev.on("connection.update", (u: any) => this.onConnectionUpdate(u));
       this.note("Socket abierto; esperando QR o sesión…");
     } catch (err) {
@@ -386,80 +391,93 @@ export class BaileysSession {
   }
 
   /**
-   * Forward incoming DIRECT (1:1) text messages to the Inbox via onInbound.
-   * Groups (`@g.us`) and status broadcasts are skipped so the inbox isn't
-   * flooded with broadcast traffic; only real conversations land there.
+   * Forward DIRECT (1:1) messages to the Inbox: what contacts write and what
+   * the operator sends from the phone. Groups (`@g.us`), status and channels
+   * are skipped. Chats whose number WhatsApp hides behind a "@lid" are resolved
+   * to the phone number (needed to answer and to match CRM contacts).
    */
-  private onIncomingMessages(u: any): void {
-    if (u?.type !== "notify" || !Array.isArray(u.messages)) return;
+  private async onIncomingMessages(u: any): Promise<void> {
+    if (!Array.isArray(u?.messages)) return;
+    // "notify" = new messages; "append" also carries what you send from the phone.
+    if (u.type !== "notify" && u.type !== "append") return;
     for (const m of u.messages) {
       try {
-        if (m?.key?.fromMe) continue;
-        const jid: string = m?.key?.remoteJid ?? "";
-        if (!jid.endsWith("@s.whatsapp.net")) continue; // 1:1 chats only
-        const text = BaileysSession.textOf(m);
-        if (!text.trim()) continue;
-        const handle = numberFromJid(jid) ?? jid.split("@")[0];
-        const name = String(m?.pushName || handle);
+        if (u.type === "append" && !m?.key?.fromMe) continue;
+        await this.resolveLid(m?.key);
+        const msg = toChatMessage(m, this.lidToPn);
+        if (!msg) continue;
         this.events.onInbound(this.workspaceSlug, {
-          contactHandle: handle,
-          contactName: name,
-          text,
+          contactHandle: msg.handle,
+          contactName: msg.name ?? this.names.get(msg.handle) ?? msg.handle,
+          text: msg.text,
+          direction: msg.direction,
+          at: msg.at,
+          externalId: msg.externalId,
         });
       } catch (err) {
-        this.logger.warn(`Mensaje entrante ignorado: ${(err as Error).message}`);
+        this.logger.warn(`Mensaje ignorado: ${(err as Error).message}`);
       }
     }
   }
 
-  /** Extract the readable text/caption from a Baileys message (empty if none). */
-  private static textOf(m: any): string {
-    return (
-      m?.message?.conversation ??
-      m?.message?.extendedTextMessage?.text ??
-      m?.message?.imageMessage?.caption ??
-      m?.message?.videoMessage?.caption ??
-      ""
-    );
+  /** Learn the phone number behind a "@lid" chat id, when Baileys knows it. */
+  private async resolveLid(key: any): Promise<void> {
+    const jid: string = key?.remoteJid ?? "";
+    if (!jid.endsWith("@lid") || this.lidToPn.has(jid)) return;
+    const alt = chatJid(key);
+    if (alt && alt.endsWith("@s.whatsapp.net")) {
+      this.lidToPn.set(jid, alt);
+      return;
+    }
+    try {
+      const pn = await this.sock?.signalRepository?.lidMapping?.getPNForLID?.(jid);
+      if (typeof pn === "string" && pn.includes("@")) this.lidToPn.set(jid, pn.replace(/:\d+@/, "@"));
+    } catch {
+      /* unknown LID: the message is skipped until WhatsApp tells us the number */
+    }
   }
 
   /**
-   * Seed the Inbox with recent 1:1 conversations from the history Baileys sends
-   * right after linking. WhatsApp Web doesn't replay full history, but this gives
-   * the operator their recent chats immediately instead of an empty inbox until
-   * someone writes. One entry per contact (their most recent inbound text).
+   * Seed the Inbox with the recent history Baileys sends right after linking:
+   * the last messages of each 1:1 chat, in both directions and with their real
+   * dates. WhatsApp Web doesn't replay the full history. Stored once per
+   * message id, and never treated as new (no automations or AI replies).
    */
   private seedInboxFromHistory(messages: any[]): void {
-    if (!Array.isArray(messages) || !messages.length) return;
-    const latest = new Map<string, { handle: string; name: string; text: string; ts: number }>();
-    for (const m of messages) {
-      try {
-        if (m?.key?.fromMe) continue;
-        const jid: string = m?.key?.remoteJid ?? "";
-        if (!jid.endsWith("@s.whatsapp.net")) continue; // 1:1 chats only
-        const text = BaileysSession.textOf(m);
-        if (!text.trim()) continue;
-        const ts = Number(m?.messageTimestamp ?? 0);
-        const prev = latest.get(jid);
-        if (prev && prev.ts >= ts) continue;
-        const handle = numberFromJid(jid) ?? jid.split("@")[0];
-        latest.set(jid, { handle, name: String(m?.pushName || handle), text, ts });
-      } catch {
-        /* ignore malformed history rows */
-      }
-    }
-    for (const c of latest.values()) {
+    for (const msg of historyMessages(messages, this.lidToPn)) {
       this.events.onInbound(this.workspaceSlug, {
-        contactHandle: c.handle,
-        contactName: c.name,
-        text: c.text,
+        contactHandle: msg.handle,
+        contactName: msg.name ?? this.names.get(msg.handle) ?? msg.handle,
+        text: msg.text,
+        direction: msg.direction,
+        at: msg.at,
+        externalId: msg.externalId,
+        history: true,
       });
     }
   }
 
+  /**
+   * Contact list from WhatsApp: count it, learn which number is behind each
+   * "@lid", and pass on the names (as saved in the phone, else the contact's
+   * own profile name) so chats stop showing bare numbers.
+   */
   private trackContacts(rows: any[]): void {
     if (!Array.isArray(rows)) return;
-    for (const c of rows) if (c?.id) this.contacts.add(String(c.id));
+    const named: { handle: string; name: string }[] = [];
+    for (const c of rows) {
+      if (c?.id) this.contacts.add(String(c.id));
+      const pn = contactPnJid(c);
+      const lid = contactLid(c);
+      if (pn && lid) this.lidToPn.set(lid, pn);
+      const handle = numberFromJid(pn ?? (lid ? this.lidToPn.get(lid) : null));
+      const name = contactName(c);
+      if (handle && name && this.names.get(handle) !== name) {
+        this.names.set(handle, name);
+        named.push({ handle, name });
+      }
+    }
+    if (named.length) this.events.onContactNames?.(this.workspaceSlug, named);
     if (this.contacts.size > 0) {
       this.events.onMeta(this.workspaceSlug, { contactsCount: this.contacts.size });
     }
