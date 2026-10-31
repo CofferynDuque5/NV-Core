@@ -1,5 +1,5 @@
 import * as React from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { Loader2 } from "lucide-react";
 import { DEFAULT_LEGAL_URL } from "@nv/domain";
 
@@ -17,6 +17,10 @@ const LEGAL_URL = import.meta.env.VITE_LEGAL_URL || DEFAULT_LEGAL_URL;
 
 export default function RegisterPage() {
   const navigate = useNavigate();
+  const [params] = useSearchParams();
+  // Only same-app paths (an invite link sends people back to /join/…).
+  const nextParam = params.get("next");
+  const next = nextParam && nextParam.startsWith("/") && !nextParam.startsWith("//") ? nextParam : null;
   const register = useAuthStore((s) => s.register);
 
   const [name, setName] = React.useState("");
@@ -43,7 +47,7 @@ export default function RegisterPage() {
       // New account: send them straight to the guided setup to create their first
       // workspace (unless a pending invitation already added them to one).
       const target = useAuthStore.getState().memberships[0]?.workspaceSlug;
-      navigate(target ? `/w/${target}/dashboard` : "/onboarding", { replace: true });
+      navigate(next ?? (target ? `/w/${target}/dashboard` : "/onboarding"), { replace: true });
     } catch (err) {
       setError(err instanceof Error && err.message ? err.message : "No se pudo crear la cuenta.");
       setSubmitting(false);
@@ -57,7 +61,7 @@ export default function RegisterPage() {
       footer={
         <>
           ¿Ya tienes cuenta?{" "}
-          <Link to="/login" className="text-brand font-medium hover:underline">
+          <Link to={next ? `/login?next=${encodeURIComponent(next)}` : "/login"} className="text-brand font-medium hover:underline">
             Inicia sesión
           </Link>
         </>

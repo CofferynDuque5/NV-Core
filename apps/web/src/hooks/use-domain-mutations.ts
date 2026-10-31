@@ -10,6 +10,7 @@ import type {
   UpdatePaymentRequestInput,
   WeeklyReportSettings,
   AddMemberInput,
+  CreateInviteLinkInput,
   CampaignAttachment,
   ChannelId,
   Contact,
@@ -1179,6 +1180,20 @@ export function useUpdateConversation() {
   });
 }
 
+export function useDeleteConversation() {
+  const svc = useServices();
+  const ws = useWorkspace();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => svc.inbox.deleteConversation(ws.id, id),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: [ws.id, "inbox"] });
+      toast.success("Chat eliminado del panel");
+    },
+    onError: (err) => toast.error(errText(err)),
+  });
+}
+
 // ── WhatsApp (Baileys) ────────────────────────────────────────────────────────
 function useWhatsappAction(action: "connect" | "reconnect" | "disconnect" | "sync" | "relink") {
   const svc = useServices();
@@ -1585,6 +1600,7 @@ function invalidateTeam(qc: ReturnType<typeof useQueryClient>, wsId: string) {
   void qc.invalidateQueries({ queryKey: [wsId, "team"] });
   void qc.invalidateQueries({ queryKey: [wsId, "roles"] });
   void qc.invalidateQueries({ queryKey: [wsId, "invitations"] });
+  void qc.invalidateQueries({ queryKey: [wsId, "invite-links"] });
 }
 
 export function useAddMember() {
@@ -1614,6 +1630,31 @@ export function useRevokeInvitation() {
     onSuccess: () => {
       invalidateTeam(qc, ws.id);
       toast.success("Invitación cancelada");
+    },
+    onError: (err) => toast.error(errText(err)),
+  });
+}
+
+export function useCreateInviteLink() {
+  const svc = useServices();
+  const ws = useWorkspace();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: CreateInviteLinkInput) => svc.team.createInviteLink(ws.id, input),
+    onSuccess: () => invalidateTeam(qc, ws.id),
+    onError: (err) => toast.error(errText(err)),
+  });
+}
+
+export function useRevokeInviteLink() {
+  const svc = useServices();
+  const ws = useWorkspace();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (linkId: string) => svc.team.revokeInviteLink(ws.id, linkId),
+    onSuccess: () => {
+      invalidateTeam(qc, ws.id);
+      toast.success("Enlace desactivado");
     },
     onError: (err) => toast.error(errText(err)),
   });

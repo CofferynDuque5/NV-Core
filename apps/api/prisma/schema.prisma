@@ -164,38 +164,38 @@ model Contact {
 }
 
 model Group {
-  id            String    @id @default(cuid())
-  workspaceSlug String
-  name          String
-  channel       ChannelId @default(wa)
+  id             String    @id @default(cuid())
+  workspaceSlug  String
+  name           String
+  channel        ChannelId @default(wa)
   /// Destination kind: "group" (chat) or "channel" (broadcast, e.g. a Telegram
   /// channel where the bot is an admin). Delivery is the same; this drives UI.
-  kind          String    @default("group")
-  members       Int       @default(0)
-  admins        Int       @default(0)
-  description   String?
-  tags          String[]
+  kind           String    @default("group")
+  members        Int       @default(0)
+  admins         Int       @default(0)
+  description    String?
+  tags           String[]
   /// WhatsApp group JID (e.g. "12345-678@g.us") when synced from Baileys.
-  remoteJid     String?
+  remoteJid      String?
   /// True when the row was populated from a WhatsApp sync (vs. manual CRUD).
-  synced        Boolean   @default(false)
+  synced         Boolean   @default(false)
   /// «Apartado»: campaigns never post here (team, university, news groups…).
-  excluded      Boolean   @default(false)
+  excluded       Boolean   @default(false)
   /// What the group is about (GROUP_CATEGORIES in @nv/domain).
-  category      String?
+  category       String?
   /// The group's rules ask for a price / a photo in every post.
-  requiresPrice Boolean   @default(false)
-  requiresImage Boolean   @default(false)
+  requiresPrice  Boolean   @default(false)
+  requiresImage  Boolean   @default(false)
   /// The group's rules ban ads; only admins can write (WhatsApp setting).
-  forbidsAds    Boolean   @default(false)
-  onlyAdmins    Boolean   @default(false)
+  forbidsAds     Boolean   @default(false)
+  onlyAdmins     Boolean   @default(false)
   /// ISO country chosen by the user; when null it is detected (name, creator).
-  country       String?
+  country        String?
   /// Creator of the WhatsApp group, read on sync (its prefix hints the country).
-  ownerJid      String?
+  ownerJid       String?
   /// Last time the rules were read and checked.
   rulesCheckedAt DateTime?
-  createdAt     DateTime  @default(now())
+  createdAt      DateTime  @default(now())
 
   variables       GroupVariable[]
   campaignTargets CampaignTarget[]
@@ -391,6 +391,8 @@ model Campaign {
   prices             Json           @default("{}")
   /// Append the brand's links and the NV Marketing credit to group messages.
   addFooter          Boolean        @default(true)
+  /// Category the team files the campaign under («Halloween», «Streaming»…).
+  category           String?
   createdAt          DateTime       @default(now())
 
   posts    Post[]
@@ -542,18 +544,18 @@ model Template {
 }
 
 model Automation {
-  id            String           @id @default(cuid())
+  id            String                   @id @default(cuid())
   workspaceSlug String
   name          String
-  status        String           @default("pausado")
-  runs          Int              @default(0)
+  status        String                   @default("pausado")
+  runs          Int                      @default(0)
   description   String?
-  nodes         Json             @default("[]")
+  nodes         Json                     @default("[]")
   // Visual-editor connections between nodes (graph edges).
-  edges         Json             @default("[]")
+  edges         Json                     @default("[]")
   // Optional n8n webhook (absolute URL or path resolved against N8N_BASE_URL).
   webhookUrl    String?
-  createdAt     DateTime         @default(now())
+  createdAt     DateTime                 @default(now())
   waits         AutomationWait[]
   executions    AutomationRun[]
   inactiveFires AutomationInactiveFire[]
@@ -649,6 +651,8 @@ model Conversation {
   assignee      String?
   /// Free-form labels for triage (e.g. "ventas", "urgente").
   labels        String[]
+  /// New incoming messages not seen yet; 0 when read, ≥1 to mark it unread again.
+  unreadCount   Int       @default(0)
   createdAt     DateTime  @default(now())
   messages      Message[]
 
@@ -946,6 +950,23 @@ model Invitation {
   @@unique([workspaceSlug, email])
   @@index([workspaceSlug])
   @@index([email])
+}
+
+/// A shareable link that lets anyone with it join a workspace with a fixed role
+/// (never Owner). Only the hash of the token is stored; the link is shown once.
+model InviteLink {
+  id            String    @id @default(cuid())
+  workspaceSlug String
+  tokenHash     String    @unique
+  role          String    @default("Visor")
+  createdByName String?
+  maxUses       Int?
+  uses          Int       @default(0)
+  expiresAt     DateTime
+  revokedAt     DateTime?
+  createdAt     DateTime  @default(now())
+
+  @@index([workspaceSlug])
 }
 
 /// A team to-do on the workspace task board. status: todo | doing | done;

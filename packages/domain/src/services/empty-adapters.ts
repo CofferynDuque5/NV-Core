@@ -146,6 +146,7 @@ export const emptyAdapters: Services = {
     update: () => notAvailable(),
     remove: () => notAvailable(),
     run: () => delay(null),
+    activity: (_id, since) => delay({ since, runs: [], inbox: { received: 0, replied: 0, newChats: 0 } }),
     pause: () => notAvailable(),
     resume: () => notAvailable(),
     logs: () => delay([]),
@@ -236,6 +237,7 @@ export const emptyAdapters: Services = {
     sendMessage: () => notAvailable(),
     setResolved: () => notAvailable(),
     updateConversation: () => notAvailable(),
+    deleteConversation: () => notAvailable(),
   },
   media: {
     folders: () => delay([]),
@@ -330,6 +332,9 @@ export const emptyAdapters: Services = {
     removeMember: () => notAvailable(),
     invitations: () => delay([]),
     revokeInvitation: () => notAvailable(),
+    inviteLinks: () => delay([]),
+    createInviteLink: () => notAvailable(),
+    revokeInviteLink: () => notAvailable(),
   },
   audit: {
     logs: () => delay([]),

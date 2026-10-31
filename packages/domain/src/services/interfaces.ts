@@ -65,6 +65,7 @@ import type {
 } from "../entities";
 import type { ChannelId, ContactStage, Role, WorkspaceKind } from "../enums";
 import type { PlanId, PlanLimits } from "../config/plans";
+import type { DayActivity } from "../config/activity";
 
 /** Server-side query for the contacts list (search + stage + pagination). */
 export interface ContactListQuery {
@@ -130,6 +131,7 @@ export interface CreateCampaignInput {
   targetGroups?: string[];
   /** currency → amount for {{precio}}. */
   prices?: Record<string, string>;
+  category?: string | null;
   addFooter?: boolean;
 }
 export type UpdateCampaignInput = Partial<CreateCampaignInput>;
@@ -257,6 +259,8 @@ export interface CampaignService {
   pause(workspaceId: string, id: string): Promise<Campaign>;
   resume(workspaceId: string, id: string): Promise<Campaign>;
   logs(workspaceId: string): Promise<SendLogEntry[]>;
+  /** What happened since `since` (start of the user's day). */
+  activity(workspaceId: string, since: string): Promise<DayActivity>;
   clearLogs(workspaceId: string): Promise<{ deleted: number }>;
   /** Export all campaigns as CSV, incl. recipient groups by name. */
   exportCsv(workspaceId: string): Promise<string>;
@@ -475,6 +479,8 @@ export interface UpdateConversationInput {
   /** Assignee email, or null / "" to unassign. */
   assignee?: string | null;
   labels?: string[];
+  /** true = mark as unread again; false = mark as read. */
+  unread?: boolean;
 }
 
 /** Assignee filter value meaning "only unassigned conversations". */
@@ -518,6 +524,8 @@ export interface InboxService {
     conversationId: string,
     input: UpdateConversationInput,
   ): Promise<Conversation>;
+  /** Delete a chat and its messages from the panel. */
+  deleteConversation(workspaceId: string, conversationId: string): Promise<void>;
 }
 
 export interface MediaUploadSignature {
@@ -736,6 +744,41 @@ export interface TeamInvitation {
   createdAt: string;
 }
 
+/** A shareable link that lets teammates join the brand with a fixed role. */
+export interface InviteLink {
+  id: string;
+  role: Role;
+  createdByName: string | null;
+  /** How many people may use it; null = no limit. */
+  maxUses: number | null;
+  uses: number;
+  expiresAt: string;
+  createdAt: string;
+}
+
+/** A link just created: the only time its address is shown. */
+export interface CreatedInviteLink extends InviteLink {
+  url: string;
+}
+
+export interface CreateInviteLinkInput {
+  role: Role;
+  /** Days it lasts (1–30, default 7). */
+  days?: number;
+  maxUses?: number;
+}
+
+/** What the /join page shows before joining. */
+export interface InviteLinkPreview {
+  workspaceSlug: string;
+  workspaceName: string;
+  role: Role;
+  invitedByName: string | null;
+  expiresAt: string;
+  /** Why the link can't be used, or null while it works. */
+  problem: string | null;
+}
+
 /** Result of addMember: whether an existing user was added or an email invited. */
 export interface AddMemberResult {
   status: "added" | "invited";
@@ -754,6 +797,10 @@ export interface TeamService {
   invitations(workspaceId: string): Promise<TeamInvitation[]>;
   /** Revoke a pending invitation. */
   revokeInvitation(workspaceId: string, invitationId: string): Promise<void>;
+  /** Shareable invite links that still work. */
+  inviteLinks(workspaceId: string): Promise<InviteLink[]>;
+  createInviteLink(workspaceId: string, input: CreateInviteLinkInput): Promise<CreatedInviteLink>;
+  revokeInviteLink(workspaceId: string, linkId: string): Promise<void>;
 }
 
 export interface AuditService {

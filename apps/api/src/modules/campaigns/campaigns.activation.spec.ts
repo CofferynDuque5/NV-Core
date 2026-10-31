@@ -17,8 +17,13 @@ const scheduledStatus = (
 ).scheduledStatus;
 
 describe("CampaignsService.scheduledStatus (auto-activation)", () => {
-  it("activates a daily campaign left as draft", () => {
-    expect(scheduledStatus("borrador", "daily", null, ["20:00"])).toBe("programada");
+  it("activates a daily campaign whose status wasn't chosen", () => {
+    expect(scheduledStatus(undefined, "daily", null, ["20:00"])).toBe("programada");
+  });
+
+  it("keeps a campaign the user saved as «borrador», even with a schedule", () => {
+    expect(scheduledStatus("borrador", "daily", null, ["20:00"])).toBe("borrador");
+    expect(scheduledStatus("borrador", "once", "2026-09-10T20:00:00.000Z", [])).toBe("borrador");
   });
 
   it("activates a weekly campaign with times", () => {
@@ -26,7 +31,7 @@ describe("CampaignsService.scheduledStatus (auto-activation)", () => {
   });
 
   it("activates a one-off with a scheduled datetime", () => {
-    expect(scheduledStatus("borrador", "once", "2026-09-10T20:00:00.000Z", [])).toBe("programada");
+    expect(scheduledStatus(undefined, "once", "2026-09-10T20:00:00.000Z", [])).toBe("programada");
   });
 
   it("leaves a draft with no schedule alone", () => {

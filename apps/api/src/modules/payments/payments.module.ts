@@ -60,6 +60,7 @@ import { CurrentUser } from "../../auth/decorators/current-user.decorator";
 import { Roles } from "../../auth/decorators/roles.decorator";
 import { RolesGuard } from "../../auth/guards/roles.guard";
 import type { AuthenticatedUser } from "../../auth/auth.types";
+import { PlanMethodsSeeder } from "./plan-methods.seed";
 
 /** Payment requests listed at once (newest first). */
 export const PAYMENTS_LIMIT = 300;
@@ -523,7 +524,7 @@ export class PaymentsController {
 @Module({
   imports: [NotificationsModule],
   controllers: [PaymentsController],
-  providers: [PaymentsService],
+  providers: [PaymentsService, PlanMethodsSeeder],
   exports: [PaymentsService],
 })
 export class PaymentsModule {}

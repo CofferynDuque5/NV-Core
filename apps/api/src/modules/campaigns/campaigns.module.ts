@@ -11,6 +11,7 @@ import {
   Param,
   Patch,
   Post,
+  Query,
   ServiceUnavailableException,
   UseGuards,
 } from "@nestjs/common";
@@ -19,11 +20,13 @@ import {
   CAMPAIGN_STATUSES,
   CHANNEL_IDS,
   PRICE_CURRENCIES,
+  summarizeRuns,
   type Campaign,
   type CampaignAttachment,
   type CampaignImportResult,
   type CampaignStatus,
   type ChannelId,
+  type DayActivity,
 } from "@nv/domain";
 import { Prisma } from "@prisma/client";
 import {
@@ -176,6 +179,12 @@ export class CreateCampaignDto {
   @IsOptional()
   @IsBoolean()
   addFooter?: boolean;
+
+  @ApiPropertyOptional({ description: "Categoría para ordenar las campañas («Halloween»)" })
+  @IsOptional()
+  @IsString()
+  @MaxLength(40)
+  category?: string | null;
 }
 
 export class ImportCampaignsDto {
@@ -212,6 +221,7 @@ export class UpdateCampaignDto {
   @IsOptional() @IsArray() @IsString({ each: true }) targetGroups?: string[];
   @IsOptional() @IsObject() prices?: Record<string, string>;
   @IsOptional() @IsBoolean() addFooter?: boolean;
+  @IsOptional() @IsString() @MaxLength(40) category?: string | null;
 }
 
 /** Known currencies only, trimmed, without empty amounts. */
@@ -302,14 +312,16 @@ export class CampaignsService {
       rotateAttachments: dto.rotateAttachments,
       prices: cleanPrices(dto.prices),
       addFooter: dto.addFooter,
+      category: dto.category === undefined ? undefined : dto.category?.trim() || null,
     };
   }
 
   /**
    * A campaign that carries a real schedule must be "programada" so the runner
    * picks it up. Otherwise a freshly created scheduled campaign stays "borrador"
-   * and never fires — the tick only processes "programada"/"activa". An explicit
-   * non-draft status (pausada/completada/activa) is always respected.
+   * and never fires — the tick only processes "programada"/"activa". A status the
+   * user chose (including «borrador», to keep it saved without sending) is
+   * always respected; only a missing one is inferred from the schedule.
    */
   private static scheduledStatus(
     status: CampaignStatus | undefined,
@@ -317,7 +329,7 @@ export class CampaignsService {
     scheduleAt: string | undefined | null,
     scheduleTimes: string[] | undefined | null,
   ): CampaignStatus | undefined {
-    if (status && status !== "borrador") return status;
+    if (status) return status;
     const hasRecurring =
       (scheduleType === "daily" || scheduleType === "weekly") && (scheduleTimes?.length ?? 0) > 0;
     const hasOnce = scheduleType === "once" && Boolean(scheduleAt);
@@ -355,6 +367,7 @@ export class CampaignsService {
         rotateAttachments: dto.rotateAttachments ?? false,
         prices: cleanPrices(dto.prices) ?? {},
         addFooter: dto.addFooter ?? true,
+        category: dto.category?.trim() || null,
       },
     });
     if (dto.targetGroups) await this.setTargets(workspaceId, created.id, dto.targetGroups);
@@ -379,12 +392,14 @@ export class CampaignsService {
     );
     // Activate a campaign that (now) carries a schedule but is still a draft, so
     // the runner fires it. Merges with the stored values since the update is partial.
-    const status = CampaignsService.scheduledStatus(
-      dto.status ?? (existing.status as CampaignStatus),
-      dto.scheduleType ?? existing.scheduleType,
-      dto.scheduleAt ?? existing.scheduleAt,
-      dto.scheduleTimes ?? (existing.scheduleTimes as string[] | null),
-    );
+    // A draft whose status wasn't touched is inferred again; a chosen status stays.
+    const status =
+      CampaignsService.scheduledStatus(
+        dto.status ?? (existing.status === "borrador" ? undefined : (existing.status as CampaignStatus)),
+        dto.scheduleType ?? existing.scheduleType,
+        dto.scheduleAt ?? existing.scheduleAt,
+        dto.scheduleTimes ?? (existing.scheduleTimes as string[] | null),
+      ) ?? (existing.status as CampaignStatus);
     await this.prisma.campaign.update({
       where: { id },
       data: {
@@ -432,6 +447,7 @@ export class CampaignsService {
         postToWaStatus: src.postToWaStatus,
         prices: src.prices ?? {},
         addFooter: src.addFooter,
+        category: src.category,
         targets: { create: src.targets.map((t) => ({ groupId: t.groupId })) },
       },
     });
@@ -467,6 +483,31 @@ export class CampaignsService {
       orderBy: { createdAt: "desc" },
       take: 500,
     });
+  }
+
+  /**
+   * What happened since `since` (the start of the user's day): each campaign run
+   * with its first and last send, plus how the Inbox moved.
+   */
+  async activity(workspaceId: string, since: Date): Promise<DayActivity> {
+    const empty = { since: since.toISOString(), runs: [], inbox: { received: 0, replied: 0, newChats: 0 } };
+    if (!this.prisma.enabled) return empty;
+    const [logs, received, replied, newChats] = await Promise.all([
+      this.prisma.sendLog.findMany({
+        where: { workspaceSlug: workspaceId, createdAt: { gte: since } },
+        select: { campaignId: true, campaignName: true, runKey: true, target: true, ok: true, createdAt: true },
+        orderBy: { createdAt: "asc" },
+        take: 5000,
+      }),
+      this.prisma.message.count({
+        where: { direction: "in", createdAt: { gte: since }, conversation: { workspaceSlug: workspaceId } },
+      }),
+      this.prisma.message.count({
+        where: { direction: "out", createdAt: { gte: since }, conversation: { workspaceSlug: workspaceId } },
+      }),
+      this.prisma.conversation.count({ where: { workspaceSlug: workspaceId, createdAt: { gte: since } } }),
+    ]);
+    return { ...empty, runs: summarizeRuns(logs), inbox: { received, replied, newChats } };
   }
 
   /** Delete all send-log entries for a workspace. Returns how many were removed. */
@@ -686,6 +727,17 @@ export class CampaignsController {
   @Get("logs")
   logs(@WorkspaceId() workspaceId: string) {
     return this.service.logs(workspaceId);
+  }
+
+  /** «Lo que pasó hoy»: `since` = start of the user's day (ISO); default the last 24 h. */
+  @Get("activity")
+  activity(@WorkspaceId() workspaceId: string, @Query("since") since?: string) {
+    const parsed = since ? new Date(since) : null;
+    const from =
+      parsed && !Number.isNaN(parsed.getTime()) && Date.now() - parsed.getTime() <= 8 * 86_400_000
+        ? parsed
+        : new Date(Date.now() - 86_400_000);
+    return this.service.activity(workspaceId, from);
   }
 
   @Delete("logs")

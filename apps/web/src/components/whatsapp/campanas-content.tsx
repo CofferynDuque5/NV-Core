@@ -1,23 +1,9 @@
 
 import * as React from "react";
 import type { Campaign } from "@nv/domain";
-import {
-  Download,
-  Loader2,
-  Megaphone,
-  Pause,
-  Clock,
-  Copy,
-  Pencil,
-  Play,
-  Plus,
-  Send,
-  Trash2,
-  Upload,
-} from "lucide-react";
+import { Download, Loader2, Megaphone, Plus, Upload } from "lucide-react";
 
-import { EMPTY_METRIC } from "@/lib/utils";
-import { isScheduled, scheduleLabel } from "@/lib/schedule";
+import type { CampaignTab } from "@/lib/campaigns";
 import { useCampaigns } from "@/hooks/use-domain-data";
 import {
   useDeleteCampaign,
@@ -32,8 +18,6 @@ import { useConfirm } from "@/providers/confirm-provider";
 import { PageHeader } from "@/components/common/page-header";
 import { QueryBoundary } from "@/components/common/query-boundary";
 import { CardGridSkeleton } from "@/components/common/skeletons";
-import { Panel } from "@/components/common/panel";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import {
@@ -44,16 +28,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { ChannelStack } from "@/components/common/channel-badge";
 import { CampaignFormDialog } from "@/components/entities/campaign-form-dialog";
-
-const STATUS_VARIANT: Record<Campaign["status"], "default" | "success" | "warning" | "neutral"> = {
-  activa: "success",
-  programada: "warning",
-  pausada: "neutral",
-  borrador: "neutral",
-  completada: "default",
-};
+import { CampaignBoard, CampaignRow } from "./campaign-board";
 
 export function CampanasContent({ showHeader = true }: { showHeader?: boolean }) {
   const campaigns = useCampaigns();
@@ -70,6 +46,10 @@ export function CampanasContent({ showHeader = true }: { showHeader?: boolean })
   const [deletingId, setDeletingId] = React.useState<string | null>(null);
   const [importOpen, setImportOpen] = React.useState(false);
   const [importCsvText, setImportCsvText] = React.useState("");
+  const [tab, setTab] = React.useState<CampaignTab | null>(null);
+  // null = every category; NO_CATEGORY ("") = only the ones without one.
+  const [category, setCategory] = React.useState<string | null>(null);
+  const [query, setQuery] = React.useState("");
 
   const hasItems = (campaigns.data?.items.length ?? 0) > 0;
 
@@ -146,147 +126,32 @@ export function CampanasContent({ showHeader = true }: { showHeader?: boolean })
           ),
         }}
       >
-        {(data) => {
-          const scheduled = data.items.filter(isScheduled);
-          return (
-          <div className="space-y-4">
-            {scheduled.length > 0 ? (
-              <Panel className="p-4">
-                <div className="mb-3 flex items-center gap-2">
-                  <Clock className="size-4 text-brand" />
-                  <h3 className="text-sm font-semibold text-ink-bright">Programados</h3>
-                  <span className="text-xs text-ink-faint">({scheduled.length})</span>
-                </div>
-                <div className="space-y-1.5">
-                  {scheduled.map((c) => (
-                    <div
-                      key={c.id}
-                      className="flex items-center gap-3 rounded-lg border border-line-soft bg-panel-raised px-3 py-2"
-                    >
-                      <div className="min-w-0 flex-1">
-                        <div className="truncate text-sm font-medium text-ink">{c.name}</div>
-                        <div className="text-[11px] text-ink-faint">{scheduleLabel(c)}</div>
-                      </div>
-                      <Button
-                        size="sm"
-                        variant="secondary"
-                        disabled={run.isPending && run.variables === c.id}
-                        onClick={() => run.mutate(c.id)}
-                      >
-                        {run.isPending && run.variables === c.id ? (
-                          <Loader2 className="size-3.5 animate-spin" />
-                        ) : (
-                          <Send className="size-3.5" />
-                        )}
-                        Enviar ahora
-                      </Button>
-                    </div>
-                  ))}
-                </div>
-              </Panel>
-            ) : null}
-
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
-            {data.items.map((c) => (
-              <Panel key={c.id} className="flex flex-col gap-3 p-4">
-                <div className="flex items-start justify-between gap-2">
-                  <div className="min-w-0">
-                    <h3 className="truncate text-sm font-semibold text-ink-bright">{c.name}</h3>
-                    <div className="mt-1">
-                      <Badge variant={STATUS_VARIANT[c.status]}>{c.status}</Badge>
-                    </div>
-                  </div>
-                  <div className="flex shrink-0 items-center gap-0.5">
-                    <button
-                      onClick={() => run.mutate(c.id)}
-                      disabled={run.isPending && run.variables === c.id}
-                      className="rounded-md p-1.5 text-ink-faint transition-colors hover:bg-state-success/10 hover:text-state-success"
-                      title="Enviar ahora"
-                    >
-                      {run.isPending && run.variables === c.id ? (
-                        <Loader2 className="size-4 animate-spin" />
-                      ) : (
-                        <Send className="size-4" />
-                      )}
-                    </button>
-                    {c.status === "pausada" ? (
-                      <button
-                        onClick={() => resume.mutate(c.id)}
-                        className="rounded-md p-1.5 text-ink-faint transition-colors hover:bg-panel-high hover:text-ink"
-                        title="Reanudar"
-                      >
-                        <Play className="size-4" />
-                      </button>
-                    ) : (
-                      <button
-                        onClick={() => pause.mutate(c.id)}
-                        className="rounded-md p-1.5 text-ink-faint transition-colors hover:bg-panel-high hover:text-ink"
-                        title="Pausar"
-                      >
-                        <Pause className="size-4" />
-                      </button>
-                    )}
-                    <button
-                      onClick={() => openEdit(c)}
-                      className="rounded-md p-1.5 text-ink-faint transition-colors hover:bg-panel-high hover:text-ink"
-                      title="Editar"
-                    >
-                      <Pencil className="size-4" />
-                    </button>
-                    <button
-                      onClick={() => duplicate.mutate(c.id)}
-                      disabled={duplicate.isPending && duplicate.variables === c.id}
-                      className="rounded-md p-1.5 text-ink-faint transition-colors hover:bg-panel-high hover:text-ink"
-                      title="Duplicar"
-                      aria-label={`Duplicar ${c.name}`}
-                    >
-                      {duplicate.isPending && duplicate.variables === c.id ? (
-                        <Loader2 className="size-4 animate-spin" />
-                      ) : (
-                        <Copy className="size-4" />
-                      )}
-                    </button>
-                    <button
-                      onClick={() => remove(c)}
-                      disabled={deletingId === c.id}
-                      className="rounded-md p-1.5 text-ink-faint transition-colors hover:bg-state-danger/10 hover:text-state-danger"
-                      title="Eliminar"
-                    >
-                      {deletingId === c.id ? (
-                        <Loader2 className="size-4 animate-spin" />
-                      ) : (
-                        <Trash2 className="size-4" />
-                      )}
-                    </button>
-                  </div>
-                </div>
-
-                {c.channels.length > 0 ? <ChannelStack ids={c.channels} /> : null}
-
-                <div>
-                  <div className="mb-1 flex justify-between text-[11px] text-ink-faint">
-                    <span>Progreso</span>
-                    <span>{c.progress}%</span>
-                  </div>
-                  <div className="h-1.5 w-full overflow-hidden rounded-full bg-line">
-                    <div
-                      className="h-full rounded-full bg-gradient-to-r from-brand to-brand-violet"
-                      style={{ width: `${c.progress}%` }}
-                    />
-                  </div>
-                </div>
-
-                <div className="flex justify-between border-t border-line pt-2 text-xs text-ink-muted">
-                  <span>Alcance {c.reach ?? EMPTY_METRIC}</span>
-                  <span>CTR {c.ctr ?? EMPTY_METRIC}</span>
-                  <span>{c.posts} posts</span>
-                </div>
-              </Panel>
-            ))}
-            </div>
-          </div>
-          );
-        }}
+        {(data) => (
+          <CampaignBoard
+            items={data.items}
+            tab={tab}
+            onTab={setTab}
+            category={category}
+            onCategory={setCategory}
+            query={query}
+            onQuery={setQuery}
+            renderRow={(c) => (
+              <CampaignRow
+                key={c.id}
+                campaign={c}
+                running={run.isPending && run.variables === c.id}
+                duplicating={duplicate.isPending && duplicate.variables === c.id}
+                deleting={deletingId === c.id}
+                onRun={() => run.mutate(c.id)}
+                onPause={() => pause.mutate(c.id)}
+                onResume={() => resume.mutate(c.id)}
+                onEdit={() => openEdit(c)}
+                onDuplicate={() => duplicate.mutate(c.id)}
+                onDelete={() => remove(c)}
+              />
+            )}
+          />
+        )}
       </QueryBoundary>
 
       {/* Import dialog */}

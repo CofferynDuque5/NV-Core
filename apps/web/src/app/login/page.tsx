@@ -1,5 +1,5 @@
 import * as React from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { Loader2 } from "lucide-react";
 
 import { useAuthStore } from "@/stores/auth-store";
@@ -14,6 +14,10 @@ import { demoTarget } from "@/lib/demo";
 
 export default function LoginPage() {
   const navigate = useNavigate();
+  const [params] = useSearchParams();
+  // Only same-app paths (an invite link sends people back to /join/…).
+  const nextParam = params.get("next");
+  const next = nextParam && nextParam.startsWith("/") && !nextParam.startsWith("//") ? nextParam : null;
   const login = useAuthStore((s) => s.login);
   const startDemo = useAuthStore((s) => s.startDemo);
   const [demoPending, setDemoPending] = React.useState(false);
@@ -48,7 +52,7 @@ export default function LoginPage() {
       // Take the user to one of their workspaces; if they have none yet, guide
       // them through creating their first one.
       const target = useAuthStore.getState().memberships[0]?.workspaceSlug;
-      navigate(target ? `/w/${target}/dashboard` : "/onboarding", { replace: true });
+      navigate(next ?? (target ? `/w/${target}/dashboard` : "/onboarding"), { replace: true });
     } catch (err) {
       setError(err instanceof Error && err.message ? err.message : "No se pudo iniciar sesión.");
       setSubmitting(false);
@@ -62,7 +66,7 @@ export default function LoginPage() {
       footer={
         <>
           ¿No tienes cuenta?{" "}
-          <Link to="/register" className="text-brand font-medium hover:underline">
+          <Link to={next ? `/register?next=${encodeURIComponent(next)}` : "/register"} className="text-brand font-medium hover:underline">
             Crear cuenta
           </Link>
         </>

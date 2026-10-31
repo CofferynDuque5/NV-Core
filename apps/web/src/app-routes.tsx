@@ -20,6 +20,7 @@ const PublicFunnelPage = React.lazy(() => import("@/app/fn/[funnel]/page"));
 // Platform super-admin (global, not workspace-scoped).
 const AdminPage = React.lazy(() => import("@/app/admin/page"));
 const DemoPage = React.lazy(() => import("@/app/demo/page"));
+const JoinPage = React.lazy(() => import("@/app/join/[token]/page"));
 
 // Workspace module pages — lazy-loaded so each becomes its own chunk and the
 // initial payload stays small (faster load, lower memory on the VPS).
@@ -98,6 +99,14 @@ export function AppRoutes() {
         }
       />
       <Route path="/register" element={<RegisterPage />} />
+      <Route
+        path="/join/:token"
+        element={
+          <React.Suspense fallback={<RouteFallback />}>
+            <JoinPage />
+          </React.Suspense>
+        }
+      />
       <Route path="/forgot-password" element={<ForgotPasswordPage />} />
       <Route path="/reset-password" element={<ResetPasswordPage />} />
       <Route path="/verify-email" element={<VerifyEmailPage />} />

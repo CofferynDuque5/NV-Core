@@ -1,11 +1,17 @@
 import * as React from "react";
 import { CHANNELS, CHANNEL_IDS, type ChannelId, type Conversation } from "@nv/domain";
-import { CheckCircle2, Inbox, MessageSquare, Plus, RotateCcw, Search, Send, Tag, UserRound, X } from "lucide-react";
+import { CheckCircle2, Inbox, Mail, MessageSquare, Plus, RotateCcw, Search, Send, Tag, Trash2, UserRound, X } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { UNASSIGNED, withLabel, withoutLabel, type InboxStatus } from "@/lib/inbox";
 import { useConversations, useMessages, useTeam } from "@/hooks/use-domain-data";
-import { useResolveConversation, useSendMessage, useUpdateConversation } from "@/hooks/use-domain-mutations";
+import {
+  useDeleteConversation,
+  useResolveConversation,
+  useSendMessage,
+  useUpdateConversation,
+} from "@/hooks/use-domain-mutations";
+import { useConfirm } from "@/providers/confirm-provider";
 import { PageHeader } from "@/components/common/page-header";
 import { Panel, PanelHeader } from "@/components/common/panel";
 import { EmptyState } from "@/components/common/empty-state";
@@ -80,6 +86,8 @@ export default function InboxPage() {
   const send = useSendMessage(selected);
   const resolve = useResolveConversation();
   const updateConv = useUpdateConversation();
+  const deleteConv = useDeleteConversation();
+  const confirm = useConfirm();
 
   const members = team.data ?? [];
   const nameByEmail = React.useMemo(
@@ -100,14 +108,45 @@ export default function InboxPage() {
     () => [...(messages.data ?? [])].sort((a, b) => new Date(a.at).getTime() - new Date(b.at).getTime()),
     [messages.data],
   );
-  const bottomRef = React.useRef<HTMLDivElement>(null);
+  // Follow new messages like a chat app: jump to the newest when a chat opens,
+  // and keep following while the user is at the bottom (not while reading back).
+  const scrollRef = React.useRef<HTMLDivElement>(null);
+  const atBottom = React.useRef(true);
+  const lastId = thread[thread.length - 1]?.id;
   React.useEffect(() => {
-    bottomRef.current?.scrollIntoView({ block: "end" });
-  }, [thread.length, selected]);
+    atBottom.current = true;
+  }, [selected]);
+  React.useEffect(() => {
+    const el = scrollRef.current;
+    if (el && atBottom.current) el.scrollTop = el.scrollHeight;
+  }, [lastId, selected]);
+
+  // Opening a chat marks it as read.
+  const openChat = (c: Conversation) => {
+    setSelected(c.id);
+    if (c.unread > 0) updateConv.mutate({ id: c.id, input: { unread: false } });
+  };
+
+  async function removeChat(c: Conversation) {
+    const ok = await confirm({
+      title: "Eliminar chat",
+      description: `Se borra la conversación con ${c.contactName} del panel (no de tu teléfono). Si te vuelve a escribir, aparecerá de nuevo.`,
+      confirmLabel: "Eliminar",
+      destructive: true,
+    });
+    if (!ok) return;
+    deleteConv.mutate(c.id, {
+      onSuccess: () => {
+        setSelected(null);
+        setPinned(null);
+      },
+    });
+  }
 
   function submitMessage(e: React.FormEvent) {
     e.preventDefault();
     if (!draft.trim() || !selected) return;
+    atBottom.current = true;
     send.mutate(draft.trim(), { onSuccess: () => setDraft("") });
   }
 
@@ -182,7 +221,8 @@ export default function InboxPage() {
                 {filtered.map((c) => (
                   <li key={c.id}>
                     <button
-                      onClick={() => setSelected(c.id)}
+                      onClick={() => openChat(c)}
+                      data-testid="inbox-conversation"
                       className={cn(
                         "flex w-full items-start gap-2.5 rounded-lg px-2.5 py-2 text-left transition-colors",
                         selected === c.id ? "bg-brand/12" : "hover:bg-panel-raised",
@@ -196,7 +236,7 @@ export default function InboxPage() {
                       </span>
                       <span className="min-w-0 flex-1">
                         <span className="flex items-center gap-1.5">
-                          <span className="min-w-0 flex-1 truncate text-sm font-medium text-ink">{c.contactName}</span>
+                          <span className={cn("min-w-0 flex-1 truncate text-sm text-ink", c.unread > 0 ? "font-bold" : "font-medium")}>{c.contactName}</span>
                           {c.lastMessageAt ? (
                             <span className="shrink-0 text-[10px] tabular-nums text-ink-faint">{timeOf(c.lastMessageAt)}</span>
                           ) : null}
@@ -247,7 +287,7 @@ export default function InboxPage() {
         </Panel>
 
         {/* Thread */}
-        <Panel className="flex min-h-[74vh] flex-col overflow-hidden">
+        <Panel className="flex h-[74vh] flex-col overflow-hidden">
           {!active ? (
             <div className="flex flex-1 items-center justify-center">
               <EmptyState icon={MessageSquare} title="Selecciona una conversación" description="Aquí verás el hilo completo y podrás responder, asignar o etiquetar." />
@@ -273,6 +313,35 @@ export default function InboxPage() {
                         ))}
                       </select>
                     </label>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      title="Marcar como no leído"
+                      aria-label="Marcar como no leído"
+                      onClick={() =>
+                        updateConv.mutate(
+                          { id: active.id, input: { unread: true } },
+                          {
+                            onSuccess: () => {
+                              setSelected(null);
+                              setPinned(null);
+                            },
+                          },
+                        )
+                      }
+                    >
+                      <Mail className="size-4" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      title="Eliminar chat"
+                      aria-label="Eliminar chat"
+                      className="text-ink-faint hover:text-state-danger"
+                      onClick={() => void removeChat(active)}
+                    >
+                      <Trash2 className="size-4" />
+                    </Button>
                     <Button
                       variant={active.resolved ? "secondary" : "outline"}
                       size="sm"
@@ -309,7 +378,14 @@ export default function InboxPage() {
                 />
               </div>
 
-              <div className="flex-1 space-y-1.5 overflow-y-auto bg-panel-raised/40 p-4">
+              <div
+                ref={scrollRef}
+                onScroll={(e) => {
+                  const el = e.currentTarget;
+                  atBottom.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
+                }}
+                className="min-h-0 flex-1 space-y-1.5 overflow-y-auto bg-panel-raised/40 p-4"
+              >
                 {messages.isLoading ? (
                   <ListSkeleton rows={3} />
                 ) : thread.length === 0 ? (
@@ -354,7 +430,6 @@ export default function InboxPage() {
                     );
                   })
                 )}
-                <div ref={bottomRef} />
               </div>
 
               <form onSubmit={submitMessage} className="flex items-center gap-2 border-t border-line p-3">

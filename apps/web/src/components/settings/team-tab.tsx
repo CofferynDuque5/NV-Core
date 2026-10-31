@@ -13,6 +13,7 @@ import { EmptyState } from "@/components/common/empty-state";
 import { ListSkeleton } from "@/components/common/skeletons";
 import { Button } from "@/components/ui/button";
 import { InviteMemberDialog } from "@/components/entities/invite-member-dialog";
+import { InviteLinksPanel } from "@/components/settings/invite-links-panel";
 
 export function TeamTab() {
   const team = useTeam();
@@ -148,6 +149,8 @@ export function TeamTab() {
 
       <InviteMemberDialog open={inviteOpen} onOpenChange={setInviteOpen} />
     </Panel>
+
+      {canManage ? <InviteLinksPanel /> : null}
 
       {canManage && invitations.length > 0 ? (
         <Panel>

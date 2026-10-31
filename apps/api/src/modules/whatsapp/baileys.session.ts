@@ -492,23 +492,43 @@ export class BaileysSession {
     return { groupsCount: groups.length, contactsCount };
   }
 
-  /** Read the participating groups with their subject and member count. */
+  /**
+   * Read the participating groups with their subject and member count. Big
+   * accounts can time out on the first try, so it retries once. Community
+   * "parent" entries are skipped (nobody can write in them) and a group with no
+   * subject gets its real name from its metadata instead of showing its id.
+   */
   async fetchGroups(): Promise<WhatsappGroup[]> {
-    try {
-      const groups = await this.sock?.groupFetchAllParticipating?.();
-      if (!groups) return [];
-      return Object.values(groups).map((g: any) => ({
+    let raw: Record<string, any> | undefined;
+    for (let attempt = 1; attempt <= 2 && !raw; attempt++) {
+      try {
+        raw = await this.sock?.groupFetchAllParticipating?.();
+      } catch (err) {
+        this.logger.warn(`No se pudieron leer los grupos (intento ${attempt}): ${(err as Error).message}`);
+        if (attempt < 2) await new Promise((r) => setTimeout(r, 5_000));
+      }
+    }
+    if (!raw) return [];
+    const out: WhatsappGroup[] = [];
+    let lookups = 0;
+    for (const g of Object.values(raw) as any[]) {
+      if (!g?.id || g.isCommunity) continue;
+      let subject: string = typeof g.subject === "string" ? g.subject.trim() : "";
+      if (!subject && lookups < 25) {
+        lookups += 1;
+        const meta = await this.sock?.groupMetadata?.(g.id).catch(() => null);
+        subject = typeof meta?.subject === "string" ? meta.subject.trim() : "";
+      }
+      out.push({
         remoteJid: String(g.id),
-        subject: String(g.subject ?? g.id),
+        subject: subject || "Grupo sin nombre",
         size: Number(g.size ?? g.participants?.length ?? 0),
         description: typeof g.desc === "string" ? g.desc : null,
-        onlyAdmins: g.announce === true,
+        onlyAdmins: g.announce === true || g.isCommunityAnnounce === true,
         ownerJid: g.owner ? String(g.owner) : null,
-      }));
-    } catch (err) {
-      this.logger.warn(`No se pudieron sincronizar grupos: ${(err as Error).message}`);
-      return [];
+      });
     }
+    return out;
   }
 
   /** Send a text message. Throws if not connected. */

@@ -150,6 +150,8 @@ export interface Campaign {
   prices?: Record<string, string>;
   /** Add the brand links + NV Marketing credit to group messages. */
   addFooter?: boolean;
+  /** Category the team files it under; null = «Sin categoría». */
+  category?: string | null;
   lastRunAt?: string | null;
 }
 

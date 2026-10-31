@@ -12,6 +12,7 @@ import {
   type OnModuleInit,
   Param,
   Patch,
+  Delete,
   Post,
   Query,
   Req,
@@ -151,6 +152,11 @@ export class UpdateConversationDto {
   @IsBoolean()
   resolved?: boolean;
 
+  @ApiPropertyOptional({ description: "true = marcar como no leído; false = marcar como leído" })
+  @IsOptional()
+  @IsBoolean()
+  unread?: boolean;
+
   @ApiPropertyOptional({ description: "Email del responsable; vacío o null para desasignar." })
   @IsOptional()
   @IsString()
@@ -281,6 +287,13 @@ export class InboxService implements OnModuleInit {
       // Same message delivered twice at once (history + live): keep one.
       if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") return;
       throw err;
+    }
+    // A new incoming message makes the chat unread; replying from the phone reads it.
+    if (!msg.history || direction === "out") {
+      await this.prisma.conversation.update({
+        where: { id: conversation.id },
+        data: direction === "in" ? { unreadCount: { increment: 1 } } : { unreadCount: 0 },
+      });
     }
     if (direction !== "in" || msg.history) return;
     this.logger.log(`Mensaje entrante (${msg.channel}) de ${msg.contactHandle} → ${slug}.`);
@@ -499,6 +512,7 @@ export class InboxService implements OnModuleInit {
     const row = await this.prisma.message.create({
       data: { conversationId, direction: "out", text: dto.text },
     });
+    await this.prisma.conversation.update({ where: { id: conversationId }, data: { unreadCount: 0 } });
 
     // Best-effort external delivery (Baileys when connected, else Cloud API).
     // Never blocks or fails the persisted reply.
@@ -526,9 +540,22 @@ export class InboxService implements OnModuleInit {
         ...(dto.resolved !== undefined ? { resolved: dto.resolved } : {}),
         ...(dto.assignee !== undefined ? { assignee: dto.assignee ? dto.assignee : null } : {}),
         ...(dto.labels !== undefined ? { labels: dto.labels } : {}),
+        ...(dto.unread === false ? { unreadCount: 0 } : {}),
       },
     });
+    if (dto.unread === true && row.unreadCount === 0) {
+      return mapConversation(
+        await this.prisma.conversation.update({ where: { id: conversationId }, data: { unreadCount: 1 } }),
+      );
+    }
     return mapConversation(row);
+  }
+
+  /** Delete a chat and its messages from the panel (WhatsApp itself is not touched). */
+  async deleteConversation(workspaceId: string, conversationId: string): Promise<{ ok: true }> {
+    await this.owned(workspaceId, conversationId);
+    await this.prisma.conversation.delete({ where: { id: conversationId } });
+    return { ok: true };
   }
 }
 
@@ -576,6 +603,13 @@ export class InboxController {
     @Body() dto: UpdateConversationDto,
   ) {
     return this.service.updateConversation(workspaceId, id, dto);
+  }
+
+  @Delete("conversations/:id")
+  @Roles("Owner", "Admin", "Editor")
+  @UseGuards(RolesGuard)
+  deleteConversation(@WorkspaceId() workspaceId: string, @Param("id") id: string) {
+    return this.service.deleteConversation(workspaceId, id);
   }
 }
 

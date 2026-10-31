@@ -50,3 +50,6 @@ scratch/
 .e2e-db/
 _pg.mjs
 data/uploads/
+
+# Private payment details for the panel plan (shipped only in the cPanel package)
+plan-methods.json

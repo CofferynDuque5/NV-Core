@@ -13,7 +13,7 @@ import { ProviderManager } from "../../providers/provider-manager.service";
 import { NotificationsService } from "../notifications/notifications.module";
 import type { MediaAttachment, ProviderId, PublishInput, PublishResult } from "../../providers/provider.types";
 import { builtinVars, renderTemplate } from "./render";
-import { campaignFooter, groupPostingProblems, priceForGroup, usesPriceVar, withFooter, type SocialLink } from "@nv/domain";
+import { campaignFooter, explainError, summarizeSkips, groupPostingProblems, priceForGroup, usesPriceVar, withFooter, type SocialLink } from "@nv/domain";
 import { resolvePacing, pacingDelay, type PacingOptions } from "./pacing";
 import { inDateRange, localDayKey } from "./date-range";
 
@@ -657,19 +657,14 @@ export class CampaignRunner implements OnModuleInit, OnModuleDestroy {
     omitted: { name: string; reason: string }[] = [],
   ): Promise<void> {
     const total = ok + failed;
-    const skippedNote = omitted.length
-      ? ` ${omitted.length === 1 ? "1 grupo omitido" : `${omitted.length} grupos omitidos`}: ${omitted
-          .slice(0, 3)
-          .map((o) => `${o.name} (${o.reason})`)
-          .join("; ")}${omitted.length > 3 ? "…" : ""}.`
-      : "";
+    const skippedNote = summarizeSkips(omitted);
     if (total === 0) {
       if (omitted.length === 0) return;
       await this.notifications
         .create(workspaceSlug, {
           type: "warning",
           title: `Campaña «${name}»: no se envió a ningún grupo`,
-          meta: skippedNote.trim(),
+          meta: skippedNote,
         })
         .catch(() => undefined);
       return;
@@ -682,12 +677,17 @@ export class CampaignRunner implements OnModuleInit, OnModuleDestroy {
           select: { error: true, groupName: true },
           orderBy: { createdAt: "asc" },
         });
-        if (first?.error) reason = ` Motivo${first.groupName ? ` (${first.groupName})` : ""}: ${first.error.slice(0, 160)}`;
+        // Plain words here; the raw error stays in the Historial.
+        const f = explainError(first?.error);
+        reason = ` ${first?.groupName ? `En «${first.groupName}»: ` : ""}${f.title} ${f.hint}`;
       }
       await this.notifications.create(workspaceSlug, {
         type: failed === 0 ? "success" : ok === 0 ? "error" : "warning",
-        title: failed === 0 ? `Campaña «${name}» enviada` : `Campaña «${name}»: ${failed} de ${total} envíos fallaron`,
-        meta: `${ok} de ${total} enviados.${reason}${skippedNote} Detalle en Historial.`,
+        title:
+          failed === 0
+            ? `Campaña «${name}» enviada`
+            : `Campaña «${name}»: ${ok} de ${total} enviados`,
+        meta: `${failed > 0 ? `${failed} no salieron.` : `${ok} de ${total} enviados.`}${reason}${skippedNote ? ` ${skippedNote}` : ""}`,
       });
     } catch (err) {
       this.logger.warn(`No se pudo avisar del resultado de la campaña: ${(err as Error).message}`);

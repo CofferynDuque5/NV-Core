@@ -30,6 +30,7 @@ import type {
   Design,
   BillingStatus,
   Campaign,
+  DayActivity,
   CalendarEvent,
   Connection,
   Contact,
@@ -63,6 +64,8 @@ import type {
   TemplateImportResult,
   TeamMember,
   TeamInvitation,
+  InviteLink,
+  CreatedInviteLink,
   AddMemberResult,
   AuditLogEntry,
   AdminUser,
@@ -241,6 +244,8 @@ export function createHttpAdapters(opts: HttpAdapterOptions): Services {
       update: (id, cid, input) => patch<Campaign>(`${ws(id)}/campaigns/${cid}`, input),
       remove: (id, cid) => del<void>(`${ws(id)}/campaigns/${cid}`),
       run: (id, cid) => post<Campaign | null>(`${ws(id)}/campaigns/${cid}/run`, {}),
+      activity: (id, since) =>
+        get<DayActivity>(`${ws(id)}/campaigns/activity?since=${encodeURIComponent(since)}`),
       pause: (id, cid) => post<Campaign>(`${ws(id)}/campaigns/${cid}/pause`, {}),
       resume: (id, cid) => post<Campaign>(`${ws(id)}/campaigns/${cid}/resume`, {}),
       logs: (id) => get<SendLogEntry[]>(`${ws(id)}/campaigns/logs`),
@@ -364,6 +369,7 @@ export function createHttpAdapters(opts: HttpAdapterOptions): Services {
         patch<Conversation>(`${ws(id)}/inbox/conversations/${cid}`, { resolved }),
       updateConversation: (id, cid, input) =>
         patch<Conversation>(`${ws(id)}/inbox/conversations/${cid}`, input),
+      deleteConversation: (id, cid) => del<void>(`${ws(id)}/inbox/conversations/${cid}`),
     },
     media: {
       folders: (id) => get<MediaFolder[]>(`${ws(id)}/media/folders`),
@@ -488,6 +494,9 @@ export function createHttpAdapters(opts: HttpAdapterOptions): Services {
       invitations: (id) => get<TeamInvitation[]>(`${ws(id)}/members/invitations`),
       revokeInvitation: (id, invitationId) =>
         del<void>(`${ws(id)}/members/invitations/${invitationId}`),
+      inviteLinks: (id) => get<InviteLink[]>(`${ws(id)}/members/invite-links`),
+      createInviteLink: (id, input) => post<CreatedInviteLink>(`${ws(id)}/members/invite-links`, input),
+      revokeInviteLink: (id, linkId) => del<void>(`${ws(id)}/members/invite-links/${linkId}`),
     },
     audit: { logs: (id) => get<AuditLogEntry[]>(`${ws(id)}/audit/logs`) },
     ai: {
