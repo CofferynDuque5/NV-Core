@@ -37,13 +37,17 @@ export default function RegisterPage() {
       setError("No hay backend configurado. Entra en modo demo desde el inicio.");
       return;
     }
+    if (name.trim().length < 2) {
+      setError("Escribe tu nombre (al menos 2 letras).");
+      return;
+    }
     if (!accepted) {
       setError("Debes aceptar los Términos legales para crear tu cuenta.");
       return;
     }
     setSubmitting(true);
     try {
-      await register({ name, email, password, acceptTerms: true });
+      await register({ name: name.trim(), email, password, acceptTerms: true });
       // New account: send them straight to the guided setup to create their first
       // workspace (unless a pending invitation already added them to one).
       const target = useAuthStore.getState().memberships[0]?.workspaceSlug;

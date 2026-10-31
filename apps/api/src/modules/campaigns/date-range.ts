@@ -22,3 +22,38 @@ export function checkDateRange(start?: string | null, end?: string | null): void
     throw new BadRequestException("La fecha «hasta» no puede ser antes de la fecha «desde».");
   }
 }
+
+/** What a campaign needs before it can be «programada» or «activa». */
+export interface ReadyCheck {
+  message?: string | null;
+  attachments?: unknown;
+  targets: number;
+  channels?: string[] | null;
+  postToWaStatus?: boolean | null;
+  scheduleType?: string | null;
+  scheduleAt?: string | null;
+}
+
+/** Problems that keep a campaign from being scheduled, in plain words (empty = ready). */
+export function schedulingProblems(c: ReadyCheck, now = new Date()): string[] {
+  const problems: string[] = [];
+  const hasMedia = Array.isArray(c.attachments) && c.attachments.length > 0;
+  if (!c.message?.trim() && !hasMedia) problems.push("Escribe el mensaje o añade una imagen.");
+  const social = (c.channels ?? []).some((ch) => ch === "fb" || ch === "ig");
+  if (c.targets === 0 && !social && !c.postToWaStatus) problems.push("Elige al menos un grupo o canal.");
+  if (c.scheduleType === "once" && c.scheduleAt) {
+    const at = new Date(c.scheduleAt);
+    if (!Number.isNaN(at.getTime()) && at.getTime() < now.getTime() - 60_000) {
+      problems.push("La fecha de envío ya pasó: elige una fecha futura.");
+    }
+  }
+  return problems;
+}
+
+export function assertReadyToSchedule(status: string | undefined, c: ReadyCheck): void {
+  if (status !== "programada" && status !== "activa") return;
+  const problems = schedulingProblems(c);
+  if (problems.length) {
+    throw new BadRequestException(`Para programar la campaña: ${problems.join(" ")} O guárdala como borrador.`);
+  }
+}

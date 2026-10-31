@@ -47,14 +47,16 @@ export function NotificationsPanel() {
               Notificaciones
               {hasUnread ? <span className="ml-2 rounded-full bg-brand/15 px-2 py-0.5 text-xs text-brand">{unread}</span> : null}
             </SheetTitle>
-            <button
-              type="button"
-              onClick={() => markRead.mutate()}
-              disabled={!hasUnread || markRead.isPending}
-              className="text-xs text-ink-muted transition-colors hover:text-ink disabled:cursor-not-allowed disabled:opacity-40"
-            >
-              Marcar leídas
-            </button>
+            {hasUnread ? (
+              <button
+                type="button"
+                onClick={() => markRead.mutate()}
+                disabled={markRead.isPending}
+                className="text-xs text-ink-muted transition-colors hover:text-ink disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                Marcar leídas
+              </button>
+            ) : null}
           </div>
         </SheetHeader>
         <SheetBody>

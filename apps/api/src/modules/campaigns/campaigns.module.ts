@@ -20,6 +20,7 @@ import {
   CAMPAIGN_STATUSES,
   CHANNEL_IDS,
   PRICE_CURRENCIES,
+  isValidPrice,
   summarizeRuns,
   type Campaign,
   type CampaignAttachment,
@@ -48,7 +49,7 @@ import {
 import { Type } from "class-transformer";
 
 import { MediaAttachmentDto } from "../../common/dto/media-attachment.dto";
-import { DAY_RE, checkDateRange } from "./date-range";
+import { DAY_RE, assertReadyToSchedule, checkDateRange } from "./date-range";
 import { parseCsv, toCsv } from "../../common/csv";
 import { ListResultDto } from "../../common/dto/list-result.dto";
 import { WorkspaceId } from "../../common/tenant/workspace.decorator";
@@ -230,7 +231,13 @@ export function cleanPrices(raw: Record<string, unknown> | undefined): Record<st
   const out: Record<string, string> = {};
   for (const [k, v] of Object.entries(raw)) {
     const amount = typeof v === "string" || typeof v === "number" ? String(v).trim().slice(0, 40) : "";
-    if (PRICE_CURRENCIES.includes(k) && amount) out[k] = amount;
+    if (!PRICE_CURRENCIES.includes(k) || !amount) continue;
+    if (!isValidPrice(amount)) {
+      throw new BadRequestException(
+        `El precio en ${k} («${amount}») no es válido: escribe solo un número mayor o igual a 0, por ejemplo 6.50.`,
+      );
+    }
+    out[k] = amount;
   }
   return out;
 }
@@ -339,17 +346,22 @@ export class CampaignsService {
   async create(workspaceId: string, actor: string, dto: CreateCampaignDto): Promise<Campaign> {
     await this.plans.assertWithinLimit(workspaceId, "campaigns", 1);
     checkDateRange(dto.startDate, dto.endDate);
+    const initialStatus =
+      CampaignsService.scheduledStatus(dto.status, dto.scheduleType, dto.scheduleAt, dto.scheduleTimes) ?? "borrador";
+    assertReadyToSchedule(initialStatus, {
+      message: dto.message,
+      attachments: dto.attachments,
+      targets: dto.targetGroups?.length ?? 0,
+      channels: dto.channels,
+      postToWaStatus: dto.postToWaStatus,
+      scheduleType: dto.scheduleType ?? "once",
+      scheduleAt: dto.scheduleAt,
+    });
     const created = await this.db().campaign.create({
       data: {
         workspaceSlug: workspaceId,
         name: dto.name,
-        status:
-          CampaignsService.scheduledStatus(
-            dto.status,
-            dto.scheduleType,
-            dto.scheduleAt,
-            dto.scheduleTimes,
-          ) ?? "borrador",
+        status: initialStatus,
         channels: dto.channels ?? [],
         progress: dto.progress ?? 0,
         nextRunAt: dto.nextRunAt ? new Date(dto.nextRunAt) : null,
@@ -400,6 +412,21 @@ export class CampaignsService {
         dto.scheduleAt ?? existing.scheduleAt,
         dto.scheduleTimes ?? (existing.scheduleTimes as string[] | null),
       ) ?? (existing.status as CampaignStatus);
+    // Check again when it is being (re)scheduled: status, date or content changed.
+    const reschedules =
+      status !== existing.status || dto.scheduleAt !== undefined || dto.message !== undefined || dto.targetGroups !== undefined;
+    if (reschedules) {
+      assertReadyToSchedule(status, {
+        message: dto.message ?? existing.message,
+        attachments: dto.attachments ?? existing.attachments,
+        targets:
+          dto.targetGroups?.length ?? (await this.prisma.campaignTarget.count({ where: { campaignId: id } })),
+        channels: dto.channels ?? (existing.channels as string[]),
+        postToWaStatus: dto.postToWaStatus ?? existing.postToWaStatus,
+        scheduleType: dto.scheduleType ?? existing.scheduleType,
+        scheduleAt: dto.scheduleAt ?? existing.scheduleAt,
+      });
+    }
     await this.prisma.campaign.update({
       where: { id },
       data: {

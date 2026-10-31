@@ -1,5 +1,6 @@
 import { Link, useLocation } from "react-router-dom";
 import { ChevronLeft, ChevronsUpDown } from "lucide-react";
+import { initialsOf } from "@nv/domain";
 
 import { cn } from "@/lib/utils";
 import { BrandMark } from "./brand-mark";
@@ -21,15 +22,7 @@ export function Sidebar({ onOpenSwitcher }: { onOpenSwitcher: () => void }) {
   const ws = useWorkspace();
   const { pathname } = useLocation();
 
-  const userInitials = user
-    ? user.name
-        .split(" ")
-        .map((w) => w[0])
-        .filter(Boolean)
-        .slice(0, 2)
-        .join("")
-        .toUpperCase()
-    : "NV";
+  const userInitials = user ? initialsOf(user.name) : "NV";
 
   return (
     <aside

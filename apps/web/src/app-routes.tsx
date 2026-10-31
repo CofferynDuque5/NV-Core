@@ -3,6 +3,8 @@ import { Navigate, Route, Routes, useParams } from "react-router-dom";
 import { DEFAULT_WORKSPACE_SLUG } from "@nv/domain";
 
 import { AppShell } from "@/components/shell/app-shell";
+import { useAuthStore } from "@/stores/auth-store";
+import { isBackendConfigured } from "@/lib/env";
 
 // Auth pages (small, loaded eagerly)
 import LoginPage from "@/app/login/page";
@@ -79,13 +81,29 @@ function WorkspacePage({ children }: { children: React.ReactNode }) {
   );
 }
 
+/** «/»: your own brand when signed in, the login otherwise (never a built-in sample brand). */
+function HomeRedirect() {
+  const status = useAuthStore((s) => s.status);
+  const memberships = useAuthStore((s) => s.memberships);
+  const hydrate = useAuthStore((s) => s.hydrate);
+  const backend = isBackendConfigured();
+  React.useEffect(() => {
+    if (backend && status === "idle") void hydrate();
+  }, [backend, status, hydrate]);
+  if (!backend) return <Navigate to={`/w/${DEFAULT_WORKSPACE_SLUG}/dashboard`} replace />;
+  if (status === "unauthenticated") return <Navigate to="/login" replace />;
+  if (status !== "authenticated") return <RouteFallback />;
+  const first = memberships[0]?.workspaceSlug;
+  return <Navigate to={first ? `/w/${first}/dashboard` : "/onboarding"} replace />;
+}
+
 /** Route table — mirrors the original Next.js app-router structure 1:1. */
 export function AppRoutes() {
   return (
     <Routes>
       <Route
         path="/"
-        element={<Navigate to={`/w/${DEFAULT_WORKSPACE_SLUG}/dashboard`} replace />}
+        element={<HomeRedirect />}
       />
 
       {/* Auth */}

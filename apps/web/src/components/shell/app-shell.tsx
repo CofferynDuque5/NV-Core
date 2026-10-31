@@ -1,5 +1,5 @@
 import * as React from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { Lock } from "lucide-react";
 
 import { Sidebar } from "./sidebar";
@@ -31,6 +31,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const { workspace: routeSlug } = useParams<{ workspace?: string }>();
   const authStatus = useAuthStore((s) => s.status);
   const memberships = useAuthStore((s) => s.memberships);
+  const { pathname } = useLocation();
+
+  // A new page starts at the top, not where the previous one was scrolled.
+  React.useEffect(() => {
+    window.scrollTo(0, 0);
+    document.getElementById("main-content")?.scrollTo?.(0, 0);
+  }, [pathname]);
 
   // A logged-in user who isn't a member of the workspace in the URL would get a
   // 403 on every data call ("Algo salió mal" everywhere). Show a clear access
@@ -88,7 +95,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           <main
             id="main-content"
             tabIndex={-1}
-            className="flex-1 px-4 py-6 outline-none sm:px-6 lg:px-8"
+            className="min-w-0 flex-1 px-4 py-6 outline-none sm:px-6 lg:px-8"
           >
             <div className="animate-fadein mx-auto w-full max-w-[1400px]">
               {noAccess ? (

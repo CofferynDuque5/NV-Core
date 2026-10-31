@@ -20,6 +20,12 @@ test.describe.serial("campaigns", () => {
     await page.getByRole("button", { name: "Nueva campaña" }).first().click();
     await page.waitForSelector("#cp-name");
     await page.fill("#cp-name", "Lanzamiento Q3");
+    // A scheduled campaign needs something to send.
+    await page.fill("#cp-message", "Hola, mira nuestra promo");
+    // …and, sent once, a future date.
+    const tomorrow = new Date(Date.now() + 86_400_000);
+    const local = new Date(tomorrow.getTime() - tomorrow.getTimezoneOffset() * 60_000).toISOString().slice(0, 16);
+    await page.getByLabel("Fecha y hora de envío").fill(local);
     await page.selectOption("#cp-status", "programada");
     await page.getByRole("button", { name: "Facebook" }).click();
     await page.getByRole("button", { name: "Crear campaña" }).click();

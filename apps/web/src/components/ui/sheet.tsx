@@ -1,10 +1,10 @@
-
 import * as React from "react";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { cva, type VariantProps } from "class-variance-authority";
 import { X } from "lucide-react";
 
 import { cn } from "@/lib/utils";
+import { useReturnFocus } from "./dialog";
 
 const Sheet = DialogPrimitive.Root;
 const SheetTrigger = DialogPrimitive.Trigger;
@@ -17,7 +17,7 @@ const SheetOverlay = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <DialogPrimitive.Overlay
     className={cn(
-      "fixed inset-0 z-50 bg-black/70 backdrop-blur-sm data-[state=open]:animate-fadein",
+      "data-[state=open]:animate-fadein fixed inset-0 z-50 bg-black/70 backdrop-blur-sm",
       className,
     )}
     {...props}
@@ -40,7 +40,8 @@ const sheetVariants = cva(
 );
 
 interface SheetContentProps
-  extends React.ComponentPropsWithoutRef<typeof DialogPrimitive.Content>,
+  extends
+    React.ComponentPropsWithoutRef<typeof DialogPrimitive.Content>,
     VariantProps<typeof sheetVariants> {
   showClose?: boolean;
 }
@@ -48,26 +49,34 @@ interface SheetContentProps
 const SheetContent = React.forwardRef<
   React.ElementRef<typeof DialogPrimitive.Content>,
   SheetContentProps
->(({ side = "right", className, children, showClose = true, ...props }, ref) => (
-  <SheetPortal>
-    <SheetOverlay />
-    <DialogPrimitive.Content ref={ref} className={cn(sheetVariants({ side }), className)} {...props}>
-      {showClose ? (
-        <DialogPrimitive.Close className="absolute right-4 top-4 z-10 rounded-md p-1 text-ink-muted opacity-80 transition-opacity hover:bg-panel-raised hover:opacity-100 focus:outline-none">
-          <X className="size-4" />
-          <span className="sr-only">Cerrar</span>
-        </DialogPrimitive.Close>
-      ) : null}
-      {children}
-    </DialogPrimitive.Content>
-  </SheetPortal>
-));
+>(({ side = "right", className, children, showClose = true, onCloseAutoFocus, ...props }, ref) => {
+  const returnFocus = useReturnFocus(onCloseAutoFocus);
+  return (
+    <SheetPortal>
+      <SheetOverlay />
+      <DialogPrimitive.Content
+        ref={ref}
+        className={cn(sheetVariants({ side }), className)}
+        {...props}
+        onCloseAutoFocus={returnFocus}
+      >
+        {showClose ? (
+          <DialogPrimitive.Close className="text-ink-muted hover:bg-panel-raised absolute right-4 top-4 z-10 rounded-md p-1 opacity-80 transition-opacity hover:opacity-100 focus:outline-none">
+            <X className="size-4" />
+            <span className="sr-only">Cerrar</span>
+          </DialogPrimitive.Close>
+        ) : null}
+        {children}
+      </DialogPrimitive.Content>
+    </SheetPortal>
+  );
+});
 SheetContent.displayName = DialogPrimitive.Content.displayName;
 
 function SheetHeader({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) {
   return (
     <div
-      className={cn("flex flex-col gap-1 border-b border-line px-5 py-4", className)}
+      className={cn("border-line flex flex-col gap-1 border-b px-5 py-4", className)}
       {...props}
     />
   );
@@ -80,7 +89,7 @@ function SheetBody({ className, ...props }: React.HTMLAttributes<HTMLDivElement>
 function SheetFooter({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) {
   return (
     <div
-      className={cn("flex items-center gap-2 border-t border-line px-5 py-4", className)}
+      className={cn("border-line flex items-center gap-2 border-t px-5 py-4", className)}
       {...props}
     />
   );
@@ -92,7 +101,7 @@ const SheetTitle = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <DialogPrimitive.Title
     ref={ref}
-    className={cn("text-base font-semibold text-ink-bright", className)}
+    className={cn("text-ink-bright text-base font-semibold", className)}
     {...props}
   />
 ));
@@ -104,7 +113,7 @@ const SheetDescription = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <DialogPrimitive.Description
     ref={ref}
-    className={cn("text-xs text-ink-muted", className)}
+    className={cn("text-ink-muted text-xs", className)}
     {...props}
   />
 ));

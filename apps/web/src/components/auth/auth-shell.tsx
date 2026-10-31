@@ -1,7 +1,10 @@
-import { Link } from "react-router-dom";
 import { CalendarClock, MessageCircle, Sparkles, Users } from "lucide-react";
+import { NV_MARKETING_URL } from "@nv/domain";
 
 import { BrandMark } from "@/components/shell/brand-mark";
+
+/** The sales site; VITE_SITE_URL points it elsewhere. */
+const SITE_URL = import.meta.env.VITE_SITE_URL || NV_MARKETING_URL;
 
 const FEATURES = [
   { icon: MessageCircle, text: "Difunde a WhatsApp, Telegram, Facebook e Instagram" },
@@ -101,7 +104,7 @@ export function AuthShell({
             </ul>
           </div>
 
-          <p className="text-ink-faint text-[11px]">
+          <p className="text-ink-muted text-xs">
             © {new Date().getFullYear()} NV Marketing · Business Operating System
           </p>
         </div>
@@ -134,10 +137,10 @@ export function AuthShell({
               <div className="text-ink-muted mt-4 text-center text-sm">{footer}</div>
             ) : null}
 
-            <p className="text-ink-faint mt-6 text-center text-[11px]">
-              <Link to="/" className="hover:text-ink-muted">
-                ← Volver al inicio
-              </Link>
+            <p className="mt-6 text-center text-xs">
+              <a href={SITE_URL} className="text-ink-muted hover:text-ink underline-offset-2 hover:underline">
+                ← Volver a la web de NV Marketing
+              </a>
             </p>
           </div>
         </div>

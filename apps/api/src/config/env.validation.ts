@@ -20,7 +20,7 @@ export const envSchema = z.object({
   ENCRYPTION_KEY: z.string().min(32).optional(),
   // Access token lifetime (short). Refresh tokens extend the session.
   JWT_EXPIRES_IN: z.string().default("15m"),
-  REFRESH_TOKEN_TTL_DAYS: z.coerce.number().int().positive().default(7),
+  REFRESH_TOKEN_TTL_DAYS: z.coerce.number().int().positive().default(30),
   // Allow public registration to claim Owner of an unclaimed built-in workspace.
   // Off by default (secure); "true"/"1" to enable open self-serve claiming.
   ALLOW_OPEN_WORKSPACE_CLAIM: z.string().optional(),

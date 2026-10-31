@@ -1,6 +1,6 @@
 
 import * as React from "react";
-import { ROLES, type Role } from "@nv/domain";
+import { ROLES, initialsOf, type Role } from "@nv/domain";
 import { Loader2, MailCheck, Trash2, UserPlus, Users, X } from "lucide-react";
 
 import { useTeam, useTeamInvitations } from "@/hooks/use-domain-data";
@@ -91,13 +91,7 @@ export function TeamTab() {
                     className="grid size-9 shrink-0 place-items-center rounded-lg text-xs font-bold text-white"
                     style={{ background: m.avatarColor }}
                   >
-                    {m.name
-                      .split(" ")
-                      .map((w) => w[0])
-                      .filter(Boolean)
-                      .slice(0, 2)
-                      .join("")
-                      .toUpperCase()}
+                    {initialsOf(m.name)}
                   </span>
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-1.5 text-sm font-medium text-ink">

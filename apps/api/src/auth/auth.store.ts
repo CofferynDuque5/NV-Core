@@ -14,6 +14,9 @@ const LOGIN_HISTORY_MS = 90 * 86_400_000;
  * register/invite actions and persist across restarts. The AuthService depends
  * only on these method signatures.
  */
+/** How long a just-rotated refresh token keeps working (concurrent refreshes). */
+export const REFRESH_REUSE_GRACE_MS = 60_000;
+
 @Injectable()
 export class AuthStore {
   constructor(private readonly prisma: PrismaService) {}
@@ -296,7 +299,11 @@ export class AuthStore {
     tokenHash: string,
   ): Promise<{ id: string; userId: string } | undefined> {
     const row = await this.prisma.refreshToken.findUnique({ where: { tokenHash } });
-    if (!row || row.revokedAt || row.expiresAt.getTime() < Date.now()) return undefined;
+    if (!row || row.expiresAt.getTime() < Date.now()) return undefined;
+    // A token rotated a moment ago is still accepted: two tabs (or a reload in
+    // the middle of a refresh) send the same cookie at once, and the loser
+    // must not be signed out.
+    if (row.revokedAt && Date.now() - row.revokedAt.getTime() > REFRESH_REUSE_GRACE_MS) return undefined;
     return { id: row.id, userId: row.userId };
   }
 

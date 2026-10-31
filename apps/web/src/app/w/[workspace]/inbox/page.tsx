@@ -1,5 +1,5 @@
 import * as React from "react";
-import { CHANNELS, CHANNEL_IDS, type ChannelId, type Conversation } from "@nv/domain";
+import { CHANNELS, CHANNEL_IDS, initialsOf, type ChannelId, type Conversation } from "@nv/domain";
 import { CheckCircle2, Inbox, Mail, MessageSquare, Plus, RotateCcw, Search, Send, Tag, Trash2, UserRound, X } from "lucide-react";
 
 import { cn } from "@/lib/utils";
@@ -23,10 +23,6 @@ import { ConversationCreateDialog } from "@/components/entities/conversation-cre
 
 const selectClass =
   "h-9 rounded-lg border border-line-soft bg-panel px-2 text-xs text-ink focus-visible:border-brand/60 focus-visible:outline-none";
-
-function initialsOf(s: string): string {
-  return s.split(/[@\s.]+/).filter(Boolean).slice(0, 2).map((p) => p[0]!.toUpperCase()).join("");
-}
 
 const timeOf = (iso: string) =>
   new Date(iso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });

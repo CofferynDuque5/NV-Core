@@ -130,6 +130,7 @@ export default function CalendarioPage() {
 
   return (
     <div className="space-y-4">
+      <h1 className="sr-only">Calendario</h1>
       <CalendarToolbar
         view={cal.view}
         onView={cal.setView}

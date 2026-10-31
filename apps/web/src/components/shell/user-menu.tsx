@@ -1,5 +1,6 @@
 import { useNavigate, useParams } from "react-router-dom";
 import { LogIn, LogOut, MessageSquarePlus, Moon, Settings, ShieldCheck, Sparkles, Sun, User } from "lucide-react";
+import { initialsOf } from "@nv/domain";
 
 import { useTheme } from "@/providers/theme-provider";
 
@@ -13,16 +14,6 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-
-function initialsOf(name: string): string {
-  return name
-    .split(" ")
-    .map((w) => w[0])
-    .filter(Boolean)
-    .slice(0, 2)
-    .join("")
-    .toUpperCase();
-}
 
 export function UserMenu() {
   const navigate = useNavigate();

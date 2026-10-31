@@ -60,3 +60,25 @@ export function filterCampaigns<T extends Pick<Campaign, "status" | "category" |
     return !q || c.name.toLowerCase().includes(q) || (c.category ?? "").toLowerCase().includes(q);
   });
 }
+
+/** What keeps a campaign from being scheduled (same rules as the server); empty = ready. */
+export function campaignReadyProblems(c: {
+  message: string;
+  attachments: number;
+  targets: number;
+  social: boolean;
+  postToWaStatus: boolean;
+  scheduleType: string;
+  dateTime: string;
+}, now = new Date()): string[] {
+  const problems: string[] = [];
+  if (!c.message.trim() && c.attachments === 0) problems.push("Escribe el mensaje o añade una imagen.");
+  if (c.targets === 0 && !c.social && !c.postToWaStatus) problems.push("Elige al menos un grupo o canal.");
+  if (c.scheduleType === "once") {
+    if (!c.dateTime) problems.push("Elige la fecha y hora de envío.");
+    else if (new Date(c.dateTime).getTime() < now.getTime() - 60_000) {
+      problems.push("La fecha de envío ya pasó: elige una fecha futura.");
+    }
+  }
+  return problems;
+}

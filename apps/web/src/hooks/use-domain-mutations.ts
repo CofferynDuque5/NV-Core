@@ -1,6 +1,7 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import type {
+  ChangelogStatus,
   CreateProductInput,
   UpdateWorkspaceInput,
   AccessPaymentInput,
@@ -124,6 +125,13 @@ export function useMarkChangelogSeen() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: () => svc.changelog.markSeen(),
+    // Clear the badge right away: the read-only demo can't save "seen", and the
+    // counter shouldn't stay up while the page is open either way.
+    onMutate: () => {
+      qc.setQueryData<ChangelogStatus>(["changelog"], (prev) =>
+        prev ? { ...prev, unseenCount: 0 } : prev,
+      );
+    },
     onSuccess: (status) => {
       qc.setQueryData(["changelog"], status);
     },

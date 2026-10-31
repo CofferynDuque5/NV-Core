@@ -32,9 +32,11 @@ export class MembersController {
   ) {}
 
   @Get()
-  async list(@WorkspaceId() workspaceId: string): Promise<TeamMember[]> {
+  async list(@WorkspaceId() workspaceId: string, @CurrentUser() me: AuthenticatedUser): Promise<TeamMember[]> {
     const rows = await this.store.listWorkspaceMembers(workspaceId);
-    return rows.map(({ user, role }) => toTeamMember(user, role));
+    // The read-only demo only ever sees itself: never other people's emails.
+    const visible = me?.demo ? rows.filter(({ user }) => user.id === me.userId) : rows;
+    return visible.map(({ user, role }) => toTeamMember(user, role));
   }
 
   @Roles("Owner", "Admin")

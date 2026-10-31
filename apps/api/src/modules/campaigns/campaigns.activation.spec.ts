@@ -45,3 +45,21 @@ describe("CampaignsService.scheduledStatus (auto-activation)", () => {
     expect(scheduledStatus("completada", "once", "2026-09-10T20:00:00Z", [])).toBe("completada");
   });
 });
+
+describe("schedulingProblems", () => {
+  const now = new Date("2026-10-31T12:00:00Z");
+  it("asks for message, destinations and a future date", async () => {
+    const { schedulingProblems } = await import("./date-range");
+    expect(schedulingProblems({ message: " ", targets: 0, scheduleType: "once", scheduleAt: "2020-01-01T08:00:00Z" }, now)).toEqual([
+      "Escribe el mensaje o añade una imagen.",
+      "Elige al menos un grupo o canal.",
+      "La fecha de envío ya pasó: elige una fecha futura.",
+    ]);
+  });
+  it("accepts an image instead of text and Facebook/Instagram instead of groups", async () => {
+    const { schedulingProblems } = await import("./date-range");
+    expect(
+      schedulingProblems({ message: "", attachments: [{ url: "x" }], targets: 0, channels: ["fb"], scheduleType: "daily" }, now),
+    ).toEqual([]);
+  });
+});

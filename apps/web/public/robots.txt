@@ -1,0 +1,8 @@
+# NV Marketing panel: the private workspace screens stay out of search engines.
+User-agent: *
+Disallow: /w/
+Disallow: /admin
+Disallow: /join/
+Disallow: /reset-password
+Disallow: /verify-email
+Disallow: /onboarding

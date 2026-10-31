@@ -117,9 +117,13 @@ export function ProvidersAdapters() {
                   </span>
                 )}
               </div>
-              <label className="mb-1 block text-[11px] font-medium text-ink-muted">Adapter activo</label>
+              <label htmlFor={`adapter-${p.id}`} className="mb-1 block text-[11px] font-medium text-ink-muted">
+                Adapter activo
+              </label>
               <div className="flex items-center gap-2">
                 <select
+                  id={`adapter-${p.id}`}
+                  aria-label={`Adapter activo de ${p.label}`}
                   value={p.activeAdapter}
                   disabled={saving === p.id}
                   onChange={(e) => select(p.id, e.target.value)}

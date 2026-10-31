@@ -7,6 +7,7 @@ import {
   WORKSPACE_GOAL_IDS,
   type Workspace,
   type WorkspaceKind,
+  initialsOf,
 } from "@nv/domain";
 
 import { AuthStore } from "../auth/auth.store";
@@ -24,9 +25,7 @@ export function slugify(name: string): string {
 }
 
 function monogram(name: string): string {
-  const words = name.trim().split(/\s+/).filter(Boolean);
-  const letters = (words[0]?.[0] ?? "") + (words[1]?.[0] ?? words[0]?.[1] ?? "");
-  return letters.toUpperCase() || "NV";
+  return initialsOf(name);
 }
 
 interface DbWorkspaceRow {

@@ -106,6 +106,9 @@ export class DemoService implements OnApplicationBootstrap {
       create: { userId: user.id, workspaceSlug: demo.slug, role: "Visor" },
       update: { role: "Visor" },
     });
+    // Only the fictitious visitor belongs to the demo: a real account (e.g. the
+    // admin, made Owner of every brand at boot) would show its email to anyone.
+    await this.prisma.membership.deleteMany({ where: { workspaceSlug: demo.slug, userId: { not: user.id } } });
 
     if ((await this.prisma.contact.count({ where: { workspaceSlug: demo.slug } })) === 0) {
       await this.fill(demo.slug);
