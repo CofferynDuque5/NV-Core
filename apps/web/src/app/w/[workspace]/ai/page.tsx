@@ -165,7 +165,7 @@ export default function AiStudioPage() {
       <PageHeader
         eyebrow="Inteligencia de contenido"
         title="AI Content Studio"
-        description="Asistente y generación de contenido con Google Gemini (clave gratis en Marketplace)."
+        description="Asistente y generación de contenido con Google Gemini (clave gratis en Integraciones)."
         actions={
           usage.data ? (
             <span className="rounded-full border border-line-soft bg-panel px-3 py-1 text-xs text-ink-muted">
@@ -353,7 +353,7 @@ export default function AiStudioPage() {
               <EmptyState
                 icon={Sparkles}
                 title="Sin variantes todavía"
-                description="Describe tu campaña, elige tipo y tono, y pulsa «Generar variantes». Requiere tu clave de Google Gemini en Marketplace."
+                description="Describe tu campaña, elige tipo y tono, y pulsa «Generar variantes». Requiere tu clave de Google Gemini en Integraciones."
                 compact
               />
             )}
@@ -384,7 +384,7 @@ export default function AiStudioPage() {
             <p className="text-[11px] text-ink-faint">
               La generación de imágenes usa Google Gemini. Pega tu clave en{" "}
               <Link to={`/w/${ws.slug}/marketplace`} className="text-brand hover:underline">
-                Marketplace → Google Gemini
+                Integraciones → Google Gemini
               </Link>
               .
             </p>
@@ -415,7 +415,7 @@ export default function AiStudioPage() {
               <EmptyState
                 icon={ImageIcon}
                 title="Sin flyer todavía"
-                description="Describe el flyer y pulsa «Generar flyer». Requiere tu clave de Gemini en Marketplace."
+                description="Describe el flyer y pulsa «Generar flyer». Requiere tu clave de Gemini en Integraciones."
                 compact
               />
             )}

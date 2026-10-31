@@ -1,5 +1,5 @@
 import * as React from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useLocation, useNavigate, useParams } from "react-router-dom";
 
 import { useAuthStore } from "@/stores/auth-store";
 import { isBackendConfigured } from "@/lib/env";
@@ -24,6 +24,7 @@ function FullScreenLoader() {
  */
 export function AuthGate({ children }: { children: React.ReactNode }) {
   const navigate = useNavigate();
+  const location = useLocation();
   const params = useParams<{ workspace?: string }>();
   const status = useAuthStore((s) => s.status);
   const memberships = useAuthStore((s) => s.memberships);
@@ -41,7 +42,9 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
   React.useEffect(() => {
     if (!backend) return;
     if (status === "unauthenticated") {
-      navigate("/login", { replace: true });
+      // Come back to this page after signing in again.
+      const next = `${location.pathname}${location.search}`;
+      navigate(`/login?next=${encodeURIComponent(next)}`, { replace: true });
       return;
     }
     // Authenticated but visiting a workspace they don't belong to → steer them
@@ -52,7 +55,7 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
         navigate(`/w/${memberships[0]!.workspaceSlug}/dashboard`, { replace: true });
       }
     }
-  }, [backend, status, memberships, params?.workspace, navigate]);
+  }, [backend, status, memberships, params?.workspace, navigate, location.pathname, location.search]);
 
   if (!backend) return <>{children}</>;
   if (status !== "authenticated") return <FullScreenLoader />;

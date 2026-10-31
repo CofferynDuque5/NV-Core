@@ -1,19 +1,20 @@
 import { randomUUID } from "node:crypto";
 
-import { Injectable, Logger, type OnModuleDestroy, type OnModuleInit } from "@nestjs/common";
+import { Injectable, Logger, Optional, type OnModuleDestroy, type OnModuleInit } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import type { Campaign as PCampaign, Prisma } from "@prisma/client";
 
 import type { AppConfig } from "../../config/configuration";
 import { PrismaService } from "../../prisma/prisma.service";
 import { AuditLogger } from "../../common/audit-logger.service";
+import { WorkspaceAccessService } from "../../common/access/workspace-access.service";
 import { EventBus } from "../../core/events/event-bus.service";
 import { JobManager } from "../../core/jobs/job-manager.service";
 import { ProviderManager } from "../../providers/provider-manager.service";
 import { NotificationsService } from "../notifications/notifications.module";
 import type { MediaAttachment, ProviderId, PublishInput, PublishResult } from "../../providers/provider.types";
 import { builtinVars, renderTemplate } from "./render";
-import { campaignFooter, groupPostingProblems, priceForGroup, usesPriceVar, withFooter, type SocialLink } from "@nv/domain";
+import { campaignFooter, explainError, summarizeSkips, groupPostingProblems, priceForGroup, usesPriceVar, withFooter, type SocialLink } from "@nv/domain";
 import { resolvePacing, pacingDelay, type PacingOptions } from "./pacing";
 import { inDateRange, localDayKey } from "./date-range";
 
@@ -95,6 +96,7 @@ export class CampaignRunner implements OnModuleInit, OnModuleDestroy {
     private readonly events: EventBus,
     private readonly audit: AuditLogger,
     private readonly notifications: NotificationsService,
+    @Optional() private readonly access?: WorkspaceAccessService,
   ) {
     this.pacing = resolvePacing(process.env);
     // Retry policy for transient/rate-limited sends (exponential backoff).
@@ -434,6 +436,18 @@ export class CampaignRunner implements OnModuleInit, OnModuleDestroy {
         data: { lastRunAt: startedAt, runKey, runHeartbeatAt: startedAt, progress: 0 },
       });
       if (claim.count !== 1) return skip("ya está en ejecución en otro proceso; no se duplica.");
+      // Free trial: one campaign send, then the trial closes (after this run).
+      if (this.access && (await this.access.claimTrialSend(workspaceSlug)) === "used") {
+        await this.prisma.campaign.update({ where: { id: campaignId }, data: { runKey: null, runHeartbeatAt: null, progress: 0 } });
+        await this.notifications
+          .create(workspaceSlug, {
+            type: "warning",
+            title: `Campaña «${campaign.name}» no enviada`,
+            meta: "Tu prueba gratis incluye un solo envío y ya lo usaste. Elige un plan para seguir enviando.",
+          })
+          .catch(() => undefined);
+        return skip("la prueba gratis ya usó su único envío.");
+      }
     }
 
     const attachments = (campaign.attachments as Attachment[]) ?? [];
@@ -599,6 +613,7 @@ export class CampaignRunner implements OnModuleInit, OnModuleDestroy {
         data: { runKey: null, runHeartbeatAt: null },
       });
       await this.audit.record(workspaceSlug, "system", "campaign.paused", campaignId);
+      await this.closeTrialAfterSend(workspaceSlug);
       return { status: "paused" }; // nada de redes ni Estado, y no se marca completada
     }
 
@@ -640,7 +655,21 @@ export class CampaignRunner implements OnModuleInit, OnModuleDestroy {
       campaignName: campaign.name,
       ok: allOk,
     });
+    await this.closeTrialAfterSend(workspaceSlug);
     return { status: "completed", ok: allOk, sent: okCount, failed: failedCount };
+  }
+
+  /** After the trial's one send, the trial ends and the panel asks to pay. */
+  private async closeTrialAfterSend(workspaceSlug: string): Promise<void> {
+    if (!this.access || !(await this.access.trialSendTaken(workspaceSlug))) return;
+    await this.access.endTrial(workspaceSlug);
+    await this.notifications
+      .create(workspaceSlug, {
+        type: "info",
+        title: "Tu envío de prueba salió",
+        meta: "La prueba gratis incluía un envío de campaña. Elige un plan para seguir usando NV Marketing.",
+      })
+      .catch(() => undefined);
   }
 
   /**
@@ -657,19 +686,14 @@ export class CampaignRunner implements OnModuleInit, OnModuleDestroy {
     omitted: { name: string; reason: string }[] = [],
   ): Promise<void> {
     const total = ok + failed;
-    const skippedNote = omitted.length
-      ? ` ${omitted.length === 1 ? "1 grupo omitido" : `${omitted.length} grupos omitidos`}: ${omitted
-          .slice(0, 3)
-          .map((o) => `${o.name} (${o.reason})`)
-          .join("; ")}${omitted.length > 3 ? "…" : ""}.`
-      : "";
+    const skippedNote = summarizeSkips(omitted);
     if (total === 0) {
       if (omitted.length === 0) return;
       await this.notifications
         .create(workspaceSlug, {
           type: "warning",
           title: `Campaña «${name}»: no se envió a ningún grupo`,
-          meta: skippedNote.trim(),
+          meta: skippedNote,
         })
         .catch(() => undefined);
       return;
@@ -682,12 +706,17 @@ export class CampaignRunner implements OnModuleInit, OnModuleDestroy {
           select: { error: true, groupName: true },
           orderBy: { createdAt: "asc" },
         });
-        if (first?.error) reason = ` Motivo${first.groupName ? ` (${first.groupName})` : ""}: ${first.error.slice(0, 160)}`;
+        // Plain words here; the raw error stays in the Historial.
+        const f = explainError(first?.error);
+        reason = ` ${first?.groupName ? `En «${first.groupName}»: ` : ""}${f.title} ${f.hint}`;
       }
       await this.notifications.create(workspaceSlug, {
         type: failed === 0 ? "success" : ok === 0 ? "error" : "warning",
-        title: failed === 0 ? `Campaña «${name}» enviada` : `Campaña «${name}»: ${failed} de ${total} envíos fallaron`,
-        meta: `${ok} de ${total} enviados.${reason}${skippedNote} Detalle en Historial.`,
+        title:
+          failed === 0
+            ? `Campaña «${name}» enviada`
+            : `Campaña «${name}»: ${ok} de ${total} enviados`,
+        meta: `${failed > 0 ? `${failed} no salieron.` : `${ok} de ${total} enviados.`}${reason}${skippedNote ? ` ${skippedNote}` : ""}`,
       });
     } catch (err) {
       this.logger.warn(`No se pudo avisar del resultado de la campaña: ${(err as Error).message}`);

@@ -6,6 +6,7 @@ import {
   GROUP_COUNTRIES,
   campaignFooter,
   groupPostingProblems,
+  isValidPrice,
   priceForGroup,
   usesPriceVar,
   withFooter,
@@ -26,6 +27,7 @@ import {
 } from "@/hooks/use-domain-mutations";
 import { useBrandLinks, useCampaigns, useGroups, useProducts, useTemplates } from "@/hooks/use-domain-data";
 import { productMessage } from "@/lib/products";
+import { CAMPAIGN_STATUS_LABEL, campaignCategories, campaignReadyProblems } from "@/lib/campaigns";
 import { FormDialog, errorMessage } from "./form-dialog";
 import { ContentPreview } from "./content-preview";
 import { AiFlyerButton } from "./ai-flyer-button";
@@ -98,6 +100,12 @@ export function CampaignFormDialog({
 
   const [name, setName] = React.useState("");
   const [status, setStatus] = React.useState<CampaignStatus>("borrador");
+  // Only a status the user picked is sent; otherwise the server infers it
+  // (a campaign with a schedule becomes «programada»).
+  const [statusTouched, setStatusTouched] = React.useState(false);
+  const [category, setCategory] = React.useState("");
+  const allCampaigns = useCampaigns();
+  const categoryOptions = React.useMemo(() => campaignCategories(allCampaigns.data?.items ?? []), [allCampaigns.data]);
   const [progress, setProgress] = React.useState(0);
   const [message, setMessage] = React.useState("");
   const [scheduleType, setScheduleType] = React.useState<ScheduleType>("once");
@@ -125,6 +133,8 @@ export function CampaignFormDialog({
     const type = campaign?.scheduleType ?? "once";
     setName(campaign?.name ?? draft?.name ?? "");
     setStatus(campaign?.status ?? "borrador");
+    setStatusTouched(false);
+    setCategory(campaign?.category ?? "");
     setProgress(campaign?.progress ?? 0);
     setMessage(campaign?.message ?? draft?.message ?? "");
     setScheduleType(type);
@@ -152,7 +162,10 @@ export function CampaignFormDialog({
     setPrices(campaign?.prices ?? draft?.prices ?? {});
     setAddFooter(campaign?.addFooter ?? true);
     setError(null);
-  }, [open, campaign, draft]);
+    // Reset only when the dialog opens or switches campaign: the list refreshes
+    // in the background, and a new copy of the same campaign must not wipe
+    // what the user is editing (it reverted «borrador» to «programada»).
+  }, [open, campaign?.id, draft]);
 
   /** Fill the message, prices and photo from a Tienda product. */
   function fillFromProduct(id: string) {
@@ -223,6 +236,15 @@ export function CampaignFormDialog({
 
   function submit() {
     setError(null);
+    if (!name.trim()) {
+      setError("Ponle un nombre a la campaña.");
+      return;
+    }
+    const badPrice = Object.entries(prices).find(([, v]) => !isValidPrice(v));
+    if (badPrice) {
+      setError(`El precio en ${badPrice[0]} no es válido: escribe solo un número mayor o igual a 0, por ejemplo 6.50.`);
+      return;
+    }
 
     const channels: ChannelId[] = [];
     const selected = (groups.data?.items ?? []).filter((g) => targetGroups.includes(g.id));
@@ -251,8 +273,9 @@ export function CampaignFormDialog({
 
     const input = {
       name: name.trim(),
-      status,
+      ...(statusTouched || (campaign && campaign.status !== "borrador") ? { status } : {}),
       progress,
+      category: category.trim() || null,
       channels,
       message: message.trim() || undefined,
       scheduleType,
@@ -271,6 +294,27 @@ export function CampaignFormDialog({
       addFooter,
       ...(campaign?.accent ? { accent: campaign.accent } : {}),
     };
+
+    // Same checks as the server, before sending: a scheduled campaign needs
+    // content, somewhere to go and (for «una vez») a future date.
+    const sentStatus = input.status;
+    const hasSchedule = scheduleType === "once" ? Boolean(scheduleAt) : times.length > 0;
+    const finalStatus = sentStatus ?? (hasSchedule ? "programada" : (campaign?.status ?? "borrador"));
+    if (finalStatus === "programada" || finalStatus === "activa") {
+      const problems = campaignReadyProblems({
+        message,
+        attachments: attachments.length,
+        targets: targetGroups.length,
+        social: fb || ig,
+        postToWaStatus,
+        scheduleType,
+        dateTime,
+      });
+      if (problems.length) {
+        setError(`${problems.join(" ")} O guárdala como «Borrador».`);
+        return;
+      }
+    }
 
     const opts = {
       onSuccess: () => onOpenChange(false),
@@ -363,26 +407,35 @@ export function CampaignFormDialog({
                 <select
                   id="cp-status"
                   value={status}
-                  onChange={(e) => setStatus(e.target.value as CampaignStatus)}
+                  onChange={(e) => {
+                    setStatus(e.target.value as CampaignStatus);
+                    setStatusTouched(true);
+                  }}
                   className={selectClass}
                 >
                   {CAMPAIGN_STATUSES.map((s) => (
                     <option key={s} value={s}>
-                      {s}
+                      {CAMPAIGN_STATUS_LABEL[s]}
                     </option>
                   ))}
                 </select>
               </div>
               <div className="space-y-1.5">
-                <Label htmlFor="cp-progress">Progreso (%)</Label>
+                <Label htmlFor="cp-category">Categoría</Label>
                 <Input
-                  id="cp-progress"
-                  type="number"
-                  min={0}
-                  max={100}
-                  value={progress}
-                  onChange={(e) => setProgress(Number(e.target.value))}
+                  id="cp-category"
+                  data-testid="campaign-category"
+                  list="cp-category-options"
+                  maxLength={40}
+                  placeholder="Ej.: Halloween"
+                  value={category}
+                  onChange={(e) => setCategory(e.target.value)}
                 />
+                <datalist id="cp-category-options">
+                  {categoryOptions.map((c) => (
+                    <option key={c} value={c} />
+                  ))}
+                </datalist>
               </div>
             </div>
 
@@ -534,10 +587,16 @@ export function CampaignFormDialog({
                 <>
                   <Input
                     type="datetime-local"
+                    aria-label="Fecha y hora de envío"
+                    min={isoToLocalInput(new Date().toISOString())}
                     value={dateTime}
                     onChange={(e) => setDateTime(e.target.value)}
                   />
-                  {dateTime ? (
+                  {dateTime && new Date(dateTime).getTime() < Date.now() - 60_000 ? (
+                    <p className="text-state-danger text-[11px]">
+                      Esa fecha ya pasó: elige una fecha futura o guárdala como borrador.
+                    </p>
+                  ) : dateTime ? (
                     <p className="text-ink-faint text-[11px]">
                       Se enviará a las {formatTime12h(dateTime)}.
                     </p>

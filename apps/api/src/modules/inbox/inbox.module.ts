@@ -12,6 +12,7 @@ import {
   type OnModuleInit,
   Param,
   Patch,
+  Delete,
   Post,
   Query,
   Req,
@@ -131,6 +132,30 @@ function likePattern(q: string): string {
   return `%${q.replace(/[\\%_]/g, (c) => `\\${c}`)}%`;
 }
 
+/** Accented letters (both cases) and their plain form, for accent-free search. */
+const ACCENTED_LOWER = "áàäâãéèëêíìïîóòöôõúùüûñç";
+const PLAIN_LOWER = "aaaaaeeeeiiiiooooouuuunc";
+const FOLD_PAIRS: [string, string][] = [...ACCENTED_LOWER + ACCENTED_LOWER.toUpperCase()].map((c, i) => [
+  c,
+  PLAIN_LOWER[i % PLAIN_LOWER.length]!,
+]);
+
+/** Lowercase without accents: «María» → «maria» (matches `folded()` in SQL). */
+export function foldSearch(text: string): string {
+  return text.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+}
+
+/**
+ * SQL expression: the column without accents, lowercased. Nested replace()
+ * (not translate) because it works on whole letters whatever the database
+ * encoding is; accents go first so lower() only meets ASCII letters. The
+ * pairs are constants of this file, never user input.
+ */
+const FOLD_SQL = FOLD_PAIRS.reduce((acc, [a, b]) => `replace(${acc}, '${a}', '${b}')`, "$COL");
+function folded(column: string): Prisma.Sql {
+  return Prisma.raw(`lower(${FOLD_SQL.replace("$COL", column)})`);
+}
+
 export class CreateConversationDto {
   @IsIn(CHANNEL_IDS) channel!: ChannelId;
   @IsString() @MinLength(1) contactName!: string;
@@ -150,6 +175,11 @@ export class UpdateConversationDto {
   @IsOptional()
   @IsBoolean()
   resolved?: boolean;
+
+  @ApiPropertyOptional({ description: "true = marcar como no leído; false = marcar como leído" })
+  @IsOptional()
+  @IsBoolean()
+  unread?: boolean;
 
   @ApiPropertyOptional({ description: "Email del responsable; vacío o null para desasignar." })
   @IsOptional()
@@ -198,6 +228,7 @@ export class InboxService implements OnModuleInit {
         at: p.at,
         externalId: p.externalId,
         history: p.history,
+        waLine: p.waLine,
       }).catch((err: unknown) => this.logger.warn(`Mensaje no guardado: ${(err as Error).message}`));
     });
     this.events.on("session.contact-names", (p) => {
@@ -256,7 +287,14 @@ export class InboxService implements OnModuleInit {
           channel: msg.channel,
           contactName: bestName ?? msg.contactName ?? msg.contactHandle,
           contactHandle: msg.contactHandle,
+          waLine: msg.waLine ?? null,
         },
+      });
+    } else if (msg.waLine && conversation.waLine !== msg.waLine && !msg.history) {
+      // The contact now writes to another of the brand's numbers: reply from that one.
+      conversation = await this.prisma.conversation.update({
+        where: { id: conversation.id },
+        data: { waLine: msg.waLine, ...(bestName && isBareName(conversation.contactName, conversation.contactHandle) ? { contactName: bestName } : {}) },
       });
     } else if (bestName && isBareName(conversation.contactName, conversation.contactHandle)) {
       // The chat was created with the number: now the real name is known.
@@ -281,6 +319,13 @@ export class InboxService implements OnModuleInit {
       // Same message delivered twice at once (history + live): keep one.
       if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") return;
       throw err;
+    }
+    // A new incoming message makes the chat unread; replying from the phone reads it.
+    if (!msg.history || direction === "out") {
+      await this.prisma.conversation.update({
+        where: { id: conversation.id },
+        data: direction === "in" ? { unreadCount: { increment: 1 } } : { unreadCount: 0 },
+      });
     }
     if (direction !== "in" || msg.history) return;
     this.logger.log(`Mensaje entrante (${msg.channel}) de ${msg.contactHandle} → ${slug}.`);
@@ -409,12 +454,13 @@ export class InboxService implements OnModuleInit {
     else if (query.assignee) filters.push(Prisma.sql`c."assignee" = ${query.assignee}`);
     const q = query.q?.trim();
     if (q) {
-      const p = likePattern(q);
+      // Accent-free: «maria» finds «María» and the other way round.
+      const p = likePattern(foldSearch(q));
       filters.push(Prisma.sql`(
-        c."contactName" ILIKE ${p}
+        ${folded('c."contactName"')} LIKE ${p}
         OR c."contactHandle" ILIKE ${p}
-        OR EXISTS (SELECT 1 FROM unnest(c."labels") l WHERE l ILIKE ${p})
-        OR EXISTS (SELECT 1 FROM "Message" mq WHERE mq."conversationId" = c."id" AND mq."text" ILIKE ${p})
+        OR EXISTS (SELECT 1 FROM unnest(c."labels") l WHERE ${folded("l")} LIKE ${p})
+        OR EXISTS (SELECT 1 FROM "Message" mq WHERE mq."conversationId" = c."id" AND ${folded('mq."text"')} LIKE ${p})
       )`);
     }
     const where = Prisma.join(filters, " AND ");
@@ -499,6 +545,7 @@ export class InboxService implements OnModuleInit {
     const row = await this.prisma.message.create({
       data: { conversationId, direction: "out", text: dto.text },
     });
+    await this.prisma.conversation.update({ where: { id: conversationId }, data: { unreadCount: 0 } });
 
     // Best-effort external delivery (Baileys when connected, else Cloud API).
     // Never blocks or fails the persisted reply.
@@ -526,9 +573,22 @@ export class InboxService implements OnModuleInit {
         ...(dto.resolved !== undefined ? { resolved: dto.resolved } : {}),
         ...(dto.assignee !== undefined ? { assignee: dto.assignee ? dto.assignee : null } : {}),
         ...(dto.labels !== undefined ? { labels: dto.labels } : {}),
+        ...(dto.unread === false ? { unreadCount: 0 } : {}),
       },
     });
+    if (dto.unread === true && row.unreadCount === 0) {
+      return mapConversation(
+        await this.prisma.conversation.update({ where: { id: conversationId }, data: { unreadCount: 1 } }),
+      );
+    }
     return mapConversation(row);
+  }
+
+  /** Delete a chat and its messages from the panel (WhatsApp itself is not touched). */
+  async deleteConversation(workspaceId: string, conversationId: string): Promise<{ ok: true }> {
+    await this.owned(workspaceId, conversationId);
+    await this.prisma.conversation.delete({ where: { id: conversationId } });
+    return { ok: true };
   }
 }
 
@@ -576,6 +636,13 @@ export class InboxController {
     @Body() dto: UpdateConversationDto,
   ) {
     return this.service.updateConversation(workspaceId, id, dto);
+  }
+
+  @Delete("conversations/:id")
+  @Roles("Owner", "Admin", "Editor")
+  @UseGuards(RolesGuard)
+  deleteConversation(@WorkspaceId() workspaceId: string, @Param("id") id: string) {
+    return this.service.deleteConversation(workspaceId, id);
   }
 }
 

@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 
 import { Link } from "react-router-dom";
+import { simplifyNotice } from "@nv/domain";
 
 import { useWorkspace } from "@/hooks/use-workspace";
 import { useAuthStore } from "@/stores/auth-store";
@@ -26,6 +27,7 @@ import { PageHeader } from "@/components/common/page-header";
 import { OnboardingChecklist } from "@/components/dashboard/onboarding-checklist";
 import { SampleDataBanner } from "@/components/dashboard/sample-data-banner";
 import { GoalSteps } from "@/components/dashboard/goal-steps";
+import { DayActivity } from "@/components/dashboard/day-activity";
 import { Panel, PanelHeader } from "@/components/common/panel";
 import { KpiCard } from "@/components/common/kpi-card";
 import { EmptyState } from "@/components/common/empty-state";
@@ -96,6 +98,8 @@ export default function DashboardPage() {
         <KpiCard label="Mensajes (7 días)" icon={Eye} accent="#3FB950" loading={analytics.isLoading} value={weeklyMessages} />
         <KpiCard label="Alertas activas" icon={AlertTriangle} accent="#F85149" loading={notifications.isLoading} value={notifications.data ? String(alerts.length) : null} />
       </div>
+
+      <DayActivity />
 
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-3">
         {/* Today's agenda */}
@@ -174,7 +178,7 @@ export default function DashboardPage() {
                     />
                     <div className="min-w-0">
                       <div className="truncate text-sm text-ink">{n.title}</div>
-                      {n.meta ? <div className="text-xs text-ink-faint">{n.meta}</div> : null}
+                      {n.meta ? <div className="line-clamp-3 text-xs text-ink-faint">{simplifyNotice(n.meta)}</div> : null}
                     </div>
                   </li>
                 ))}

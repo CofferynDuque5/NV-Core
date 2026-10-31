@@ -1,6 +1,6 @@
 import * as React from "react";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
-import { CONTACT_STAGES, PAYMENT_STATUS_LABEL, formatPaymentAmount, type Contact } from "@nv/domain";
+import { CONTACT_STAGES, PAYMENT_STATUS_LABEL, formatPaymentAmount, initialsOf, type Contact } from "@nv/domain";
 import { Link } from "react-router-dom";
 import { BadgeDollarSign, BellOff, BellRing, Building2, KanbanSquare, Loader2, Mail, Navigation, Pencil, Phone, Plus, Tag, Trash2, X } from "lucide-react";
 
@@ -23,9 +23,7 @@ import { PaymentDialog } from "@/components/payments/payment-dialog";
 import { STATUS_BADGE } from "@/lib/payments";
 import { PRIORITY_LABEL, TASK_COLUMNS, dueLabel, isOverdue } from "@/lib/tasks";
 
-function initials(name: string): string {
-  return name.split(/\s+/).filter(Boolean).slice(0, 2).map((p) => p[0]!.toUpperCase()).join("");
-}
+const initials = (name: string) => initialsOf(name, "?");
 
 function relative(iso: string): string {
   const then = new Date(iso).getTime();

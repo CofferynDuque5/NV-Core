@@ -11,17 +11,15 @@ import { Label } from "@/components/ui/label";
 
 export default function ResetPasswordPage() {
   const navigate = useNavigate();
-  const [token, setToken] = React.useState<string | null>(null);
+  // A link without its token can't reset anything: say so instead of a form.
+  const [token] = React.useState<string | null>(() =>
+    typeof window === "undefined" ? null : new URL(window.location.href).searchParams.get("token"),
+  );
   const [password, setPassword] = React.useState("");
   const [confirm, setConfirm] = React.useState("");
   const [submitting, setSubmitting] = React.useState(false);
   const [done, setDone] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
-
-  // Read the token client-side to keep the page statically renderable.
-  React.useEffect(() => {
-    setToken(new URL(window.location.href).searchParams.get("token"));
-  }, []);
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -56,7 +54,16 @@ export default function ResetPasswordPage() {
         </Link>
       }
     >
-      {done ? (
+      {!token ? (
+        <div className="space-y-4">
+          <p className="rounded-lg border border-state-danger/30 bg-state-danger/10 px-3 py-2 text-sm text-state-danger">
+            Enlace inválido o vencido. Pide uno nuevo para cambiar tu contraseña.
+          </p>
+          <Button asChild className="w-full">
+            <Link to="/forgot-password">Pedir un enlace nuevo</Link>
+          </Button>
+        </div>
+      ) : done ? (
         <p className="rounded-lg border border-state-success/30 bg-state-success/10 px-3 py-2 text-sm text-state-success">
           Contraseña actualizada. Redirigiendo al inicio de sesión…
         </p>

@@ -9,11 +9,14 @@ import {
   NotFoundException,
   Param,
   Post,
+  Res,
   UseGuards,
 } from "@nestjs/common";
+import { ConfigService } from "@nestjs/config";
+import type { Response } from "express";
 import { ApiBearerAuth, ApiTags } from "@nestjs/swagger";
 import { ROLES, type AdminLogins, type Role } from "@nv/domain";
-import { IsIn, IsInt, IsString, Max, Min, MinLength } from "class-validator";
+import { IsIn, IsInt, IsString, Max, MaxLength, Min, MinLength } from "class-validator";
 
 import { AuthModule } from "../../auth/auth.module";
 import { AuthStore } from "../../auth/auth.store";
@@ -21,13 +24,21 @@ import { SuperAdminGuard } from "../../auth/guards/super-admin.guard";
 import { WorkspaceRegistry } from "../../common/workspace-registry.service";
 import { WorkspaceAccessService } from "../../common/access/workspace-access.service";
 import { AuditLogger } from "../../common/audit-logger.service";
+import { MailService } from "../../common/mail.service";
 import { CurrentUser } from "../../auth/decorators/current-user.decorator";
 import type { AuthenticatedUser } from "../../auth/auth.types";
+import type { AppConfig } from "../../config/configuration";
+import { UsdtRateService } from "../../common/fx/usdt-rate.service";
+import { PaymentsModule, PaymentsService } from "../payments/payments.module";
 
 export class SetMembershipDto {
   @IsString() @MinLength(3) email!: string;
   @IsString() @MinLength(1) workspaceSlug!: string;
   @IsIn(ROLES) role!: Role;
+}
+
+export class RejectPlanPaymentDto {
+  @IsString() @MinLength(3) @MaxLength(300) reason!: string;
 }
 
 export class ActivateAccessDto {
@@ -160,7 +171,78 @@ export class AdminService {
 @UseGuards(SuperAdminGuard)
 @Controller("admin")
 export class AdminController {
-  constructor(private readonly service: AdminService) {}
+  constructor(
+    private readonly service: AdminService,
+    private readonly mail: MailService,
+    private readonly payments: PaymentsService,
+    private readonly rates: UsdtRateService,
+    private readonly config: ConfigService<AppConfig, true>,
+  ) {}
+
+  private get billingWorkspace(): string {
+    return this.config.get("billing", { infer: true }).operatorWorkspace;
+  }
+
+  /** Plan payments customers sent, waiting ones first. */
+  @Get("plan-payments")
+  planPayments() {
+    return this.payments.planPayments(this.billingWorkspace);
+  }
+
+  /**
+   * The receipt of a plan payment. Served as a download-safe file: its real
+   * type (checked on upload), no sniffing, and a sandbox so a crafted PDF
+   * can't run anything on our domain.
+   */
+  @Get("plan-payments/:id/receipt")
+  async receipt(@Param("id") id: string, @Res() res: Response) {
+    const file = await this.payments.planPaymentReceipt(this.billingWorkspace, id);
+    res.set({
+      "Content-Type": file.type,
+      "Content-Disposition": `inline; filename="comprobante.${file.ext}"`,
+      "X-Content-Type-Options": "nosniff",
+      "Content-Security-Policy": "sandbox; default-src 'none'; img-src 'self' data:",
+      "Cache-Control": "private, no-store",
+    });
+    res.send(file.buf);
+  }
+
+  @Post("plan-payments/:id/approve")
+  @HttpCode(200)
+  approvePlanPayment(@Param("id") id: string, @CurrentUser() user: AuthenticatedUser) {
+    return this.payments.reviewPlanPayment(this.billingWorkspace, user.email, id, { approve: true });
+  }
+
+  @Post("plan-payments/:id/reject")
+  @HttpCode(200)
+  rejectPlanPayment(@Param("id") id: string, @Body() dto: RejectPlanPaymentDto, @CurrentUser() user: AuthenticatedUser) {
+    return this.payments.reviewPlanPayment(this.billingWorkspace, user.email, id, { approve: false, reason: dto.reason.trim() });
+  }
+
+  /** Today's USDT rate in bolívares, and where it came from. */
+  @Get("usdt-rate")
+  async usdtRate() {
+    return { rate: await this.rates.current() };
+  }
+
+  /** How outgoing mail is set up (SMTP, Resend or none). */
+  @Get("mail")
+  mailStatus() {
+    return { provider: this.mail.provider };
+  }
+
+  /** Send a test email to the admin who asks, to check the mailbox works. */
+  @Post("mail/test")
+  @HttpCode(200)
+  async mailTest(@CurrentUser() user: AuthenticatedUser) {
+    const result = await this.mail.send({
+      to: user.email,
+      subject: "Prueba de correo · NV Marketing",
+      html: "<p>Si lees esto, el panel ya puede enviar correos (verificación, recuperar contraseña e invitaciones).</p>",
+      text: "Si lees esto, el panel ya puede enviar correos (verificación, recuperar contraseña e invitaciones).",
+    });
+    return { provider: this.mail.provider, sent: result.sent, to: user.email };
+  }
 
   @Get("users")
   users() {
@@ -209,7 +291,7 @@ export class AdminController {
 }
 
 @Module({
-  imports: [AuthModule],
+  imports: [AuthModule, PaymentsModule],
   controllers: [AdminController],
   providers: [AdminService, SuperAdminGuard],
 })

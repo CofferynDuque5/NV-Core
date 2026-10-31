@@ -1,4 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger";
+import { Transform } from "class-transformer";
 import { IsBoolean, IsEmail, IsOptional, IsString, MinLength } from "class-validator";
 
 export class RegisterDto {
@@ -12,8 +13,10 @@ export class RegisterDto {
   password!: string;
 
   @ApiProperty({ example: "Valeryn Duque" })
+  // "   " is not a name: trim before checking the length.
+  @Transform(({ value }) => (typeof value === "string" ? value.trim() : value))
   @IsString()
-  @MinLength(2)
+  @MinLength(2, { message: "Escribe tu nombre (al menos 2 letras)." })
   name!: string;
 
   @ApiPropertyOptional({

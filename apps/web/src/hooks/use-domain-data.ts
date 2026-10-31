@@ -21,6 +21,20 @@ export function useCampaigns(opts: { enabled?: boolean } = {}) {
   });
 }
 
+/** «Lo que pasó hoy»: campaign runs and Inbox movement since local midnight. */
+export function useDayActivity() {
+  const svc = useServices();
+  const ws = useWorkspace();
+  const start = new Date();
+  start.setHours(0, 0, 0, 0);
+  const since = start.toISOString();
+  return useQuery({
+    queryKey: [ws.id, "campaigns", "activity", since],
+    queryFn: () => svc.campaigns.activity(ws.id, since),
+    refetchInterval: 30_000,
+  });
+}
+
 export function useTodayPosts() {
   const svc = useServices();
   const ws = useWorkspace();
@@ -196,8 +210,9 @@ export function useConversations(filters: Omit<ConversationQuery, "cursor"> = {}
     queryFn: ({ pageParam }) => svc.inbox.conversations(ws.id, { ...filters, cursor: pageParam }),
     initialPageParam: undefined as string | undefined,
     getNextPageParam: (last) => last.nextCursor ?? undefined,
-    // Inbox en vivo: nuevos chats entrantes aparecen solos.
-    refetchInterval: 10_000,
+    // Inbox en vivo: nuevos chats entrantes aparecen solos (también en segundo plano).
+    refetchInterval: 5_000,
+    refetchIntervalInBackground: true,
     refetchOnWindowFocus: true,
   });
 }
@@ -209,7 +224,8 @@ export function useMessages(conversationId: string | null) {
     queryKey: [ws.id, "inbox", conversationId, "messages"],
     queryFn: () => svc.inbox.messages(ws.id, conversationId as string),
     enabled: Boolean(conversationId),
-    refetchInterval: 8_000,
+    refetchInterval: 4_000,
+    refetchIntervalInBackground: true,
     refetchOnWindowFocus: true,
   });
 }
@@ -310,6 +326,17 @@ export function useWhatsappStatus() {
     // Mientras no está conectado (esperando QR / conectando), refresca cada 3 s
     // para que el QR aparezca por HTTP aunque el WebSocket no funcione (cPanel).
     refetchInterval: (q) => (q.state.data?.status === "connected" ? false : 3000),
+  });
+}
+
+/** All the brand's WhatsApp numbers; polls fast while one waits for its QR. */
+export function useWhatsappLines() {
+  const svc = useServices();
+  const ws = useWorkspace();
+  return useQuery({
+    queryKey: [ws.id, "whatsapp", "lines"],
+    queryFn: () => svc.whatsapp.lines(ws.id),
+    refetchInterval: (q) => (q.state.data?.some((l) => l.status === "qr" || l.status === "connecting") ? 3000 : 15000),
   });
 }
 
@@ -447,6 +474,16 @@ export function useTeamInvitations() {
   });
 }
 
+export function useInviteLinks(enabled = true) {
+  const svc = useServices();
+  const ws = useWorkspace();
+  return useQuery({
+    queryKey: [ws.id, "invite-links"],
+    queryFn: () => svc.team.inviteLinks(ws.id),
+    enabled,
+  });
+}
+
 export function useRoles() {
   const svc = useServices();
   const ws = useWorkspace();
@@ -478,6 +515,11 @@ export function useAccess(slug: string | undefined, enabled = true) {
 export function useAdminAccess(enabled = true) {
   const svc = useServices();
   return useQuery({ queryKey: ["admin", "access"], queryFn: () => svc.admin.access(), enabled });
+}
+
+export function useAdminMail(enabled = true) {
+  const svc = useServices();
+  return useQuery({ queryKey: ["admin", "mail"], queryFn: () => svc.admin.mailStatus(), enabled });
 }
 
 /** Example records still loaded in the brand (from older versions). */

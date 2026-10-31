@@ -437,7 +437,7 @@ describe("CampaignRunner.run", () => {
 
     expect(notifications.create).toHaveBeenCalledWith(
       "w1",
-      expect.objectContaining({ type: "error", meta: expect.stringContaining("Motivo (A): proveedor caído") }),
+      expect.objectContaining({ type: "error", meta: expect.stringContaining("En «A»: El servicio de envío falló por un momento.") }),
     );
     expect(sendLogs).toHaveLength(1);
     expect(sendLogs[0]!.ok).toBe(false);
@@ -807,9 +807,9 @@ describe("CampaignRunner.run: reglas de grupo, precio y pie", () => {
     });
     expect(sendLogs).toHaveLength(1);
     const meta = (notifications.create.mock.calls[0]![1] as { meta: string }).meta;
-    expect(meta).toContain("2 grupos omitidos");
-    expect(meta).toContain("Grupo Uni (Es un grupo de «Universidad o estudios»");
-    expect(meta).toContain("Ofertas Madrid (Exige precio y la campaña no tiene precio en Euros (€).)");
+    expect(meta).toContain("Se saltaron");
+    expect(meta).toContain("1 grupo porque son de «Universidad o estudios», donde no se publica publicidad");
+    expect(meta).toContain("1 grupo porque la campaña no tiene precio en Euros (€)");
   });
 
   it("sin pie cuando la campaña lo desactiva", async () => {

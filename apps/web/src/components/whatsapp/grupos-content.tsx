@@ -1,5 +1,6 @@
 
 import * as React from "react";
+import { useSearchParams } from "react-router-dom";
 import { categoryLabel, type Group, type GroupRulesCheck } from "@nv/domain";
 import { Ban, Loader2, Plus, RotateCcw, Send, Settings2, ShieldCheck, SlidersHorizontal, Trash2, Users } from "lucide-react";
 
@@ -117,7 +118,8 @@ export function GruposContent({ showHeader = true }: { showHeader?: boolean }) {
   const [rulesGroup, setRulesGroup] = React.useState<Group | null>(null);
   const [campaignOpen, setCampaignOpen] = React.useState(false);
   const [summary, setSummary] = React.useState<GroupRulesCheck[] | null>(null);
-  const [q, setQ] = React.useState("");
+  const [searchParams] = useSearchParams();
+  const [q, setQ] = React.useState(() => searchParams.get("q") ?? "");
   const [category, setCategory] = React.useState("");
   const [status, setStatus] = React.useState<StatusFilter>("");
   const [selected, setSelected] = React.useState<Set<string>>(new Set());

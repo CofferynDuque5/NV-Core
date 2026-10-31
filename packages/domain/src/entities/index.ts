@@ -21,6 +21,7 @@ import type {
   SegmentOperator,
   WorkspaceKind,
 } from "../enums";
+import type { SalesPlanId } from "../config/sales-plans";
 
 /**
  * Domain entities.
@@ -150,6 +151,8 @@ export interface Campaign {
   prices?: Record<string, string>;
   /** Add the brand links + NV Marketing credit to group messages. */
   addFooter?: boolean;
+  /** Category the team files it under; null = «Sin categoría». */
+  category?: string | null;
   lastRunAt?: string | null;
 }
 
@@ -1097,16 +1100,35 @@ export interface AccessPlan {
   days: number;
 }
 
+/** One plan the brand can pay for, with the operator's price. */
+export interface AccessPlanOption extends AccessPlan {
+  id: SalesPlanId;
+}
+
 /** The brand's own last plan payment, as the customer sees it. */
 export interface AccessPayment {
   id: string;
+  /** Plan this payment is for (older payments: none = Pro). */
+  planId?: SalesPlanId;
   status: PaymentStatus;
   amount: number;
   currency: PaymentCurrency;
   methodLabel?: string;
   reference?: string;
   rejectReason?: string;
+  /** What was paid in the method's own money (e.g. bolívares), when it differs. */
+  localAmount?: number;
+  localCurrency?: string;
   createdAt: string;
+}
+
+/** USDT price in bolívares used to quote Venezuelan methods. */
+export interface UsdtRate {
+  /** Bolívares per USDT. */
+  rate: number;
+  /** "binance" = median of Binance P2P offers; "manual" = set by the operator. */
+  source: "binance" | "manual";
+  at: string;
 }
 
 /**
@@ -1114,21 +1136,59 @@ export interface AccessPayment {
  * operator has not set a billing brand with active payment methods yet.
  */
 export interface AccessOverview extends WorkspaceAccess {
+  /** Price of Pro (kept for older panels). */
   plan: AccessPlan;
+  /** Every plan with its price, cheapest first. */
+  plans: AccessPlanOption[];
+  /** Plan in force: the paid one, or Pro while on the trial. Absent when unlimited. */
+  planId?: SalesPlanId;
   methods: PaymentMethod[];
   payment?: AccessPayment;
+  /** Today's USDT rate in bolívares (absent when it couldn't be fetched). */
+  vesRate?: UsdtRate;
+  /** The trial's one campaign send was already used. */
+  trialSendUsed?: boolean;
+  /** No trial: this device or account already had one. */
+  trialDenied?: boolean;
 }
 
 export interface AccessPaymentInput {
+  /** Plan being paid for (default Pro). */
+  planId?: SalesPlanId;
   methodId: string;
   reference: string;
-  note?: string;
+  /** Payer details (see planPayerFields). */
+  payer: Record<string, string>;
+  /** Photo or PDF of the payment. */
+  receipt: File;
+}
+
+/** A plan payment waiting for (or past) the operator's approval. */
+export interface PlanPaymentReview {
+  id: string;
+  forWorkspace: string;
+  planId?: SalesPlanId;
+  status: PaymentStatus;
+  amount: number;
+  currency: PaymentCurrency;
+  localAmount?: number;
+  localCurrency?: string;
+  rate?: number;
+  methodLabel?: string;
+  reference?: string;
+  payer: Record<string, string>;
+  hasReceipt: boolean;
+  rejectReason?: string;
+  createdBy: string;
+  createdAt: string;
 }
 
 /** One brand on a trial or paid plan, for the platform admin. */
 export interface AdminAccessRow extends WorkspaceAccess {
   workspaceSlug: string;
   createdAt: string;
+  /** Plan in force (Pro during the trial). */
+  planId?: SalesPlanId;
 }
 
 /** Example records older versions loaded into new brands, still present. */

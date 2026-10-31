@@ -15,6 +15,7 @@ import {
   KanbanSquare,
   Layers,
   LayoutDashboard,
+  Crown,
   LifeBuoy,
   Megaphone,
   Plug,
@@ -54,6 +55,7 @@ const MAP: Record<string, LucideIcon> = {
   Send,
   Settings,
   ShoppingBag,
+  Crown,
   LifeBuoy,
 };
 
@@ -81,6 +83,7 @@ export const EXTRA_NAV_ITEMS: Record<string, NavRenderItem[]> = {
   ],
   "AUTOMATIZACIÓN": [{ module: "informes", label: "Informe semanal", icon: "FileBarChart" }],
   SISTEMA: [
+    { module: "plan", label: "Mi plan", icon: "Crown" },
     { module: "ayuda", label: "Centro de ayuda", icon: "LifeBuoy" },
     { module: "estado", label: "Estado del servicio", icon: "Activity" },
   ],

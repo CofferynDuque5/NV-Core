@@ -71,6 +71,24 @@ describe.skipIf(!url)("Inbox: búsqueda y páginas contra PostgreSQL real", () =
     expect(await names("nadie")).toEqual([]);
   });
 
+  it("busca sin importar tildes ni mayúsculas", async () => {
+    const ws = `it-inbox-acc-${Date.now()}`;
+    await prisma.conversation.create({
+      data: {
+        workspaceSlug: ws,
+        channel: "wa",
+        contactName: "María Ramírez",
+        labels: ["Atención"],
+        messages: { create: [{ direction: "in", text: "Pagué por Pago Móvil" }] },
+      },
+    });
+    const names = async (q: string) => (await inbox.conversations(ws, { q })).items.map((c) => c.contactName);
+    expect(await names("maria ramirez")).toEqual(["María Ramírez"]);
+    expect(await names("MARÍA")).toEqual(["María Ramírez"]);
+    expect(await names("atencion")).toEqual(["María Ramírez"]);
+    expect(await names("pague por pago movil")).toEqual(["María Ramírez"]);
+  });
+
   it("filtra por canal, estado y responsable, y aísla el workspace", async () => {
     const ws = `it-inbox-f-${Date.now()}`;
     await seed(ws);

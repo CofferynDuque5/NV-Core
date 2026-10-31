@@ -92,6 +92,8 @@ jobs:
       NV_BILLING_WORKSPACE: nv-cobros
       # Platform admin for e2e/demo-admin.spec (/admin «Quién entra al panel»).
       NV_SUPER_ADMINS: e2e_superadmin@nv.tv
+      # Every E2E browser has the same traits and IP: match trials by device id only.
+      TRIAL_FINGERPRINT_CHECK: "false"
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4

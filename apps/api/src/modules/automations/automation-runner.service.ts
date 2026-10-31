@@ -1,6 +1,7 @@
-import { Injectable, Logger, type OnModuleDestroy, type OnModuleInit } from "@nestjs/common";
+import { Injectable, Logger, Optional, type OnModuleDestroy, type OnModuleInit } from "@nestjs/common";
 import type { AutomationEdge, AutomationNode, AutomationTraceStep } from "@nv/domain";
 
+import { WorkspaceAccessService } from "../../common/access/workspace-access.service";
 import { EventBus } from "../../core/events/event-bus.service";
 import { PrismaService } from "../../prisma/prisma.service";
 import { ProviderManager } from "../../providers/provider-manager.service";
@@ -140,7 +141,13 @@ export class AutomationRunnerService implements OnModuleInit, OnModuleDestroy {
     private readonly ai: AiService,
     private readonly notifications: NotificationsService,
     private readonly consent: ConsentService,
+    @Optional() private readonly access?: WorkspaceAccessService,
   ) {}
+
+  /** Automations are a Pro extra: a Básico brand's flows stay saved but don't run. */
+  private async planAllows(workspaceSlug: string): Promise<boolean> {
+    return this.access ? this.access.allows(workspaceSlug, "automatizaciones") : true;
+  }
 
   onModuleInit(): void {
     this.unsubscribe = this.events.on("message.received", (p) => this.onMessage(p));
@@ -172,6 +179,7 @@ export class AutomationRunnerService implements OnModuleInit, OnModuleDestroy {
       where: { workspaceSlug: p.workspaceSlug, status: "activo" },
     });
     if (flows.length === 0) return;
+    if (!(await this.planAllows(p.workspaceSlug))) return;
 
     const low = p.text.toLowerCase();
     const context: Record<string, string> = {
@@ -433,6 +441,7 @@ export class AutomationRunnerService implements OnModuleInit, OnModuleDestroy {
       const edges = (flow.edges as unknown as AutomationEdge[]) ?? [];
       const trigger = nodes.find((n) => n.type === "trigger");
       if (!trigger || str(cfg(trigger).event) !== INACTIVE_EVENT) continue;
+      if (!(await this.planAllows(flow.workspaceSlug))) continue;
       const days = inactiveDays(cfg(trigger));
       if (days == null) continue;
       const threshold = new Date(now.getTime() - days * DAY_MS);
@@ -577,6 +586,10 @@ export class AutomationRunnerService implements OnModuleInit, OnModuleDestroy {
     // Pausar o borrar el flujo cancela sus esperas: no se envía nada.
     if (!flow || flow.status !== "activo" || flow.workspaceSlug !== w.workspaceSlug) {
       await this.finishWait(w.id, "cancelled", "El flujo ya no está activo.");
+      return;
+    }
+    if (!(await this.planAllows(w.workspaceSlug))) {
+      await this.finishWait(w.id, "cancelled", "El plan Básico no incluye automatizaciones.");
       return;
     }
     const nodes = (flow.nodes as unknown as AutomationNode[]) ?? [];

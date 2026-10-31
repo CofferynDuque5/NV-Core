@@ -1,4 +1,3 @@
-
 import * as React from "react";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { X } from "lucide-react";
@@ -17,7 +16,7 @@ const DialogOverlay = React.forwardRef<
   <DialogPrimitive.Overlay
     ref={ref}
     className={cn(
-      "fixed inset-0 z-50 bg-black/70 backdrop-blur-sm data-[state=open]:animate-fadein",
+      "data-[state=open]:animate-fadein fixed inset-0 z-50 bg-black/70 backdrop-blur-sm",
       className,
     )}
     {...props}
@@ -25,36 +24,62 @@ const DialogOverlay = React.forwardRef<
 ));
 DialogOverlay.displayName = DialogPrimitive.Overlay.displayName;
 
+/**
+ * Remember what had focus when an overlay opened and give it back on close
+ * (WCAG 2.4.3). Radix only does this for its own Trigger; most of our dialogs
+ * open from state, which left focus on <body>.
+ */
+export function useReturnFocus(onCloseAutoFocus?: (e: Event) => void) {
+  const [opener] = React.useState<HTMLElement | null>(() =>
+    typeof document === "undefined" ? null : (document.activeElement as HTMLElement | null),
+  );
+  return React.useCallback(
+    (e: Event) => {
+      onCloseAutoFocus?.(e);
+      if (e.defaultPrevented) return;
+      if (opener && opener !== document.body && opener.isConnected) {
+        e.preventDefault();
+        opener.focus({ preventScroll: true });
+      }
+    },
+    [onCloseAutoFocus, opener],
+  );
+}
+
 const DialogContent = React.forwardRef<
   React.ElementRef<typeof DialogPrimitive.Content>,
   React.ComponentPropsWithoutRef<typeof DialogPrimitive.Content> & { showClose?: boolean }
->(({ className, children, showClose = true, ...props }, ref) => (
-  <DialogPortal>
-    <DialogOverlay />
-    <DialogPrimitive.Content
-      ref={ref}
-      className={cn(
-        "fixed left-1/2 top-1/2 z-50 grid w-[calc(100%-1.5rem)] max-w-lg -translate-x-1/2 -translate-y-1/2 gap-4",
-        "rounded-2xl border border-line-strong bg-panel-high p-4 shadow-panel duration-200 sm:p-6",
-        // Tall forms must stay usable on short viewports: cap height and scroll
-        // inside the dialog so the footer/submit is always reachable. Clip stray
-        // horizontal overflow (long tokens/URLs) instead of a sideways scrollbar.
-        "max-h-[calc(100dvh-2rem)] overflow-y-auto overflow-x-hidden",
-        "animate-dialog-in",
-        className,
-      )}
-      {...props}
-    >
-      {children}
-      {showClose ? (
-        <DialogPrimitive.Close className="absolute right-4 top-4 rounded-md p-1 text-ink-muted opacity-80 transition-opacity hover:bg-panel-raised hover:opacity-100 focus:outline-none">
-          <X className="size-4" />
-          <span className="sr-only">Cerrar</span>
-        </DialogPrimitive.Close>
-      ) : null}
-    </DialogPrimitive.Content>
-  </DialogPortal>
-));
+>(({ className, children, showClose = true, onCloseAutoFocus, ...props }, ref) => {
+  const returnFocus = useReturnFocus(onCloseAutoFocus);
+  return (
+    <DialogPortal>
+      <DialogOverlay />
+      <DialogPrimitive.Content
+        ref={ref}
+        onCloseAutoFocus={returnFocus}
+        className={cn(
+          "fixed left-1/2 top-1/2 z-50 grid w-[calc(100%-1.5rem)] max-w-lg -translate-x-1/2 -translate-y-1/2 gap-4",
+          "border-line-strong bg-panel-high shadow-panel rounded-2xl border p-4 duration-200 sm:p-6",
+          // Tall forms must stay usable on short viewports: cap height and scroll
+          // inside the dialog so the footer/submit is always reachable. Clip stray
+          // horizontal overflow (long tokens/URLs) instead of a sideways scrollbar.
+          "max-h-[calc(100dvh-2rem)] overflow-y-auto overflow-x-hidden",
+          "animate-dialog-in",
+          className,
+        )}
+        {...props}
+      >
+        {children}
+        {showClose ? (
+          <DialogPrimitive.Close className="text-ink-muted hover:bg-panel-raised absolute right-4 top-4 rounded-md p-1 opacity-80 transition-opacity hover:opacity-100 focus:outline-none">
+            <X className="size-4" />
+            <span className="sr-only">Cerrar</span>
+          </DialogPrimitive.Close>
+        ) : null}
+      </DialogPrimitive.Content>
+    </DialogPortal>
+  );
+});
 DialogContent.displayName = DialogPrimitive.Content.displayName;
 
 function DialogHeader({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) {
@@ -76,7 +101,7 @@ const DialogTitle = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <DialogPrimitive.Title
     ref={ref}
-    className={cn("text-lg font-semibold text-ink-bright", className)}
+    className={cn("text-ink-bright text-lg font-semibold", className)}
     {...props}
   />
 ));
@@ -88,7 +113,7 @@ const DialogDescription = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <DialogPrimitive.Description
     ref={ref}
-    className={cn("text-sm text-ink-muted", className)}
+    className={cn("text-ink-muted text-sm", className)}
     {...props}
   />
 ));

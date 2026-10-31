@@ -10,6 +10,7 @@ import {
   Logger,
   Module,
   NotFoundException,
+  Optional,
   Param,
   Patch,
   Post,
@@ -19,13 +20,20 @@ import {
 } from "@nestjs/common";
 import { ApiBearerAuth, ApiPropertyOptional, ApiTags } from "@nestjs/swagger";
 import {
+  isQrImage,
   PAYMENT_CURRENCIES,
   PAYMENT_METHOD_KINDS,
   PAYMENT_STATUSES,
   PAYMENT_TRANSITIONS,
   PAYMENT_STATUS_LABEL,
+  SALES_PLANS,
   formatPaymentAmount,
   paymentMethodDef,
+  planPayerFields,
+  salesPlanId,
+  vesAmount,
+  type PlanPaymentReview,
+  type SalesPlanId,
   type PaymentCurrency,
   type PaymentMethod,
   type PaymentMethodKind,
@@ -60,6 +68,10 @@ import { CurrentUser } from "../../auth/decorators/current-user.decorator";
 import { Roles } from "../../auth/decorators/roles.decorator";
 import { RolesGuard } from "../../auth/guards/roles.guard";
 import type { AuthenticatedUser } from "../../auth/auth.types";
+import { PlanMethodsSeeder } from "./plan-methods.seed";
+import { PlanPaymentAlerts } from "./plan-payment-alerts";
+import { ReceiptStore, sniffReceipt } from "../../common/receipts/receipt-store.service";
+import { UsdtRateService } from "../../common/fx/usdt-rate.service";
 
 /** Payment requests listed at once (newest first). */
 export const PAYMENTS_LIMIT = 300;
@@ -104,6 +116,20 @@ export class UpdatePaymentDto {
   @ApiPropertyOptional({ nullable: true }) @nullable() @IsDateString() dueAt?: string | null;
 }
 
+/**
+ * A method's QR picture: a PNG/JPEG/WebP data URL whose bytes really are that
+ * image (it is shown to customers, so nothing else gets through).
+ */
+export function cleanQrImage(value: string, label = "Código QR"): string {
+  if (!isQrImage(value)) throw new BadRequestException(`«${label}» debe ser una imagen PNG, JPG o WebP de hasta 600 KB.`);
+  const [head, data] = value.split(",", 2);
+  const type = sniffReceipt(Buffer.from(data ?? "", "base64"));
+  if (!type || type === "application/pdf" || !head?.includes(type)) {
+    throw new BadRequestException(`«${label}» no es una imagen válida.`);
+  }
+  return value;
+}
+
 /** Keep only the catalog fields of the kind, trimmed; require the mandatory ones. */
 export function cleanDetails(kind: PaymentMethodKind, details: Record<string, unknown>): Record<string, string> {
   const def = paymentMethodDef(kind);
@@ -112,6 +138,10 @@ export function cleanDetails(kind: PaymentMethodKind, details: Record<string, un
     const v = details[f.key];
     if (v == null) continue;
     if (typeof v !== "string") throw new BadRequestException(`«${f.label}» debe ser texto.`);
+    if (f.type === "image") {
+      if (v) out[f.key] = cleanQrImage(v, f.label);
+      continue;
+    }
     const t = v.trim();
     if (t.length > 200) throw new BadRequestException(`«${f.label}» es demasiado largo.`);
     if (t) out[f.key] = t;
@@ -119,6 +149,57 @@ export function cleanDetails(kind: PaymentMethodKind, details: Record<string, un
   const missing = def.fields.filter((f) => f.required && !out[f.key]).map((f) => f.label);
   if (missing.length > 0) throw new BadRequestException(`Falta: ${missing.join(", ")}.`);
   return out;
+}
+
+/** Longest payer detail kept. */
+const PAYER_MAX = 120;
+
+/**
+ * Keep only the payer fields this kind of method asks for, trimmed; require
+ * the mandatory ones; the payment date must be real, not in the future and
+ * not older than 60 days.
+ */
+export function cleanPayer(kind: string, payer: Record<string, unknown> | undefined, now = new Date()): Record<string, string> {
+  const out: Record<string, string> = {};
+  const fields = planPayerFields(kind);
+  for (const f of fields) {
+    const v = payer?.[f.key];
+    if (v == null) continue;
+    if (typeof v !== "string") throw new BadRequestException(`«${f.label}» debe ser texto.`);
+    // Control characters (new lines, tabs, NUL…) become spaces.
+    const t = Array.from(v, (c) => (c.charCodeAt(0) < 32 || c.charCodeAt(0) === 127 ? " " : c)).join("").trim();
+    if (t.length > PAYER_MAX) throw new BadRequestException(`«${f.label}» es demasiado largo.`);
+    if (t) out[f.key] = t;
+  }
+  const missing = fields.filter((f) => f.required && !out[f.key]).map((f) => f.label);
+  if (missing.length > 0) throw new BadRequestException(`Falta: ${missing.join(", ")}.`);
+  if (out.paidOn) {
+    const day = /^\d{4}-\d{2}-\d{2}$/.test(out.paidOn) ? new Date(`${out.paidOn}T12:00:00Z`) : null;
+    if (!day || Number.isNaN(day.getTime())) throw new BadRequestException("La fecha del pago no es válida.");
+    if (day.getTime() > now.getTime() + 36 * 3_600_000) throw new BadRequestException("La fecha del pago no puede ser futura.");
+    if (day.getTime() < now.getTime() - 60 * 86_400_000) throw new BadRequestException("Ese pago tiene más de 60 días: escríbenos.");
+  }
+  return out;
+}
+
+export function mapPlanReview(row: RequestRow): PlanPaymentReview {
+  return {
+    id: row.id,
+    forWorkspace: row.forWorkspace ?? "",
+    ...(salesPlanId(row.planId) ? { planId: salesPlanId(row.planId) } : {}),
+    status: row.status as PaymentStatus,
+    amount: Number(row.amount),
+    currency: row.currency as PaymentCurrency,
+    ...(row.localAmount != null ? { localAmount: Number(row.localAmount), localCurrency: row.localCurrency ?? undefined } : {}),
+    ...(row.rate != null ? { rate: Number(row.rate) } : {}),
+    methodLabel: row.methodLabel ?? undefined,
+    reference: row.reference ?? undefined,
+    payer: (row.payer ?? {}) as Record<string, string>,
+    hasReceipt: !!row.receiptFile,
+    rejectReason: row.rejectReason ?? undefined,
+    createdBy: row.createdBy,
+    createdAt: row.createdAt.toISOString(),
+  };
 }
 
 export function mapMethod(row: MethodRow): PaymentMethod {
@@ -173,6 +254,9 @@ export class PaymentsService {
     private readonly notifications: NotificationsService,
     private readonly access: WorkspaceAccessService,
     private readonly config: ConfigService<AppConfig, true>,
+    @Optional() private readonly receipts?: ReceiptStore,
+    @Optional() private readonly rates?: UsdtRateService,
+    @Optional() private readonly alerts?: PlanPaymentAlerts,
   ) {}
 
   private requireDb(): void {
@@ -336,8 +420,14 @@ export class PaymentsService {
     // A confirmed plan payment of a customer brand opens it for another period.
     if (to === "pagado" && from !== to && row.forWorkspace) {
       const days = this.config.get("billing", { infer: true }).plan.days;
-      const state = await this.access.activate(row.forWorkspace, days, actor);
-      await this.audit.record(row.forWorkspace, actor, "access.activate", `+${days} días · hasta ${state.paidUntil} · cobro ${row.id}`);
+      const planId = salesPlanId(row.planId) ?? "pro";
+      const state = await this.access.activate(row.forWorkspace, days, actor, new Date(), planId);
+      await this.audit.record(
+        row.forWorkspace,
+        actor,
+        "access.activate",
+        `Plan ${SALES_PLANS[planId].name} · +${days} días · hasta ${state.paidUntil} · cobro ${row.id}`,
+      );
     }
     const names = await this.contactNames(workspaceId, [row.contactId]);
     const contactName = row.contactId ? names.get(row.contactId) : undefined;
@@ -346,23 +436,30 @@ export class PaymentsService {
   }
 
   /**
-   * A customer brand sends the reference of its plan payment. It lands in the
-   * operator's billing brand as «Por verificar» (with the usual team notice);
-   * the brand opens when someone there confirms it as «Pagado».
+   * A customer brand sends its plan payment: who paid, from where, the
+   * reference and the receipt. The amount is the plan's price (never the
+   * client's); a method in bolívares also stores the amount in VES at today's
+   * USDT rate. It lands in the operator's billing brand as «Por verificar»
+   * and the operator is told by WhatsApp, email and in-app; the brand opens
+   * when they approve it (here in /admin, or as «Pagado» in Cobros).
    */
   async submitPlanPayment(
     billingWorkspace: string,
     forWorkspace: string,
     forName: string,
     actor: string,
-    input: { methodId: string; reference: string; note?: string },
+    input: { methodId: string; reference: string; payer: Record<string, unknown> },
+    planId: SalesPlanId = "pro",
+    receipt?: Buffer,
   ): Promise<RequestRow> {
     this.requireDb();
-    const plan = this.config.get("billing", { infer: true }).plan;
+    const billing = this.config.get("billing", { infer: true });
+    const plan = { ...billing.plan, price: planId === "basico" ? billing.basicPrice : billing.plan.price };
     const method = await this.prisma.paymentMethod.findFirst({
       where: { id: input.methodId, workspaceSlug: billingWorkspace, active: true },
     });
     if (!method) throw new BadRequestException("Ese método de pago no está disponible.");
+    const payer = cleanPayer(method.kind, input.payer);
     const reference = input.reference.trim();
     const waiting = await this.prisma.paymentRequest.findFirst({
       where: { workspaceSlug: billingWorkspace, forWorkspace, status: "por_verificar" },
@@ -370,24 +467,122 @@ export class PaymentsService {
     });
     if (waiting) throw new ConflictException("Ya enviaste un pago que estamos verificando. Te avisaremos al confirmarlo.");
     await this.checkReferenceUnused(billingWorkspace, "", reference);
+    // A reference already sent by ANY brand and not rejected is a reused receipt.
+    const sent = await this.prisma.paymentRequest.findFirst({
+      where: {
+        workspaceSlug: billingWorkspace,
+        forWorkspace: { not: null },
+        status: { in: ["por_verificar", "pagado"] },
+        reference: { equals: reference, mode: "insensitive" },
+      },
+      select: { id: true },
+    });
+    if (sent) throw new ConflictException("Esa referencia ya se envió en otro pago. Revisa el número de operación.");
+
+    // Bolívares at today's USDT rate (USD/USDT plan prices only).
+    let local: { localAmount: Prisma.Decimal; localCurrency: string; rate: Prisma.Decimal } | null = null;
+    if (method.currency === "VES" && (plan.currency === "USD" || plan.currency === "USDT")) {
+      const rate = await this.rates?.current();
+      if (rate) {
+        local = {
+          localAmount: new Prisma.Decimal(vesAmount(plan.price, rate.rate)),
+          localCurrency: "VES",
+          rate: new Prisma.Decimal(rate.rate),
+        };
+      }
+    }
+
+    // The receipt is checked (real type, size) and kept privately last, so a
+    // refused payment leaves no file behind.
+    const stored = this.receipts ? await this.receipts.save(receipt) : null;
     const row = await this.prisma.paymentRequest.create({
       data: {
         workspaceSlug: billingWorkspace,
         forWorkspace,
-        concept: `Plan ${forName} (${forWorkspace}) · ${plan.days} días`,
+        concept: `Plan ${SALES_PLANS[planId].name} · ${forName} (${forWorkspace}) · ${plan.days} días`,
+        planId,
         amount: new Prisma.Decimal(plan.price),
         currency: plan.currency,
         status: "por_verificar",
         methodId: method.id,
         methodLabel: method.label,
         reference,
-        note: [input.note?.trim(), `Enviado por ${actor}`].filter(Boolean).join(" · "),
+        payer,
+        ...(stored ? { receiptFile: stored.file, receiptType: stored.type } : {}),
+        ...(local ?? {}),
+        note: `Enviado por ${actor}`,
         createdBy: actor,
       },
     });
     await this.audit.record(billingWorkspace, actor, "payment.por_verificar", `${row.concept} · ${row.amount.toString()} ${row.currency} · ref ${reference}`);
     await this.noticeToVerify(billingWorkspace, row, undefined);
+    if (this.alerts) {
+      const file = stored && this.receipts ? await this.receipts.read(stored.file).catch(() => undefined) : undefined;
+      await this.alerts
+        .send({
+          id: row.id,
+          forWorkspace,
+          forName,
+          planId,
+          amount: plan.price,
+          currency: plan.currency,
+          localAmount: local ? Number(local.localAmount) : null,
+          localCurrency: local?.localCurrency ?? null,
+          rate: local ? Number(local.rate) : null,
+          methodKind: method.kind,
+          methodLabel: method.label,
+          reference,
+          payer,
+          sentBy: actor,
+          receipt: file,
+        })
+        .catch((err: unknown) => this.logger.warn(`Aviso del pago ${row.id} falló: ${(err as Error).message}`));
+    }
     return row;
+  }
+
+  // ── Plan payments, for the platform admin ─────────────────────────────────
+
+  async planPayments(billingWorkspace: string): Promise<PlanPaymentReview[]> {
+    if (!this.prisma.enabled || !billingWorkspace) return [];
+    const rows = await this.prisma.paymentRequest.findMany({
+      where: { workspaceSlug: billingWorkspace, forWorkspace: { not: null } },
+      orderBy: { createdAt: "desc" },
+      take: 200,
+    });
+    const order = (s: string) => (s === "por_verificar" ? 0 : 1);
+    return rows.sort((a, b) => order(a.status) - order(b.status)).map(mapPlanReview);
+  }
+
+  async planPaymentReceipt(billingWorkspace: string, id: string) {
+    const row = await this.prisma.paymentRequest.findFirst({
+      where: { id, workspaceSlug: billingWorkspace, forWorkspace: { not: null } },
+      select: { receiptFile: true },
+    });
+    if (!row || !this.receipts) throw new NotFoundException("Pago no encontrado.");
+    return this.receipts.read(row.receiptFile);
+  }
+
+  /** Approve (→ «Pagado», opens the brand) or reject (with a reason the customer sees). */
+  async reviewPlanPayment(
+    billingWorkspace: string,
+    actor: string,
+    id: string,
+    decision: { approve: true } | { approve: false; reason: string },
+  ): Promise<PlanPaymentReview> {
+    const row = await this.prisma.paymentRequest.findFirst({
+      where: { id, workspaceSlug: billingWorkspace, forWorkspace: { not: null } },
+      select: { id: true },
+    });
+    if (!row) throw new NotFoundException("Pago no encontrado.");
+    await this.update(
+      billingWorkspace,
+      actor,
+      id,
+      decision.approve ? { status: "pagado" } : { status: "rechazado", rejectReason: decision.reason },
+    );
+    const fresh = await this.prisma.paymentRequest.findUniqueOrThrow({ where: { id } });
+    return mapPlanReview(fresh);
   }
 
   /**
@@ -396,7 +591,14 @@ export class PaymentsService {
    */
   private async noticeToVerify(
     workspaceId: string,
-    row: { concept: string; amount: Prisma.Decimal; currency: string; methodLabel: string | null; reference: string | null },
+    row: {
+      concept: string;
+      amount: Prisma.Decimal;
+      currency: string;
+      methodLabel: string | null;
+      reference: string | null;
+      forWorkspace?: string | null;
+    },
     contactName: string | undefined,
   ): Promise<void> {
     const meta = [
@@ -404,7 +606,9 @@ export class PaymentsService {
       formatPaymentAmount(Number(row.amount.toString()), row.currency as PaymentCurrency),
       row.methodLabel,
       row.reference ? `ref ${row.reference}` : null,
-      "Revisa la cuenta y confírmalo en Cobros.",
+      "forWorkspace" in row && row.forWorkspace
+        ? "Revisa el comprobante y apruébalo en /admin (o en Cobros)."
+        : "Revisa la cuenta y confírmalo en Cobros.",
     ]
       .filter(Boolean)
       .join(" · ");
@@ -523,7 +727,7 @@ export class PaymentsController {
 @Module({
   imports: [NotificationsModule],
   controllers: [PaymentsController],
-  providers: [PaymentsService],
+  providers: [PaymentsService, PlanMethodsSeeder, PlanPaymentAlerts],
   exports: [PaymentsService],
 })
 export class PaymentsModule {}

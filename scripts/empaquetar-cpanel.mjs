@@ -470,9 +470,18 @@ NV_ADMIN_EMAIL=tucorreo@ejemplo.com
 # bloquea y le muestra tus métodos de pago. Pon aquí el identificador (slug) de
 # TU marca donde configuraste esos métodos en Cobros (créala con NV_ADMIN_EMAIL
 # para que no tenga prueba). Al confirmar su pago como «Pagado», la marca del
-# cliente se activa PLAN_DAYS días más.
+# cliente se activa PLAN_DAYS días más con el plan que eligió.
+# PLAN_PRICE es el plan Pro y PLAN_BASIC_PRICE el Básico (1 WhatsApp, 1 Telegram, 1 marca).
 # NV_BILLING_WORKSPACE=nv-cobros
 # PLAN_PRICE=19
+# PLAN_BASIC_PRICE=7
+# Tu WhatsApp (con código de país, solo números) para recibir cada pago de plan.
+# Sale del WhatsApp conectado en NV_BILLING_WORKSPACE. También llega por correo a NV_ADMIN_EMAIL.
+# NV_ADMIN_WHATSAPP=584120000000
+# Tasa USDT→Bs: vacía = la del día (Binance P2P). Pon un número para fijarla.
+# USDT_VES_RATE=
+# Comprobantes de pago: carpeta PRIVADA (no la pongas dentro de public_html).
+# RECEIPTS_DIR=data/receipts
 # PLAN_CURRENCY=USD
 # PLAN_DAYS=30
 # TRIAL_HOURS=24
@@ -483,7 +492,15 @@ NV_ADMIN_EMAIL=tucorreo@ejemplo.com
 # TELEGRAM_API_HASH=
 # STRIPE_SECRET_KEY=
 # OPENAI_API_KEY=
-# RESEND_API_KEY=
+
+# CORREO GRATIS con tu propio buzón de cPanel (verificación, contraseña, invitaciones).
+# La contraseña del buzón va SOLO aquí, nunca en el código.
+# SMTP_HOST=mail.nvcorx.com
+# SMTP_PORT=465
+# SMTP_USER=nvmarketing@nvcorx.com
+# SMTP_PASS=
+# MAIL_FROM=NV Marketing <nvmarketing@nvcorx.com>
+# (Alternativa: RESEND_API_KEY=, se usa solo si no hay SMTP)
 `,
 );
 

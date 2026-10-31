@@ -33,7 +33,11 @@ export interface AppConfig {
   sentry: { dsn?: string };
   database: { url?: string };
   redis: { url?: string };
-  mail: { from: string };
+  mail: {
+    from: string;
+    /** Own mailbox over SMTP (e.g. the cPanel account); takes precedence over Resend. */
+    smtp?: { host: string; port: number; user: string; pass: string };
+  };
   /** Files uploaded to this server (see modules/media/local-storage.ts). */
   media: { enabled: boolean; dir: string; maxBytes: number; publicBase: string };
   /** Plan applied when Stripe isn't configured (self-host / dev). */
@@ -42,7 +46,19 @@ export interface AppConfig {
     trialHours: number;
     /** Operator brand whose Cobros receive plan payments ("" = not set). */
     operatorWorkspace: string;
+    /** Pro: price of each paid period. */
     plan: { price: number; currency: "COP" | "VES" | "PEN" | "USD" | "USDT"; days: number };
+    /** Price of Básico (same currency and days as Pro). */
+    basicPrice: number;
+    /** Private folder for plan payment receipts. */
+    receiptsDir: string;
+    /** Fixed USDT→VES rate (else today's from Binance P2P when `autoRate`). */
+    usdtVesRate?: number;
+    autoRate: boolean;
+    /** Operator WhatsApp number that gets every plan payment. */
+    adminWhatsapp?: string;
+    /** Also match trials by browser traits + IP (last week). */
+    fingerprintCheck: boolean;
   };
   integrations: {
     n8n: { baseUrl?: string; apiKey?: string; eventsWebhook?: string; inboundSecret?: string };
@@ -134,7 +150,14 @@ export function buildConfig(env: Env): AppConfig {
     sentry: { dsn: env.SENTRY_DSN },
     database: { url: env.DATABASE_URL },
     redis: { url: env.REDIS_URL },
-    mail: { from: env.MAIL_FROM },
+    mail: {
+      from:
+        env.MAIL_FROM?.trim() ||
+        (env.SMTP_USER ? `NV Marketing <${env.SMTP_USER.trim()}>` : "NV Marketing <onboarding@resend.dev>"),
+      ...(env.SMTP_HOST && env.SMTP_USER && env.SMTP_PASS
+        ? { smtp: { host: env.SMTP_HOST.trim(), port: env.SMTP_PORT, user: env.SMTP_USER.trim(), pass: env.SMTP_PASS } }
+        : {}),
+    },
     media: {
       enabled: env.MEDIA_STORAGE === "local",
       dir: env.MEDIA_DIR,
@@ -146,6 +169,12 @@ export function buildConfig(env: Env): AppConfig {
       trialHours: env.TRIAL_HOURS ?? 24,
       operatorWorkspace: env.NV_BILLING_WORKSPACE?.trim().toLowerCase() ?? "",
       plan: { price: env.PLAN_PRICE ?? 19, currency: env.PLAN_CURRENCY ?? "USD", days: env.PLAN_DAYS ?? 30 },
+      basicPrice: env.PLAN_BASIC_PRICE ?? 7,
+      receiptsDir: env.RECEIPTS_DIR,
+      usdtVesRate: env.USDT_VES_RATE,
+      autoRate: env.USDT_RATE_AUTO,
+      adminWhatsapp: env.NV_ADMIN_WHATSAPP?.replace(/\D/g, "") || undefined,
+      fingerprintCheck: env.TRIAL_FINGERPRINT_CHECK,
     },
     integrations: {
       n8n: {

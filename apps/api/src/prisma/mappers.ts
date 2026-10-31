@@ -223,6 +223,7 @@ export const mapCampaign = (
   targetGroups: c.targets?.map((t) => t.groupId) ?? [],
   prices: (c.prices as Record<string, string> | null) ?? {},
   addFooter: c.addFooter ?? true,
+  category: c.category ?? null,
 });
 
 export const mapPost = (p: PPost & { campaign?: { name: string } | null }): Post => ({
@@ -322,8 +323,8 @@ export const mapConversation = (c: PConversation, last?: PMessage | null): Conve
   contactInitials: initials(c.contactName),
   contactHandle: c.contactHandle ?? undefined,
   preview: last?.text.slice(0, 140) ?? "",
-  // A thread whose newest message is incoming is awaiting our reply.
-  unread: last?.direction === "in" && !c.resolved ? 1 : 0,
+  // Incoming messages not opened yet (or marked «no leído» by hand).
+  unread: c.unreadCount ?? 0,
   lastMessageAt: (last?.createdAt ?? c.createdAt).toISOString(),
   assignee: c.assignee ?? undefined,
   labels: c.labels ?? [],

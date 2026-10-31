@@ -8,6 +8,8 @@ import { WorkspaceRegistry } from "./workspace-registry.service";
 import { CryptoService } from "./crypto/crypto.service";
 import { SampleDataService } from "./sample-data.service";
 import { WorkspaceAccessService } from "./access/workspace-access.service";
+import { UsdtRateService } from "./fx/usdt-rate.service";
+import { ReceiptStore } from "./receipts/receipt-store.service";
 
 /** Cross-cutting providers available app-wide. */
 @Global()
@@ -21,6 +23,8 @@ import { WorkspaceAccessService } from "./access/workspace-access.service";
     CryptoService,
     SampleDataService,
     WorkspaceAccessService,
+    UsdtRateService,
+    ReceiptStore,
   ],
   exports: [
     WorkspaceGuard,
@@ -31,6 +35,8 @@ import { WorkspaceAccessService } from "./access/workspace-access.service";
     CryptoService,
     SampleDataService,
     WorkspaceAccessService,
+    UsdtRateService,
+    ReceiptStore,
   ],
 })
 export class CommonModule {}

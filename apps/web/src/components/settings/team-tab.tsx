@@ -1,6 +1,6 @@
 
 import * as React from "react";
-import { ROLES, type Role } from "@nv/domain";
+import { ROLES, initialsOf, type Role } from "@nv/domain";
 import { Loader2, MailCheck, Trash2, UserPlus, Users, X } from "lucide-react";
 
 import { useTeam, useTeamInvitations } from "@/hooks/use-domain-data";
@@ -13,6 +13,7 @@ import { EmptyState } from "@/components/common/empty-state";
 import { ListSkeleton } from "@/components/common/skeletons";
 import { Button } from "@/components/ui/button";
 import { InviteMemberDialog } from "@/components/entities/invite-member-dialog";
+import { InviteLinksPanel } from "@/components/settings/invite-links-panel";
 
 export function TeamTab() {
   const team = useTeam();
@@ -90,13 +91,7 @@ export function TeamTab() {
                     className="grid size-9 shrink-0 place-items-center rounded-lg text-xs font-bold text-white"
                     style={{ background: m.avatarColor }}
                   >
-                    {m.name
-                      .split(" ")
-                      .map((w) => w[0])
-                      .filter(Boolean)
-                      .slice(0, 2)
-                      .join("")
-                      .toUpperCase()}
+                    {initialsOf(m.name)}
                   </span>
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-1.5 text-sm font-medium text-ink">
@@ -148,6 +143,8 @@ export function TeamTab() {
 
       <InviteMemberDialog open={inviteOpen} onOpenChange={setInviteOpen} />
     </Panel>
+
+      {canManage ? <InviteLinksPanel /> : null}
 
       {canManage && invitations.length > 0 ? (
         <Panel>

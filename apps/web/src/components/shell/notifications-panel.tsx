@@ -1,6 +1,6 @@
 
 import { AlertTriangle, Bell, CheckCircle2, Info, XCircle } from "lucide-react";
-import type { Notification } from "@nv/domain";
+import { simplifyNotice, type Notification } from "@nv/domain";
 
 import { useUiStore } from "@/stores/ui-store";
 import { useNotifications } from "@/hooks/use-domain-data";
@@ -47,14 +47,16 @@ export function NotificationsPanel() {
               Notificaciones
               {hasUnread ? <span className="ml-2 rounded-full bg-brand/15 px-2 py-0.5 text-xs text-brand">{unread}</span> : null}
             </SheetTitle>
-            <button
-              type="button"
-              onClick={() => markRead.mutate()}
-              disabled={!hasUnread || markRead.isPending}
-              className="text-xs text-ink-muted transition-colors hover:text-ink disabled:cursor-not-allowed disabled:opacity-40"
-            >
-              Marcar leídas
-            </button>
+            {hasUnread ? (
+              <button
+                type="button"
+                onClick={() => markRead.mutate()}
+                disabled={markRead.isPending}
+                className="text-xs text-ink-muted transition-colors hover:text-ink disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                Marcar leídas
+              </button>
+            ) : null}
           </div>
         </SheetHeader>
         <SheetBody>
@@ -89,7 +91,7 @@ export function NotificationsPanel() {
                         {n.title}
                         {n.personal ? <span className="ml-1.5 text-[10px] uppercase text-brand">para ti</span> : null}
                       </div>
-                      {n.meta ? <div className="break-words text-xs text-ink-muted">{n.meta}</div> : null}
+                      {n.meta ? <div className="break-words text-xs text-ink-muted">{simplifyNotice(n.meta)}</div> : null}
                       <div className="mt-1 text-[11px] text-ink-faint">{ago(n.createdAt)}</div>
                     </div>
                     {!n.read ? <span className="mt-1.5 size-2 shrink-0 rounded-full bg-brand" aria-label="Sin leer" /> : null}

@@ -4,8 +4,10 @@ import type { Form } from "@nv/domain";
 
 /** Conversion rate (submissions / views) as a 0–100 number, 0 when no views. */
 export function conversionRate(form: Pick<Form, "views" | "submissions">): number {
-  if (form.views <= 0) return 0;
-  return Math.round((form.submissions / form.views) * 1000) / 10;
+  const views = Number(form.views) || 0;
+  const subs = Number(form.submissions) || 0;
+  if (views <= 0) return 0;
+  return Math.round((subs / views) * 1000) / 10;
 }
 
 /** Public shareable URL for a form (rendered by the /f/:id route). */

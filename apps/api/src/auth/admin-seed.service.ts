@@ -64,7 +64,9 @@ export class AdminSeedService implements OnModuleInit {
       // Solo los workspaces REALES (creados en la base de datos), no los demos
       // integrados en la config. Así un instalador nuevo empieza en cero y pasa
       // por el onboarding para crear su propio negocio.
-      const workspaces = await this.registry.listDbWorkspaces();
+      // The public «Ver demo» brand is excluded: its members are visible to visitors.
+      const demoSlug = "nv-demo"; // config demo.slug
+      const workspaces = (await this.registry.listDbWorkspaces()).filter((w) => w.slug !== demoSlug);
       for (const w of workspaces) {
         await this.store.upsertMembership(user.id, w.slug, "Owner");
       }

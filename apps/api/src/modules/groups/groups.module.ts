@@ -38,7 +38,6 @@ import { RolesGuard } from "../../auth/guards/roles.guard";
 import { Roles } from "../../auth/decorators/roles.decorator";
 import { CurrentUser } from "../../auth/decorators/current-user.decorator";
 import type { AuthenticatedUser } from "../../auth/auth.types";
-import { LIST_CAP } from "../../common/query-limits";
 import { WhatsappModule } from "../whatsapp/whatsapp.module";
 import { WhatsappService } from "../whatsapp/whatsapp.service";
 
@@ -102,6 +101,9 @@ export class BulkExcludeDto {
   @IsBoolean() excluded!: boolean;
 }
 
+/** Accounts in many groups (resellers) easily pass the generic 500 cap. */
+const GROUP_LIST_CAP = 5000;
+
 @Injectable()
 export class GroupsService {
   constructor(
@@ -119,7 +121,7 @@ export class GroupsService {
     if (!this.prisma.enabled) return ListResultDto.empty<Group>();
     const where = { workspaceSlug: workspaceId };
     const [rows, total] = await Promise.all([
-      this.prisma.group.findMany({ where, orderBy: { createdAt: "desc" }, take: LIST_CAP }),
+      this.prisma.group.findMany({ where, orderBy: { createdAt: "desc" }, take: GROUP_LIST_CAP }),
       this.prisma.group.count({ where }),
     ]);
     return new ListResultDto(rows.map(mapGroup), total);
@@ -194,7 +196,7 @@ export class GroupsService {
       source = "whatsapp";
     }
     const where = { workspaceSlug: workspaceId, ...(id ? { id } : {}) };
-    const groups = await this.db().group.findMany({ where, orderBy: { name: "asc" }, take: LIST_CAP });
+    const groups = await this.db().group.findMany({ where, orderBy: { name: "asc" }, take: GROUP_LIST_CAP });
     if (id && groups.length === 0) throw new NotFoundException("Grupo no encontrado.");
     const out: GroupRulesCheck[] = [];
     for (const g of groups) {

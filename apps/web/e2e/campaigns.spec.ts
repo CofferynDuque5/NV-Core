@@ -20,6 +20,12 @@ test.describe.serial("campaigns", () => {
     await page.getByRole("button", { name: "Nueva campaña" }).first().click();
     await page.waitForSelector("#cp-name");
     await page.fill("#cp-name", "Lanzamiento Q3");
+    // A scheduled campaign needs something to send.
+    await page.fill("#cp-message", "Hola, mira nuestra promo");
+    // …and, sent once, a future date.
+    const tomorrow = new Date(Date.now() + 86_400_000);
+    const local = new Date(tomorrow.getTime() - tomorrow.getTimezoneOffset() * 60_000).toISOString().slice(0, 16);
+    await page.getByLabel("Fecha y hora de envío").fill(local);
     await page.selectOption("#cp-status", "programada");
     await page.getByRole("button", { name: "Facebook" }).click();
     await page.getByRole("button", { name: "Crear campaña" }).click();
@@ -30,32 +36,37 @@ test.describe.serial("campaigns", () => {
     await page.waitForTimeout(1000);
     await expect(page.locator("body")).toContainText("Lanzamiento Q3");
 
-    const card = page.locator("h3", { hasText: "Lanzamiento Q3" }).locator("..").locator("..");
+    const card = page.getByTestId("campaign-row").filter({ hasText: "Lanzamiento Q3" });
 
-    // Run now (send). Optimistic/settled — the card stays.
+    // Run now (send). Optimistic/settled — the row stays.
     await card.getByTitle("Enviar ahora").click();
     await page.waitForTimeout(500);
     await expect(page.locator("body")).toContainText("Lanzamiento Q3");
 
-    // Pause → the Resume (Reanudar) control appears.
+    // Pause → it moves to the «Pausadas» tab, with a Resume (Reanudar) control.
     await card.getByTitle("Pausar").click();
+    await page.getByTestId("campaign-tab-pausadas").click();
     await expect(card.getByTitle("Reanudar")).toBeVisible({ timeout: 10000 });
 
-    // Edit → rename.
+    // Edit → rename, file it under a category and keep it as a draft.
     await card.getByTitle("Editar").click();
     await page.waitForSelector("#cp-name");
     expect(await page.inputValue("#cp-name")).toBe("Lanzamiento Q3");
     await page.fill("#cp-name", "Lanzamiento Q3 (v2)");
+    await page.getByTestId("campaign-category").fill("Lanzamientos");
+    await page.selectOption("#cp-status", "borrador");
     await page.getByRole("button", { name: "Guardar cambios" }).click();
-    await expect(page.locator("body")).toContainText("Lanzamiento Q3 (v2)", { timeout: 10000 });
+    await page.getByTestId("campaign-tab-borradores").click();
+    const draft = page.getByTestId("campaign-row").filter({ hasText: "Lanzamiento Q3 (v2)" });
+    await expect(draft).toBeVisible({ timeout: 10000 });
+    await expect(draft.getByTestId("campaign-category-chip")).toHaveText("Lanzamientos");
+    // Still a draft after the list refreshes (it used to flip back to «programada»).
+    await page.reload({ waitUntil: "networkidle" });
+    await page.getByTestId("campaign-tab-borradores").click();
+    await expect(draft.getByText("Borrador", { exact: true })).toBeVisible({ timeout: 10000 });
 
     // Delete (confirm dialog) → back to empty.
-    await page
-      .locator("h3", { hasText: "Lanzamiento Q3 (v2)" })
-      .locator("..")
-      .locator("..")
-      .getByTitle("Eliminar")
-      .click();
+    await draft.getByTitle("Eliminar").click();
     await page.getByRole("button", { name: "Eliminar" }).click();
     await expect(page.locator("body")).toContainText("Aún no hay campañas", { timeout: 10000 });
   });

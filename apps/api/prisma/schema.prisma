@@ -164,38 +164,40 @@ model Contact {
 }
 
 model Group {
-  id            String    @id @default(cuid())
-  workspaceSlug String
-  name          String
-  channel       ChannelId @default(wa)
+  id             String    @id @default(cuid())
+  workspaceSlug  String
+  name           String
+  channel        ChannelId @default(wa)
   /// Destination kind: "group" (chat) or "channel" (broadcast, e.g. a Telegram
   /// channel where the bot is an admin). Delivery is the same; this drives UI.
-  kind          String    @default("group")
-  members       Int       @default(0)
-  admins        Int       @default(0)
-  description   String?
-  tags          String[]
+  kind           String    @default("group")
+  members        Int       @default(0)
+  admins         Int       @default(0)
+  description    String?
+  tags           String[]
+  /// WhatsApp number (line) that is in this group and sends to it.
+  waLine         Int       @default(1)
   /// WhatsApp group JID (e.g. "12345-678@g.us") when synced from Baileys.
-  remoteJid     String?
+  remoteJid      String?
   /// True when the row was populated from a WhatsApp sync (vs. manual CRUD).
-  synced        Boolean   @default(false)
+  synced         Boolean   @default(false)
   /// «Apartado»: campaigns never post here (team, university, news groups…).
-  excluded      Boolean   @default(false)
+  excluded       Boolean   @default(false)
   /// What the group is about (GROUP_CATEGORIES in @nv/domain).
-  category      String?
+  category       String?
   /// The group's rules ask for a price / a photo in every post.
-  requiresPrice Boolean   @default(false)
-  requiresImage Boolean   @default(false)
+  requiresPrice  Boolean   @default(false)
+  requiresImage  Boolean   @default(false)
   /// The group's rules ban ads; only admins can write (WhatsApp setting).
-  forbidsAds    Boolean   @default(false)
-  onlyAdmins    Boolean   @default(false)
+  forbidsAds     Boolean   @default(false)
+  onlyAdmins     Boolean   @default(false)
   /// ISO country chosen by the user; when null it is detected (name, creator).
-  country       String?
+  country        String?
   /// Creator of the WhatsApp group, read on sync (its prefix hints the country).
-  ownerJid      String?
+  ownerJid       String?
   /// Last time the rules were read and checked.
   rulesCheckedAt DateTime?
-  createdAt     DateTime  @default(now())
+  createdAt      DateTime  @default(now())
 
   variables       GroupVariable[]
   campaignTargets CampaignTarget[]
@@ -391,6 +393,8 @@ model Campaign {
   prices             Json           @default("{}")
   /// Append the brand's links and the NV Marketing credit to group messages.
   addFooter          Boolean        @default(true)
+  /// Category the team files the campaign under («Halloween», «Streaming»…).
+  category           String?
   createdAt          DateTime       @default(now())
 
   posts    Post[]
@@ -542,18 +546,18 @@ model Template {
 }
 
 model Automation {
-  id            String           @id @default(cuid())
+  id            String                   @id @default(cuid())
   workspaceSlug String
   name          String
-  status        String           @default("pausado")
-  runs          Int              @default(0)
+  status        String                   @default("pausado")
+  runs          Int                      @default(0)
   description   String?
-  nodes         Json             @default("[]")
+  nodes         Json                     @default("[]")
   // Visual-editor connections between nodes (graph edges).
-  edges         Json             @default("[]")
+  edges         Json                     @default("[]")
   // Optional n8n webhook (absolute URL or path resolved against N8N_BASE_URL).
   webhookUrl    String?
-  createdAt     DateTime         @default(now())
+  createdAt     DateTime                 @default(now())
   waits         AutomationWait[]
   executions    AutomationRun[]
   inactiveFires AutomationInactiveFire[]
@@ -649,6 +653,10 @@ model Conversation {
   assignee      String?
   /// Free-form labels for triage (e.g. "ventas", "urgente").
   labels        String[]
+  /// New incoming messages not seen yet; 0 when read, ≥1 to mark it unread again.
+  unreadCount   Int       @default(0)
+  /// WhatsApp number (line) the chat belongs to; replies go out from it.
+  waLine        Int?
   createdAt     DateTime  @default(now())
   messages      Message[]
 
@@ -720,9 +728,34 @@ model WorkspaceAccess {
   trialEndsAt   DateTime
   /// Paid access runs until this moment (extended each time a payment is confirmed).
   paidUntil     DateTime?
+  /// Paid plan («basico» | «pro»); null = still on the trial (or paid before plans existed → pro).
+  planId        String?
   activatedBy   String?
+  /// When the trial's one campaign send was used (null = still free to send).
+  trialSendAt   DateTime?
+  /// No trial was given: the device or account already had one.
+  trialDenied   Boolean   @default(false)
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
+}
+
+/// Who got a free trial, from which device. Kept when the brand is deleted
+/// (no workspaceSlug column on purpose) so deleting and recreating a brand,
+/// or opening another account on the same device, does not give a new trial.
+/// Device id and fingerprint are stored hashed.
+model TrialClaim {
+  id              String   @id @default(cuid())
+  brandSlug       String
+  userId          String
+  deviceHash      String?
+  fingerprintHash String?
+  ip              String?
+  granted         Boolean  @default(true)
+  createdAt       DateTime @default(now())
+
+  @@index([userId])
+  @@index([deviceHash])
+  @@index([fingerprintHash, ip])
 }
 
 /// Per-brand settings that apply to built-in and created workspaces alike
@@ -760,15 +793,22 @@ model GoogleConnection {
 /**
  * WhatsApp (Baileys) connection metadata per workspace; creds live on disk.
  */
+/// One linked WhatsApp number of a brand. Line 1 is the main number; a brand
+/// can link more (line 2, 3…), each with its own QR and session files.
 model WhatsappSession {
   id               String    @id @default(cuid())
-  workspaceSlug    String    @unique
+  workspaceSlug    String
+  line             Int       @default(1)
+  /// Name the user gives the number («Ventas», «Soporte»).
+  label            String?
   status           String    @default("disconnected")
   number           String?
   lastConnectionAt DateTime?
   groupsCount      Int       @default(0)
   contactsCount    Int       @default(0)
   updatedAt        DateTime  @updatedAt
+
+  @@unique([workspaceSlug, line])
 }
 
 /// Telegram user (MTProto/GramJS) session state per workspace. The auth string
@@ -948,6 +988,23 @@ model Invitation {
   @@index([email])
 }
 
+/// A shareable link that lets anyone with it join a workspace with a fixed role
+/// (never Owner). Only the hash of the token is stored; the link is shown once.
+model InviteLink {
+  id            String    @id @default(cuid())
+  workspaceSlug String
+  tokenHash     String    @unique
+  role          String    @default("Visor")
+  createdByName String?
+  maxUses       Int?
+  uses          Int       @default(0)
+  expiresAt     DateTime
+  revokedAt     DateTime?
+  createdAt     DateTime  @default(now())
+
+  @@index([workspaceSlug])
+}
+
 /// A team to-do on the workspace task board. status: todo | doing | done;
 /// priority: low | normal | high. `position` orders cards within a column.
 model Task {
@@ -1025,6 +1082,17 @@ model PaymentRequest {
   /// Plan payment of a customer brand (set only in the operator's billing
   /// brand); confirming it as "pagado" adds paid days to that brand.
   forWorkspace  String?
+  /// Plan the brand pays for (plan payments only).
+  planId        String?
+  /// Payer details the customer typed (name, bank, phone, date…), plan payments only.
+  payer         Json?
+  /// Receipt file name in the private receipts folder (never served publicly).
+  receiptFile   String?
+  receiptType   String?
+  /// Amount in the method's own money (e.g. VES) and the USDT rate used.
+  localAmount   Decimal?  @db.Decimal(18, 2)
+  localCurrency String?
+  rate          Decimal?  @db.Decimal(18, 4)
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 

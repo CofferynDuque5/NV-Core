@@ -2,16 +2,17 @@ import * as React from "react";
 import { Link } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ShieldCheck, Loader2, Trash2, UserCog } from "lucide-react";
-import { ROLES, type Role } from "@nv/domain";
+import { ROLES, SALES_PLANS, type Role } from "@nv/domain";
 import { toast } from "sonner";
 
 import { useServices } from "@/hooks/use-services";
-import { useAdminAccess } from "@/hooks/use-domain-data";
+import { useAdminAccess, useAdminMail } from "@/hooks/use-domain-data";
 import { useActivateAccess } from "@/hooks/use-domain-mutations";
 import { useAuthStore } from "@/stores/auth-store";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { LoginsSection } from "@/components/admin/logins-section";
+import { PlanPaymentsSection } from "@/components/admin/plan-payments-section";
 
 /**
  * Platform super-admin panel (global, not workspace-scoped). Lists every user
@@ -104,7 +105,9 @@ export default function AdminPage() {
 
       <LoginsSection enabled={superAdmin} />
 
+      <PlanPaymentsSection enabled={superAdmin} />
       <AccessSection enabled={superAdmin} />
+      <MailSection enabled={superAdmin} />
 
       <h2 className="pt-2 font-semibold text-ink-bright">Roles por marca</h2>
 
@@ -174,6 +177,41 @@ const ACCESS_BADGE = {
  * confirmed in Cobros activates the brand on its own; this is the manual way
  * (a payment received outside Cobros, a courtesy extension).
  */
+const MAIL_LABEL = {
+  smtp: "Tu buzón propio (SMTP)",
+  resend: "Resend",
+  none: "Sin configurar: no se envían correos",
+} as const;
+
+/** Outgoing email: how it is set up, and a test to the admin's own inbox. */
+function MailSection({ enabled }: { enabled: boolean }) {
+  const svc = useServices();
+  const status = useAdminMail(enabled);
+  const test = useMutation({
+    mutationFn: () => svc.admin.mailTest(),
+    onSuccess: (r) =>
+      r.sent ? toast.success(`Correo de prueba enviado a ${r.to}. Revisa tu bandeja (y spam).`) : toast.error("No se pudo enviar. Revisa SMTP_HOST, SMTP_USER y SMTP_PASS."),
+    onError: () => toast.error("No se pudo enviar la prueba."),
+  });
+  const provider = status.data?.provider;
+  return (
+    <section className="nv-panel space-y-3 p-4" data-testid="admin-mail">
+      <div className="flex flex-wrap items-center gap-2">
+        <div className="min-w-0 flex-1">
+          <h2 className="font-semibold text-ink-bright">Correo saliente</h2>
+          <p className="text-xs text-ink-muted">
+            Verificación de cuenta, recuperar contraseña e invitaciones. {provider ? MAIL_LABEL[provider] : "Cargando…"}.
+          </p>
+        </div>
+        <Button size="sm" variant="secondary" disabled={!provider || provider === "none" || test.isPending} onClick={() => test.mutate()}>
+          {test.isPending ? <Loader2 className="size-4 animate-spin" /> : null}
+          Enviarme una prueba
+        </Button>
+      </div>
+    </section>
+  );
+}
+
 function AccessSection({ enabled }: { enabled: boolean }) {
   const access = useAdminAccess(enabled);
   const activate = useActivateAccess();
@@ -211,6 +249,9 @@ function AccessSection({ enabled }: { enabled: boolean }) {
             <li key={r.workspaceSlug} className="flex flex-wrap items-center gap-2 py-2 text-sm">
               <b className="min-w-0 flex-1 truncate font-medium">{r.workspaceSlug}</b>
               <span className={`rounded-full border px-2 py-0.5 text-xs ${ACCESS_BADGE[r.state]}`}>{ACCESS_LABEL[r.state]}</span>
+              {r.state === "active" && r.planId ? (
+                <span className="rounded-full border border-line-soft px-2 py-0.5 text-xs">{SALES_PLANS[r.planId].name}</span>
+              ) : null}
               <span className="text-xs text-ink-muted">
                 {r.paidUntil ? `Pagado hasta ${until(r.paidUntil)}` : `Prueba hasta ${until(r.trialEndsAt)}`}
               </span>

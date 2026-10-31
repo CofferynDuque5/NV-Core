@@ -1,12 +1,13 @@
 import { PrismaClient } from "@prisma/client";
 import { describe, expect, it, vi } from "vitest";
 
+import { WorkspaceAccessService } from "../../common/access/workspace-access.service";
 import { CampaignRunner, UNCONFIRMED } from "./campaign-runner.service";
 
 const url = process.env.IT_DATABASE_URL;
 describe.skipIf(!url)("CampaignRunner contra PostgreSQL real", () => {
   const prisma = Object.assign(new PrismaClient({ datasourceUrl: url }), { enabled: true });
-  const mk = () => {
+  const mk = (access?: WorkspaceAccessService) => {
     const sent: string[] = [];
     const dispatched: unknown[] = [];
     const providers = {
@@ -25,7 +26,8 @@ describe.skipIf(!url)("CampaignRunner contra PostgreSQL real", () => {
       { register: vi.fn(), dispatch: vi.fn(async (_t: string, _w: string, p: unknown) => dispatched.push(p)) } as never,
       { emit: vi.fn() } as never,
       { record: vi.fn() } as never,
-      { create: vi.fn() } as never,
+      { create: vi.fn(async () => undefined) } as never,
+      access,
     );
     return { runner, sent, dispatched };
   };
@@ -93,5 +95,29 @@ describe.skipIf(!url)("CampaignRunner contra PostgreSQL real", () => {
     // Las filas históricas sin runKey siguen permitidas (NULL no choca).
     await prisma.sendLog.create({ data: { ...row, runKey: null } });
     await prisma.sendLog.create({ data: { ...row, runKey: null } });
+  });
+
+  it("prueba gratis: la primera campaña sale, la prueba se cierra y una segunda no sale", async () => {
+    process.env.WHATSAPP_GROUP_DELAY_MS = "0";
+    const ws = `it-trial-send-${Date.now()}`;
+    const access = new WorkspaceAccessService(prisma as never, { get: () => ({ trialHours: 24 }) } as never);
+    await access.startTrial(ws);
+    const { c } = await seed(ws);
+    const second = await prisma.campaign.create({
+      data: { workspaceSlug: ws, name: "IT 2", status: "programada", message: "Hola", channels: ["wa"], scheduleType: "once" },
+    });
+    await prisma.campaignTarget.create({
+      data: { campaignId: second.id, groupId: (await prisma.group.findFirstOrThrow({ where: { workspaceSlug: ws } })).id },
+    });
+    const a = mk(access);
+    const first = await a.runner.run(ws, c.id, { runKey: "manual:t1" });
+    expect(first.status).toBe("completed");
+    expect(a.sent).toHaveLength(3);
+    expect((await access.state(ws)).state).toBe("expired");
+    // Even if the panel were bypassed, the runner refuses a second send.
+    await prisma.workspaceAccess.update({ where: { workspaceSlug: ws }, data: { trialEndsAt: new Date(Date.now() + 3_600_000) } });
+    const again = await a.runner.run(ws, second.id, { runKey: "manual:t2" });
+    expect(again).toMatchObject({ status: "skipped" });
+    expect(a.sent).toHaveLength(3);
   });
 });

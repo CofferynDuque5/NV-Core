@@ -91,6 +91,11 @@ export const emptyAdapters: Services = {
     sync: () => notAvailable(),
     relink: () => notAvailable(),
     diagnose: () => notAvailable(),
+    lines: () => delay([]),
+    addLine: () => notAvailable(),
+    renameLine: () => notAvailable(),
+    lineAction: () => notAvailable(),
+    removeLine: () => notAvailable(),
   },
   pcAgent: {
     status: () =>
@@ -120,6 +125,13 @@ export const emptyAdapters: Services = {
     removeMembership: () => notAvailable(),
     access: () => delay([]),
     activate: () => notAvailable(),
+    mailStatus: () => delay({ provider: "none" as const }),
+    mailTest: () => notAvailable(),
+    planPayments: () => delay([]),
+    planPaymentReceipt: () => notAvailable(),
+    approvePlanPayment: () => notAvailable(),
+    rejectPlanPayment: () => notAvailable(),
+    usdtRate: () => delay({ rate: null }),
   },
   brandLinks: {
     get: () => delay({ socialLinks: [], website: null }),
@@ -136,7 +148,7 @@ export const emptyAdapters: Services = {
     remove: () => notAvailable(),
   },
   access: {
-    overview: () => delay({ state: "unlimited", plan: { price: 0, currency: "USD", days: 30 }, methods: [] }),
+    overview: () => delay({ state: "unlimited", plan: { price: 0, currency: "USD", days: 30 }, plans: [], methods: [] }),
     pay: () => notAvailable(),
   },
   campaigns: {
@@ -146,6 +158,7 @@ export const emptyAdapters: Services = {
     update: () => notAvailable(),
     remove: () => notAvailable(),
     run: () => delay(null),
+    activity: (_id, since) => delay({ since, runs: [], inbox: { received: 0, replied: 0, newChats: 0 } }),
     pause: () => notAvailable(),
     resume: () => notAvailable(),
     logs: () => delay([]),
@@ -236,6 +249,7 @@ export const emptyAdapters: Services = {
     sendMessage: () => notAvailable(),
     setResolved: () => notAvailable(),
     updateConversation: () => notAvailable(),
+    deleteConversation: () => notAvailable(),
   },
   media: {
     folders: () => delay([]),
@@ -330,6 +344,9 @@ export const emptyAdapters: Services = {
     removeMember: () => notAvailable(),
     invitations: () => delay([]),
     revokeInvitation: () => notAvailable(),
+    inviteLinks: () => delay([]),
+    createInviteLink: () => notAvailable(),
+    revokeInviteLink: () => notAvailable(),
   },
   audit: {
     logs: () => delay([]),

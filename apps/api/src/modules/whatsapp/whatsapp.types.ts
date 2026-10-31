@@ -3,6 +3,10 @@ export type WhatsappStatusValue = "disconnected" | "connecting" | "qr" | "connec
 export interface WhatsappStatus {
   status: WhatsappStatusValue;
   provider: "baileys";
+  /** 1 = the brand's main number; 2, 3… = extra numbers. */
+  line?: number;
+  /** Name the user gave the number («Ventas»). */
+  label?: string | null;
   number: string | null;
   lastConnectionAt: string | null;
   groupsCount: number;

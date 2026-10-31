@@ -99,7 +99,7 @@ export default function SecuenciasPage() {
                     <UserPlus className="size-3.5" /> Inscribir
                   </Button>
                   <div className="ml-auto flex items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100">
-                    <Button
+                    <Button aria-label="Editar"
                       variant="ghost"
                       size="sm"
                       onClick={() => {
@@ -109,7 +109,7 @@ export default function SecuenciasPage() {
                     >
                       <Pencil className="size-3.5" />
                     </Button>
-                    <Button
+                    <Button aria-label="Eliminar"
                       variant="ghost"
                       size="sm"
                       disabled={del.isPending}
