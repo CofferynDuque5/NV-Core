@@ -312,6 +312,9 @@ export function priceForGroup(g: GroupPostingInfo, prices: Record<string, string
 /** Official site of NV Marketing, credited at the end of every group message. */
 export const NV_MARKETING_URL = "https://nvmarketing.nvcorx.com/";
 
+/** Official contact email of NV Marketing. */
+export const NV_CONTACT_EMAIL = "nvmarketing@nvcorx.com";
+
 export interface SocialLink {
   /** "Instagram", "TikTok", "Facebook"… */
   label: string;

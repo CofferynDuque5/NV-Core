@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import {
   NO_REFUNDS_NOTICE,
+  NV_CONTACT_EMAIL,
   PAYMENT_STATUS_LABEL,
   SALES_PLANS,
   formatPaymentAmount,
@@ -381,7 +382,11 @@ export function PlanPicker({ slug, access, canPay }: { slug: string; access: Acc
       <PlanCards access={access} canPay={canPay} onChoose={setChosen} />
       {chosen && access.methods.length === 0 ? (
         <p className="rounded-lg border border-line-soft p-3 text-sm text-ink-muted">
-          Los métodos de pago aún no están configurados. Escríbenos y te ayudamos a activar tu plan.
+          Los métodos de pago aún no están configurados. Escríbenos a{" "}
+          <a href={`mailto:${NV_CONTACT_EMAIL}`} className="text-brand hover:underline">
+            {NV_CONTACT_EMAIL}
+          </a>{" "}
+          y te ayudamos a activar tu plan.
         </p>
       ) : null}
       {!canPay && access.state !== "unlimited" ? (
