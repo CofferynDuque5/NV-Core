@@ -1,7 +1,7 @@
 import * as React from "react";
-import { useSearchParams } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { CONTACT_STAGES, type Contact as ContactEntity, type ContactStage } from "@nv/domain";
-import { Columns3, Contact, Download, Loader2, Pencil, Plus, Search, Send, Table2, Trash2, Upload } from "lucide-react";
+import { Columns3, Contact, Download, Loader2, Pencil, Plug, Plus, Search, Send, Table2, Trash2, Upload } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { STAGE_ACCENTS } from "@/lib/crm";
@@ -51,6 +51,7 @@ function StageBadge({ stage }: { stage: ContactStage }) {
 
 export default function ContactosPage() {
   const ws = useWorkspace();
+  const navigate = useNavigate();
   const openCompose = useUiStore((s) => s.openCompose);
   const del = useDeleteContact();
   const move = useMoveContactStage();
@@ -195,12 +196,18 @@ export default function ContactosPage() {
         isEmpty={(d) => d.items.length === 0 && !hasFilters}
         empty={{
           icon: Contact,
-          title: "Tu CRM está vacío",
-          description: "Crea el primer contacto para empezar a segmentar, hacer difusión y gestionar tu pipeline.",
+          title: "Aún no tienes contactos",
+          description:
+            "Aparecen solos cuando conectas tu WhatsApp o Telegram y te escriben, o cuando alguien llena un formulario. También puedes importarlos o crearlos a mano.",
           action: (
-            <Button size="sm" onClick={openCreate}>
-              <Plus className="size-4" /> Nuevo contacto
-            </Button>
+            <div className="flex flex-wrap justify-center gap-2">
+              <Button size="sm" onClick={() => navigate(`/w/${ws.slug}/conexiones`)}>
+                <Plug className="size-4" /> Conectar WhatsApp o Telegram
+              </Button>
+              <Button size="sm" variant="outline" onClick={openCreate}>
+                <Plus className="size-4" /> Nuevo contacto
+              </Button>
+            </div>
           ),
         }}
       >

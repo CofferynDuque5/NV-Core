@@ -270,7 +270,7 @@
   .switch[aria-checked="true"] .knob{transform:translateX(26px)}
   .save-badge{font-size:11px;font-weight:700;color:#22D3EE;background:rgba(34,211,238,.12);border:1px solid rgba(34,211,238,.3);padding:3px 9px;border-radius:999px}
 
-  .grid-price{display:grid;grid-template-columns:repeat(4,1fr);gap:18px;align-items:stretch}
+  .grid-price{display:grid;grid-template-columns:repeat(3,1fr);gap:18px;align-items:stretch}
   .plan{
     background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:28px 24px;
     display:flex;flex-direction:column;transition:transform .25s ease,border-color .25s ease;
@@ -675,94 +675,72 @@
       <div class="section-head reveal">
         <span class="eyebrow"><span class="dot"></span>Precios</span>
         <h2 style="margin-top:18px">Planes para cada etapa</h2>
-        <p>Pruébalo 24 horas gratis y crece cuando lo necesites. Cambia o cancela en cualquier momento.</p>
-      </div>
-
-      <div class="toggle reveal">
-        <span id="lbl-monthly" class="on">Mensual</span>
-        <button class="switch" id="billing-switch" role="switch" aria-checked="false" aria-label="Cambiar entre facturación mensual y anual">
-          <span class="knob"></span>
-        </button>
-        <span id="lbl-annual">Anual <span class="save-badge">2 meses gratis</span></span>
+        <p>Pruébalo 24 horas gratis y luego elige tu plan. Pagas cada 30 días, en tu país, con Binance o Zinli, y puedes mejorar de plan cuando quieras.</p>
       </div>
 
       <div class="grid-price">
 
-        <!-- FREE -->
+        <!-- PRUEBA -->
         <div class="plan reveal">
           <div class="pname">Prueba gratis</div>
           <div class="ptag">Prueba el panel completo antes de pagar.</div>
           <div class="price">
-            <span class="cur">USD</span><span class="amt" data-monthly="0" data-annual="0">0</span><span class="per">/24 h</span>
+            <span class="cur">USD</span><span class="amt">0</span><span class="per">/24 h</span>
           </div>
-          <div class="subprice" data-sub-monthly="24 horas, sin tarjeta" data-sub-annual="24 horas, sin tarjeta">24 horas, sin tarjeta</div>
+          <div class="subprice">24 horas, sin tarjeta</div>
           <ul>
-            <li><svg viewBox="0 0 24 24"><path d="M5 13l4 4L19 7"/></svg>Todo el panel abierto</li>
+            <li><svg viewBox="0 0 24 24"><path d="M5 13l4 4L19 7"/></svg>Todo lo del plan Pro, abierto</li>
             <li><svg viewBox="0 0 24 24"><path d="M5 13l4 4L19 7"/></svg>Sin tarjeta ni pago por adelantado</li>
             <li><svg viewBox="0 0 24 24"><path d="M5 13l4 4L19 7"/></svg>Tus datos se guardan al activar tu plan</li>
-            <li><svg viewBox="0 0 24 24"><path d="M5 13l4 4L19 7"/></svg>Pagas en tu país, con Binance o Zinli</li>
           </ul>
           <a class="btn btn-ghost btn-block" data-app data-path="/register" data-plan="free" href="#">Probar 24 horas gratis</a>
         </div>
 
-        <!-- STARTER -->
+        <!-- BÁSICO -->
         <div class="plan reveal">
-          <div class="pname">Starter</div>
-          <div class="ptag">Para equipos pequeños que arrancan en serio.</div>
+          <div class="pname">Básico</div>
+          <div class="ptag">Para empezar con un solo número.</div>
           <div class="price">
-            <span class="cur">USD</span><span class="amt" data-monthly="19" data-annual="190">19</span><span class="per">/mes</span>
+            <span class="cur">USD</span><span class="amt">7</span><span class="per">/30 días</span>
           </div>
-          <div class="subprice" data-sub-monthly="Facturado mensualmente" data-sub-annual="190 USD/año · ahorra 38 USD">Facturado mensualmente</div>
+          <div class="subprice">Pago manual cada 30 días</div>
           <ul>
-            <li><svg viewBox="0 0 24 24"><path d="M5 13l4 4L19 7"/></svg>2 workspaces</li>
-            <li><svg viewBox="0 0 24 24"><path d="M5 13l4 4L19 7"/></svg>Hasta 2.500 contactos</li>
-            <li><svg viewBox="0 0 24 24"><path d="M5 13l4 4L19 7"/></svg>Automatizaciones básicas</li>
-            <li><svg viewBox="0 0 24 24"><path d="M5 13l4 4L19 7"/></svg>AI Content (límite mensual)</li>
-            <li><svg viewBox="0 0 24 24"><path d="M5 13l4 4L19 7"/></svg>Reportes estándar</li>
+            <li><svg viewBox="0 0 24 24"><path d="M5 13l4 4L19 7"/></svg>1 número de WhatsApp</li>
+            <li><svg viewBox="0 0 24 24"><path d="M5 13l4 4L19 7"/></svg>1 cuenta de Telegram</li>
+            <li><svg viewBox="0 0 24 24"><path d="M5 13l4 4L19 7"/></svg>1 marca</li>
+            <li><svg viewBox="0 0 24 24"><path d="M5 13l4 4L19 7"/></svg>Campañas programadas con imágenes y rotación</li>
+            <li><svg viewBox="0 0 24 24"><path d="M5 13l4 4L19 7"/></svg>Contactos (CRM), Inbox y etiquetas</li>
+            <li><svg viewBox="0 0 24 24"><path d="M5 13l4 4L19 7"/></svg>Tienda, Cobros y mensajes de cobro</li>
+            <li><svg viewBox="0 0 24 24"><path d="M5 13l4 4L19 7"/></svg>Automatizaciones, formularios y embudos</li>
+            <li><svg viewBox="0 0 24 24"><path d="M5 13l4 4L19 7"/></svg>Informe semanal y analítica</li>
           </ul>
-          <a class="btn btn-ghost btn-block" data-app data-path="/register" data-plan="starter" href="#">Elegir Starter</a>
+          <a class="btn btn-ghost btn-block" data-app data-path="/register" data-plan="basico" href="#">Elegir Básico</a>
         </div>
 
         <!-- PRO (featured) -->
         <div class="plan featured reveal">
-          <span class="badge">Más popular</span>
+          <span class="badge">Recomendado</span>
           <div class="pname">Pro</div>
-          <div class="ptag">Todo lo que un equipo en crecimiento necesita.</div>
+          <div class="ptag">Para vender con varios números y marcas.</div>
           <div class="price">
-            <span class="cur">USD</span><span class="amt" data-monthly="49" data-annual="490">49</span><span class="per">/mes</span>
+            <span class="cur">USD</span><span class="amt">19</span><span class="per">/30 días</span>
           </div>
-          <div class="subprice" data-sub-monthly="Facturado mensualmente" data-sub-annual="490 USD/año · ahorra 98 USD">Facturado mensualmente</div>
+          <div class="subprice">Pago manual cada 30 días</div>
           <ul>
-            <li><svg viewBox="0 0 24 24"><path d="M5 13l4 4L19 7"/></svg>5 workspaces</li>
-            <li><svg viewBox="0 0 24 24"><path d="M5 13l4 4L19 7"/></svg>Contactos ilimitados</li>
-            <li><svg viewBox="0 0 24 24"><path d="M5 13l4 4L19 7"/></svg>Automatizaciones avanzadas</li>
-            <li><svg viewBox="0 0 24 24"><path d="M5 13l4 4L19 7"/></svg>AI Content ampliado</li>
-            <li><svg viewBox="0 0 24 24"><path d="M5 13l4 4L19 7"/></svg>Analytics y reportes avanzados</li>
-            <li><svg viewBox="0 0 24 24"><path d="M5 13l4 4L19 7"/></svg>Roles y permisos</li>
+            <li><svg viewBox="0 0 24 24"><path d="M5 13l4 4L19 7"/></svg>Hasta 5 números de WhatsApp</li>
+            <li><svg viewBox="0 0 24 24"><path d="M5 13l4 4L19 7"/></svg>1 cuenta de Telegram</li>
+            <li><svg viewBox="0 0 24 24"><path d="M5 13l4 4L19 7"/></svg>Varias marcas (cada una con su plan)</li>
+            <li><svg viewBox="0 0 24 24"><path d="M5 13l4 4L19 7"/></svg>Campañas programadas con imágenes y rotación</li>
+            <li><svg viewBox="0 0 24 24"><path d="M5 13l4 4L19 7"/></svg>Contactos (CRM), Inbox y etiquetas</li>
+            <li><svg viewBox="0 0 24 24"><path d="M5 13l4 4L19 7"/></svg>Tienda, Cobros y mensajes de cobro</li>
+            <li><svg viewBox="0 0 24 24"><path d="M5 13l4 4L19 7"/></svg>Automatizaciones, formularios y embudos</li>
+            <li><svg viewBox="0 0 24 24"><path d="M5 13l4 4L19 7"/></svg>Informe semanal y analítica</li>
           </ul>
           <a class="btn btn-primary btn-block" data-app data-path="/register" data-plan="pro" href="#">Elegir Pro</a>
         </div>
 
-        <!-- BUSINESS -->
-        <div class="plan reveal">
-          <div class="pname">Business</div>
-          <div class="ptag">Para organizaciones que operan a gran escala.</div>
-          <div class="price">
-            <span class="cur">USD</span><span class="amt" data-monthly="99" data-annual="990">99</span><span class="per">/mes</span>
-          </div>
-          <div class="subprice" data-sub-monthly="Facturado mensualmente" data-sub-annual="990 USD/año · ahorra 198 USD">Facturado mensualmente</div>
-          <ul>
-            <li><svg viewBox="0 0 24 24"><path d="M5 13l4 4L19 7"/></svg>Workspaces ilimitados</li>
-            <li><svg viewBox="0 0 24 24"><path d="M5 13l4 4L19 7"/></svg>Todo lo de Pro</li>
-            <li><svg viewBox="0 0 24 24"><path d="M5 13l4 4L19 7"/></svg>Biblioteca de medios ampliada</li>
-            <li><svg viewBox="0 0 24 24"><path d="M5 13l4 4L19 7"/></svg>Soporte prioritario</li>
-            <li><svg viewBox="0 0 24 24"><path d="M5 13l4 4L19 7"/></svg>Gestión avanzada de equipos</li>
-          </ul>
-          <a class="btn btn-ghost btn-block" data-app data-path="/register" data-plan="business" href="#">Elegir Business</a>
-        </div>
-
       </div>
-      <p style="text-align:center;color:var(--muted-2);font-size:13px;margin-top:22px">Precios de referencia en USD. Editables según tu configuración.</p>
+      <p style="text-align:center;color:var(--muted-2);font-size:13px;margin-top:22px"><strong>Sin reembolsos:</strong> los pagos son finales, revisa el plan antes de pagar. Precios en USD; si pagas en otra moneda, pagas el equivalente del día. <a href="legal.html" style="color:inherit;text-decoration:underline">Términos</a></p>
     </div>
   </section>
 
@@ -931,29 +909,7 @@
   menu.querySelectorAll('a').forEach(function(a){ a.addEventListener('click', closeMenu); });
   window.addEventListener('resize', function(){ if(window.innerWidth > 860) closeMenu(); });
 
-  /* ---------- Pricing billing toggle ---------- */
-  var sw = document.getElementById('billing-switch');
-  var lblM = document.getElementById('lbl-monthly');
-  var lblA = document.getElementById('lbl-annual');
-  var applyPrices = function(annual){
-    document.querySelectorAll('.amt').forEach(function(el){
-      var v = annual ? el.getAttribute('data-annual') : el.getAttribute('data-monthly');
-      el.textContent = v;
-    });
-    document.querySelectorAll('.per').forEach(function(el){
-      el.textContent = annual ? '/año' : '/mes';
-    });
-    document.querySelectorAll('.subprice').forEach(function(el){
-      el.textContent = annual ? el.getAttribute('data-sub-annual') : el.getAttribute('data-sub-monthly');
-    });
-    lblM.classList.toggle('on', !annual);
-    lblA.classList.toggle('on', annual);
-  };
-  sw.addEventListener('click', function(){
-    var next = sw.getAttribute('aria-checked') !== 'true';
-    sw.setAttribute('aria-checked', next ? 'true' : 'false');
-    applyPrices(next);
-  });
+
 
   /* ---------- Reveal on scroll ---------- */
   var reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;

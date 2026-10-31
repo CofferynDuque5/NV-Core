@@ -12,4 +12,5 @@ export * from "./time-zones";
 export * from "./group-rules";
 export * from "./friendly-errors";
 export * from "./initials";
+export * from "./sales-plans";
 export * from "./activity";

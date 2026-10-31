@@ -42,7 +42,10 @@ export interface AppConfig {
     trialHours: number;
     /** Operator brand whose Cobros receive plan payments ("" = not set). */
     operatorWorkspace: string;
+    /** Pro: price of each paid period. */
     plan: { price: number; currency: "COP" | "VES" | "PEN" | "USD" | "USDT"; days: number };
+    /** Price of Básico (same currency and days as Pro). */
+    basicPrice: number;
   };
   integrations: {
     n8n: { baseUrl?: string; apiKey?: string; eventsWebhook?: string; inboundSecret?: string };
@@ -146,6 +149,7 @@ export function buildConfig(env: Env): AppConfig {
       trialHours: env.TRIAL_HOURS ?? 24,
       operatorWorkspace: env.NV_BILLING_WORKSPACE?.trim().toLowerCase() ?? "",
       plan: { price: env.PLAN_PRICE ?? 19, currency: env.PLAN_CURRENCY ?? "USD", days: env.PLAN_DAYS ?? 30 },
+      basicPrice: env.PLAN_BASIC_PRICE ?? 7,
     },
     integrations: {
       n8n: {

@@ -2,7 +2,7 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import * as tls from "node:tls";
 
-import { BadRequestException, Injectable, type OnModuleInit, type OnModuleDestroy } from "@nestjs/common";
+import { BadRequestException, HttpException, HttpStatus, Injectable, type OnModuleInit, type OnModuleDestroy } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { analyzeGroupRules } from "@nv/domain";
 
@@ -10,6 +10,7 @@ import type { AppConfig } from "../../config/configuration";
 import { PrismaService } from "../../prisma/prisma.service";
 import { EventBus } from "../../core/events/event-bus.service";
 import { NotificationsService } from "../notifications/notifications.module";
+import { WorkspaceAccessService } from "../../common/access/workspace-access.service";
 import { BaileysSession } from "./baileys.session";
 import { SessionManager } from "./session-manager";
 import { WhatsappGateway } from "./whatsapp.gateway";
@@ -106,6 +107,7 @@ export class WhatsappService implements SessionEvents, OnModuleInit, OnModuleDes
     private readonly gateway: WhatsappGateway,
     private readonly events: EventBus,
     private readonly notifications: NotificationsService,
+    private readonly access?: WorkspaceAccessService,
   ) {
     this.sessions = new SessionManager(
       config.get("integrations", { infer: true }).whatsappSessionDir,
@@ -389,6 +391,13 @@ export class WhatsappService implements SessionEvents, OnModuleInit, OnModuleDes
   /** Link one more number: opens a new session that shows its own QR. */
   async addLine(workspaceSlug: string, label?: string | null): Promise<WhatsappStatus> {
     const numbers = await this.lineNumbers(workspaceSlug);
+    const planMax = (await this.access?.limits(workspaceSlug))?.whatsappNumbers;
+    if (planMax !== undefined && numbers.length >= planMax) {
+      throw new HttpException(
+        `Tu plan incluye ${planMax} ${planMax === 1 ? "número" : "números"} de WhatsApp. Mejora a Pro para conectar más.`,
+        HttpStatus.PAYMENT_REQUIRED,
+      );
+    }
     if (numbers.length >= MAX_WA_LINES) {
       throw new BadRequestException(`Puedes conectar hasta ${MAX_WA_LINES} números de WhatsApp por marca.`);
     }

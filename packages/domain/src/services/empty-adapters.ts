@@ -141,7 +141,7 @@ export const emptyAdapters: Services = {
     remove: () => notAvailable(),
   },
   access: {
-    overview: () => delay({ state: "unlimited", plan: { price: 0, currency: "USD", days: 30 }, methods: [] }),
+    overview: () => delay({ state: "unlimited", plan: { price: 0, currency: "USD", days: 30 }, plans: [], methods: [] }),
     pay: () => notAvailable(),
   },
   campaigns: {

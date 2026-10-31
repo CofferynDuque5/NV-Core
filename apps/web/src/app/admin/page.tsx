@@ -2,7 +2,7 @@ import * as React from "react";
 import { Link } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ShieldCheck, Loader2, Trash2, UserCog } from "lucide-react";
-import { ROLES, type Role } from "@nv/domain";
+import { ROLES, SALES_PLANS, type Role } from "@nv/domain";
 import { toast } from "sonner";
 
 import { useServices } from "@/hooks/use-services";
@@ -211,6 +211,9 @@ function AccessSection({ enabled }: { enabled: boolean }) {
             <li key={r.workspaceSlug} className="flex flex-wrap items-center gap-2 py-2 text-sm">
               <b className="min-w-0 flex-1 truncate font-medium">{r.workspaceSlug}</b>
               <span className={`rounded-full border px-2 py-0.5 text-xs ${ACCESS_BADGE[r.state]}`}>{ACCESS_LABEL[r.state]}</span>
+              {r.state === "active" && r.planId ? (
+                <span className="rounded-full border border-line-soft px-2 py-0.5 text-xs">{SALES_PLANS[r.planId].name}</span>
+              ) : null}
               <span className="text-xs text-ink-muted">
                 {r.paidUntil ? `Pagado hasta ${until(r.paidUntil)}` : `Prueba hasta ${until(r.trialEndsAt)}`}
               </span>

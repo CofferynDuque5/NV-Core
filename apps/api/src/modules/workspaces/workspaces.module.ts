@@ -7,6 +7,8 @@ import {
   Delete,
   Get,
   HttpCode,
+  HttpException,
+  HttpStatus,
   Injectable,
   Logger,
   Module,
@@ -166,6 +168,8 @@ export class WorkspacesService {
 
   /** A brand a customer creates starts its free trial; the operator's own brands don't. */
   async create(dto: CreateWorkspaceDto, user: AuthenticatedUser): Promise<Workspace> {
+    const operator = this.config.get("superAdmins", { infer: true }).includes(user.email.toLowerCase());
+    if (!operator) await this.assertMayAddBrand(user.userId);
     const ws = await this.registry.create(dto, { userId: user.userId, email: user.email });
     if (dto.goals?.length) {
       const goals = cleanGoals(dto.goals);
@@ -176,9 +180,24 @@ export class WorkspacesService {
       });
       ws.goals = goals;
     }
-    const operator = this.config.get("superAdmins", { infer: true }).includes(user.email.toLowerCase());
     if (!operator) await this.access.startTrial(ws.slug);
     return ws;
+  }
+
+  /** A brand on the Básico plan is its owner's only brand. */
+  private async assertMayAddBrand(userId: string): Promise<void> {
+    if (!this.prisma.enabled) return;
+    const owned = await this.prisma.membership.findMany({ where: { userId, role: "Owner" }, select: { workspaceSlug: true } });
+    for (const { workspaceSlug } of owned) {
+      const limits = await this.access.limits(workspaceSlug);
+      if (limits?.brands != null && owned.length >= limits.brands) {
+        const name = (await this.registry.resolve(workspaceSlug))?.name ?? workspaceSlug;
+        throw new HttpException(
+          `Tu plan Básico incluye ${limits.brands} marca («${name}»). Mejora a Pro para crear otra.`,
+          HttpStatus.PAYMENT_REQUIRED,
+        );
+      }
+    }
   }
 }
 

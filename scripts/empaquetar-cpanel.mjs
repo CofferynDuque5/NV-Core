@@ -470,9 +470,11 @@ NV_ADMIN_EMAIL=tucorreo@ejemplo.com
 # bloquea y le muestra tus métodos de pago. Pon aquí el identificador (slug) de
 # TU marca donde configuraste esos métodos en Cobros (créala con NV_ADMIN_EMAIL
 # para que no tenga prueba). Al confirmar su pago como «Pagado», la marca del
-# cliente se activa PLAN_DAYS días más.
+# cliente se activa PLAN_DAYS días más con el plan que eligió.
+# PLAN_PRICE es el plan Pro y PLAN_BASIC_PRICE el Básico (1 WhatsApp, 1 Telegram, 1 marca).
 # NV_BILLING_WORKSPACE=nv-cobros
 # PLAN_PRICE=19
+# PLAN_BASIC_PRICE=7
 # PLAN_CURRENCY=USD
 # PLAN_DAYS=30
 # TRIAL_HOURS=24

@@ -76,14 +76,26 @@ test("24 h free trial: banner, lock when it ends, manual plan payment, unlocked 
     .toBe(402);
   await page.reload({ waitUntil: "networkidle" });
   const lock = page.getByTestId("plan-lock");
-  await expect(lock).toContainText("Tu prueba gratis de 24 horas terminó");
-  await expect(lock).toContainText("US$ 19");
-  await expect(lock).toContainText("555666777");
+  await expect(lock).toContainText("Tu prueba gratis terminó");
+  // Both plans, with what each includes and the no-refunds notice.
+  await expect(lock.getByTestId("plan-card-basico")).toContainText("US$ 7");
+  await expect(lock.getByTestId("plan-card-basico")).toContainText("1 número de WhatsApp");
+  await expect(lock.getByTestId("plan-card-pro")).toContainText("US$ 19");
+  await expect(lock.getByTestId("plan-card-pro")).toContainText("Hasta 5 números de WhatsApp");
+  await expect(lock.getByTestId("no-refunds")).toBeVisible();
 
+  await lock.getByRole("button", { name: "Elegir Básico" }).click();
+  await expect(lock.getByTestId("plan-checkout")).toContainText("Plan Básico");
+  await expect(lock.getByTestId("plan-method-details")).toContainText("555666777");
   await lock.locator("#plan-reference").fill("BP-778899");
-  await lock.getByRole("button", { name: "Enviar pago para verificar" }).click();
+  const send = lock.getByRole("button", { name: /Enviar pago de US\$ 7/ });
+  // Payments are final: it can't be sent until that is acknowledged.
+  await expect(send).toBeDisabled();
+  await lock.getByTestId("plan-accept-no-refunds").check();
+  await send.click();
   await expect(lock).toContainText("Estamos verificando tu pago");
   await expect(page.getByTestId("plan-payment")).toContainText("Por verificar");
+  await expect(page.getByTestId("plan-payment")).toContainText("Plan Básico");
 
   // The operator sees it in their Cobros and confirms it after checking the account.
   const list = await page.request.get(`${API}/workspaces/${OPERATOR}/payments?status=por_verificar`, { headers: op });
@@ -91,6 +103,7 @@ test("24 h free trial: banner, lock when it ends, manual plan payment, unlocked 
     (p) => p.reference === "BP-778899",
   );
   expect(pending?.concept).toContain(slug);
+  expect(pending?.concept).toContain("Básico");
   const ok = await page.request.patch(`${API}/workspaces/${OPERATOR}/payments/${pending!.id}`, {
     headers: op,
     data: { status: "pagado" },
@@ -106,4 +119,16 @@ test("24 h free trial: banner, lock when it ends, manual plan payment, unlocked 
   await page.reload({ waitUntil: "networkidle" });
   await expect(page.getByTestId("plan-lock")).toHaveCount(0);
   await expect(page.getByTestId("trial-banner")).toHaveCount(0);
+
+  // «Mi plan»: Básico is theirs, Pro is the upgrade.
+  await page.goto(`/w/${slug}/plan`, { waitUntil: "networkidle" });
+  await expect(page.getByTestId("plan-card-basico")).toContainText("Tu plan");
+  await expect(page.getByTestId("plan-card-pro").getByRole("button", { name: "Mejorar a Pro" })).toBeVisible();
+
+  // Básico limits: one WhatsApp number and one brand.
+  const line = await page.request.post(`${API}/workspaces/${slug}/whatsapp/lines`, { headers: me, data: { label: "Ventas" } });
+  expect(line.status()).toBe(402);
+  const second = await page.request.post(`${API}/workspaces`, { headers: me, data: { name: `Otra marca ${stamp}` } });
+  expect(second.status()).toBe(402);
+  expect(await second.text()).toContain("Mejora a Pro");
 });

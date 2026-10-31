@@ -24,8 +24,11 @@ import {
   PAYMENT_STATUSES,
   PAYMENT_TRANSITIONS,
   PAYMENT_STATUS_LABEL,
+  SALES_PLANS,
   formatPaymentAmount,
   paymentMethodDef,
+  salesPlanId,
+  type SalesPlanId,
   type PaymentCurrency,
   type PaymentMethod,
   type PaymentMethodKind,
@@ -337,8 +340,14 @@ export class PaymentsService {
     // A confirmed plan payment of a customer brand opens it for another period.
     if (to === "pagado" && from !== to && row.forWorkspace) {
       const days = this.config.get("billing", { infer: true }).plan.days;
-      const state = await this.access.activate(row.forWorkspace, days, actor);
-      await this.audit.record(row.forWorkspace, actor, "access.activate", `+${days} días · hasta ${state.paidUntil} · cobro ${row.id}`);
+      const planId = salesPlanId(row.planId) ?? "pro";
+      const state = await this.access.activate(row.forWorkspace, days, actor, new Date(), planId);
+      await this.audit.record(
+        row.forWorkspace,
+        actor,
+        "access.activate",
+        `Plan ${SALES_PLANS[planId].name} · +${days} días · hasta ${state.paidUntil} · cobro ${row.id}`,
+      );
     }
     const names = await this.contactNames(workspaceId, [row.contactId]);
     const contactName = row.contactId ? names.get(row.contactId) : undefined;
@@ -357,9 +366,11 @@ export class PaymentsService {
     forName: string,
     actor: string,
     input: { methodId: string; reference: string; note?: string },
+    planId: SalesPlanId = "pro",
   ): Promise<RequestRow> {
     this.requireDb();
-    const plan = this.config.get("billing", { infer: true }).plan;
+    const billing = this.config.get("billing", { infer: true });
+    const plan = { ...billing.plan, price: planId === "basico" ? billing.basicPrice : billing.plan.price };
     const method = await this.prisma.paymentMethod.findFirst({
       where: { id: input.methodId, workspaceSlug: billingWorkspace, active: true },
     });
@@ -375,7 +386,8 @@ export class PaymentsService {
       data: {
         workspaceSlug: billingWorkspace,
         forWorkspace,
-        concept: `Plan ${forName} (${forWorkspace}) · ${plan.days} días`,
+        concept: `Plan ${SALES_PLANS[planId].name} · ${forName} (${forWorkspace}) · ${plan.days} días`,
+        planId,
         amount: new Prisma.Decimal(plan.price),
         currency: plan.currency,
         status: "por_verificar",

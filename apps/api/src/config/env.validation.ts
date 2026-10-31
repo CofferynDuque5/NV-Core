@@ -110,7 +110,9 @@ export const envSchema = z.object({
   // Manual plan payment after the trial: the operator's own brand whose
   // Cobros methods customers pay to, and the price of each paid period.
   NV_BILLING_WORKSPACE: z.string().optional(),
+  // Pro (PLAN_PRICE, default 19) and Básico (PLAN_BASIC_PRICE, default 7).
   PLAN_PRICE: z.coerce.number().positive().max(1_000_000).optional(),
+  PLAN_BASIC_PRICE: z.coerce.number().positive().max(1_000_000).optional(),
   PLAN_CURRENCY: z.enum(["COP", "VES", "PEN", "USD", "USDT"]).optional(),
   PLAN_DAYS: z.coerce.number().int().min(1).max(400).optional(),
   CLOUDINARY_URL: z.string().optional(),

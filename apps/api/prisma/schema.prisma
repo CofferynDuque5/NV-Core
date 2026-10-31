@@ -728,6 +728,8 @@ model WorkspaceAccess {
   trialEndsAt   DateTime
   /// Paid access runs until this moment (extended each time a payment is confirmed).
   paidUntil     DateTime?
+  /// Paid plan («basico» | «pro»); null = still on the trial (or paid before plans existed → pro).
+  planId        String?
   activatedBy   String?
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
@@ -1057,6 +1059,8 @@ model PaymentRequest {
   /// Plan payment of a customer brand (set only in the operator's billing
   /// brand); confirming it as "pagado" adds paid days to that brand.
   forWorkspace  String?
+  /// Plan the brand pays for (plan payments only).
+  planId        String?
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 

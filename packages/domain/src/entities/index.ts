@@ -21,6 +21,7 @@ import type {
   SegmentOperator,
   WorkspaceKind,
 } from "../enums";
+import type { SalesPlanId } from "../config/sales-plans";
 
 /**
  * Domain entities.
@@ -1099,9 +1100,16 @@ export interface AccessPlan {
   days: number;
 }
 
+/** One plan the brand can pay for, with the operator's price. */
+export interface AccessPlanOption extends AccessPlan {
+  id: SalesPlanId;
+}
+
 /** The brand's own last plan payment, as the customer sees it. */
 export interface AccessPayment {
   id: string;
+  /** Plan this payment is for (older payments: none = Pro). */
+  planId?: SalesPlanId;
   status: PaymentStatus;
   amount: number;
   currency: PaymentCurrency;
@@ -1116,12 +1124,19 @@ export interface AccessPayment {
  * operator has not set a billing brand with active payment methods yet.
  */
 export interface AccessOverview extends WorkspaceAccess {
+  /** Price of Pro (kept for older panels). */
   plan: AccessPlan;
+  /** Every plan with its price, cheapest first. */
+  plans: AccessPlanOption[];
+  /** Plan in force: the paid one, or Pro while on the trial. Absent when unlimited. */
+  planId?: SalesPlanId;
   methods: PaymentMethod[];
   payment?: AccessPayment;
 }
 
 export interface AccessPaymentInput {
+  /** Plan being paid for (default Pro). */
+  planId?: SalesPlanId;
   methodId: string;
   reference: string;
   note?: string;
@@ -1131,6 +1146,8 @@ export interface AccessPaymentInput {
 export interface AdminAccessRow extends WorkspaceAccess {
   workspaceSlug: string;
   createdAt: string;
+  /** Plan in force (Pro during the trial). */
+  planId?: SalesPlanId;
 }
 
 /** Example records older versions loaded into new brands, still present. */
