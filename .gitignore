@@ -54,3 +54,6 @@ data/receipts/
 
 # Private payment details for the panel plan (shipped only in the cPanel package)
 plan-methods.json
+*-qr.jpg
+*-qr.png
+*-qr.webp

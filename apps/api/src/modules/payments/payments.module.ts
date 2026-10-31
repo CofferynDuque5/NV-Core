@@ -20,6 +20,7 @@ import {
 } from "@nestjs/common";
 import { ApiBearerAuth, ApiPropertyOptional, ApiTags } from "@nestjs/swagger";
 import {
+  isQrImage,
   PAYMENT_CURRENCIES,
   PAYMENT_METHOD_KINDS,
   PAYMENT_STATUSES,
@@ -69,7 +70,7 @@ import { RolesGuard } from "../../auth/guards/roles.guard";
 import type { AuthenticatedUser } from "../../auth/auth.types";
 import { PlanMethodsSeeder } from "./plan-methods.seed";
 import { PlanPaymentAlerts } from "./plan-payment-alerts";
-import { ReceiptStore } from "../../common/receipts/receipt-store.service";
+import { ReceiptStore, sniffReceipt } from "../../common/receipts/receipt-store.service";
 import { UsdtRateService } from "../../common/fx/usdt-rate.service";
 
 /** Payment requests listed at once (newest first). */
@@ -115,6 +116,20 @@ export class UpdatePaymentDto {
   @ApiPropertyOptional({ nullable: true }) @nullable() @IsDateString() dueAt?: string | null;
 }
 
+/**
+ * A method's QR picture: a PNG/JPEG/WebP data URL whose bytes really are that
+ * image (it is shown to customers, so nothing else gets through).
+ */
+export function cleanQrImage(value: string, label = "Código QR"): string {
+  if (!isQrImage(value)) throw new BadRequestException(`«${label}» debe ser una imagen PNG, JPG o WebP de hasta 600 KB.`);
+  const [head, data] = value.split(",", 2);
+  const type = sniffReceipt(Buffer.from(data ?? "", "base64"));
+  if (!type || type === "application/pdf" || !head?.includes(type)) {
+    throw new BadRequestException(`«${label}» no es una imagen válida.`);
+  }
+  return value;
+}
+
 /** Keep only the catalog fields of the kind, trimmed; require the mandatory ones. */
 export function cleanDetails(kind: PaymentMethodKind, details: Record<string, unknown>): Record<string, string> {
   const def = paymentMethodDef(kind);
@@ -123,6 +138,10 @@ export function cleanDetails(kind: PaymentMethodKind, details: Record<string, un
     const v = details[f.key];
     if (v == null) continue;
     if (typeof v !== "string") throw new BadRequestException(`«${f.label}» debe ser texto.`);
+    if (f.type === "image") {
+      if (v) out[f.key] = cleanQrImage(v, f.label);
+      continue;
+    }
     const t = v.trim();
     if (t.length > 200) throw new BadRequestException(`«${f.label}» es demasiado largo.`);
     if (t) out[f.key] = t;

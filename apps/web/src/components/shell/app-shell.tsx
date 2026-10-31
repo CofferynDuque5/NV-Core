@@ -6,7 +6,6 @@ import { Sidebar } from "./sidebar";
 import { MobileNav } from "./mobile-nav";
 import { Topbar } from "./topbar";
 import { WorkspaceSwitcher } from "./workspace-switcher";
-import { CommandPalette } from "./command-palette";
 import { NotificationsPanel } from "./notifications-panel";
 import { ComposeWizard } from "@/components/overlays/compose-wizard";
 import { EntityDrawer } from "@/components/overlays/entity-drawer";
@@ -146,7 +145,6 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
         {/* Global overlays */}
         <WorkspaceSwitcher open={switcherOpen} onOpenChange={setSwitcherOpen} />
-        <CommandPalette />
         <NotificationsPanel />
         <ComposeWizard />
         <EntityDrawer />

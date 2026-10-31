@@ -26,6 +26,7 @@ import {
   SALES_PLANS,
   formatPaymentAmount,
   paymentMethodDef,
+  paymentMethodQr,
   planPayerFields,
   vesAmount,
   type AccessOverview,
@@ -190,8 +191,10 @@ function CopyRow({ label, value }: { label: string; value: string }) {
 function MethodDetails({ method }: { method: PaymentMethod }) {
   const def = paymentMethodDef(method.kind);
   const rows = def.fields
+    .filter((f) => f.type !== "image")
     .map((f) => ({ label: f.label, value: (method.details[f.key] ?? "").trim() }))
     .filter((r) => r.value);
+  const qr = paymentMethodQr(method);
   return (
     <div className="rounded-xl border border-line-soft bg-panel-raised px-4 py-1" data-testid="plan-method-details">
       <div className="divide-y divide-line-soft">
@@ -199,6 +202,12 @@ function MethodDetails({ method }: { method: PaymentMethod }) {
           <CopyRow key={r.label} label={r.label} value={r.value} />
         ))}
       </div>
+      {qr ? (
+        <div className="flex flex-col items-center gap-2 border-t border-line-soft py-3" data-testid="plan-method-qr">
+          <img src={qr} alt={`Código QR de ${method.label}`} className="max-h-72 w-auto max-w-full rounded-lg bg-white object-contain" />
+          <p className="text-xs text-ink-muted">Escanéalo desde la app de {method.label} para pagar.</p>
+        </div>
+      ) : null}
       {method.instructions?.trim() ? (
         <p className="border-t border-line-soft py-2 text-xs text-ink-muted">{method.instructions.trim()}</p>
       ) : null}

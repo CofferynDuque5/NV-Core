@@ -1,4 +1,5 @@
 import * as React from "react";
+import { createPortal } from "react-dom";
 import { useNavigate } from "react-router-dom";
 import { Command } from "cmdk";
 import { useQuery } from "@tanstack/react-query";
@@ -51,7 +52,6 @@ import { useWorkspace } from "@/hooks/use-workspace";
 import { useServices } from "@/hooks/use-services";
 import { usePlanLocks } from "@/hooks/use-plan-locks";
 import { useCampaigns, useContacts, useGroups, useProducts } from "@/hooks/use-domain-data";
-import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { getNavIcon } from "./sidebar-icon";
 
 export { fold, matches } from "@/lib/search";
@@ -496,6 +496,22 @@ function Preview({ r, onOpen }: { r: Result | null; onOpen: (r: Result, path?: s
   );
 }
 
+/** True on phone-width screens (below Tailwind's `sm`). */
+function useIsPhone(): boolean {
+  const query = "(max-width: 639px)";
+  const [phone, setPhone] = React.useState(
+    () => typeof window !== "undefined" && !!window.matchMedia?.(query).matches,
+  );
+  React.useEffect(() => {
+    const mq = window.matchMedia?.(query);
+    if (!mq) return;
+    const on = () => setPhone(mq.matches);
+    mq.addEventListener("change", on);
+    return () => mq.removeEventListener("change", on);
+  }, []);
+  return phone;
+}
+
 export function CommandPalette() {
   const { open, setOpen, query, setQuery } = useCommandStore();
   const navigate = useNavigate();
@@ -510,6 +526,34 @@ export function CommandPalette() {
   const [opened, setOpened] = React.useState<RecentItem[]>([]);
   const listRef = React.useRef<HTMLDivElement>(null);
   const inputRef = React.useRef<HTMLInputElement>(null);
+  const rootRef = React.useRef<HTMLDivElement>(null);
+  const phone = useIsPhone();
+  const [dropWidth, setDropWidth] = React.useState({ wide: 1000, narrow: 720 });
+
+  // Results open under the search box, as wide as the screen allows.
+  React.useLayoutEffect(() => {
+    if (!open || phone) return;
+    const measure = () => {
+      const left = rootRef.current?.getBoundingClientRect().left ?? 0;
+      const room = Math.max(320, window.innerWidth - left - 16);
+      setDropWidth({ wide: Math.min(1000, room), narrow: Math.min(720, room) });
+    };
+    measure();
+    window.addEventListener("resize", measure);
+    return () => window.removeEventListener("resize", measure);
+  }, [open, phone]);
+
+  // Focus the box on open; a click anywhere else closes the results.
+  React.useEffect(() => {
+    if (!open) return;
+    inputRef.current?.focus();
+    if (phone) return;
+    const onDown = (e: MouseEvent) => {
+      if (rootRef.current && !rootRef.current.contains(e.target as Node)) close();
+    };
+    document.addEventListener("mousedown", onDown);
+    return () => document.removeEventListener("mousedown", onDown);
+  }, [open, phone]);
 
   useKeyboardShortcut("k", openPalette, { meta: true });
 
@@ -825,342 +869,374 @@ export function CommandPalette() {
     },
   ];
 
-  return (
-    <Dialog open={open} onOpenChange={(v) => (v ? setOpen(true) : close())}>
-      <DialogContent
-        showClose={false}
-        aria-describedby={undefined}
-        className={cn(
-          "bg-panel-sunken grid-cols-[minmax(0,1fr)] gap-0 overflow-hidden p-0 sm:p-0",
-          // Phone: the whole screen. Desktop: wide enough for the preview.
-          "max-sm:top-0 max-sm:h-[100dvh] max-sm:max-h-none max-sm:w-full max-sm:max-w-none max-sm:translate-y-0 max-sm:rounded-none max-sm:border-0",
-          "sm:top-[8vh] sm:translate-y-0",
-          searching ? "sm:max-w-[min(1000px,calc(100vw-2rem))]" : "sm:max-w-[720px]",
-        )}
-        data-testid="command-palette"
-        // Start in the search box (on phones the back button comes first).
-        onOpenAutoFocus={(e) => {
+  // Desktop: the search box stays in the top bar and results open below it.
+  // Phone: the whole screen (in a portal: the bar's blur would clip it).
+  const panel = (
+    <Command
+      shouldFilter={false}
+      value={current?.key ?? ""}
+      onValueChange={setSelected}
+      label="Buscar en el panel"
+      className={cn(
+        "min-w-0",
+        phone ? "bg-panel-sunken fixed inset-0 z-50 flex flex-col" : "relative",
+      )}
+      onKeyDown={(e) => {
+        if (e.key === "Escape") {
           e.preventDefault();
-          inputRef.current?.focus();
-        }}
+          close();
+        }
+        if (e.key === "Tab" && searching) {
+          e.preventDefault();
+          cycleFilter(e.shiftKey ? -1 : 1);
+        }
+      }}
+    >
+      <div
+        className={cn(
+          "flex items-center gap-3",
+          phone
+            ? "border-line h-14 border-b px-4"
+            : "border-brand/60 bg-panel-sunken ring-brand/15 h-9 rounded-lg border px-3 ring-4",
+        )}
       >
-        <DialogTitle className="sr-only">Buscar en el panel</DialogTitle>
-        <Command
-          shouldFilter={false}
-          value={current?.key ?? ""}
-          onValueChange={setSelected}
-          className="flex min-h-0 min-w-0 flex-col max-sm:h-full"
-          onKeyDown={(e) => {
-            if (e.key === "Tab" && searching) {
-              e.preventDefault();
-              cycleFilter(e.shiftKey ? -1 : 1);
-            }
-          }}
+        <button
+          type="button"
+          onClick={close}
+          className="text-ink-muted sm:hidden"
+          aria-label="Cerrar"
         >
-          <div className="border-line flex h-14 items-center gap-3 border-b px-4 sm:h-[58px] sm:px-5">
-            <button
-              type="button"
-              onClick={close}
-              className="text-ink-muted sm:hidden"
-              aria-label="Cerrar"
-            >
-              <ArrowLeft className="size-5" />
-            </button>
-            <Search
-              className={cn(
-                "size-[18px] flex-none max-sm:hidden",
-                loading ? "text-brand animate-pulse" : "text-brand",
-              )}
-            />
-            <Command.Input
-              ref={inputRef}
-              value={query}
-              onValueChange={(v) => {
-                setQuery(v);
-                setSelected("");
-              }}
-              placeholder="Busca contactos, chats, campañas, productos…"
-              className="text-ink-bright placeholder:text-ink-faint h-full min-w-0 flex-1 bg-transparent text-base outline-none"
-              aria-label="Buscar"
-            />
-            {query ? (
-              <button
-                type="button"
-                onClick={() => setQuery("")}
-                className="text-ink-faint hover:text-ink"
-                aria-label="Borrar búsqueda"
-              >
-                <X className="size-4" />
-              </button>
-            ) : null}
-            <kbd className="border-line-strong bg-panel-raised text-ink-muted rounded-md border px-1.5 py-0.5 text-[10.5px] font-medium max-sm:hidden">
-              ESC
-            </kbd>
-          </div>
-
-          {searching ? (
-            <div
-              className="border-line flex gap-1.5 overflow-x-auto border-b px-3.5 py-2.5 [scrollbar-width:none]"
-              role="tablist"
-              aria-label="Filtrar resultados"
-            >
-              {chips.map((f) => {
-                const on = effective === f.id;
-                return (
-                  <button
-                    key={f.id}
-                    type="button"
-                    role="tab"
-                    aria-selected={on}
-                    data-testid={`search-filter-${f.id}`}
-                    onClick={() => {
-                      setFilter(f.id);
-                      setSelected("");
-                    }}
+          <ArrowLeft className="size-5" />
+        </button>
+        <Search
+          className={cn(
+            "size-4 flex-none max-sm:hidden",
+            loading ? "text-brand animate-pulse" : "text-brand",
+          )}
+        />
+        <Command.Input
+          ref={inputRef}
+          value={query}
+          onValueChange={(v) => {
+            setQuery(v);
+            setSelected("");
+          }}
+          placeholder="Busca contactos, chats, campañas, productos…"
+          className="text-ink-bright placeholder:text-ink-faint h-full min-w-0 flex-1 bg-transparent text-base outline-none sm:text-sm"
+          aria-label="Buscar"
+        />
+        {query ? (
+          <button
+            type="button"
+            onClick={() => setQuery("")}
+            className="text-ink-faint hover:text-ink"
+            aria-label="Borrar búsqueda"
+          >
+            <X className="size-4" />
+          </button>
+        ) : null}
+        <kbd className="border-line-strong bg-panel-raised text-ink-muted rounded-md border px-1.5 py-0.5 text-[10.5px] font-medium max-sm:hidden">
+          ESC
+        </kbd>
+      </div>
+      <div
+        data-testid="command-palette"
+        className={cn(
+          "flex min-h-0 min-w-0 flex-col",
+          phone
+            ? "flex-1"
+            : "border-line-strong bg-panel-sunken shadow-panel animate-fadein absolute left-0 top-[calc(100%+8px)] z-30 max-h-[calc(100dvh-80px)] overflow-hidden rounded-2xl border",
+        )}
+        style={phone ? undefined : { width: searching ? dropWidth.wide : dropWidth.narrow }}
+      >
+        {searching ? (
+          <div
+            className="border-line flex gap-1.5 overflow-x-auto border-b px-3.5 py-2.5 [scrollbar-width:none]"
+            role="tablist"
+            aria-label="Filtrar resultados"
+          >
+            {chips.map((f) => {
+              const on = effective === f.id;
+              return (
+                <button
+                  key={f.id}
+                  type="button"
+                  role="tab"
+                  aria-selected={on}
+                  data-testid={`search-filter-${f.id}`}
+                  onClick={() => {
+                    setFilter(f.id);
+                    setSelected("");
+                  }}
+                  className={cn(
+                    "flex flex-none items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs transition-colors",
+                    on
+                      ? "border-brand/50 from-brand/20 to-brand-violet/15 text-ink-bright bg-gradient-to-r"
+                      : "border-line-strong text-ink-soft hover:text-ink",
+                  )}
+                >
+                  {f.label}
+                  <b
                     className={cn(
-                      "flex flex-none items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs transition-colors",
-                      on
-                        ? "border-brand/50 from-brand/20 to-brand-violet/15 text-ink-bright bg-gradient-to-r"
-                        : "border-line-strong text-ink-soft hover:text-ink",
+                      "text-[11px] font-semibold",
+                      on ? "text-sky-200" : "text-ink-faint",
                     )}
                   >
-                    {f.label}
-                    <b
-                      className={cn(
-                        "text-[11px] font-semibold",
-                        on ? "text-sky-200" : "text-ink-faint",
-                      )}
-                    >
-                      {counts[f.id] ?? 0}
-                    </b>
-                  </button>
-                );
-              })}
-            </div>
-          ) : null}
+                    {counts[f.id] ?? 0}
+                  </b>
+                </button>
+              );
+            })}
+          </div>
+        ) : null}
 
-          <div className={cn("min-h-0 flex-1", searching && "lg:grid lg:grid-cols-[1fr_380px]")}>
-            <Command.List
-              ref={listRef}
-              className="h-full max-h-[min(460px,calc(100dvh-14rem))] overflow-y-auto p-2 max-sm:max-h-none"
-            >
-              {searching ? (
-                <>
-                  {!loading && shown.length === 0 ? (
-                    <div className="px-3 py-10 text-center">
-                      <p className="text-ink text-sm">Sin resultados para “{term}”.</p>
-                      <p className="text-ink-faint mt-1 text-xs">
-                        Prueba con parte del nombre, un teléfono o una palabra del mensaje.
-                      </p>
-                    </div>
-                  ) : null}
-                  {byKind.map((g) => (
-                    <Command.Group
-                      key={g.kind}
-                      heading={
-                        <span className="flex items-center justify-between">
-                          {GROUP_HEADING[g.kind]}
-                          {effective === "all" && g.items.length > 1 && g.kind !== "page" ? (
-                            <button
-                              type="button"
-                              onClick={() => setFilter(g.kind)}
-                              className="text-brand text-[11.5px] normal-case tracking-normal hover:underline"
-                            >
-                              Ver solo {GROUP_HEADING[g.kind].toLowerCase()} →
-                            </button>
+        <div className={cn("min-h-0 flex-1", searching && "lg:grid lg:grid-cols-[1fr_380px]")}>
+          <Command.List
+            ref={listRef}
+            className="h-full max-h-[min(460px,calc(100dvh-14rem))] overflow-y-auto p-2 max-sm:max-h-none"
+          >
+            {searching ? (
+              <>
+                {!loading && shown.length === 0 ? (
+                  <div className="px-3 py-10 text-center">
+                    <p className="text-ink text-sm">Sin resultados para “{term}”.</p>
+                    <p className="text-ink-faint mt-1 text-xs">
+                      Prueba con parte del nombre, un teléfono o una palabra del mensaje.
+                    </p>
+                  </div>
+                ) : null}
+                {byKind.map((g) => (
+                  <Command.Group
+                    key={g.kind}
+                    heading={
+                      <span className="flex items-center justify-between">
+                        {GROUP_HEADING[g.kind]}
+                        {effective === "all" && g.items.length > 1 && g.kind !== "page" ? (
+                          <button
+                            type="button"
+                            onClick={() => setFilter(g.kind)}
+                            className="text-brand text-[11.5px] normal-case tracking-normal hover:underline"
+                          >
+                            Ver solo {GROUP_HEADING[g.kind].toLowerCase()} →
+                          </button>
+                        ) : null}
+                      </span>
+                    }
+                    className={groupCls}
+                  >
+                    {g.items.map((r) => (
+                      <Command.Item
+                        key={r.key}
+                        value={r.key}
+                        onSelect={() => openResult(r)}
+                        className={itemCls}
+                        data-testid={`search-result-${r.kind}`}
+                      >
+                        <span className="from-brand to-brand-violet absolute left-0 top-1/2 hidden h-5 w-[3px] -translate-y-1/2 rounded-full bg-gradient-to-b group-data-[selected=true]:block" />
+                        <Lead r={r} />
+                        <span className="min-w-0 flex-1">
+                          <span className="text-ink block truncate text-[13.5px]">
+                            <Highlight text={r.title} term={term} />
+                          </span>
+                          {r.subtitle ? (
+                            <span className="text-ink-faint mt-0.5 block truncate text-xs">
+                              <Highlight text={r.subtitle} term={term} />
+                            </span>
                           ) : null}
                         </span>
-                      }
-                      className={groupCls}
-                    >
-                      {g.items.map((r) => (
-                        <Command.Item
-                          key={r.key}
-                          value={r.key}
-                          onSelect={() => openResult(r)}
-                          className={itemCls}
-                          data-testid={`search-result-${r.kind}`}
-                        >
-                          <span className="from-brand to-brand-violet absolute left-0 top-1/2 hidden h-5 w-[3px] -translate-y-1/2 rounded-full bg-gradient-to-b group-data-[selected=true]:block" />
-                          <Lead r={r} />
-                          <span className="min-w-0 flex-1">
-                            <span className="text-ink block truncate text-[13.5px]">
-                              <Highlight text={r.title} term={term} />
-                            </span>
-                            {r.subtitle ? (
-                              <span className="text-ink-faint mt-0.5 block truncate text-xs">
-                                <Highlight text={r.subtitle} term={term} />
-                              </span>
-                            ) : null}
+                        {r.badge ? (
+                          <span className="max-sm:hidden">
+                            <Badge {...r.badge} />
                           </span>
-                          {r.badge ? (
-                            <span className="max-sm:hidden">
-                              <Badge {...r.badge} />
-                            </span>
-                          ) : null}
-                        </Command.Item>
-                      ))}
-                    </Command.Group>
+                        ) : null}
+                      </Command.Item>
+                    ))}
+                  </Command.Group>
+                ))}
+              </>
+            ) : (
+              <>
+                <p className="text-ink-faint px-2.5 pb-2 pt-3 text-[10.5px] uppercase tracking-wider">
+                  Acciones rápidas
+                </p>
+                <div className="grid grid-cols-1 gap-2 px-1 pb-1 sm:grid-cols-3">
+                  {quickActions.map((a) => (
+                    <Command.Item
+                      key={a.label}
+                      value={`accion-${a.label}`}
+                      onSelect={a.run}
+                      className="border-line-strong bg-panel data-[selected=true]:border-brand/50 data-[selected=true]:bg-panel-high flex cursor-pointer items-center gap-3 rounded-xl border p-3 sm:flex-col sm:items-start"
+                    >
+                      <IconTile icon={a.icon} color={a.color} />
+                      <span>
+                        <span className="text-ink block text-[13px]">{a.label}</span>
+                        <span className="text-ink-faint block text-xs">{a.hint}</span>
+                      </span>
+                    </Command.Item>
                   ))}
-                </>
-              ) : (
-                <>
-                  <p className="text-ink-faint px-2.5 pb-2 pt-3 text-[10.5px] uppercase tracking-wider">
-                    Acciones rápidas
-                  </p>
-                  <div className="grid grid-cols-1 gap-2 px-1 pb-1 sm:grid-cols-3">
-                    {quickActions.map((a) => (
+                </div>
+                {queries.length > 0 ? (
+                  <Command.Group
+                    heading={
+                      <span className="flex items-center justify-between">
+                        Búsquedas recientes
+                        <button
+                          type="button"
+                          className="text-brand text-[11.5px] normal-case tracking-normal hover:underline"
+                          onClick={() => {
+                            clearRecents(ws.slug);
+                            setQueries([]);
+                            setOpened([]);
+                          }}
+                        >
+                          Borrar
+                        </button>
+                      </span>
+                    }
+                    className={groupCls}
+                  >
+                    {queries.map((q) => (
                       <Command.Item
-                        key={a.label}
-                        value={`accion-${a.label}`}
-                        onSelect={a.run}
-                        className="border-line-strong bg-panel data-[selected=true]:border-brand/50 data-[selected=true]:bg-panel-high flex cursor-pointer items-center gap-3 rounded-xl border p-3 sm:flex-col sm:items-start"
+                        key={q}
+                        value={`reciente-${q}`}
+                        onSelect={() => setQuery(q)}
+                        className={itemCls}
                       >
-                        <IconTile icon={a.icon} color={a.color} />
-                        <span>
-                          <span className="text-ink block text-[13px]">{a.label}</span>
-                          <span className="text-ink-faint block text-xs">{a.hint}</span>
+                        <Clock className="text-ink-faint size-4" />
+                        <span className="flex-1 truncate">{q}</span>
+                        <button
+                          type="button"
+                          aria-label={`Quitar «${q}»`}
+                          className="text-ink-faint hover:text-ink"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setQueries(removeRecentQuery(ws.slug, q));
+                          }}
+                        >
+                          <X className="size-4" />
+                        </button>
+                      </Command.Item>
+                    ))}
+                  </Command.Group>
+                ) : null}
+                {opened.length > 0 ? (
+                  <Command.Group heading="Abiertos hace poco" className={groupCls}>
+                    {opened.map((i) => (
+                      <Command.Item
+                        key={`${i.kind}-${i.id}`}
+                        value={`abierto-${i.kind}-${i.id}`}
+                        onSelect={() => go(i.path)}
+                        className={itemCls}
+                      >
+                        {i.kind === "contact" ? (
+                          <Avatar initials={initialsOf(i.title)} hue={hueOf(i.id)} />
+                        ) : (
+                          <IconTile
+                            icon={
+                              {
+                                conversation: MessageSquare,
+                                campaign: Megaphone,
+                                group: Users,
+                                product: ShoppingBag,
+                                page: CornerDownLeft,
+                                contact: UserRound,
+                              }[i.kind]
+                            }
+                          />
+                        )}
+                        <span className="min-w-0 flex-1">
+                          <span className="text-ink block truncate text-[13.5px]">{i.title}</span>
+                          <span className="text-ink-faint block text-xs">
+                            {[i.subtitle, ago(new Date(i.at).toISOString())]
+                              .filter(Boolean)
+                              .join(" · ")}
+                          </span>
                         </span>
                       </Command.Item>
                     ))}
-                  </div>
-                  {queries.length > 0 ? (
-                    <Command.Group
-                      heading={
-                        <span className="flex items-center justify-between">
-                          Búsquedas recientes
-                          <button
-                            type="button"
-                            className="text-brand text-[11.5px] normal-case tracking-normal hover:underline"
-                            onClick={() => {
-                              clearRecents(ws.slug);
-                              setQueries([]);
-                              setOpened([]);
-                            }}
-                          >
-                            Borrar
-                          </button>
-                        </span>
-                      }
-                      className={groupCls}
-                    >
-                      {queries.map((q) => (
+                  </Command.Group>
+                ) : null}
+                <Command.Group heading="Ir a" className={groupCls}>
+                  {pages
+                    .filter((p) => !locks.includes(p.module as never))
+                    .slice(0, 6)
+                    .map((p) => {
+                      const Icon = getNavIcon(p.icon);
+                      return (
                         <Command.Item
-                          key={q}
-                          value={`reciente-${q}`}
-                          onSelect={() => setQuery(q)}
+                          key={p.module}
+                          value={`ir-${p.module}`}
+                          onSelect={() => go(p.module)}
                           className={itemCls}
                         >
-                          <Clock className="text-ink-faint size-4" />
-                          <span className="flex-1 truncate">{q}</span>
-                          <button
-                            type="button"
-                            aria-label={`Quitar «${q}»`}
-                            className="text-ink-faint hover:text-ink"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setQueries(removeRecentQuery(ws.slug, q));
-                            }}
-                          >
-                            <X className="size-4" />
-                          </button>
-                        </Command.Item>
-                      ))}
-                    </Command.Group>
-                  ) : null}
-                  {opened.length > 0 ? (
-                    <Command.Group heading="Abiertos hace poco" className={groupCls}>
-                      {opened.map((i) => (
-                        <Command.Item
-                          key={`${i.kind}-${i.id}`}
-                          value={`abierto-${i.kind}-${i.id}`}
-                          onSelect={() => go(i.path)}
-                          className={itemCls}
-                        >
-                          {i.kind === "contact" ? (
-                            <Avatar initials={initialsOf(i.title)} hue={hueOf(i.id)} />
-                          ) : (
-                            <IconTile
-                              icon={
-                                {
-                                  conversation: MessageSquare,
-                                  campaign: Megaphone,
-                                  group: Users,
-                                  product: ShoppingBag,
-                                  page: CornerDownLeft,
-                                  contact: UserRound,
-                                }[i.kind]
-                              }
-                            />
-                          )}
-                          <span className="min-w-0 flex-1">
-                            <span className="text-ink block truncate text-[13.5px]">{i.title}</span>
-                            <span className="text-ink-faint block text-xs">
-                              {[i.subtitle, ago(new Date(i.at).toISOString())]
-                                .filter(Boolean)
-                                .join(" · ")}
-                            </span>
+                          <IconTile icon={Icon} />
+                          <span className="flex-1">{p.label}</span>
+                          <span className="text-ink-faint truncate text-[11px] max-sm:hidden">
+                            {p.description}
                           </span>
                         </Command.Item>
-                      ))}
-                    </Command.Group>
-                  ) : null}
-                  <Command.Group heading="Ir a" className={groupCls}>
-                    {pages
-                      .filter((p) => !locks.includes(p.module as never))
-                      .slice(0, 6)
-                      .map((p) => {
-                        const Icon = getNavIcon(p.icon);
-                        return (
-                          <Command.Item
-                            key={p.module}
-                            value={`ir-${p.module}`}
-                            onSelect={() => go(p.module)}
-                            className={itemCls}
-                          >
-                            <IconTile icon={Icon} />
-                            <span className="flex-1">{p.label}</span>
-                            <span className="text-ink-faint truncate text-[11px] max-sm:hidden">
-                              {p.description}
-                            </span>
-                          </Command.Item>
-                        );
-                      })}
-                  </Command.Group>
-                </>
-              )}
-            </Command.List>
-            {searching ? (
-              <aside
-                className="border-line bg-panel hidden border-l lg:block"
-                aria-label="Vista previa"
-              >
-                <Preview r={current} onOpen={openResult} />
-              </aside>
-            ) : null}
-          </div>
+                      );
+                    })}
+                </Command.Group>
+              </>
+            )}
+          </Command.List>
+          {searching ? (
+            <aside
+              className="border-line bg-panel hidden border-l lg:block"
+              aria-label="Vista previa"
+            >
+              <Preview r={current} onOpen={openResult} />
+            </aside>
+          ) : null}
+        </div>
 
-          <div className="border-line bg-panel text-ink-faint flex items-center gap-4 border-t px-4 py-2.5 text-[11.5px] max-sm:hidden">
+        <div className="border-line bg-panel text-ink-faint flex items-center gap-4 border-t px-4 py-2.5 text-[11.5px] max-sm:hidden">
+          <span className="flex items-center gap-1.5">
+            <Kbd>↑</Kbd>
+            <Kbd>↓</Kbd> moverse
+          </span>
+          <span className="flex items-center gap-1.5">
+            <Kbd>↵</Kbd> abrir
+          </span>
+          {searching ? (
             <span className="flex items-center gap-1.5">
-              <Kbd>↑</Kbd>
-              <Kbd>↓</Kbd> moverse
+              <Kbd>Tab</Kbd> cambiar filtro
             </span>
-            <span className="flex items-center gap-1.5">
-              <Kbd>↵</Kbd> abrir
-            </span>
-            {searching ? (
-              <span className="flex items-center gap-1.5">
-                <Kbd>Tab</Kbd> cambiar filtro
-              </span>
-            ) : null}
-            <span className="ml-auto flex items-center gap-1.5">
-              <Kbd>Ctrl</Kbd>
-              <Kbd>K</Kbd> desde cualquier pantalla
-            </span>
-          </div>
-        </Command>
-      </DialogContent>
-    </Dialog>
+          ) : null}
+          <span className="ml-auto flex items-center gap-1.5">
+            <Kbd>Ctrl</Kbd>
+            <Kbd>K</Kbd> desde cualquier pantalla
+          </span>
+        </div>
+      </div>
+    </Command>
+  );
+
+  return (
+    <div
+      ref={rootRef}
+      className="relative min-w-0 shrink-0 sm:w-full sm:max-w-md sm:shrink"
+      data-testid="topbar-search"
+    >
+      {!open || phone ? (
+        <button
+          type="button"
+          onClick={() => setOpen(true)}
+          aria-label="Buscar"
+          className="border-line-soft bg-panel text-ink-faint hover:border-line-bright group flex h-9 w-9 items-center justify-center gap-2.5 rounded-lg border text-left text-sm transition-colors sm:w-full sm:justify-start sm:px-3"
+        >
+          <Search className="size-4" />
+          <span className="hidden flex-1 truncate sm:block">
+            Buscar contactos, chats, campañas…
+          </span>
+          <kbd className="border-line-strong bg-panel-raised text-ink-muted hidden items-center gap-0.5 rounded border px-1.5 py-0.5 text-[10px] font-medium sm:inline-flex">
+            Ctrl K
+          </kbd>
+        </button>
+      ) : null}
+      {open ? (phone ? createPortal(panel, document.body) : panel) : null}
+    </div>
   );
 }
 
