@@ -11,6 +11,7 @@ import type {
   WeeklyReportSettings,
   AddMemberInput,
   CreateInviteLinkInput,
+  WhatsappLineAction,
   CampaignAttachment,
   ChannelId,
   Contact,
@@ -1222,6 +1223,60 @@ export const useWhatsappReconnect = () => useWhatsappAction("reconnect");
 export const useWhatsappDisconnect = () => useWhatsappAction("disconnect");
 export const useWhatsappSync = () => useWhatsappAction("sync");
 export const useWhatsappRelink = () => useWhatsappAction("relink");
+
+function invalidateLines(qc: ReturnType<typeof useQueryClient>, wsId: string) {
+  void qc.invalidateQueries({ queryKey: [wsId, "whatsapp", "lines"] });
+  void qc.invalidateQueries({ queryKey: [wsId, "groups"] });
+}
+
+/** Link one more WhatsApp number to the brand. */
+export function useAddWhatsappLine() {
+  const svc = useServices();
+  const ws = useWorkspace();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (label?: string) => svc.whatsapp.addLine(ws.id, label),
+    onSuccess: () => invalidateLines(qc, ws.id),
+    onError: (err) => toast.error(errText(err)),
+  });
+}
+
+export function useWhatsappLineAction() {
+  const svc = useServices();
+  const ws = useWorkspace();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ line, action }: { line: number; action: WhatsappLineAction }) =>
+      svc.whatsapp.lineAction(ws.id, line, action),
+    onSuccess: () => invalidateLines(qc, ws.id),
+    onError: (err) => toast.error(errText(err)),
+  });
+}
+
+export function useRenameWhatsappLine() {
+  const svc = useServices();
+  const ws = useWorkspace();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ line, label }: { line: number; label: string }) => svc.whatsapp.renameLine(ws.id, line, label),
+    onSuccess: () => invalidateLines(qc, ws.id),
+    onError: (err) => toast.error(errText(err)),
+  });
+}
+
+export function useRemoveWhatsappLine() {
+  const svc = useServices();
+  const ws = useWorkspace();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (line: number) => svc.whatsapp.removeLine(ws.id, line),
+    onSuccess: () => {
+      invalidateLines(qc, ws.id);
+      toast.success("Número quitado de esta marca");
+    },
+    onError: (err) => toast.error(errText(err)),
+  });
+}
 
 function useTelegramAction(action: "connect" | "reconnect" | "disconnect" | "sync") {
   const svc = useServices();

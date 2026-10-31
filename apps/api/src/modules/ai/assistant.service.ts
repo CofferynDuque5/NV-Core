@@ -169,7 +169,7 @@ export class AssistantService {
       p.automation.findMany({ where: { workspaceSlug: ws }, select: { name: true, status: true, runs: true } }),
       p.sendLog.count({ where: { workspaceSlug: ws, ok: true, createdAt: { gte: dayAgo } } }),
       p.sendLog.count({ where: { workspaceSlug: ws, ok: false, createdAt: { gte: dayAgo } } }),
-      p.whatsappSession.findUnique({ where: { workspaceSlug: ws }, select: { status: true, number: true, groupsCount: true } }),
+      p.whatsappSession.findUnique({ where: { workspaceSlug_line: { workspaceSlug: ws, line: 1 } }, select: { status: true, number: true, groupsCount: true } }),
       p.telegramSession.findUnique({ where: { workspaceSlug: ws }, select: { status: true, username: true, groupsCount: true } }),
       p.sendLog.findMany({ where: { workspaceSlug: ws, ok: false, createdAt: { gte: dayAgo } }, orderBy: { createdAt: "desc" }, take: 5, select: { groupName: true, error: true, campaignName: true } }),
     ]);

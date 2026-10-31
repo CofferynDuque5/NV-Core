@@ -204,6 +204,7 @@ export class InboxService implements OnModuleInit {
         at: p.at,
         externalId: p.externalId,
         history: p.history,
+        waLine: p.waLine,
       }).catch((err: unknown) => this.logger.warn(`Mensaje no guardado: ${(err as Error).message}`));
     });
     this.events.on("session.contact-names", (p) => {
@@ -262,7 +263,14 @@ export class InboxService implements OnModuleInit {
           channel: msg.channel,
           contactName: bestName ?? msg.contactName ?? msg.contactHandle,
           contactHandle: msg.contactHandle,
+          waLine: msg.waLine ?? null,
         },
+      });
+    } else if (msg.waLine && conversation.waLine !== msg.waLine && !msg.history) {
+      // The contact now writes to another of the brand's numbers: reply from that one.
+      conversation = await this.prisma.conversation.update({
+        where: { id: conversation.id },
+        data: { waLine: msg.waLine, ...(bestName && isBareName(conversation.contactName, conversation.contactHandle) ? { contactName: bestName } : {}) },
       });
     } else if (bestName && isBareName(conversation.contactName, conversation.contactHandle)) {
       // The chat was created with the number: now the real name is known.

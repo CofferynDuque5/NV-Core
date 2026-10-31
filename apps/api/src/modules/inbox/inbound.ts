@@ -38,6 +38,8 @@ export interface InboundMessage {
   externalId?: string | null;
   /** History replayed after linking: stored, never treated as new. */
   history?: boolean;
+  /** WhatsApp number (line) of the brand that got it; replies go out from it. */
+  waLine?: number;
 }
 
 /** A reply sent from the panel comes back from WhatsApp; within this window it's the same message. */

@@ -91,6 +91,11 @@ export const emptyAdapters: Services = {
     sync: () => notAvailable(),
     relink: () => notAvailable(),
     diagnose: () => notAvailable(),
+    lines: () => delay([]),
+    addLine: () => notAvailable(),
+    renameLine: () => notAvailable(),
+    lineAction: () => notAvailable(),
+    removeLine: () => notAvailable(),
   },
   pcAgent: {
     status: () =>

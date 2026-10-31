@@ -16,6 +16,7 @@ import { ConnectionDialog } from "@/components/entities/connection-dialog";
 import { GoogleConnectCard } from "@/components/entities/google-connect-card";
 import { MetaConnectCard, MetaConnectDialog, useMetaReturn } from "@/components/entities/meta-connect";
 import { WhatsAppPanel } from "@/components/entities/whatsapp-panel";
+import { WhatsappLinesPanel } from "@/components/entities/whatsapp-lines-panel";
 import { TelegramPanel } from "@/components/entities/telegram-panel";
 import { PcAgentCard } from "@/components/entities/pc-agent-card";
 import { ProvidersAdapters } from "@/components/entities/providers-adapters";
@@ -131,6 +132,7 @@ function ConexionTab() {
   return (
     <div className="space-y-6">
       <WhatsAppPanel />
+      <WhatsappLinesPanel />
 
       <MetaConnectCard onConnect={() => setMetaOpen(true)} />
 

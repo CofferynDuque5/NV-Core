@@ -175,6 +175,8 @@ model Group {
   admins         Int       @default(0)
   description    String?
   tags           String[]
+  /// WhatsApp number (line) that is in this group and sends to it.
+  waLine         Int       @default(1)
   /// WhatsApp group JID (e.g. "12345-678@g.us") when synced from Baileys.
   remoteJid      String?
   /// True when the row was populated from a WhatsApp sync (vs. manual CRUD).
@@ -653,6 +655,8 @@ model Conversation {
   labels        String[]
   /// New incoming messages not seen yet; 0 when read, ≥1 to mark it unread again.
   unreadCount   Int       @default(0)
+  /// WhatsApp number (line) the chat belongs to; replies go out from it.
+  waLine        Int?
   createdAt     DateTime  @default(now())
   messages      Message[]
 
@@ -764,15 +768,22 @@ model GoogleConnection {
 /**
  * WhatsApp (Baileys) connection metadata per workspace; creds live on disk.
  */
+/// One linked WhatsApp number of a brand. Line 1 is the main number; a brand
+/// can link more (line 2, 3…), each with its own QR and session files.
 model WhatsappSession {
   id               String    @id @default(cuid())
-  workspaceSlug    String    @unique
+  workspaceSlug    String
+  line             Int       @default(1)
+  /// Name the user gives the number («Ventas», «Soporte»).
+  label            String?
   status           String    @default("disconnected")
   number           String?
   lastConnectionAt DateTime?
   groupsCount      Int       @default(0)
   contactsCount    Int       @default(0)
   updatedAt        DateTime  @updatedAt
+
+  @@unique([workspaceSlug, line])
 }
 
 /// Telegram user (MTProto/GramJS) session state per workspace. The auth string

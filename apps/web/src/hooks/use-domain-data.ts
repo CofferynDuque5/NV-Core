@@ -329,6 +329,17 @@ export function useWhatsappStatus() {
   });
 }
 
+/** All the brand's WhatsApp numbers; polls fast while one waits for its QR. */
+export function useWhatsappLines() {
+  const svc = useServices();
+  const ws = useWorkspace();
+  return useQuery({
+    queryKey: [ws.id, "whatsapp", "lines"],
+    queryFn: () => svc.whatsapp.lines(ws.id),
+    refetchInterval: (q) => (q.state.data?.some((l) => l.status === "qr" || l.status === "connecting") ? 3000 : 15000),
+  });
+}
+
 /** Health of the PC companion that publishes to Facebook/Instagram (polls every 10 s). */
 export function usePcAgentStatus() {
   const svc = useServices();

@@ -2,7 +2,7 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import * as tls from "node:tls";
 
-import { Injectable, type OnModuleInit, type OnModuleDestroy } from "@nestjs/common";
+import { BadRequestException, Injectable, type OnModuleInit, type OnModuleDestroy } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { analyzeGroupRules } from "@nv/domain";
 
@@ -72,6 +72,24 @@ export function groupRulesFromSync(g: WhatsappGroup) {
   };
 }
 
+/** Most WhatsApp numbers one brand can link at once. */
+export const MAX_WA_LINES = 5;
+
+/**
+ * Session key of a brand's WhatsApp number: line 1 keeps the brand slug (so
+ * existing sessions keep working), other lines are «<slug>__n<line>».
+ */
+export function waLineKey(workspaceSlug: string, line = 1): string {
+  return line > 1 ? `${workspaceSlug}__n${line}` : workspaceSlug;
+}
+
+export function parseWaLineKey(key: string): { workspaceSlug: string; line: number } {
+  const m = /^(.+)__n(\d+)$/.exec(key);
+  return m ? { workspaceSlug: m[1]!, line: Number(m[2]) } : { workspaceSlug: key, line: 1 };
+}
+
+const NOT_CONNECTED = "WhatsApp (Baileys) no está conectado en este workspace.";
+
 @Injectable()
 export class WhatsappService implements SessionEvents, OnModuleInit, OnModuleDestroy {
   private readonly sessions: SessionManager;
@@ -119,33 +137,90 @@ export class WhatsappService implements SessionEvents, OnModuleInit, OnModuleDes
     }
   }
 
-  private getOrCreate(workspaceSlug: string): BaileysSession {
-    let session = this.live.get(workspaceSlug);
+  private getOrCreate(key: string): BaileysSession {
+    let session = this.live.get(key);
     if (!session) {
-      session = new BaileysSession(workspaceSlug, this.sessions, this);
-      this.live.set(workspaceSlug, session);
+      session = new BaileysSession(key, this.sessions, this);
+      this.live.set(key, session);
     }
     return session;
   }
 
-  // ── SessionEvents (called by BaileysSession) ──────────────────────────────
-  onQr(workspaceSlug: string, dataUrl: string): void {
-    this.qrs.set(workspaceSlug, dataUrl); // disponible por HTTP (status)
-    this.sessions.saveQr(workspaceSlug, dataUrl); // …también desde otros procesos
-    this.gateway.emitQr(workspaceSlug, dataUrl);
+  /** Line numbers a brand has: stored rows plus sessions on disk (line 1 always). */
+  private async lineNumbers(workspaceSlug: string): Promise<number[]> {
+    const found = new Set<number>([1]);
+    for (const key of this.sessions.listSessions()) {
+      const p = parseWaLineKey(key);
+      if (p.workspaceSlug === workspaceSlug) found.add(p.line);
+    }
+    if (this.prisma.enabled) {
+      const rows = await this.prisma.whatsappSession.findMany({ where: { workspaceSlug }, select: { line: true } });
+      for (const r of rows) found.add(r.line);
+    }
+    return [...found].sort((a, b) => a - b);
   }
 
-  onStatus(workspaceSlug: string, status: WhatsappStatusValue): void {
-    // Al conectar o desconectar, el QR ya no sirve: se descarta.
-    if (status === "connected" || status === "disconnected") {
-      this.qrs.delete(workspaceSlug);
-      this.sessions.clearQr(workspaceSlug);
+  private lineConnected(workspaceSlug: string, line: number): boolean {
+    return this.live.get(waLineKey(workspaceSlug, line))?.isConnected ?? false;
+  }
+
+  /** Connected lines of a brand, main number first. */
+  private connectedLines(workspaceSlug: string): BaileysSession[] {
+    const out: { line: number; s: BaileysSession }[] = [];
+    for (const [key, s] of this.live) {
+      const p = parseWaLineKey(key);
+      if (p.workspaceSlug === workspaceSlug && s.isConnected) out.push({ line: p.line, s });
     }
-    void this.persist(workspaceSlug, { status }).then(() => this.emit(workspaceSlug));
+    return out.sort((a, b) => a.line - b.line).map((x) => x.s);
+  }
+
+  /**
+   * The number a message goes out from: the one in the group (groups), the one
+   * the contact wrote to (chats), otherwise the main connected number.
+   */
+  private async sessionFor(workspaceSlug: string, to?: string): Promise<BaileysSession> {
+    let preferred: number | null = null;
+    if (to && this.prisma.enabled) {
+      if (to.endsWith("@g.us")) {
+        const g = await this.prisma.group.findFirst({
+          where: { workspaceSlug, channel: "wa", remoteJid: to },
+          select: { waLine: true },
+        });
+        preferred = g?.waLine ?? null;
+      } else {
+        const c = await this.prisma.conversation.findFirst({
+          where: { workspaceSlug, channel: "wa", contactHandle: to },
+          select: { waLine: true },
+        });
+        preferred = c?.waLine ?? null;
+      }
+    }
+    if (preferred && this.lineConnected(workspaceSlug, preferred)) {
+      return this.live.get(waLineKey(workspaceSlug, preferred))!;
+    }
+    const any = this.connectedLines(workspaceSlug)[0];
+    if (!any) throw new Error(NOT_CONNECTED);
+    return any;
+  }
+
+  // ── SessionEvents (called by BaileysSession with its session key) ─────────
+  onQr(key: string, dataUrl: string): void {
+    this.qrs.set(key, dataUrl); // disponible por HTTP (status)
+    this.sessions.saveQr(key, dataUrl); // …también desde otros procesos
+    const { workspaceSlug, line } = parseWaLineKey(key);
+    if (line === 1) this.gateway.emitQr(workspaceSlug, dataUrl);
+  }
+
+  onStatus(key: string, status: WhatsappStatusValue): void {
+    if (status === "connected" || status === "disconnected") {
+      this.qrs.delete(key);
+      this.sessions.clearQr(key);
+    }
+    void this.persist(key, { status }).then(() => this.emit(key));
   }
 
   onMeta(
-    workspaceSlug: string,
+    key: string,
     meta: {
       number?: string | null;
       groupsCount?: number;
@@ -153,49 +228,61 @@ export class WhatsappService implements SessionEvents, OnModuleInit, OnModuleDes
       connectedAt?: Date;
     },
   ): void {
-    void this.persist(workspaceSlug, {
+    void this.persist(key, {
       number: meta.number ?? undefined,
       groupsCount: meta.groupsCount,
       contactsCount: meta.contactsCount,
       lastConnectionAt: meta.connectedAt,
-    }).then(() => this.emit(workspaceSlug));
+    }).then(() => this.emit(key));
   }
 
   /** Persist the synced groups so campaigns can target them. */
-  onGroups(workspaceSlug: string, groups: WhatsappGroup[]): void {
-    void this.persistGroups(workspaceSlug, groups);
+  onGroups(key: string, groups: WhatsappGroup[]): void {
+    void this.persistGroups(key, groups);
   }
 
   /** A direct chat message → publish for the Inbox to persist (decoupled). */
-  onInbound(workspaceSlug: string, msg: SessionChatMessage): void {
-    this.events.emit("session.inbound", { workspaceSlug, channel: "wa", ...msg });
+  onInbound(key: string, msg: SessionChatMessage): void {
+    const { workspaceSlug, line } = parseWaLineKey(key);
+    this.events.emit("session.inbound", { workspaceSlug, channel: "wa", ...msg, waLine: line });
   }
 
   /** Contact names from WhatsApp → the Inbox replaces bare numbers with them. */
-  onContactNames(workspaceSlug: string, names: { handle: string; name: string }[]): void {
-    this.events.emit("session.contact-names", { workspaceSlug, channel: "wa", names });
+  onContactNames(key: string, names: { handle: string; name: string }[]): void {
+    this.events.emit("session.contact-names", { workspaceSlug: parseWaLineKey(key).workspaceSlug, channel: "wa", names });
   }
 
   /** A connection problem → persist a notification and push the live status. */
-  onAlert(workspaceSlug: string, alert: SessionAlert): void {
+  onAlert(key: string, alert: SessionAlert): void {
+    const { workspaceSlug, line } = parseWaLineKey(key);
     void this.notifications.create(workspaceSlug, {
       type: alert.level === "error" ? "error" : "warning",
-      title: `WhatsApp: ${alert.reason}`,
+      title: `WhatsApp${line > 1 ? ` (número ${line})` : ""}: ${alert.reason}`,
       meta: "whatsapp",
     });
-    void this.emit(workspaceSlug);
+    void this.emit(key);
   }
 
-  private async persistGroups(workspaceSlug: string, groups: WhatsappGroup[]): Promise<void> {
+  private async persistGroups(key: string, groups: WhatsappGroup[]): Promise<void> {
     // Never prune on an empty fetch (a transient sync error would wipe everything);
     // the early return keeps the last known list until a real sync arrives.
     if (!this.prisma.enabled || !groups.length) return;
+    const { workspaceSlug, line } = parseWaLineKey(key);
     const jids = groups.map((g) => g.remoteJid);
+    // A group both numbers are in stays with the number that already sends to
+    // it while that number is connected.
+    const known = await this.prisma.group.findMany({
+      where: { workspaceSlug, remoteJid: { in: jids } },
+      select: { remoteJid: true, waLine: true },
+    });
+    const ownerLine = new Map(known.map((g) => [g.remoteJid, g.waLine]));
     for (const g of groups) {
       // The description is where groups write their rules: read it on every
       // sync. A detected requirement is switched on, never off, so a choice
       // the user made by hand is kept.
       const rules = groupRulesFromSync(g);
+      const current = ownerLine.get(g.remoteJid);
+      const waLine = current && current !== line && this.lineConnected(workspaceSlug, current) ? current : line;
       await this.prisma.group.upsert({
         where: { workspaceSlug_remoteJid: { workspaceSlug, remoteJid: g.remoteJid } },
         create: {
@@ -205,50 +292,56 @@ export class WhatsappService implements SessionEvents, OnModuleInit, OnModuleDes
           members: g.size,
           channel: "wa",
           synced: true,
+          waLine,
           ...rules.always,
           ...rules.whenFound,
         },
-        update: { name: g.subject, members: g.size, synced: true, ...rules.always, ...rules.whenFound },
+        update: { name: g.subject, members: g.size, synced: true, waLine, ...rules.always, ...rules.whenFound },
       });
     }
-    // Prune auto-imported WhatsApp groups this account is no longer in — e.g. after
+    // Prune auto-imported WhatsApp groups this number is no longer in — e.g. after
     // linking a DIFFERENT WhatsApp, so campaigns stop targeting the old account's
-    // groups. Manually created groups (synced=false) are always kept.
+    // groups. Manually created groups (synced=false) and other numbers' groups are kept.
     await this.prisma.group.deleteMany({
-      where: { workspaceSlug, channel: "wa", synced: true, remoteJid: { notIn: jids } },
+      where: { workspaceSlug, channel: "wa", synced: true, waLine: line, remoteJid: { notIn: jids } },
     });
   }
 
   private async persist(
-    workspaceSlug: string,
+    key: string,
     data: {
       status?: WhatsappStatusValue;
       number?: string;
       groupsCount?: number;
       contactsCount?: number;
       lastConnectionAt?: Date;
+      label?: string | null;
     },
   ): Promise<void> {
     if (!this.prisma.enabled) return;
+    const { workspaceSlug, line } = parseWaLineKey(key);
     const clean = Object.fromEntries(Object.entries(data).filter(([, v]) => v !== undefined));
     await this.prisma.whatsappSession.upsert({
-      where: { workspaceSlug },
-      create: { workspaceSlug, ...clean },
+      where: { workspaceSlug_line: { workspaceSlug, line } },
+      create: { workspaceSlug, line, ...clean },
       update: clean,
     });
   }
 
-  private async emit(workspaceSlug: string): Promise<void> {
-    this.gateway.emitStatus(workspaceSlug, await this.status(workspaceSlug));
+  private async emit(key: string): Promise<void> {
+    // The live socket only carries the main number; the others are polled.
+    const { workspaceSlug, line } = parseWaLineKey(key);
+    if (line === 1) this.gateway.emitStatus(workspaceSlug, await this.status(workspaceSlug));
   }
 
   // ── Public API (controller + provider manager) ────────────────────────────
-  async status(workspaceSlug: string): Promise<WhatsappStatus> {
+  async status(workspaceSlug: string, line = 1): Promise<WhatsappStatus> {
+    const key = waLineKey(workspaceSlug, line);
     const row = this.prisma.enabled
-      ? await this.prisma.whatsappSession.findUnique({ where: { workspaceSlug } })
+      ? await this.prisma.whatsappSession.findUnique({ where: { workspaceSlug_line: { workspaceSlug, line } } })
       : null;
-    const session = this.live.get(workspaceSlug);
-    const owner = this.sessions.lockOwner(workspaceSlug);
+    const session = this.live.get(key);
+    const owner = this.sessions.lockOwner(key);
     // Fuente de verdad del estado:
     //  - si ESTE proceso corre el socket → su estado en memoria;
     //  - si lo corre OTRO proceso vivo (hosting con varias copias de la app) →
@@ -265,6 +358,8 @@ export class WhatsappService implements SessionEvents, OnModuleInit, OnModuleDes
     return {
       status: statusValue,
       provider: "baileys",
+      line,
+      label: row?.label ?? null,
       number: row?.number ?? null,
       lastConnectionAt: row?.lastConnectionAt?.toISOString() ?? null,
       groupsCount: row?.groupsCount ?? 0,
@@ -273,28 +368,59 @@ export class WhatsappService implements SessionEvents, OnModuleInit, OnModuleDes
       // El QR viaja también por HTTP para que el panel lo muestre aunque no haya
       // WebSocket (cPanel/LiteSpeed). Solo cuando el estado es "qr". Si el QR lo
       // generó otro proceso, se lee del archivo compartido.
-      qr:
-        statusValue === "qr"
-          ? (this.qrs.get(workspaceSlug) ?? this.sessions.readQr(workspaceSlug))
-          : null,
+      qr: statusValue === "qr" ? (this.qrs.get(key) ?? this.sessions.readQr(key)) : null,
       diagnostics: {
         pid: process.pid,
         node: process.version,
         sessionDir: this.sessions.baseDir,
-        hasCreds: this.sessions.hasSession(workspaceSlug),
+        hasCreds: this.sessions.hasSession(key),
         owner: owner ? { pid: owner.pid, fresh: owner.fresh, mine: owner.mine } : null,
-        events: this.sessions.readEvents(workspaceSlug, 25),
+        events: this.sessions.readEvents(key, 25),
       },
     };
   }
 
+  /** Every WhatsApp number of the brand (main first). */
+  async lines(workspaceSlug: string): Promise<WhatsappStatus[]> {
+    const numbers = await this.lineNumbers(workspaceSlug);
+    return Promise.all(numbers.map((n) => this.status(workspaceSlug, n)));
+  }
+
+  /** Link one more number: opens a new session that shows its own QR. */
+  async addLine(workspaceSlug: string, label?: string | null): Promise<WhatsappStatus> {
+    const numbers = await this.lineNumbers(workspaceSlug);
+    if (numbers.length >= MAX_WA_LINES) {
+      throw new BadRequestException(`Puedes conectar hasta ${MAX_WA_LINES} números de WhatsApp por marca.`);
+    }
+    const line = Math.max(...numbers) + 1;
+    await this.persist(waLineKey(workspaceSlug, line), { status: "disconnected", label: label?.trim() || null });
+    return this.connect(workspaceSlug, line);
+  }
+
+  async renameLine(workspaceSlug: string, line: number, label: string | null): Promise<WhatsappStatus> {
+    await this.persist(waLineKey(workspaceSlug, line), { label: label?.trim() || null });
+    return this.status(workspaceSlug, line);
+  }
+
   /**
-   * Active checks the operator can run from the panel when the QR does not
-   * appear: can this process load Baileys, reach WhatsApp, write the session
-   * directory, and who owns the socket. Every line is meant to be pasted back
-   * to support as-is.
+   * Unlink an extra number: closes it, forgets its pairing and its groups.
+   * Its chats stay in the Inbox and are answered from the main number.
    */
-  async diagnose(workspaceSlug: string): Promise<{ lines: string[] }> {
+  async removeLine(workspaceSlug: string, line: number): Promise<void> {
+    if (line <= 1) throw new BadRequestException("El número principal se desconecta, no se elimina.");
+    const key = waLineKey(workspaceSlug, line);
+    await this.live.get(key)?.logout();
+    this.live.delete(key);
+    this.sessions.deleteSession(key);
+    this.qrs.delete(key);
+    if (!this.prisma.enabled) return;
+    await this.prisma.group.deleteMany({ where: { workspaceSlug, channel: "wa", synced: true, waLine: line } });
+    await this.prisma.conversation.updateMany({ where: { workspaceSlug, waLine: line }, data: { waLine: null } });
+    await this.prisma.whatsappSession.deleteMany({ where: { workspaceSlug, line } });
+  }
+
+  async diagnose(workspaceSlug: string, line = 1): Promise<{ lines: string[] }> {
+    const key = waLineKey(workspaceSlug, line);
     const lines: string[] = [];
     const ok = (s: string) => lines.push(`✔ ${s}`);
     const bad = (s: string) => lines.push(`✖ ${s}`);
@@ -302,7 +428,7 @@ export class WhatsappService implements SessionEvents, OnModuleInit, OnModuleDes
     lines.push(`Directorio de sesión: ${this.sessions.baseDir}`);
 
     try {
-      const probe = path.join(this.sessions.dirFor(workspaceSlug), `.write-test-${process.pid}`);
+      const probe = path.join(this.sessions.dirFor(key), `.write-test-${process.pid}`);
       fs.writeFileSync(probe, "ok");
       fs.rmSync(probe, { force: true });
       ok("El directorio de sesión se puede escribir.");
@@ -311,17 +437,17 @@ export class WhatsappService implements SessionEvents, OnModuleInit, OnModuleDes
     }
 
     lines.push(
-      this.sessions.hasSession(workspaceSlug)
+      this.sessions.hasSession(key)
         ? "Hay credenciales guardadas (intentará reanudar; si están muertas pedirá QR nuevo)."
         : "Sin credenciales guardadas (pedirá QR)."
     );
-    const owner = this.sessions.lockOwner(workspaceSlug);
+    const owner = this.sessions.lockOwner(key);
     lines.push(
       owner
         ? `Dueño del socket: pid ${owner.pid} (${owner.fresh ? "vivo" : "caído"}${owner.mine ? ", este proceso" : ""}).`
         : "Nadie tiene el socket ahora mismo.",
     );
-    const live = this.live.get(workspaceSlug);
+    const live = this.live.get(key);
     if (live) lines.push(`Estado en este proceso: ${live.currentStatus}${live.lastError ? ` · ${live.lastError}` : ""}`);
 
     let baileys: Record<string, unknown> | null = null;
@@ -348,56 +474,57 @@ export class WhatsappService implements SessionEvents, OnModuleInit, OnModuleDes
       bad(`No se llega a web.whatsapp.com:443: ${(e as Error).message} — el hosting bloquea la salida; WhatsApp no puede conectar desde este servidor.`);
     }
 
-    this.sessions.appendEvent(workspaceSlug, `Diagnóstico ejecutado: ${lines.filter((l) => l.startsWith("✖")).length} problema(s).`);
+    this.sessions.appendEvent(key, `Diagnóstico ejecutado: ${lines.filter((l) => l.startsWith("✖")).length} problema(s).`);
     return { lines };
   }
 
-  async connect(workspaceSlug: string): Promise<WhatsappStatus> {
-    await this.getOrCreate(workspaceSlug).start({ userInitiated: true });
-    return this.status(workspaceSlug);
+  async connect(workspaceSlug: string, line = 1): Promise<WhatsappStatus> {
+    await this.getOrCreate(waLineKey(workspaceSlug, line)).start({ userInitiated: true });
+    return this.status(workspaceSlug, line);
   }
 
-  async reconnect(workspaceSlug: string): Promise<WhatsappStatus> {
-    return this.connect(workspaceSlug);
+  async reconnect(workspaceSlug: string, line = 1): Promise<WhatsappStatus> {
+    return this.connect(workspaceSlug, line);
   }
 
   /** "QR nuevo": forget the stored pairing and start a fresh QR pairing right away. */
-  async relink(workspaceSlug: string): Promise<WhatsappStatus> {
-    this.sessions.appendEvent(workspaceSlug, "«QR nuevo» pulsado: se borran las credenciales y se vuelve a vincular.");
-    await this.live.get(workspaceSlug)?.logout();
-    this.live.delete(workspaceSlug);
-    this.sessions.deleteSession(workspaceSlug);
-    await this.persist(workspaceSlug, { status: "disconnected", groupsCount: 0, contactsCount: 0 });
-    return this.connect(workspaceSlug);
+  async relink(workspaceSlug: string, line = 1): Promise<WhatsappStatus> {
+    const key = waLineKey(workspaceSlug, line);
+    this.sessions.appendEvent(key, "«QR nuevo» pulsado: se borran las credenciales y se vuelve a vincular.");
+    await this.live.get(key)?.logout();
+    this.live.delete(key);
+    this.sessions.deleteSession(key);
+    await this.persist(key, { status: "disconnected", groupsCount: 0, contactsCount: 0 });
+    return this.connect(workspaceSlug, line);
   }
 
-  async disconnect(workspaceSlug: string): Promise<WhatsappStatus> {
-    await this.live.get(workspaceSlug)?.logout();
-    this.live.delete(workspaceSlug);
-    await this.persist(workspaceSlug, {
+  async disconnect(workspaceSlug: string, line = 1): Promise<WhatsappStatus> {
+    const key = waLineKey(workspaceSlug, line);
+    await this.live.get(key)?.logout();
+    this.live.delete(key);
+    await this.persist(key, {
       status: "disconnected",
       number: undefined,
       groupsCount: 0,
       contactsCount: 0,
     });
-    return this.status(workspaceSlug);
+    return this.status(workspaceSlug, line);
   }
 
-  async sync(workspaceSlug: string): Promise<WhatsappStatus> {
-    await this.live.get(workspaceSlug)?.sync();
-    return this.status(workspaceSlug);
+  /** Re-read groups and contacts: one number, or all of the brand's. */
+  async sync(workspaceSlug: string, line?: number): Promise<WhatsappStatus> {
+    if (line) await this.live.get(waLineKey(workspaceSlug, line))?.sync();
+    else for (const s of this.connectedLines(workspaceSlug)) await s.sync();
+    return this.status(workspaceSlug, line ?? 1);
   }
 
+  /** True when any of the brand's numbers is connected. */
   isConnected(workspaceSlug: string): boolean {
-    return this.live.get(workspaceSlug)?.isConnected ?? false;
+    return this.connectedLines(workspaceSlug).length > 0;
   }
 
-  sendText(workspaceSlug: string, to: string, text: string): Promise<{ id: string }> {
-    const session = this.live.get(workspaceSlug);
-    if (!session?.isConnected) {
-      throw new Error("WhatsApp (Baileys) no está conectado en este workspace.");
-    }
-    return session.sendText(to, text);
+  async sendText(workspaceSlug: string, to: string, text: string): Promise<{ id: string }> {
+    return (await this.sessionFor(workspaceSlug, to)).sendText(to, text);
   }
 
   /** List the WhatsApp groups synced for a workspace (most members first). */
@@ -409,44 +536,32 @@ export class WhatsappService implements SessionEvents, OnModuleInit, OnModuleDes
     });
   }
 
-  /** Send a message (optionally with media) to a group by its JID. */
-  sendToGroup(
+  /** Send a message (optionally with media) to a group by its JID, from the number that is in it. */
+  async sendToGroup(
     workspaceSlug: string,
     remoteJid: string,
     text: string,
     attachment?: WhatsappAttachment | null,
   ): Promise<{ id: string }> {
-    const session = this.live.get(workspaceSlug);
-    if (!session?.isConnected) {
-      throw new Error("WhatsApp (Baileys) no está conectado en este workspace.");
-    }
-    return session.sendToGroup(remoteJid, text, attachment);
+    return (await this.sessionFor(workspaceSlug, remoteJid)).sendToGroup(remoteJid, text, attachment);
   }
 
   /** Send media (or text) to any target — group JID, full JID, or phone number. */
-  sendMedia(
+  async sendMedia(
     workspaceSlug: string,
     to: string,
     text: string,
     attachment?: WhatsappAttachment | null,
   ): Promise<{ id: string }> {
-    const session = this.live.get(workspaceSlug);
-    if (!session?.isConnected) {
-      throw new Error("WhatsApp (Baileys) no está conectado en este workspace.");
-    }
-    return session.sendMedia(to, text, attachment);
+    return (await this.sessionFor(workspaceSlug, to)).sendMedia(to, text, attachment);
   }
 
-  /** Publish to the account's WhatsApp Status (Estados). */
-  postStatus(
+  /** Publish to the account's WhatsApp Status (Estados), from the main connected number. */
+  async postStatus(
     workspaceSlug: string,
     text: string,
     attachment?: WhatsappAttachment | null,
   ): Promise<{ id: string }> {
-    const session = this.live.get(workspaceSlug);
-    if (!session?.isConnected) {
-      throw new Error("WhatsApp (Baileys) no está conectado en este workspace.");
-    }
-    return session.postStatus(text, attachment);
+    return (await this.sessionFor(workspaceSlug)).postStatus(text, attachment);
   }
 }

@@ -193,6 +193,11 @@ export function createHttpAdapters(opts: HttpAdapterOptions): Services {
       sync: (id) => post<WhatsappStatus>(`${ws(id)}/whatsapp/sync`, {}),
       relink: (id) => post<WhatsappStatus>(`${ws(id)}/whatsapp/relink`, {}),
       diagnose: (id) => post<{ lines: string[] }>(`${ws(id)}/whatsapp/diagnose`, {}),
+      lines: (id) => get<WhatsappStatus[]>(`${ws(id)}/whatsapp/lines`),
+      addLine: (id, label) => post<WhatsappStatus>(`${ws(id)}/whatsapp/lines`, { label }),
+      renameLine: (id, line, label) => patch<WhatsappStatus>(`${ws(id)}/whatsapp/lines/${line}`, { label }),
+      lineAction: (id, line, action) => post<WhatsappStatus>(`${ws(id)}/whatsapp/lines/${line}/${action}`, {}),
+      removeLine: (id, line) => del<void>(`${ws(id)}/whatsapp/lines/${line}`),
     },
     pcAgent: {
       status: (id) => get<PcAgentStatus>(`${ws(id)}/pc-agent/status`),

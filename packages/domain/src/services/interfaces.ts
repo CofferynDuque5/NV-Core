@@ -971,6 +971,10 @@ export interface ProductService {
 export interface WhatsappStatus {
   status: "disconnected" | "connecting" | "qr" | "connected";
   provider: "baileys";
+  /** 1 = the brand's main number; 2, 3… = extra numbers. */
+  line?: number;
+  /** Name the user gave the number («Ventas»). */
+  label?: string | null;
   number: string | null;
   lastConnectionAt: string | null;
   groupsCount: number;
@@ -1000,7 +1004,17 @@ export interface WhatsappService {
   relink(workspaceId: string): Promise<WhatsappStatus>;
   /** Active checks (Baileys load, WhatsApp reachability, writable dir…) as readable lines. */
   diagnose(workspaceId: string): Promise<{ lines: string[] }>;
+  /** Every WhatsApp number of the brand (main first). */
+  lines(workspaceId: string): Promise<WhatsappStatus[]>;
+  /** Link one more number; it shows its own QR. */
+  addLine(workspaceId: string, label?: string): Promise<WhatsappStatus>;
+  renameLine(workspaceId: string, line: number, label: string): Promise<WhatsappStatus>;
+  lineAction(workspaceId: string, line: number, action: WhatsappLineAction): Promise<WhatsappStatus>;
+  /** Unlink an extra number (its groups go; its chats stay). */
+  removeLine(workspaceId: string, line: number): Promise<void>;
 }
+
+export type WhatsappLineAction = "connect" | "relink" | "disconnect" | "sync";
 
 /** Health of the "NV Agente PC" companion that publishes to Facebook/Instagram from the operator's computer. */
 export interface PcAgentStatus {
