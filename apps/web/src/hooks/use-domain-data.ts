@@ -517,6 +517,11 @@ export function useAdminAccess(enabled = true) {
   return useQuery({ queryKey: ["admin", "access"], queryFn: () => svc.admin.access(), enabled });
 }
 
+export function useAdminMail(enabled = true) {
+  const svc = useServices();
+  return useQuery({ queryKey: ["admin", "mail"], queryFn: () => svc.admin.mailStatus(), enabled });
+}
+
 /** Example records still loaded in the brand (from older versions). */
 export function useSampleData(slug: string | undefined) {
   const svc = useServices();

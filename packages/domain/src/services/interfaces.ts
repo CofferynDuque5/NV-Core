@@ -1073,7 +1073,14 @@ export interface AdminService {
   activate(workspaceSlug: string, days: number): Promise<WorkspaceAccess>;
   /** Every user with their last access, and the latest sign-ins. */
   logins(): Promise<AdminLogins>;
+  /** How outgoing email is set up. */
+  mailStatus(): Promise<{ provider: MailProvider }>;
+  /** Send a test email to the signed-in admin. */
+  mailTest(): Promise<{ provider: MailProvider; sent: boolean; to: string }>;
 }
+
+/** Outgoing email: own mailbox (SMTP), Resend, or not set up. */
+export type MailProvider = "smtp" | "resend" | "none";
 
 /** Free trial and plan payment of a customer brand (open after the trial ends). */
 export interface AccessService {

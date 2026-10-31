@@ -21,6 +21,7 @@ import { SuperAdminGuard } from "../../auth/guards/super-admin.guard";
 import { WorkspaceRegistry } from "../../common/workspace-registry.service";
 import { WorkspaceAccessService } from "../../common/access/workspace-access.service";
 import { AuditLogger } from "../../common/audit-logger.service";
+import { MailService } from "../../common/mail.service";
 import { CurrentUser } from "../../auth/decorators/current-user.decorator";
 import type { AuthenticatedUser } from "../../auth/auth.types";
 
@@ -160,7 +161,29 @@ export class AdminService {
 @UseGuards(SuperAdminGuard)
 @Controller("admin")
 export class AdminController {
-  constructor(private readonly service: AdminService) {}
+  constructor(
+    private readonly service: AdminService,
+    private readonly mail: MailService,
+  ) {}
+
+  /** How outgoing mail is set up (SMTP, Resend or none). */
+  @Get("mail")
+  mailStatus() {
+    return { provider: this.mail.provider };
+  }
+
+  /** Send a test email to the admin who asks, to check the mailbox works. */
+  @Post("mail/test")
+  @HttpCode(200)
+  async mailTest(@CurrentUser() user: AuthenticatedUser) {
+    const result = await this.mail.send({
+      to: user.email,
+      subject: "Prueba de correo · NV Marketing",
+      html: "<p>Si lees esto, el panel ya puede enviar correos (verificación, recuperar contraseña e invitaciones).</p>",
+      text: "Si lees esto, el panel ya puede enviar correos (verificación, recuperar contraseña e invitaciones).",
+    });
+    return { provider: this.mail.provider, sent: result.sent, to: user.email };
+  }
 
   @Get("users")
   users() {

@@ -118,8 +118,17 @@ export const envSchema = z.object({
   CLOUDINARY_URL: z.string().optional(),
   // Alternativa de hosting de imágenes (https://api.imgbb.com). Solo imágenes.
   IMGBB_API_KEY: z.string().optional(),
+  // Correo saliente (verificación, recuperar contraseña, invitaciones).
+  // Gratis: el buzón de tu propio cPanel por SMTP (SMTP_HOST=mail.tudominio.com,
+  // SMTP_USER=el correo, SMTP_PASS=su contraseña). Si no hay SMTP se usa Resend
+  // (RESEND_API_KEY); sin ninguno, no se envía nada.
+  SMTP_HOST: z.string().optional(),
+  SMTP_PORT: z.coerce.number().int().min(1).max(65535).default(465),
+  SMTP_USER: z.string().optional(),
+  SMTP_PASS: z.string().optional(),
   RESEND_API_KEY: z.string().optional(),
-  MAIL_FROM: z.string().default("NV Marketing <onboarding@resend.dev>"),
+  // Remitente. Sin MAIL_FROM: «NV Marketing <SMTP_USER>» o el de pruebas de Resend.
+  MAIL_FROM: z.string().optional(),
 });
 
 export type Env = z.infer<typeof envSchema>;

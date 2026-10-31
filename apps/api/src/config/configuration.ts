@@ -33,7 +33,11 @@ export interface AppConfig {
   sentry: { dsn?: string };
   database: { url?: string };
   redis: { url?: string };
-  mail: { from: string };
+  mail: {
+    from: string;
+    /** Own mailbox over SMTP (e.g. the cPanel account); takes precedence over Resend. */
+    smtp?: { host: string; port: number; user: string; pass: string };
+  };
   /** Files uploaded to this server (see modules/media/local-storage.ts). */
   media: { enabled: boolean; dir: string; maxBytes: number; publicBase: string };
   /** Plan applied when Stripe isn't configured (self-host / dev). */
@@ -137,7 +141,14 @@ export function buildConfig(env: Env): AppConfig {
     sentry: { dsn: env.SENTRY_DSN },
     database: { url: env.DATABASE_URL },
     redis: { url: env.REDIS_URL },
-    mail: { from: env.MAIL_FROM },
+    mail: {
+      from:
+        env.MAIL_FROM?.trim() ||
+        (env.SMTP_USER ? `NV Marketing <${env.SMTP_USER.trim()}>` : "NV Marketing <onboarding@resend.dev>"),
+      ...(env.SMTP_HOST && env.SMTP_USER && env.SMTP_PASS
+        ? { smtp: { host: env.SMTP_HOST.trim(), port: env.SMTP_PORT, user: env.SMTP_USER.trim(), pass: env.SMTP_PASS } }
+        : {}),
+    },
     media: {
       enabled: env.MEDIA_STORAGE === "local",
       dir: env.MEDIA_DIR,

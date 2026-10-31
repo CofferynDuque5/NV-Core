@@ -125,6 +125,8 @@ export const emptyAdapters: Services = {
     removeMembership: () => notAvailable(),
     access: () => delay([]),
     activate: () => notAvailable(),
+    mailStatus: () => delay({ provider: "none" as const }),
+    mailTest: () => notAvailable(),
   },
   brandLinks: {
     get: () => delay({ socialLinks: [], website: null }),

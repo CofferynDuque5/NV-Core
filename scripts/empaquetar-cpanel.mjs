@@ -485,7 +485,15 @@ NV_ADMIN_EMAIL=tucorreo@ejemplo.com
 # TELEGRAM_API_HASH=
 # STRIPE_SECRET_KEY=
 # OPENAI_API_KEY=
-# RESEND_API_KEY=
+
+# CORREO GRATIS con tu propio buzón de cPanel (verificación, contraseña, invitaciones).
+# La contraseña del buzón va SOLO aquí, nunca en el código.
+# SMTP_HOST=mail.nvcorx.com
+# SMTP_PORT=465
+# SMTP_USER=nvmarketing@nvcorx.com
+# SMTP_PASS=
+# MAIL_FROM=NV Marketing <nvmarketing@nvcorx.com>
+# (Alternativa: RESEND_API_KEY=, se usa solo si no hay SMTP)
 `,
 );
 

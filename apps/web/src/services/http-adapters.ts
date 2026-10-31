@@ -6,6 +6,7 @@ import type {
   GroupRulesCheck,
   AdminAccessRow,
   AdminLogins,
+  MailProvider,
   WorkspaceAccess,
   AiContentPlanItem,
   AiRecommendationsResult,
@@ -221,6 +222,8 @@ export function createHttpAdapters(opts: HttpAdapterOptions): Services {
         ),
       access: () => get<AdminAccessRow[]>(`/admin/access`),
       logins: () => get<AdminLogins>(`/admin/logins`),
+      mailStatus: () => get<{ provider: MailProvider }>(`/admin/mail`),
+      mailTest: () => post<{ provider: MailProvider; sent: boolean; to: string }>(`/admin/mail/test`, {}),
       activate: (slug, days) =>
         post<WorkspaceAccess>(`/admin/access/${encodeURIComponent(slug)}/activate`, { days }),
     },
