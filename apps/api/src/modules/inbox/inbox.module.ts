@@ -132,6 +132,30 @@ function likePattern(q: string): string {
   return `%${q.replace(/[\\%_]/g, (c) => `\\${c}`)}%`;
 }
 
+/** Accented letters (both cases) and their plain form, for accent-free search. */
+const ACCENTED_LOWER = "áàäâãéèëêíìïîóòöôõúùüûñç";
+const PLAIN_LOWER = "aaaaaeeeeiiiiooooouuuunc";
+const FOLD_PAIRS: [string, string][] = [...ACCENTED_LOWER + ACCENTED_LOWER.toUpperCase()].map((c, i) => [
+  c,
+  PLAIN_LOWER[i % PLAIN_LOWER.length]!,
+]);
+
+/** Lowercase without accents: «María» → «maria» (matches `folded()` in SQL). */
+export function foldSearch(text: string): string {
+  return text.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+}
+
+/**
+ * SQL expression: the column without accents, lowercased. Nested replace()
+ * (not translate) because it works on whole letters whatever the database
+ * encoding is; accents go first so lower() only meets ASCII letters. The
+ * pairs are constants of this file, never user input.
+ */
+const FOLD_SQL = FOLD_PAIRS.reduce((acc, [a, b]) => `replace(${acc}, '${a}', '${b}')`, "$COL");
+function folded(column: string): Prisma.Sql {
+  return Prisma.raw(`lower(${FOLD_SQL.replace("$COL", column)})`);
+}
+
 export class CreateConversationDto {
   @IsIn(CHANNEL_IDS) channel!: ChannelId;
   @IsString() @MinLength(1) contactName!: string;
@@ -430,12 +454,13 @@ export class InboxService implements OnModuleInit {
     else if (query.assignee) filters.push(Prisma.sql`c."assignee" = ${query.assignee}`);
     const q = query.q?.trim();
     if (q) {
-      const p = likePattern(q);
+      // Accent-free: «maria» finds «María» and the other way round.
+      const p = likePattern(foldSearch(q));
       filters.push(Prisma.sql`(
-        c."contactName" ILIKE ${p}
+        ${folded('c."contactName"')} LIKE ${p}
         OR c."contactHandle" ILIKE ${p}
-        OR EXISTS (SELECT 1 FROM unnest(c."labels") l WHERE l ILIKE ${p})
-        OR EXISTS (SELECT 1 FROM "Message" mq WHERE mq."conversationId" = c."id" AND mq."text" ILIKE ${p})
+        OR EXISTS (SELECT 1 FROM unnest(c."labels") l WHERE ${folded("l")} LIKE ${p})
+        OR EXISTS (SELECT 1 FROM "Message" mq WHERE mq."conversationId" = c."id" AND ${folded('mq."text"')} LIKE ${p})
       )`);
     }
     const where = Prisma.join(filters, " AND ");

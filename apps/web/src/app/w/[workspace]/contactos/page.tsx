@@ -98,6 +98,13 @@ export default function ContactosPage() {
   const hasFilters = Boolean(debouncedQ || stage);
 
   // Keep the drawer's contact in sync with fresh data after mutations.
+  // `?contacto=` (from the global search) opens that contact's card.
+  const linkedId = searchParams.get("contacto");
+  React.useEffect(() => {
+    if (!linkedId) return;
+    const hit = items.find((c) => c.id === linkedId);
+    if (hit) setDrawer(hit);
+  }, [linkedId, items]);
   const drawerContact = drawer ? (items.find((c) => c.id === drawer.id) ?? drawer) : null;
 
   function openCreate() {

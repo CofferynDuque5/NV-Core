@@ -1,5 +1,6 @@
 
 import * as React from "react";
+import { useSearchParams } from "react-router-dom";
 import type { Campaign } from "@nv/domain";
 import { Download, Loader2, Megaphone, Plus, Upload } from "lucide-react";
 
@@ -49,7 +50,9 @@ export function CampanasContent({ showHeader = true }: { showHeader?: boolean })
   const [tab, setTab] = React.useState<CampaignTab | null>(null);
   // null = every category; NO_CATEGORY ("") = only the ones without one.
   const [category, setCategory] = React.useState<string | null>(null);
-  const [query, setQuery] = React.useState("");
+  // `?q=` (from the global search) pre-fills the search box.
+  const [searchParams] = useSearchParams();
+  const [query, setQuery] = React.useState(() => searchParams.get("q") ?? "");
 
   const hasItems = (campaigns.data?.items.length ?? 0) > 0;
 

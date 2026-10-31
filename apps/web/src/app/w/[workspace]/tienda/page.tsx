@@ -1,4 +1,5 @@
 import * as React from "react";
+import { useSearchParams } from "react-router-dom";
 import { Copy, ImageOff, Megaphone, Pencil, Plus, ShoppingBag, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import type { Campaign, Product } from "@nv/domain";
@@ -135,7 +136,8 @@ export default function TiendaPage() {
   const [editing, setEditing] = React.useState<Product | null>(null);
   const [dialogOpen, setDialogOpen] = React.useState(false);
   const [draft, setDraft] = React.useState<Draft | null>(null);
-  const [q, setQ] = React.useState("");
+  const [searchParams] = useSearchParams();
+  const [q, setQ] = React.useState(() => searchParams.get("q") ?? "");
   const [category, setCategory] = React.useState("");
   const [status, setStatus] = React.useState<"" | "activos" | "pausados">("");
 

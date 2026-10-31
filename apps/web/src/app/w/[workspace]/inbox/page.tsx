@@ -1,4 +1,5 @@
 import * as React from "react";
+import { useSearchParams } from "react-router-dom";
 import { CHANNELS, CHANNEL_IDS, initialsOf, type ChannelId, type Conversation } from "@nv/domain";
 import { CheckCircle2, Inbox, Mail, MessageSquare, Plus, RotateCcw, Search, Send, Tag, Trash2, UserRound, X } from "lucide-react";
 
@@ -48,17 +49,20 @@ const STATUSES: { v: InboxStatus; label: string }[] = [
 
 export default function InboxPage() {
   const team = useTeam();
-  const [selected, setSelected] = React.useState<string | null>(null);
+  // `?c=` (from the global search) opens that conversation.
+  const [searchParams] = useSearchParams();
+  const linked = searchParams.get("c");
+  const [selected, setSelected] = React.useState<string | null>(linked);
   const [dialogOpen, setDialogOpen] = React.useState(false);
   const [draft, setDraft] = React.useState("");
   const [labelDraft, setLabelDraft] = React.useState("");
 
   // Filters
-  const [q, setQ] = React.useState("");
+  const [q, setQ] = React.useState(() => searchParams.get("q") ?? "");
   const [channel, setChannel] = React.useState("");
-  const [status, setStatus] = React.useState<InboxStatus>("open");
+  const [status, setStatus] = React.useState<InboxStatus>(linked || searchParams.get("q") ? "all" : "open");
   const [assignee, setAssignee] = React.useState("");
-  const [debouncedQ, setDebouncedQ] = React.useState("");
+  const [debouncedQ, setDebouncedQ] = React.useState(() => (searchParams.get("q") ?? "").trim());
   React.useEffect(() => {
     const t = setTimeout(() => setDebouncedQ(q.trim()), 300);
     return () => clearTimeout(t);
