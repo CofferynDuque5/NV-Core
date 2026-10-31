@@ -475,6 +475,13 @@ NV_ADMIN_EMAIL=tucorreo@ejemplo.com
 # NV_BILLING_WORKSPACE=nv-cobros
 # PLAN_PRICE=19
 # PLAN_BASIC_PRICE=7
+# Tu WhatsApp (con código de país, solo números) para recibir cada pago de plan.
+# Sale del WhatsApp conectado en NV_BILLING_WORKSPACE. También llega por correo a NV_ADMIN_EMAIL.
+# NV_ADMIN_WHATSAPP=584120000000
+# Tasa USDT→Bs: vacía = la del día (Binance P2P). Pon un número para fijarla.
+# USDT_VES_RATE=
+# Comprobantes de pago: carpeta PRIVADA (no la pongas dentro de public_html).
+# RECEIPTS_DIR=data/receipts
 # PLAN_CURRENCY=USD
 # PLAN_DAYS=30
 # TRIAL_HOURS=24

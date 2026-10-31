@@ -731,8 +731,31 @@ model WorkspaceAccess {
   /// Paid plan («basico» | «pro»); null = still on the trial (or paid before plans existed → pro).
   planId        String?
   activatedBy   String?
+  /// When the trial's one campaign send was used (null = still free to send).
+  trialSendAt   DateTime?
+  /// No trial was given: the device or account already had one.
+  trialDenied   Boolean   @default(false)
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
+}
+
+/// Who got a free trial, from which device. Kept when the brand is deleted
+/// (no workspaceSlug column on purpose) so deleting and recreating a brand,
+/// or opening another account on the same device, does not give a new trial.
+/// Device id and fingerprint are stored hashed.
+model TrialClaim {
+  id              String   @id @default(cuid())
+  brandSlug       String
+  userId          String
+  deviceHash      String?
+  fingerprintHash String?
+  ip              String?
+  granted         Boolean  @default(true)
+  createdAt       DateTime @default(now())
+
+  @@index([userId])
+  @@index([deviceHash])
+  @@index([fingerprintHash, ip])
 }
 
 /// Per-brand settings that apply to built-in and created workspaces alike
@@ -1061,6 +1084,15 @@ model PaymentRequest {
   forWorkspace  String?
   /// Plan the brand pays for (plan payments only).
   planId        String?
+  /// Payer details the customer typed (name, bank, phone, date…), plan payments only.
+  payer         Json?
+  /// Receipt file name in the private receipts folder (never served publicly).
+  receiptFile   String?
+  receiptType   String?
+  /// Amount in the method's own money (e.g. VES) and the USDT rate used.
+  localAmount   Decimal?  @db.Decimal(18, 2)
+  localCurrency String?
+  rate          Decimal?  @db.Decimal(18, 4)
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 

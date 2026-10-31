@@ -8,6 +8,7 @@ import {
   NotFoundException,
 } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
+import { PLAN_FEATURE_LABEL, planFeatureOfSection } from "@nv/domain";
 
 import { AuthStore } from "../../auth/auth.store";
 import type { AuthenticatedUser } from "../../auth/auth.types";
@@ -56,8 +57,20 @@ export class WorkspaceGuard implements CanActivate {
 
     const section = routeSection(request.originalUrl ?? request.url ?? "", slug);
     if (section === undefined || OPEN_WHEN_EXPIRED.has(section)) return true;
+    const superAdmin = this.config.get("superAdmins", { infer: true }).includes(user.email.toLowerCase());
+    const feature = planFeatureOfSection(section);
+    if (feature && !superAdmin && !(await this.access.allows(slug, feature))) {
+      throw new HttpException(
+        {
+          statusCode: HttpStatus.PAYMENT_REQUIRED,
+          code: "plan_upgrade",
+          message: `Tu plan Básico no incluye ${PLAN_FEATURE_LABEL[feature]}. Mejora a Pro para usarlo.`,
+        },
+        HttpStatus.PAYMENT_REQUIRED,
+      );
+    }
     if ((await this.access.state(slug)).state !== "expired") return true;
-    if (this.config.get("superAdmins", { infer: true }).includes(user.email.toLowerCase())) return true;
+    if (superAdmin) return true;
     throw new HttpException(
       { statusCode: HttpStatus.PAYMENT_REQUIRED, code: "trial_expired", message: "Tu prueba gratis terminó. Activa tu plan para seguir usando el panel." },
       HttpStatus.PAYMENT_REQUIRED,

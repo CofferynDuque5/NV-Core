@@ -7,7 +7,10 @@ import {
   CheckCircle2,
   Copy,
   Crown,
+  FileText,
   Lock,
+  Upload,
+  X,
   ShieldCheck,
   Sparkles,
   XCircle,
@@ -16,12 +19,20 @@ import {
   NO_REFUNDS_NOTICE,
   NV_CONTACT_EMAIL,
   PAYMENT_STATUS_LABEL,
+  PLAN_FEATURE_LABEL,
+  RECEIPT_ACCEPT,
+  RECEIPT_MAX_BYTES,
+  RECEIPT_TYPES,
   SALES_PLANS,
   formatPaymentAmount,
   paymentMethodDef,
+  planPayerFields,
+  vesAmount,
   type AccessOverview,
   type AccessPlanOption,
+  type PaymentCurrency,
   type PaymentMethod,
+  type PlanFeature,
   type SalesPlanId,
 } from "@nv/domain";
 import { toast } from "sonner";
@@ -33,7 +44,6 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import { STATUS_BADGE } from "@/lib/payments";
 
 const day = (iso: string) => new Date(iso).toLocaleDateString("es", { day: "numeric", month: "long", year: "numeric" });
@@ -132,6 +142,12 @@ export function PlanCards({
                   <span>{f}</span>
                 </li>
               ))}
+              {plan.excluded.map((f) => (
+                <li key={f} className="flex items-start gap-2 text-sm text-ink-faint" data-testid="plan-excluded">
+                  <X className="mt-0.5 size-4 shrink-0" />
+                  <span className="line-through decoration-ink-faint/50">{f}</span>
+                </li>
+              ))}
             </ul>
             {onChoose && !unlimited ? (
               <Button
@@ -190,7 +206,101 @@ function MethodDetails({ method }: { method: PaymentMethod }) {
   );
 }
 
-/** Step 2: pay the chosen plan to one account and send the reference. */
+/** Today in the browser's time zone, as YYYY-MM-DD (for the date field). */
+function todayIso(): string {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+/** What to pay with this method: bolívares at today's USDT rate, or the plan price. */
+function quoteFor(method: PaymentMethod | undefined, option: AccessPlanOption, access: AccessOverview) {
+  const usd = sameMoney(option.currency) === "USD";
+  if (method?.currency === "VES" && usd && access.vesRate) {
+    const amount = vesAmount(option.price, access.vesRate.rate);
+    return { amount: formatPaymentAmount(amount, "VES"), rate: access.vesRate, local: true as const };
+  }
+  return { amount: formatPaymentAmount(option.price, option.currency), rate: undefined, local: false as const };
+}
+
+/** The receipt picker: one photo, screenshot or PDF up to 5 MB, with a preview. */
+function ReceiptInput({ file, onChange }: { file: File | null; onChange: (f: File | null) => void }) {
+  const [preview, setPreview] = React.useState<string | null>(null);
+  const [error, setError] = React.useState<string | null>(null);
+  React.useEffect(() => {
+    if (!file || !file.type.startsWith("image/")) {
+      setPreview(null);
+      return;
+    }
+    const url = URL.createObjectURL(file);
+    setPreview(url);
+    return () => URL.revokeObjectURL(url);
+  }, [file]);
+  const pick = (f: File | undefined) => {
+    setError(null);
+    if (!f) return onChange(null);
+    if (!(RECEIPT_TYPES as readonly string[]).includes(f.type)) {
+      setError("Sube una imagen (JPG, PNG o WebP) o un PDF.");
+      return onChange(null);
+    }
+    if (f.size > RECEIPT_MAX_BYTES) {
+      setError("El archivo pesa más de 5 MB. Envía una captura más liviana.");
+      return onChange(null);
+    }
+    onChange(f);
+  };
+  return (
+    <div className="space-y-1.5">
+      <Label htmlFor="plan-receipt">Comprobante del pago</Label>
+      <label
+        htmlFor="plan-receipt"
+        className={cn(
+          "flex cursor-pointer items-center gap-3 rounded-xl border border-dashed px-4 py-3 text-sm transition-colors",
+          file ? "border-brand/50 bg-brand/5" : "border-line-soft hover:border-brand/40",
+        )}
+      >
+        {preview ? (
+          <img src={preview} alt="" className="size-12 rounded-md object-cover" />
+        ) : (
+          <span className="grid size-12 place-items-center rounded-md bg-panel-raised text-ink-muted">
+            {file ? <FileText className="size-5" /> : <Upload className="size-5" />}
+          </span>
+        )}
+        <span className="min-w-0 flex-1">
+          <span className="block truncate font-medium text-ink-bright">{file ? file.name : "Adjunta la captura o el PDF del pago"}</span>
+          <span className="text-xs text-ink-muted">Obligatorio · JPG, PNG, WebP o PDF · hasta 5 MB</span>
+        </span>
+        {file ? (
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            aria-label="Quitar comprobante"
+            onClick={(e) => {
+              e.preventDefault();
+              onChange(null);
+            }}
+          >
+            <XCircle className="size-4" />
+          </Button>
+        ) : null}
+      </label>
+      <input
+        id="plan-receipt"
+        type="file"
+        accept={RECEIPT_ACCEPT}
+        className="sr-only"
+        data-testid="plan-receipt"
+        onChange={(e) => {
+          pick(e.target.files?.[0]);
+          e.target.value = "";
+        }}
+      />
+      {error ? <p className="text-xs text-state-danger">{error}</p> : null}
+    </div>
+  );
+}
+
+/** Step 2: pay the chosen plan to one account, then send the payment details and the receipt. */
 function PlanCheckout({
   slug,
   access,
@@ -208,20 +318,33 @@ function PlanCheckout({
   const price = formatPaymentAmount(option.price, option.currency);
   const [methodId, setMethodId] = React.useState(methods[0]?.id ?? "");
   const [reference, setReference] = React.useState("");
-  const [note, setNote] = React.useState("");
+  const [payer, setPayer] = React.useState<Record<string, string>>({ paidOn: todayIso() });
+  const [receipt, setReceipt] = React.useState<File | null>(null);
   const [accepted, setAccepted] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
   const method = methods.find((m) => m.id === methodId);
+  const fields = method ? planPayerFields(method.kind) : [];
+  const quote = quoteFor(method, option, access);
+  const otherMoney = method && !quote.local && sameMoney(method.currency) !== sameMoney(option.currency);
 
   React.useEffect(() => {
     if (!methodId && methods[0]) setMethodId(methods[0].id);
   }, [methods, methodId]);
+  // The amount field starts with what this method should receive.
+  React.useEffect(() => {
+    setPayer((p) => ({ ...p, amountPaid: quote.amount }));
+  }, [quote.amount]);
 
+  const missing = fields.some((f) => f.required && !(payer[f.key] ?? "").trim());
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
+    if (!receipt) return setError("Adjunta el comprobante del pago.");
+    const clean = Object.fromEntries(
+      fields.map((f) => [f.key, (payer[f.key] ?? "").trim()]).filter(([, v]) => v),
+    );
     pay.mutate(
-      { planId, methodId, reference: reference.trim(), note: note.trim() || undefined },
+      { planId, methodId, reference: reference.trim(), payer: clean, receipt },
       { onError: (err) => setError(errorMessage(err)) },
     );
   };
@@ -240,7 +363,12 @@ function PlanCheckout({
             Plan {SALES_PLANS[planId].name} · {option.days} días
           </div>
         </div>
-        <div className="text-ink-bright font-display text-2xl font-semibold">{price}</div>
+        <div className="text-right">
+          <div className="text-ink-bright font-display text-2xl font-semibold" data-testid="plan-amount">
+            {quote.amount}
+          </div>
+          {quote.local ? <div className="text-xs text-ink-muted">equivale a {price}</div> : null}
+        </div>
       </div>
 
       <section className="space-y-2">
@@ -265,15 +393,25 @@ function PlanCheckout({
           ))}
         </div>
         {method ? <MethodDetails method={method} /> : null}
-        {method && sameMoney(method.currency) !== sameMoney(option.currency) ? (
+        {quote.local && quote.rate ? (
+          <p className="rounded-lg border border-line-soft bg-panel px-3 py-2 text-xs text-ink-muted" data-testid="plan-ves-rate">
+            Paga exactamente <strong className="text-ink-bright">{quote.amount}</strong>. Tasa USDT del día: 1 USDT ={" "}
+            {formatPaymentAmount(quote.rate.rate, "VES")} ({quote.rate.source === "binance" ? "Binance P2P" : "tasa fijada por NV"},{" "}
+            {new Date(quote.rate.at).toLocaleTimeString("es", { hour: "2-digit", minute: "2-digit" })}).
+          </p>
+        ) : method?.currency === "VES" ? (
           <p className="text-xs text-ink-muted">
-            Este método recibe {method.currency}: paga el equivalente de {price} y escríbelo en la nota.
+            No pudimos leer la tasa USDT de hoy: paga el equivalente de {price} en bolívares a la tasa USDT del día y escribe el monto abajo.
+          </p>
+        ) : otherMoney ? (
+          <p className="text-xs text-ink-muted">
+            Este método recibe {method!.currency}: paga el equivalente de {price} y escribe el monto abajo.
           </p>
         ) : null}
       </section>
 
       <section className="space-y-3">
-        <h3 className="text-sm font-semibold text-ink-bright">2. Envíanos la referencia</h3>
+        <h3 className="text-sm font-semibold text-ink-bright">2. Cuéntanos cómo pagaste</h3>
         <div className="space-y-1.5">
           <Label htmlFor="plan-reference">Referencia o número de operación</Label>
           <Input
@@ -286,17 +424,27 @@ function PlanCheckout({
             required
           />
         </div>
-        <div className="space-y-1.5">
-          <Label htmlFor="plan-note">Nota (opcional)</Label>
-          <Textarea
-            id="plan-note"
-            rows={2}
-            maxLength={300}
-            value={note}
-            onChange={(e) => setNote(e.target.value)}
-            placeholder="Monto exacto, banco desde el que pagaste…"
-          />
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          {fields.map((f) => (
+            <div key={f.key} className="space-y-1.5">
+              <Label htmlFor={`payer-${f.key}`}>
+                {f.label}
+                {f.required ? null : <span className="text-ink-faint"> (opcional)</span>}
+              </Label>
+              <Input
+                id={`payer-${f.key}`}
+                type={f.type === "date" ? "date" : f.type === "tel" ? "tel" : "text"}
+                value={payer[f.key] ?? ""}
+                onChange={(e) => setPayer((p) => ({ ...p, [f.key]: e.target.value }))}
+                placeholder={f.placeholder}
+                max={f.type === "date" ? todayIso() : undefined}
+                maxLength={120}
+                required={f.required}
+              />
+            </div>
+          ))}
         </div>
+        <ReceiptInput file={receipt} onChange={setReceipt} />
       </section>
 
       <NoRefunds />
@@ -317,12 +465,12 @@ function PlanCheckout({
       <Button
         type="submit"
         className="w-full"
-        disabled={pay.isPending || !methodId || reference.trim().length < 3 || !accepted}
+        disabled={pay.isPending || !methodId || reference.trim().length < 3 || missing || !receipt || !accepted}
       >
-        {pay.isPending ? "Enviando…" : `Enviar pago de ${price} para verificar`}
+        {pay.isPending ? "Enviando…" : `Enviar pago de ${quote.amount} para verificar`}
       </Button>
       <p className="text-center text-xs text-ink-faint">
-        Revisamos la cuenta y activamos tu plan en cuanto vemos el pago. Tus días se suman a los que te queden.
+        Revisamos el comprobante y activamos tu plan en cuanto vemos el pago. Tus días se suman a los que te queden.
       </p>
     </form>
   );
@@ -353,7 +501,9 @@ function LastPayment({ access }: { access: AccessOverview }) {
         </div>
         <p className="text-ink-muted">
           {payment.planId ? `Plan ${SALES_PLANS[payment.planId].name} · ` : ""}
-          {formatPaymentAmount(payment.amount, payment.currency)}
+          {payment.localAmount != null && payment.localCurrency
+            ? `${formatPaymentAmount(payment.localAmount, payment.localCurrency as PaymentCurrency)} (${formatPaymentAmount(payment.amount, payment.currency)})`
+            : formatPaymentAmount(payment.amount, payment.currency)}
           {payment.methodLabel ? ` · ${payment.methodLabel}` : ""}
           {payment.reference ? ` · ref ${payment.reference}` : ""}
         </p>
@@ -412,11 +562,17 @@ export function PlanLock({ slug, access, canPay }: { slug: string; access: Acces
           <Lock className="size-5" />
         </span>
         <h1 className="text-ink-bright font-display text-2xl font-semibold">
-          {wasPaid ? "Tu plan venció" : "Tu prueba gratis terminó"}
+          {wasPaid ? "Tu plan venció" : access.trialDenied ? "Ya usaste tu prueba gratis" : "Tu prueba gratis terminó"}
         </h1>
-        <p className="max-w-xl text-sm text-ink-muted">
-          {wasPaid ? `Tu acceso terminó el ${day(access.paidUntil!)}. ` : "Gracias por probar NV Marketing. "}
-          Tus datos siguen guardados: elige un plan, paga a una de nuestras cuentas y lo activamos en cuanto veamos el pago.
+        <p className="max-w-xl text-sm text-ink-muted" data-testid="plan-lock-reason">
+          {wasPaid
+            ? `Tu acceso terminó el ${day(access.paidUntil!)}. `
+            : access.trialDenied
+              ? "Este dispositivo o esta cuenta ya tuvo su prueba gratis. "
+              : access.trialSendUsed
+                ? "Tu prueba incluía un envío de campaña y ya salió. "
+                : "Gracias por probar NV Marketing. "}
+          Para seguir, elige un plan, paga a una de nuestras cuentas y lo activamos en cuanto veamos el pago. Tus datos siguen guardados.
         </p>
       </div>
       <PlanPicker slug={slug} access={access} canPay={canPay} />
@@ -430,7 +586,7 @@ export function PlanOverview({ slug, access, canPay }: { slug: string; access: A
   let status: string;
   if (access.state === "unlimited") status = "Esta marca no necesita plan: todo está incluido.";
   else if (access.state === "trial" && access.trialEndsAt)
-    status = `Prueba gratis con todo lo de Pro: te quedan ${timeLeft(access.trialEndsAt)}.`;
+    status = `Prueba gratis con todo lo de Pro: te quedan ${timeLeft(access.trialEndsAt)} y ${access.trialSendUsed ? "ya usaste tu envío de campaña" : "1 envío de campaña"}.`;
   else if (access.state === "active" && access.paidUntil)
     status = `Plan ${SALES_PLANS[current ?? "pro"].name} activo hasta el ${day(access.paidUntil)} (${timeLeft(access.paidUntil)}).`;
   else status = "Tu plan venció. Elige uno para seguir usando el panel.";
@@ -469,10 +625,32 @@ export function TrialBanner({ slug, access }: { slug: string; access: AccessOver
     >
       <Sparkles className="text-brand size-4 shrink-0" />
       <span className="flex-1">
-        Prueba gratis: te quedan <strong>{timeLeft(access.trialEndsAt)}</strong>. Todo el panel está abierto para que lo pruebes.
+        Prueba gratis: te quedan <strong>{timeLeft(access.trialEndsAt)}</strong> y{" "}
+        <strong>{access.trialSendUsed ? "ya usaste tu envío de campaña" : "1 envío de campaña"}</strong>. Al enviar tu campaña de prueba, la
+        prueba termina y te pediremos elegir un plan.
       </span>
       <Button size="sm" onClick={() => navigate(`/w/${slug}/plan`)}>
         <Crown className="size-4" /> Ver planes
+      </Button>
+    </div>
+  );
+}
+
+/** Shown instead of a Pro-only module on the Básico plan. */
+export function PlanUpgrade({ slug, feature }: { slug: string; feature: PlanFeature }) {
+  const navigate = useNavigate();
+  return (
+    <div className="mx-auto flex max-w-xl flex-col items-center gap-3 py-16 text-center" data-testid="plan-upgrade">
+      <span className="grid size-12 place-items-center rounded-2xl bg-brand/15 text-brand">
+        <Crown className="size-5" />
+      </span>
+      <h1 className="text-ink-bright font-display text-2xl font-semibold">{PLAN_FEATURE_LABEL[feature]} es del plan Pro</h1>
+      <p className="text-sm text-ink-muted">
+        Tu plan Básico no incluye Tienda, Cobros, Automatizaciones, Formularios ni Embudos. Mejora a Pro para usarlos; lo que ya
+        tenías guardado sigue ahí.
+      </p>
+      <Button onClick={() => navigate(`/w/${slug}/plan`)}>
+        <Crown className="size-4" /> Mejorar a Pro
       </Button>
     </div>
   );

@@ -115,6 +115,25 @@ export const envSchema = z.object({
   PLAN_BASIC_PRICE: z.coerce.number().positive().max(1_000_000).optional(),
   PLAN_CURRENCY: z.enum(["COP", "VES", "PEN", "USD", "USDT"]).optional(),
   PLAN_DAYS: z.coerce.number().int().min(1).max(400).optional(),
+  // Una prueba gratis por dispositivo: además del id del navegador, se compara
+  // la huella del navegador + IP de la última semana. false = solo id y cuenta.
+  TRIAL_FINGERPRINT_CHECK: z
+    .enum(["true", "false"])
+    .default("true")
+    .transform((v) => v === "true"),
+  // Comprobantes de pago de planes: carpeta PRIVADA (nunca se sirve en público).
+  RECEIPTS_DIR: z.string().default("data/receipts"),
+  // Tasa USDT→bolívares para los métodos en VES. Vacía = la del día (mediana de
+  // ofertas de Binance P2P, se refresca cada 30 min). Con un número, se usa ese.
+  USDT_VES_RATE: z.coerce.number().positive().max(100_000_000).optional(),
+  // false = no consultar Binance (solo USDT_VES_RATE, o sin tasa).
+  USDT_RATE_AUTO: z
+    .enum(["true", "false"])
+    .default("true")
+    .transform((v) => v === "true"),
+  // WhatsApp del operador (solo números, con código de país) al que llega cada
+  // pago de plan, enviado desde el WhatsApp conectado en NV_BILLING_WORKSPACE.
+  NV_ADMIN_WHATSAPP: z.string().regex(/^\+?\d{8,15}$/, "NV_ADMIN_WHATSAPP: solo dígitos con código de país").optional(),
   CLOUDINARY_URL: z.string().optional(),
   // Alternativa de hosting de imágenes (https://api.imgbb.com). Solo imágenes.
   IMGBB_API_KEY: z.string().optional(),

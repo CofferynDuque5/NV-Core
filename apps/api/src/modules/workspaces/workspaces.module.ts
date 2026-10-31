@@ -16,9 +16,11 @@ import {
   Param,
   Patch,
   Post,
+  Req,
   UseGuards,
 } from "@nestjs/common";
 import { Prisma } from "@prisma/client";
+import type { Request } from "express";
 import { ApiBearerAuth, ApiTags } from "@nestjs/swagger";
 import { WORKSPACE_GOAL_IDS, WORKSPACE_KINDS, type Workspace, type WorkspaceKind } from "@nv/domain";
 import { ConfigService } from "@nestjs/config";
@@ -34,7 +36,7 @@ import { RolesGuard } from "../../auth/guards/roles.guard";
 import { Roles } from "../../auth/decorators/roles.decorator";
 import { resolveMediaDir, WORKSPACE_DIR_RE } from "../media/local-storage";
 import { WorkspaceGuard } from "../../common/tenant/workspace.guard";
-import { WorkspaceAccessService } from "../../common/access/workspace-access.service";
+import { WorkspaceAccessService, type TrialOrigin } from "../../common/access/workspace-access.service";
 import type { AppConfig } from "../../config/configuration";
 
 export class CreateWorkspaceDto {
@@ -55,6 +57,19 @@ export class UpdateWorkspaceDto {
 
 export class DeleteWorkspaceDto {
   @IsString() confirmName!: string;
+}
+
+/**
+ * The browser's device id and traits hash (sent by the panel as headers) and
+ * its IP behind cPanel's proxy, to give one free trial per device.
+ */
+export function trialOrigin(req: Request): Omit<TrialOrigin, "userId"> {
+  const header = (name: string) => {
+    const v = req.headers[name];
+    return (Array.isArray(v) ? v[0] : v)?.trim() || undefined;
+  };
+  const forwarded = header("x-forwarded-for")?.split(",")[0]?.trim();
+  return { deviceId: header("x-nv-device"), fingerprint: header("x-nv-fp"), ip: forwarded || req.ip || null };
 }
 
 /**
@@ -167,7 +182,7 @@ export class WorkspacesService {
   }
 
   /** A brand a customer creates starts its free trial; the operator's own brands don't. */
-  async create(dto: CreateWorkspaceDto, user: AuthenticatedUser): Promise<Workspace> {
+  async create(dto: CreateWorkspaceDto, user: AuthenticatedUser, origin?: Omit<TrialOrigin, "userId">): Promise<Workspace> {
     const operator = this.config.get("superAdmins", { infer: true }).includes(user.email.toLowerCase());
     if (!operator) await this.assertMayAddBrand(user.userId);
     const ws = await this.registry.create(dto, { userId: user.userId, email: user.email });
@@ -180,7 +195,7 @@ export class WorkspacesService {
       });
       ws.goals = goals;
     }
-    if (!operator) await this.access.startTrial(ws.slug);
+    if (!operator) await this.access.startTrial(ws.slug, { userId: user.userId, ...origin });
     return ws;
   }
 
@@ -215,8 +230,8 @@ export class WorkspacesController {
 
   @Throttle({ default: { limit: 20, ttl: 60_000 } })
   @Post()
-  create(@Body() dto: CreateWorkspaceDto, @CurrentUser() user: AuthenticatedUser) {
-    return this.service.create(dto, user);
+  create(@Body() dto: CreateWorkspaceDto, @CurrentUser() user: AuthenticatedUser, @Req() req: Request) {
+    return this.service.create(dto, user, trialOrigin(req));
   }
 
   /** Membership-gated: only members can resolve a workspace by slug. */

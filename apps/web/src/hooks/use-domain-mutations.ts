@@ -447,6 +447,8 @@ export function useRunCampaign() {
       toast.success("Campaña en marcha: los envíos van saliendo con ritmo anti-ban. Míralos en Historial.");
     },
     onError: (err) => toast.error(errText(err)),
+    // On the free trial the one send closes it: refresh the plan state.
+    onSettled: () => qc.invalidateQueries({ queryKey: [ws.slug, "access"] }),
   });
 }
 

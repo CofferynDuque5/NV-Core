@@ -127,6 +127,11 @@ export const emptyAdapters: Services = {
     activate: () => notAvailable(),
     mailStatus: () => delay({ provider: "none" as const }),
     mailTest: () => notAvailable(),
+    planPayments: () => delay([]),
+    planPaymentReceipt: () => notAvailable(),
+    approvePlanPayment: () => notAvailable(),
+    rejectPlanPayment: () => notAvailable(),
+    usdtRate: () => delay({ rate: null }),
   },
   brandLinks: {
     get: () => delay({ socialLinks: [], website: null }),

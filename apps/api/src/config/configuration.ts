@@ -50,6 +50,15 @@ export interface AppConfig {
     plan: { price: number; currency: "COP" | "VES" | "PEN" | "USD" | "USDT"; days: number };
     /** Price of Básico (same currency and days as Pro). */
     basicPrice: number;
+    /** Private folder for plan payment receipts. */
+    receiptsDir: string;
+    /** Fixed USDT→VES rate (else today's from Binance P2P when `autoRate`). */
+    usdtVesRate?: number;
+    autoRate: boolean;
+    /** Operator WhatsApp number that gets every plan payment. */
+    adminWhatsapp?: string;
+    /** Also match trials by browser traits + IP (last week). */
+    fingerprintCheck: boolean;
   };
   integrations: {
     n8n: { baseUrl?: string; apiKey?: string; eventsWebhook?: string; inboundSecret?: string };
@@ -161,6 +170,11 @@ export function buildConfig(env: Env): AppConfig {
       operatorWorkspace: env.NV_BILLING_WORKSPACE?.trim().toLowerCase() ?? "",
       plan: { price: env.PLAN_PRICE ?? 19, currency: env.PLAN_CURRENCY ?? "USD", days: env.PLAN_DAYS ?? 30 },
       basicPrice: env.PLAN_BASIC_PRICE ?? 7,
+      receiptsDir: env.RECEIPTS_DIR,
+      usdtVesRate: env.USDT_VES_RATE,
+      autoRate: env.USDT_RATE_AUTO,
+      adminWhatsapp: env.NV_ADMIN_WHATSAPP?.replace(/\D/g, "") || undefined,
+      fingerprintCheck: env.TRIAL_FINGERPRINT_CHECK,
     },
     integrations: {
       n8n: {

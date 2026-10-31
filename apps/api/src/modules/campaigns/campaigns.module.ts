@@ -5,6 +5,8 @@ import {
   Delete,
   Get,
   HttpCode,
+  HttpException,
+  HttpStatus,
   Injectable,
   Module,
   NotFoundException,
@@ -15,6 +17,7 @@ import {
   ServiceUnavailableException,
   UseGuards,
 } from "@nestjs/common";
+import { WorkspaceAccessService } from "../../common/access/workspace-access.service";
 import { ApiBearerAuth, ApiPropertyOptional, ApiTags } from "@nestjs/swagger";
 import {
   CAMPAIGN_STATUSES,
@@ -744,6 +747,7 @@ export class CampaignsController {
   constructor(
     private readonly service: CampaignsService,
     private readonly runner: CampaignRunner,
+    private readonly access: WorkspaceAccessService,
   ) {}
 
   @Get()
@@ -856,6 +860,16 @@ export class CampaignsController {
     // (minutos, por el ritmo anti-ban) y el navegador/hosting la reintentaba,
     // lo que lanzaba la misma campaña dos veces.
     await this.service.get(workspaceId, id); // 404 si no existe
+    if (await this.access.trialSendTaken(workspaceId)) {
+      throw new HttpException(
+        {
+          statusCode: HttpStatus.PAYMENT_REQUIRED,
+          code: "trial_send_used",
+          message: "Tu prueba gratis incluye un solo envío de campaña y ya lo usaste. Elige un plan para seguir enviando.",
+        },
+        HttpStatus.PAYMENT_REQUIRED,
+      );
+    }
     // Say up front why it can't go (no WhatsApp session, no groups…) instead
     // of queueing a run whose every send fails in the background.
     const problems = await this.runner.problems(workspaceId, id);

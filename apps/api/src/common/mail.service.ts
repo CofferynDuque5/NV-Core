@@ -10,6 +10,8 @@ export interface SendMailInput {
   html: string;
   /** Optional plain-text fallback. */
   text?: string;
+  /** Files sent along (e.g. a payment receipt to the operator). */
+  attachments?: { filename: string; content: Buffer; contentType: string }[];
 }
 
 export interface SendMailResult {
@@ -77,6 +79,9 @@ export class MailService {
           subject: input.subject,
           html: input.html,
           ...(input.text ? { text: input.text } : {}),
+          ...(input.attachments?.length
+            ? { attachments: input.attachments.map((a) => ({ filename: a.filename, content: a.content.toString("base64") })) }
+            : {}),
         }),
       });
       if (!res.ok) {
@@ -101,6 +106,7 @@ export class MailService {
         subject: input.subject,
         html: input.html,
         ...(input.text ? { text: input.text } : {}),
+        ...(input.attachments?.length ? { attachments: input.attachments } : {}),
       })) as { messageId?: string };
       return { sent: true, id: info.messageId };
     } catch (err) {

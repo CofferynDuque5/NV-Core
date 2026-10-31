@@ -8,6 +8,8 @@ import type {
   AccessPaymentInput,
   AdminAccessRow,
   AdminLogins,
+  PlanPaymentReview,
+  UsdtRate,
   WorkspaceAccess,
   AnalyticsSnapshot,
   Task,
@@ -1075,6 +1077,14 @@ export interface AdminService {
   logins(): Promise<AdminLogins>;
   /** How outgoing email is set up. */
   mailStatus(): Promise<{ provider: MailProvider }>;
+  /** Plan payments customers sent (waiting ones first). */
+  planPayments(): Promise<PlanPaymentReview[]>;
+  /** The receipt file of a plan payment. */
+  planPaymentReceipt(id: string): Promise<Blob>;
+  approvePlanPayment(id: string): Promise<PlanPaymentReview>;
+  rejectPlanPayment(id: string, reason: string): Promise<PlanPaymentReview>;
+  /** Today's USDT rate used for bolívares, and where it came from. */
+  usdtRate(): Promise<{ rate: UsdtRate | null }>;
   /** Send a test email to the signed-in admin. */
   mailTest(): Promise<{ provider: MailProvider; sent: boolean; to: string }>;
 }

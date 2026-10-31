@@ -20,7 +20,8 @@ import { useWorkspaceStore } from "@/stores/workspace-store";
 import { useAuthStore } from "@/stores/auth-store";
 import { isBackendConfigured } from "@/lib/env";
 import { useAccess } from "@/hooks/use-domain-data";
-import { PlanLock, TrialBanner } from "@/components/access/plan-access";
+import { PlanLock, PlanUpgrade, TrialBanner } from "@/components/access/plan-access";
+import { usePlanLocks } from "@/hooks/use-plan-locks";
 import { DemoBanner } from "@/components/access/demo-banner";
 
 export function AppShell({ children }: { children: React.ReactNode }) {
@@ -55,6 +56,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const access = useAccess(routeSlug, isBackendConfigured() && authStatus === "authenticated" && !noAccess);
   const locked = access.data?.state === "expired" && !superAdmin;
   const canPay = role === "Owner" || role === "Admin";
+  // A Pro-only module opened on the Básico plan shows how to upgrade instead.
+  const locks = usePlanLocks(noAccess ? undefined : routeSlug);
+  const lockedModule = locks.find((m) => pathname === `/w/${routeSlug}/${m}` || pathname.startsWith(`/w/${routeSlug}/${m}/`));
 
   // Hydrate the workspace list (config + user-created) once signed in: asking
   // before the session is restored answers 401 and leaves the list empty.
@@ -133,7 +137,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                   {routeSlug && access.data ? (
                     <TrialBanner slug={routeSlug} access={access.data} canPay={canPay} />
                   ) : null}
-                  {children}
+                  {lockedModule && routeSlug ? <PlanUpgrade slug={routeSlug} feature={lockedModule} /> : children}
                 </>
               )}
             </div>

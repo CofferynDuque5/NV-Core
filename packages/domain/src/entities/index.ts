@@ -1116,7 +1116,19 @@ export interface AccessPayment {
   methodLabel?: string;
   reference?: string;
   rejectReason?: string;
+  /** What was paid in the method's own money (e.g. bolívares), when it differs. */
+  localAmount?: number;
+  localCurrency?: string;
   createdAt: string;
+}
+
+/** USDT price in bolívares used to quote Venezuelan methods. */
+export interface UsdtRate {
+  /** Bolívares per USDT. */
+  rate: number;
+  /** "binance" = median of Binance P2P offers; "manual" = set by the operator. */
+  source: "binance" | "manual";
+  at: string;
 }
 
 /**
@@ -1132,6 +1144,12 @@ export interface AccessOverview extends WorkspaceAccess {
   planId?: SalesPlanId;
   methods: PaymentMethod[];
   payment?: AccessPayment;
+  /** Today's USDT rate in bolívares (absent when it couldn't be fetched). */
+  vesRate?: UsdtRate;
+  /** The trial's one campaign send was already used. */
+  trialSendUsed?: boolean;
+  /** No trial: this device or account already had one. */
+  trialDenied?: boolean;
 }
 
 export interface AccessPaymentInput {
@@ -1139,7 +1157,30 @@ export interface AccessPaymentInput {
   planId?: SalesPlanId;
   methodId: string;
   reference: string;
-  note?: string;
+  /** Payer details (see planPayerFields). */
+  payer: Record<string, string>;
+  /** Photo or PDF of the payment. */
+  receipt: File;
+}
+
+/** A plan payment waiting for (or past) the operator's approval. */
+export interface PlanPaymentReview {
+  id: string;
+  forWorkspace: string;
+  planId?: SalesPlanId;
+  status: PaymentStatus;
+  amount: number;
+  currency: PaymentCurrency;
+  localAmount?: number;
+  localCurrency?: string;
+  rate?: number;
+  methodLabel?: string;
+  reference?: string;
+  payer: Record<string, string>;
+  hasReceipt: boolean;
+  rejectReason?: string;
+  createdBy: string;
+  createdAt: string;
 }
 
 /** One brand on a trial or paid plan, for the platform admin. */

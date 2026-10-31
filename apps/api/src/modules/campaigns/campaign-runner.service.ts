@@ -1,12 +1,13 @@
 import { randomUUID } from "node:crypto";
 
-import { Injectable, Logger, type OnModuleDestroy, type OnModuleInit } from "@nestjs/common";
+import { Injectable, Logger, Optional, type OnModuleDestroy, type OnModuleInit } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import type { Campaign as PCampaign, Prisma } from "@prisma/client";
 
 import type { AppConfig } from "../../config/configuration";
 import { PrismaService } from "../../prisma/prisma.service";
 import { AuditLogger } from "../../common/audit-logger.service";
+import { WorkspaceAccessService } from "../../common/access/workspace-access.service";
 import { EventBus } from "../../core/events/event-bus.service";
 import { JobManager } from "../../core/jobs/job-manager.service";
 import { ProviderManager } from "../../providers/provider-manager.service";
@@ -95,6 +96,7 @@ export class CampaignRunner implements OnModuleInit, OnModuleDestroy {
     private readonly events: EventBus,
     private readonly audit: AuditLogger,
     private readonly notifications: NotificationsService,
+    @Optional() private readonly access?: WorkspaceAccessService,
   ) {
     this.pacing = resolvePacing(process.env);
     // Retry policy for transient/rate-limited sends (exponential backoff).
@@ -434,6 +436,18 @@ export class CampaignRunner implements OnModuleInit, OnModuleDestroy {
         data: { lastRunAt: startedAt, runKey, runHeartbeatAt: startedAt, progress: 0 },
       });
       if (claim.count !== 1) return skip("ya está en ejecución en otro proceso; no se duplica.");
+      // Free trial: one campaign send, then the trial closes (after this run).
+      if (this.access && (await this.access.claimTrialSend(workspaceSlug)) === "used") {
+        await this.prisma.campaign.update({ where: { id: campaignId }, data: { runKey: null, runHeartbeatAt: null, progress: 0 } });
+        await this.notifications
+          .create(workspaceSlug, {
+            type: "warning",
+            title: `Campaña «${campaign.name}» no enviada`,
+            meta: "Tu prueba gratis incluye un solo envío y ya lo usaste. Elige un plan para seguir enviando.",
+          })
+          .catch(() => undefined);
+        return skip("la prueba gratis ya usó su único envío.");
+      }
     }
 
     const attachments = (campaign.attachments as Attachment[]) ?? [];
@@ -599,6 +613,7 @@ export class CampaignRunner implements OnModuleInit, OnModuleDestroy {
         data: { runKey: null, runHeartbeatAt: null },
       });
       await this.audit.record(workspaceSlug, "system", "campaign.paused", campaignId);
+      await this.closeTrialAfterSend(workspaceSlug);
       return { status: "paused" }; // nada de redes ni Estado, y no se marca completada
     }
 
@@ -640,7 +655,21 @@ export class CampaignRunner implements OnModuleInit, OnModuleDestroy {
       campaignName: campaign.name,
       ok: allOk,
     });
+    await this.closeTrialAfterSend(workspaceSlug);
     return { status: "completed", ok: allOk, sent: okCount, failed: failedCount };
+  }
+
+  /** After the trial's one send, the trial ends and the panel asks to pay. */
+  private async closeTrialAfterSend(workspaceSlug: string): Promise<void> {
+    if (!this.access || !(await this.access.trialSendTaken(workspaceSlug))) return;
+    await this.access.endTrial(workspaceSlug);
+    await this.notifications
+      .create(workspaceSlug, {
+        type: "info",
+        title: "Tu envío de prueba salió",
+        meta: "La prueba gratis incluía un envío de campaña. Elige un plan para seguir usando NV Marketing.",
+      })
+      .catch(() => undefined);
   }
 
   /**

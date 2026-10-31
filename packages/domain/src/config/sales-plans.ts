@@ -23,7 +23,50 @@ export interface SalesPlan {
   limits: SalesPlanLimits;
   /** What it includes, in the customer's words. */
   features: string[];
+  /** What it does NOT include, in the customer's words. */
+  excluded: string[];
+  /** Panel modules (sidebar ids) this plan does not open. */
+  lockedModules: PlanFeature[];
 }
+
+/** Paid extras: the panel module id of each. */
+export type PlanFeature = "tienda" | "cobros" | "automatizaciones" | "formularios" | "embudos";
+
+/**
+ * API section (`/workspaces/:ws/<section>`) behind each extra. The guard
+ * answers 402 «plan_upgrade» on them for a plan that does not include it.
+ */
+export const PLAN_FEATURE_SECTIONS: Record<PlanFeature, string[]> = {
+  tienda: ["products"],
+  cobros: ["payments"],
+  automatizaciones: ["automations"],
+  formularios: ["forms"],
+  embudos: ["funnels"],
+};
+
+export const PLAN_FEATURE_LABEL: Record<PlanFeature, string> = {
+  tienda: "Tienda",
+  cobros: "Cobros",
+  automatizaciones: "Automatizaciones",
+  formularios: "Formularios",
+  embudos: "Embudos",
+};
+
+/** The extra behind an API section, if the section is one. */
+export function planFeatureOfSection(section: string): PlanFeature | undefined {
+  for (const [feature, sections] of Object.entries(PLAN_FEATURE_SECTIONS)) {
+    if (sections.includes(section)) return feature as PlanFeature;
+  }
+  return undefined;
+}
+
+/** True when the plan opens that module (Pro opens all). */
+export function planIncludes(planId: SalesPlanId, feature: PlanFeature): boolean {
+  return !SALES_PLANS[planId].lockedModules.includes(feature);
+}
+
+/** Campaign sends the free trial allows before it closes. */
+export const TRIAL_CAMPAIGN_SENDS = 1;
 
 export const SALES_PLAN_IDS: SalesPlanId[] = ["basico", "pro"];
 
@@ -31,10 +74,11 @@ export const SALES_PLAN_IDS: SalesPlanId[] = ["basico", "pro"];
 const SHARED_FEATURES = [
   "Campañas programadas con imágenes y rotación",
   "Contactos (CRM), Inbox y etiquetas",
-  "Tienda, Cobros y mensajes de cobro",
-  "Automatizaciones, formularios y embudos",
   "Informe semanal y analítica",
 ];
+
+/** Only in Pro. */
+const PRO_EXTRAS = ["Tienda, Cobros y mensajes de cobro", "Automatizaciones, formularios y embudos"];
 
 export const SALES_PLANS: Record<SalesPlanId, SalesPlan> = {
   basico: {
@@ -43,6 +87,8 @@ export const SALES_PLANS: Record<SalesPlanId, SalesPlan> = {
     tagline: "Para empezar con un solo número",
     limits: { whatsappNumbers: 1, telegramAccounts: 1, brands: 1 },
     features: ["1 número de WhatsApp", "1 cuenta de Telegram", "1 marca", ...SHARED_FEATURES],
+    excluded: PRO_EXTRAS,
+    lockedModules: ["tienda", "cobros", "automatizaciones", "formularios", "embudos"],
   },
   pro: {
     id: "pro",
@@ -54,7 +100,10 @@ export const SALES_PLANS: Record<SalesPlanId, SalesPlan> = {
       "1 cuenta de Telegram",
       "Varias marcas (cada una con su plan)",
       ...SHARED_FEATURES,
+      ...PRO_EXTRAS,
     ],
+    excluded: [],
+    lockedModules: [],
   },
 };
 

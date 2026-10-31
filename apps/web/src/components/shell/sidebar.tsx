@@ -1,5 +1,5 @@
 import { Link, useLocation } from "react-router-dom";
-import { ChevronLeft, ChevronsUpDown } from "lucide-react";
+import { ChevronLeft, ChevronsUpDown, Lock } from "lucide-react";
 import { initialsOf } from "@nv/domain";
 
 import { cn } from "@/lib/utils";
@@ -14,12 +14,14 @@ import {
 } from "@/components/ui/tooltip";
 import { getNavIcon } from "./sidebar-icon";
 import { navSectionsFor } from "@/lib/goal-nav";
+import { usePlanLocks } from "@/hooks/use-plan-locks";
 
 export function Sidebar({ onOpenSwitcher }: { onOpenSwitcher: () => void }) {
   const collapsed = useUiStore((s) => s.navCollapsed);
   const toggleNav = useUiStore((s) => s.toggleNav);
   const user = useAuthStore((s) => s.user);
   const ws = useWorkspace();
+  const locks = usePlanLocks(ws.slug) as string[];
   const { pathname } = useLocation();
 
   const userInitials = user ? initialsOf(user.name) : "NV";
@@ -132,6 +134,9 @@ export function Sidebar({ onOpenSwitcher }: { onOpenSwitcher: () => void }) {
                       )}
                     />
                     {!collapsed ? <span className="truncate">{item.label}</span> : null}
+                    {!collapsed && locks.includes(item.module) ? (
+                      <Lock className="ml-auto size-3.5 shrink-0 text-ink-faint" aria-label="Solo en el plan Pro" data-testid={`nav-lock-${item.module}`} />
+                    ) : null}
                   </Link>
                 );
                 return (
