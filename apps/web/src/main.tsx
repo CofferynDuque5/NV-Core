@@ -5,6 +5,10 @@ import { BrowserRouter } from "react-router-dom";
 import { AppProviders } from "@/providers/app-providers";
 import { AppRoutes } from "@/app-routes";
 import "@/app/globals.css";
+import { captureInstallPrompt } from "@/hooks/use-install-prompt";
+
+// The browser offers «Instalar» once, early: keep it for /instalar and the menu.
+captureInstallPrompt();
 
 const container = document.getElementById("root");
 if (!container) throw new Error("No se encontró el elemento #root");

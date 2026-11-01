@@ -1,5 +1,5 @@
 import * as React from "react";
-import { Navigate, Route, Routes, useParams } from "react-router-dom";
+import { Navigate, Route, Routes, useParams, useSearchParams } from "react-router-dom";
 import { DEFAULT_WORKSPACE_SLUG } from "@nv/domain";
 
 import { AppShell } from "@/components/shell/app-shell";
@@ -23,6 +23,7 @@ const PublicFunnelPage = React.lazy(() => import("@/app/fn/[funnel]/page"));
 const AdminPage = React.lazy(() => import("@/app/admin/page"));
 const DemoPage = React.lazy(() => import("@/app/demo/page"));
 const JoinPage = React.lazy(() => import("@/app/join/[token]/page"));
+const InstalarPage = React.lazy(() => import("@/app/instalar/page"));
 
 // Workspace module pages — lazy-loaded so each becomes its own chunk and the
 // initial payload stays small (faster load, lower memory on the VPS).
@@ -83,7 +84,13 @@ function WorkspacePage({ children }: { children: React.ReactNode }) {
 }
 
 /** «/»: your own brand when signed in, the login otherwise (never a built-in sample brand). */
+/** App shortcuts (long-press on the installed icon) open «/?ir=inbox» etc. */
+const SHORTCUT_PAGES = new Set(["inbox", "campanas", "cobros"]);
+
 function HomeRedirect() {
+  const [params] = useSearchParams();
+  const ir = params.get("ir");
+  const page = ir && SHORTCUT_PAGES.has(ir) ? ir : "dashboard";
   const status = useAuthStore((s) => s.status);
   const memberships = useAuthStore((s) => s.memberships);
   const hydrate = useAuthStore((s) => s.hydrate);
@@ -95,7 +102,7 @@ function HomeRedirect() {
   if (status === "unauthenticated") return <Navigate to="/login" replace />;
   if (status !== "authenticated") return <RouteFallback />;
   const first = memberships[0]?.workspaceSlug;
-  return <Navigate to={first ? `/w/${first}/dashboard` : "/onboarding"} replace />;
+  return <Navigate to={first ? `/w/${first}/${page}` : "/onboarding"} replace />;
 }
 
 /** Route table — mirrors the original Next.js app-router structure 1:1. */
@@ -118,6 +125,14 @@ export function AppRoutes() {
         }
       />
       <Route path="/register" element={<RegisterPage />} />
+      <Route
+        path="/instalar"
+        element={
+          <React.Suspense fallback={<RouteFallback />}>
+            <InstalarPage />
+          </React.Suspense>
+        }
+      />
       <Route
         path="/join/:token"
         element={
