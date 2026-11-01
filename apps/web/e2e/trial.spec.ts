@@ -128,11 +128,25 @@ test("24 h free trial: banner, lock when it ends, manual plan payment, unlocked 
 
   // The operator's team sees it in Cobros; the platform admin reviews it in /admin.
   const list = await page.request.get(`${API}/workspaces/${OPERATOR}/payments?status=por_verificar`, { headers: op });
-  const pending = ((await list.json()) as { id: string; concept: string; reference?: string }[]).find(
-    (p) => p.reference === `BP-${stamp}`,
-  );
+  const pending = (
+    (await list.json()) as {
+      id: string;
+      concept: string;
+      reference?: string;
+      plan?: { forWorkspace: string; payer: Record<string, string>; hasReceipt: boolean };
+    }[]
+  ).find((p) => p.reference === `BP-${stamp}`);
   expect(pending?.concept).toContain(slug);
   expect(pending?.concept).toContain("Básico");
+  // Cobros shows who paid and lets the operator's Owner open the receipt.
+  expect(pending?.plan).toMatchObject({
+    forWorkspace: slug,
+    payer: { payerName: "Cliente Prueba", payerAccount: "cliente-binance" },
+    hasReceipt: true,
+  });
+  const opReceipt = await page.request.get(`${API}/workspaces/${OPERATOR}/payments/${pending!.id}/receipt`, { headers: op });
+  expect(opReceipt.headers()["content-type"]).toContain("image/png");
+  expect((await page.request.get(`${API}/workspaces/${OPERATOR}/payments/${pending!.id}/receipt`, { headers: me })).ok()).toBe(false);
   // Only the platform admin can see plan payments and their receipts.
   expect((await page.request.get(`${API}/admin/plan-payments`, { headers: me })).status()).toBe(403);
   const adminRequest = await playwright.request.newContext();
@@ -148,6 +162,13 @@ test("24 h free trial: banner, lock when it ends, manual plan payment, unlocked 
   const receipt = await page.request.get(`${API}/admin/plan-payments/${pending!.id}/receipt`, { headers: admin });
   expect(receipt.headers()["content-type"]).toContain("image/png");
   expect(receipt.headers()["x-content-type-options"]).toBe("nosniff");
+  // No NV_ADMIN_WHATSAPP here: /admin says what is missing for the WhatsApp alert.
+  const alert = (await (await page.request.get(`${API}/admin/whatsapp-alert`, { headers: admin })).json()) as {
+    ready: boolean;
+    problem: string | null;
+  };
+  expect(alert.ready).toBe(false);
+  expect(alert.problem).toContain("NV_ADMIN_WHATSAPP");
   const ok = await page.request.post(`${API}/admin/plan-payments/${pending!.id}/approve`, { headers: admin, data: {} });
   expect(ok.ok(), await ok.text()).toBeTruthy();
 

@@ -83,6 +83,7 @@ import type {
   PlanPaymentReview,
   UploadFileResult,
   UsdtRate,
+  WhatsappAlertStatus,
 } from "@nv/domain";
 import { deviceHeaders } from "@/lib/device";
 
@@ -252,6 +253,8 @@ export function createHttpAdapters(opts: HttpAdapterOptions): Services {
       rejectPlanPayment: (id, reason) =>
         post<PlanPaymentReview>(`/admin/plan-payments/${encodeURIComponent(id)}/reject`, { reason }),
       usdtRate: () => get<{ rate: UsdtRate | null }>(`/admin/usdt-rate`),
+      whatsappAlert: () => get<WhatsappAlertStatus>(`/admin/whatsapp-alert`),
+      whatsappAlertTest: () => post<WhatsappAlertStatus & { sent: boolean }>(`/admin/whatsapp-alert/test`, {}),
       activate: (slug, days) =>
         post<WorkspaceAccess>(`/admin/access/${encodeURIComponent(slug)}/activate`, { days }),
     },
@@ -516,6 +519,7 @@ export function createHttpAdapters(opts: HttpAdapterOptions): Services {
       },
       create: (id, input) => post<PaymentRequest>(`${ws(id)}/payments`, input),
       update: (id, pid, input) => patch<PaymentRequest>(`${ws(id)}/payments/${pid}`, input),
+      receipt: (id, pid) => blob(`${ws(id)}/payments/${encodeURIComponent(pid)}/receipt`),
     },
     reports: {
       weekly: (id) => get<WeeklyReportSummary[]>(`${ws(id)}/reports/weekly`),

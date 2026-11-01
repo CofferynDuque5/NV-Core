@@ -12,7 +12,7 @@ import { useAuthStore } from "@/stores/auth-store";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { LoginsSection } from "@/components/admin/logins-section";
-import { PlanPaymentsSection } from "@/components/admin/plan-payments-section";
+import { PlanPaymentsSection, WhatsappAlertSection } from "@/components/admin/plan-payments-section";
 
 /**
  * Platform super-admin panel (global, not workspace-scoped). Lists every user
@@ -106,6 +106,7 @@ export default function AdminPage() {
       <LoginsSection enabled={superAdmin} />
 
       <PlanPaymentsSection enabled={superAdmin} />
+      <WhatsappAlertSection enabled={superAdmin} />
       <AccessSection enabled={superAdmin} />
       <MailSection enabled={superAdmin} />
 

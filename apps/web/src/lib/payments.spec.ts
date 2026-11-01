@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { PaymentMethod, PaymentRequest } from "@nv/domain";
 
-import { collectedThisMonth, isOverdue, methodsByCountry, methodsFor, statusCounts } from "./payments";
+import { collectedThisMonth, isOverdue, methodsByCountry, methodsFor, payerRows, statusCounts } from "./payments";
 
 const method = (id: string, kind: PaymentMethod["kind"], currency: PaymentMethod["currency"], active = true): PaymentMethod => ({
   id,
@@ -63,5 +63,15 @@ describe("cobros", () => {
     expect(isOverdue(pay({ dueAt: "2026-10-20T12:00:00Z" }), now)).toBe(true);
     expect(isOverdue(pay({ dueAt: "2026-10-20T12:00:00Z", status: "por_verificar" }), now)).toBe(false);
     expect(isOverdue(pay({ dueAt: "2026-10-30T12:00:00Z" }), now)).toBe(false);
+  });
+});
+
+describe("datos de quien pagó un plan", () => {
+  it("los ordena con su nombre legible y omite los vacíos", () => {
+    expect(payerRows({ paidOn: "2026-10-31", payerName: "Ana", payerBank: "", extra: "x" })).toEqual([
+      { key: "payerName", label: "Pagó", value: "Ana" },
+      { key: "paidOn", label: "Fecha del pago", value: "2026-10-31" },
+      { key: "extra", label: "extra", value: "x" },
+    ]);
   });
 });

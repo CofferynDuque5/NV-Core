@@ -9,6 +9,7 @@ import type {
   AdminAccessRow,
   AdminLogins,
   PlanPaymentReview,
+  WhatsappAlertStatus,
   UsdtRate,
   WorkspaceAccess,
   AnalyticsSnapshot,
@@ -647,6 +648,8 @@ export interface PaymentService {
   list(workspaceId: string, filter?: { status?: PaymentRequest["status"]; contactId?: string }): Promise<PaymentRequest[]>;
   create(workspaceId: string, input: CreatePaymentRequestInput): Promise<PaymentRequest>;
   update(workspaceId: string, id: string, input: UpdatePaymentRequestInput): Promise<PaymentRequest>;
+  /** The receipt a customer sent with a plan payment (Owner/Admin). */
+  receipt(workspaceId: string, id: string): Promise<Blob>;
 }
 
 export interface ReportService {
@@ -1087,6 +1090,10 @@ export interface AdminService {
   usdtRate(): Promise<{ rate: UsdtRate | null }>;
   /** Send a test email to the signed-in admin. */
   mailTest(): Promise<{ provider: MailProvider; sent: boolean; to: string }>;
+  /** Whether plan payments can be announced by WhatsApp. */
+  whatsappAlert(): Promise<WhatsappAlertStatus>;
+  /** Send a test WhatsApp alert to the operator's number. */
+  whatsappAlertTest(): Promise<WhatsappAlertStatus & { sent: boolean }>;
 }
 
 /** Outgoing email: own mailbox (SMTP), Resend, or not set up. */

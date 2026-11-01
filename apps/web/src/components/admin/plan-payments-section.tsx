@@ -1,6 +1,6 @@
 import * as React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Check, FileText, Loader2, X } from "lucide-react";
+import { Check, FileText, Loader2, MessageCircle, X } from "lucide-react";
 import {
   PAYMENT_STATUS_LABEL,
   SALES_PLANS,
@@ -15,18 +15,8 @@ import { errorMessage } from "@/components/entities/form-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { STATUS_BADGE } from "@/lib/payments";
+import { PAYER_LABEL, STATUS_BADGE } from "@/lib/payments";
 
-/** Labels of the payer fields, whatever the method was. */
-const PAYER_LABEL: Record<string, string> = {
-  payerName: "Pagó",
-  payerBank: "Banco",
-  payerPhone: "Teléfono",
-  payerDoc: "Documento",
-  payerAccount: "Cuenta",
-  paidOn: "Fecha",
-  amountPaid: "Monto declarado",
-};
 
 function money(amount: number, currency: string) {
   return formatPaymentAmount(amount, currency as PaymentCurrency);
@@ -205,6 +195,62 @@ export function PlanPaymentsSection({ enabled }: { enabled: boolean }) {
           ))}
         </ul>
       )}
+    </section>
+  );
+}
+
+/** Whether plan payments reach the operator's WhatsApp, why not, and a test. */
+export function WhatsappAlertSection({ enabled }: { enabled: boolean }) {
+  const svc = useServices();
+  const qc = useQueryClient();
+  const status = useQuery({
+    queryKey: ["admin", "whatsapp-alert"],
+    queryFn: () => svc.admin.whatsappAlert(),
+    enabled,
+  });
+  const test = useMutation({
+    mutationFn: () => svc.admin.whatsappAlertTest(),
+    onSuccess: (r) => {
+      qc.setQueryData(["admin", "whatsapp-alert"], r);
+      if (r.sent) toast.success(`Prueba enviada a +${r.to}. Revisa tu WhatsApp.`);
+      else toast.error(r.problem ?? "No se pudo enviar la prueba.");
+    },
+    onError: (e) => toast.error(errorMessage(e)),
+  });
+  const s = status.data;
+  return (
+    <section className="nv-panel space-y-2 p-4" data-testid="admin-whatsapp-alert">
+      <div className="flex flex-wrap items-center gap-2">
+        <div className="min-w-0 flex-1">
+          <h2 className="text-ink-bright flex items-center gap-2 font-semibold">
+            <MessageCircle className="size-4" /> Aviso de pagos por WhatsApp
+          </h2>
+          <p className="text-ink-muted text-xs">
+            {s
+              ? `Llega a ${s.to ? `+${s.to}` : "— (sin número)"} · sale desde ${s.billingWorkspace || "— (sin marca de cobros)"}${s.from ? ` (+${s.from})` : ""}`
+              : "Cargando…"}
+          </p>
+        </div>
+        <Button
+          size="sm"
+          variant="secondary"
+          disabled={!s?.ready || test.isPending}
+          onClick={() => test.mutate()}
+        >
+          {test.isPending ? <Loader2 className="size-4 animate-spin" /> : null}
+          Enviarme una prueba
+        </Button>
+      </div>
+      {s?.problem ? (
+        <p
+          className={`text-xs ${s.ready ? "text-state-warning" : "text-state-danger"}`}
+          data-testid="whatsapp-alert-problem"
+        >
+          {s.problem}
+        </p>
+      ) : s?.ready ? (
+        <p className="text-state-success text-xs">Listo: cada pago de plan te llega por WhatsApp.</p>
+      ) : null}
     </section>
   );
 }

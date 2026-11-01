@@ -29,7 +29,8 @@ import { CurrentUser } from "../../auth/decorators/current-user.decorator";
 import type { AuthenticatedUser } from "../../auth/auth.types";
 import type { AppConfig } from "../../config/configuration";
 import { UsdtRateService } from "../../common/fx/usdt-rate.service";
-import { PaymentsModule, PaymentsService } from "../payments/payments.module";
+import { PaymentsModule, PaymentsService, receiptHeaders } from "../payments/payments.module";
+import { PlanPaymentAlerts } from "../payments/plan-payment-alerts";
 
 export class SetMembershipDto {
   @IsString() @MinLength(3) email!: string;
@@ -175,6 +176,7 @@ export class AdminController {
     private readonly service: AdminService,
     private readonly mail: MailService,
     private readonly payments: PaymentsService,
+    private readonly alerts: PlanPaymentAlerts,
     private readonly rates: UsdtRateService,
     private readonly config: ConfigService<AppConfig, true>,
   ) {}
@@ -197,13 +199,7 @@ export class AdminController {
   @Get("plan-payments/:id/receipt")
   async receipt(@Param("id") id: string, @Res() res: Response) {
     const file = await this.payments.planPaymentReceipt(this.billingWorkspace, id);
-    res.set({
-      "Content-Type": file.type,
-      "Content-Disposition": `inline; filename="comprobante.${file.ext}"`,
-      "X-Content-Type-Options": "nosniff",
-      "Content-Security-Policy": "sandbox; default-src 'none'; img-src 'self' data:",
-      "Cache-Control": "private, no-store",
-    });
+    res.set(receiptHeaders(file));
     res.send(file.buf);
   }
 
@@ -223,6 +219,19 @@ export class AdminController {
   @Get("usdt-rate")
   async usdtRate() {
     return { rate: await this.rates.current() };
+  }
+
+  /** Whether plan payments can be announced by WhatsApp, and why not. */
+  @Get("whatsapp-alert")
+  whatsappAlert() {
+    return this.alerts.whatsappStatus();
+  }
+
+  /** Send a test alert to NV_ADMIN_WHATSAPP from the billing brand's WhatsApp. */
+  @Post("whatsapp-alert/test")
+  @HttpCode(200)
+  whatsappAlertTest() {
+    return this.alerts.whatsappTest();
   }
 
   /** How outgoing mail is set up (SMTP, Resend or none). */

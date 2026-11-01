@@ -132,6 +132,8 @@ export const emptyAdapters: Services = {
     approvePlanPayment: () => notAvailable(),
     rejectPlanPayment: () => notAvailable(),
     usdtRate: () => delay({ rate: null }),
+    whatsappAlert: () => notAvailable(),
+    whatsappAlertTest: () => notAvailable(),
   },
   brandLinks: {
     get: () => delay({ socialLinks: [], website: null }),
@@ -323,6 +325,7 @@ export const emptyAdapters: Services = {
     list: () => delay([]),
     create: () => notAvailable(),
     update: () => notAvailable(),
+    receipt: () => notAvailable(),
   },
   reports: {
     weekly: () => delay([]),

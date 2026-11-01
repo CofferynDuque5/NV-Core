@@ -7,6 +7,7 @@ import {
   planPayerFields,
   salesPlanId,
   type PaymentCurrency,
+  type WhatsappAlertStatus,
 } from "@nv/domain";
 
 import type { AppConfig } from "../../config/configuration";
@@ -59,6 +60,34 @@ export function alertLines(a: PlanPaymentAlert): string[] {
   return lines;
 }
 
+const digits = (n: string | null) => (n ?? "").replace(/\D/g, "");
+
+/** What keeps the WhatsApp alert from working, in plain words. */
+export function alertProblem(
+  to: string | null,
+  brand: string,
+  connected: boolean,
+  from: string | null,
+): { ready: boolean; problem: string | null } {
+  if (!to) {
+    return { ready: false, problem: "Falta tu número: agrega NV_ADMIN_WHATSAPP en las variables de la app (solo dígitos con código de país) y reinicia." };
+  }
+  if (!brand) {
+    return { ready: false, problem: "Falta la marca de cobros: agrega NV_BILLING_WORKSPACE en las variables de la app y reinicia." };
+  }
+  if (!connected) {
+    return { ready: false, problem: `La marca «${brand}» no tiene un WhatsApp conectado. Conéctalo en Conexiones de esa marca; desde ese número salen los avisos.` };
+  }
+  if (from && digits(from) === digits(to)) {
+    // WhatsApp delivers it to «Mensajes para ti» but never rings for your own messages.
+    return {
+      ready: true,
+      problem: "El aviso sale desde el mismo número que lo recibe: llega a tu chat «Tú» pero WhatsApp no suena. Para que te notifique, conecta en esa marca otro número (por ejemplo, un WhatsApp Business) o pon en NV_ADMIN_WHATSAPP un número distinto.",
+    };
+  }
+  return { ready: true, problem: null };
+}
+
 /**
  * Tell the operator a customer sent a plan payment: by WhatsApp (from the
  * billing brand's connected number to NV_ADMIN_WHATSAPP) and by email to the
@@ -87,12 +116,56 @@ export class PlanPaymentAlerts {
     return { whatsapp, email };
   }
 
-  private async whatsapp(a: PlanPaymentAlert, lines: string[], link: string): Promise<boolean> {
+  /** Whether a plan payment can reach the operator's WhatsApp, and why not. */
+  async whatsappStatus(): Promise<WhatsappAlertStatus> {
     const billing = this.config.get("billing", { infer: true });
-    if (!billing.adminWhatsapp || !billing.operatorWorkspace) return false;
+    const to = billing.adminWhatsapp ?? null;
+    const brand = billing.operatorWorkspace;
+    let connected = false;
+    let from: string | null = null;
+    if (brand) {
+      try {
+        const wa = this.moduleRef.get(WhatsappService, { strict: false });
+        connected = wa.isConnected(brand);
+        if (connected) from = (await wa.status(brand)).number ?? null;
+      } catch {
+        connected = false;
+      }
+    }
+    return { to, billingWorkspace: brand, connected, from, ...alertProblem(to, brand, connected, from) };
+  }
+
+  /** Send a test alert to the operator's WhatsApp. */
+  async whatsappTest(): Promise<WhatsappAlertStatus & { sent: boolean }> {
+    const status = await this.whatsappStatus();
+    if (!status.ready) return { ...status, sent: false };
     try {
       const wa = this.moduleRef.get(WhatsappService, { strict: false });
-      if (!wa.isConnected(billing.operatorWorkspace)) return false;
+      await wa.sendText(
+        status.billingWorkspace,
+        status.to!,
+        "✅ Prueba de NV Marketing: así te llegarán los avisos de pagos de planes.",
+      );
+      return { ...status, sent: true };
+    } catch (err) {
+      return { ...status, sent: false, ready: false, problem: `WhatsApp no lo envió: ${(err as Error).message}` };
+    }
+  }
+
+  private async whatsapp(a: PlanPaymentAlert, lines: string[], link: string): Promise<boolean> {
+    const billing = this.config.get("billing", { infer: true });
+    if (!billing.adminWhatsapp || !billing.operatorWorkspace) {
+      this.logger.warn(
+        `Pago ${a.id}: no se avisó por WhatsApp porque falta ${!billing.adminWhatsapp ? "NV_ADMIN_WHATSAPP" : "NV_BILLING_WORKSPACE"}.`,
+      );
+      return false;
+    }
+    try {
+      const wa = this.moduleRef.get(WhatsappService, { strict: false });
+      if (!wa.isConnected(billing.operatorWorkspace)) {
+        this.logger.warn(`Pago ${a.id}: no se avisó por WhatsApp porque ${billing.operatorWorkspace} no tiene WhatsApp conectado.`);
+        return false;
+      }
       const text = [
         `💳 *Pago de plan por aprobar*`,
         ...lines,

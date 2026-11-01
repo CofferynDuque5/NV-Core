@@ -15,9 +15,11 @@ import {
   Patch,
   Post,
   Query,
+  Res,
   ServiceUnavailableException,
   UseGuards,
 } from "@nestjs/common";
+import type { Response } from "express";
 import { ApiBearerAuth, ApiPropertyOptional, ApiTags } from "@nestjs/swagger";
 import {
   isQrImage,
@@ -232,9 +234,34 @@ export function mapPayment(row: RequestRow, contactName?: string): PaymentReques
     dueAt: row.dueAt?.toISOString(),
     paidAt: row.paidAt?.toISOString(),
     verifiedBy: row.verifiedBy ?? undefined,
+    ...(row.forWorkspace
+      ? {
+          plan: {
+            forWorkspace: row.forWorkspace,
+            ...(salesPlanId(row.planId) ? { planId: salesPlanId(row.planId) } : {}),
+            payer: (row.payer ?? {}) as Record<string, string>,
+            hasReceipt: !!row.receiptFile,
+            ...(row.localAmount != null
+              ? { localAmount: Number(row.localAmount), localCurrency: row.localCurrency ?? undefined }
+              : {}),
+            ...(row.rate != null ? { rate: Number(row.rate) } : {}),
+          },
+        }
+      : {}),
     createdBy: row.createdBy,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
+  };
+}
+
+/** Headers that serve a private receipt safely (real type, no sniffing, sandboxed). */
+export function receiptHeaders(file: { type: string; ext: string }): Record<string, string> {
+  return {
+    "Content-Type": file.type,
+    "Content-Disposition": `inline; filename="comprobante.${file.ext}"`,
+    "X-Content-Type-Options": "nosniff",
+    "Content-Security-Policy": "sandbox; default-src 'none'; img-src 'self' data:",
+    "Cache-Control": "private, no-store",
   };
 }
 
@@ -722,12 +749,22 @@ export class PaymentsController {
   ) {
     return this.service.update(workspaceId, user.email, id, dto);
   }
+
+  /** Receipt a customer sent with a plan payment to this (billing) brand. */
+  @Get(":id/receipt")
+  @Roles("Owner", "Admin")
+  @UseGuards(RolesGuard)
+  async receipt(@WorkspaceId() workspaceId: string, @Param("id") id: string, @Res() res: Response) {
+    const file = await this.service.planPaymentReceipt(workspaceId, id);
+    res.set(receiptHeaders(file));
+    res.send(file.buf);
+  }
 }
 
 @Module({
   imports: [NotificationsModule],
   controllers: [PaymentsController],
   providers: [PaymentsService, PlanMethodsSeeder, PlanPaymentAlerts],
-  exports: [PaymentsService],
+  exports: [PaymentsService, PlanPaymentAlerts],
 })
 export class PaymentsModule {}

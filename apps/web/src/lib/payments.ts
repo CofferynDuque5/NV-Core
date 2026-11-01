@@ -61,3 +61,23 @@ export function collectedThisMonth(payments: PaymentRequest[], now = new Date())
 export function isOverdue(p: PaymentRequest, now = new Date()): boolean {
   return (p.status === "pendiente" || p.status === "rechazado") && !!p.dueAt && new Date(p.dueAt) < now;
 }
+
+/** Labels of the payer fields a customer fills when paying a plan. */
+export const PAYER_LABEL: Record<string, string> = {
+  payerName: "Pagó",
+  payerBank: "Banco",
+  payerPhone: "Teléfono",
+  payerDoc: "Documento",
+  payerAccount: "Cuenta",
+  paidOn: "Fecha del pago",
+  amountPaid: "Monto declarado",
+};
+
+/** Payer details in a fixed, readable order (known fields first). */
+export function payerRows(payer: Record<string, string>): { key: string; label: string; value: string }[] {
+  const order = Object.keys(PAYER_LABEL);
+  return Object.entries(payer)
+    .filter(([, v]) => v?.trim())
+    .sort(([a], [b]) => (order.indexOf(a) + 1 || 99) - (order.indexOf(b) + 1 || 99))
+    .map(([key, value]) => ({ key, label: PAYER_LABEL[key] ?? key, value }));
+}

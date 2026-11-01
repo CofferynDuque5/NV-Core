@@ -935,9 +935,40 @@ export interface PaymentRequest {
   paidAt?: string;
   /** Email of who confirmed it. */
   verifiedBy?: string;
+  /** Set when a customer paid a plan from the panel (billing brand only). */
+  plan?: PaymentPlanDetails;
   createdBy: string;
   createdAt: string;
   updatedAt: string;
+}
+
+/** What a customer sent with a plan payment: who paid, how much in Bs, receipt. */
+export interface PaymentPlanDetails {
+  /** Brand the plan is for. */
+  forWorkspace: string;
+  planId?: SalesPlanId;
+  /** Payer details (keys from planPayerFields). */
+  payer: Record<string, string>;
+  hasReceipt: boolean;
+  localAmount?: number;
+  localCurrency?: string;
+  rate?: number;
+}
+
+/** Whether a plan payment can reach the operator's WhatsApp, and why not. */
+export interface WhatsappAlertStatus {
+  /** Number the alert goes to (NV_ADMIN_WHATSAPP), or null when not set. */
+  to: string | null;
+  /** Brand whose WhatsApp sends it (NV_BILLING_WORKSPACE), or "" when not set. */
+  billingWorkspace: string;
+  /** That brand has a WhatsApp connected right now. */
+  connected: boolean;
+  /** Number connected in that brand (the sender). */
+  from: string | null;
+  /** Everything is in place to send. */
+  ready: boolean;
+  /** What is missing or wrong, in plain words (null when ready and fine). */
+  problem: string | null;
 }
 
 /** A team to-do on the workspace task board. */

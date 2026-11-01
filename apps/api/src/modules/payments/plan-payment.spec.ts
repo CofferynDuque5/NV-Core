@@ -2,8 +2,8 @@ import { describe, expect, it } from "vitest";
 
 import { medianP2pPrice } from "../../common/fx/usdt-rate.service";
 import { RECEIPT_NAME_RE, sniffReceipt } from "../../common/receipts/receipt-store.service";
-import { alertLines } from "./plan-payment-alerts";
-import { cleanPayer } from "./payments.module";
+import { alertLines, alertProblem } from "./plan-payment-alerts";
+import { cleanPayer, mapPayment } from "./payments.module";
 
 describe("tasa USDT de Binance P2P", () => {
   it("toma la mediana de las ofertas y descarta basura", () => {
@@ -109,5 +109,71 @@ describe("datos del pago", () => {
     expect(lines).toContain("40 Bs/USDT");
     expect(lines).toContain("Referencia: 778899");
     expect(lines).toContain("Banco desde el que pagaste: Banesco");
+  });
+});
+
+describe("aviso de pagos por WhatsApp", () => {
+  it("dice qué falta para que llegue", () => {
+    expect(alertProblem(null, "cobros", true, "584120000000")).toMatchObject({ ready: false });
+    expect(alertProblem(null, "cobros", true, null).problem).toContain("NV_ADMIN_WHATSAPP");
+    expect(alertProblem("584120000000", "", false, null).problem).toContain("NV_BILLING_WORKSPACE");
+    expect(alertProblem("584120000000", "cobros", false, null).problem).toContain("no tiene un WhatsApp conectado");
+    expect(alertProblem("584120000000", "cobros", true, "584129999999")).toEqual({ ready: true, problem: null });
+  });
+
+  it("avisa que WhatsApp no suena si sale y llega al mismo número", () => {
+    const r = alertProblem("584120000000", "cobros", true, "+58 412 000 0000");
+    expect(r.ready).toBe(true);
+    expect(r.problem).toContain("mismo número");
+  });
+});
+
+describe("pago de plan en Cobros", () => {
+  const base = {
+    id: "p1",
+    workspaceSlug: "cobros",
+    concept: "Plan Básico",
+    amount: { toString: () => "7" },
+    currency: "USD",
+    status: "por_verificar",
+    contactId: null,
+    methodId: "m1",
+    methodLabel: "Pago Móvil",
+    reference: "0645",
+    note: null,
+    rejectReason: null,
+    dueAt: null,
+    paidAt: null,
+    verifiedBy: null,
+    createdBy: "a@b.c",
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  };
+
+  it("muestra quién pagó, el monto en Bs y si hay comprobante", () => {
+    const p = mapPayment({
+      ...base,
+      amount: 7,
+      forWorkspace: "marca-x",
+      planId: "basico",
+      payer: { payerName: "Ana", payerPhone: "04120000000" },
+      receiptFile: "abc.jpg",
+      localAmount: 280,
+      localCurrency: "VES",
+      rate: 40,
+    } as never);
+    expect(p.plan).toEqual({
+      forWorkspace: "marca-x",
+      planId: "basico",
+      payer: { payerName: "Ana", payerPhone: "04120000000" },
+      hasReceipt: true,
+      localAmount: 280,
+      localCurrency: "VES",
+      rate: 40,
+    });
+  });
+
+  it("un cobro normal no trae datos de plan", () => {
+    expect(mapPayment({ ...base, amount: 7, forWorkspace: null } as never).plan).toBeUndefined();
   });
 });
