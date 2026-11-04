@@ -1,4 +1,3 @@
-
 import * as React from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Loader2 } from "lucide-react";
@@ -49,14 +48,14 @@ export default function ResetPasswordPage() {
       title="Nueva contraseña"
       subtitle="Elige una contraseña segura."
       footer={
-        <Link to="/login" className="font-medium text-brand hover:underline">
+        <Link to="/login" className="text-brand font-medium hover:underline">
           Volver a iniciar sesión
         </Link>
       }
     >
       {!token ? (
         <div className="space-y-4">
-          <p className="rounded-lg border border-state-danger/30 bg-state-danger/10 px-3 py-2 text-sm text-state-danger">
+          <p className="border-state-danger/30 bg-state-danger/10 text-state-danger rounded-lg border px-3 py-2 text-sm">
             Enlace inválido o vencido. Pide uno nuevo para cambiar tu contraseña.
           </p>
           <Button asChild className="w-full">
@@ -64,7 +63,7 @@ export default function ResetPasswordPage() {
           </Button>
         </div>
       ) : done ? (
-        <p className="rounded-lg border border-state-success/30 bg-state-success/10 px-3 py-2 text-sm text-state-success">
+        <p className="border-state-success/30 bg-state-success/10 text-state-success rounded-lg border px-3 py-2 text-sm">
           Contraseña actualizada. Redirigiendo al inicio de sesión…
         </p>
       ) : (
@@ -79,7 +78,7 @@ export default function ResetPasswordPage() {
               minLength={8}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              placeholder="••••••••"
+              placeholder="Mínimo 8 caracteres"
             />
           </div>
           <div className="space-y-1.5">
@@ -92,11 +91,11 @@ export default function ResetPasswordPage() {
               minLength={8}
               value={confirm}
               onChange={(e) => setConfirm(e.target.value)}
-              placeholder="••••••••"
+              placeholder="Mínimo 8 caracteres"
             />
           </div>
           {error ? (
-            <p className="rounded-lg border border-state-danger/30 bg-state-danger/10 px-3 py-2 text-xs text-state-danger">
+            <p className="border-state-danger/30 bg-state-danger/10 text-state-danger rounded-lg border px-3 py-2 text-xs">
               {error}
             </p>
           ) : null}

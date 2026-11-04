@@ -105,7 +105,7 @@ export function AuthShell({
           </div>
 
           <p className="text-ink-muted text-xs">
-            © {new Date().getFullYear()} NV Marketing · Business Operating System
+            © {new Date().getFullYear()} NV Marketing · Panel de ventas
           </p>
         </div>
 
@@ -118,7 +118,9 @@ export function AuthShell({
                 <BrandMark size={26} />
               </span>
               <div>
-                <div className="font-display text-ink-bright text-xl font-semibold">NV Marketing</div>
+                <div className="font-display text-ink-bright text-xl font-semibold">
+                  NV Marketing
+                </div>
                 <div className="text-ink-faint text-[9px] font-semibold tracking-[0.22em]">
                   BUSINESS OS
                 </div>
@@ -138,7 +140,10 @@ export function AuthShell({
             ) : null}
 
             <p className="mt-6 text-center text-xs">
-              <a href={SITE_URL} className="text-ink-muted hover:text-ink underline-offset-2 hover:underline">
+              <a
+                href={SITE_URL}
+                className="text-ink-muted hover:text-ink underline-offset-2 hover:underline"
+              >
                 ← Volver a la web de NV Marketing
               </a>
             </p>

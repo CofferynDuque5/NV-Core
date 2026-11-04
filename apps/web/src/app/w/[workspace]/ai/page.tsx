@@ -164,12 +164,12 @@ export default function AiStudioPage() {
     <div className="space-y-6">
       <PageHeader
         eyebrow="Inteligencia de contenido"
-        title="AI Content Studio"
+        title="Contenido con IA"
         description="Asistente y generación de contenido con Google Gemini (clave gratis en Integraciones)."
         actions={
           usage.data ? (
-            <span className="rounded-full border border-line-soft bg-panel px-3 py-1 text-xs text-ink-muted">
-              <span className="font-medium text-ink">{usage.data.planName}</span> ·{" "}
+            <span className="border-line-soft bg-panel text-ink-muted rounded-full border px-3 py-1 text-xs">
+              <span className="text-ink font-medium">{usage.data.planName}</span> ·{" "}
               {usage.data.calls}
               {usage.data.quota != null ? ` / ${usage.data.quota}` : ""} usos ·{" "}
               {usage.data.period || "este mes"}
@@ -191,23 +191,27 @@ export default function AiStudioPage() {
             <span
               className={cn(
                 "grid size-9 shrink-0 place-items-center rounded-lg",
-                quota.exhausted ? "bg-state-warning/15 text-state-warning" : "bg-brand/10 text-brand",
+                quota.exhausted
+                  ? "bg-state-warning/15 text-state-warning"
+                  : "bg-brand/10 text-brand",
               )}
             >
               <Zap className="size-4" />
             </span>
             <div className="min-w-0">
-              <div className="text-sm font-semibold text-ink-bright">
+              <div className="text-ink-bright text-sm font-semibold">
                 {quota.exhausted
                   ? "Alcanzaste el límite mensual de IA"
                   : "Te estás acercando al límite mensual de IA"}
               </div>
-              <p className="mt-0.5 text-xs text-ink-muted">
+              <p className="text-ink-muted mt-0.5 text-xs">
                 Has usado {quota.used} de {quota.limit} llamadas este mes en el plan{" "}
                 {usage.data?.planName}.
-                {quota.canUpgrade ? " Amplía a Pro para uso ilimitado." : " Se renueva el próximo mes."}
+                {quota.canUpgrade
+                  ? " Amplía a Pro para uso ilimitado."
+                  : " Se renueva el próximo mes."}
               </p>
-              <div className="mt-2 h-1.5 w-full max-w-xs overflow-hidden rounded-full bg-panel-high">
+              <div className="bg-panel-high mt-2 h-1.5 w-full max-w-xs overflow-hidden rounded-full">
                 <div
                   className={cn(
                     "h-full rounded-full",
@@ -251,36 +255,66 @@ export default function AiStudioPage() {
 
             <div className="space-y-1.5">
               <Label>Plataforma</Label>
-              <Chips options={CHANNEL_LIST.map((c) => ({ id: c.id, label: c.name }))} value={channel} onChange={setChannel} />
+              <Chips
+                options={CHANNEL_LIST.map((c) => ({ id: c.id, label: c.name }))}
+                value={channel}
+                onChange={setChannel}
+              />
             </div>
 
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
                 <Label>Tono</Label>
-                <Chips options={TONES.map((t) => ({ id: t, label: t }))} value={tone} onChange={setTone} accent="brand-violet" />
+                <Chips
+                  options={TONES.map((t) => ({ id: t, label: t }))}
+                  value={tone}
+                  onChange={setTone}
+                  accent="brand-violet"
+                />
               </div>
               <div className="space-y-1.5">
                 <Label>Longitud</Label>
-                <Chips options={LENGTHS} value={length} onChange={setLength} accent="brand-violet" />
+                <Chips
+                  options={LENGTHS}
+                  value={length}
+                  onChange={setLength}
+                  accent="brand-violet"
+                />
               </div>
             </div>
 
             <div className="flex flex-wrap gap-2 pt-1">
               <Button size="sm" onClick={onGenerate} disabled={!canGenerate}>
-                {generate.isPending ? <Loader2 className="size-4 animate-spin" /> : <Wand2 className="size-4" />}
+                {generate.isPending ? (
+                  <Loader2 className="size-4 animate-spin" />
+                ) : (
+                  <Wand2 className="size-4" />
+                )}
                 Generar variantes
               </Button>
-              <Button variant="secondary" size="sm" onClick={onSuggestHashtags} disabled={hashtagsM.isPending}>
-                {hashtagsM.isPending ? <Loader2 className="size-4 animate-spin" /> : <Hash className="size-4" />}
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={onSuggestHashtags}
+                disabled={hashtagsM.isPending}
+              >
+                {hashtagsM.isPending ? (
+                  <Loader2 className="size-4 animate-spin" />
+                ) : (
+                  <Hash className="size-4" />
+                )}
                 Sugerir hashtags
               </Button>
             </div>
 
             {hashtags.length > 0 ? (
-              <div className="space-y-1.5 rounded-lg border border-line-soft bg-panel-raised p-3">
+              <div className="border-line-soft bg-panel-raised space-y-1.5 rounded-lg border p-3">
                 <div className="flex items-center justify-between">
                   <Label>Hashtags sugeridos</Label>
-                  <button onClick={() => copy(hashtags.join(" "))} className="text-[11px] text-brand hover:underline">
+                  <button
+                    onClick={() => copy(hashtags.join(" "))}
+                    className="text-brand text-[11px] hover:underline"
+                  >
                     Copiar todos
                   </button>
                 </div>
@@ -289,7 +323,7 @@ export default function AiStudioPage() {
                     <button
                       key={h}
                       onClick={() => copy(h)}
-                      className="rounded-full bg-panel-high px-2 py-0.5 text-[11px] text-ink-muted transition-colors hover:text-ink"
+                      className="bg-panel-high text-ink-muted hover:text-ink rounded-full px-2 py-0.5 text-[11px] transition-colors"
                       title="Copiar"
                     >
                       {h}
@@ -303,45 +337,60 @@ export default function AiStudioPage() {
 
         {/* Output */}
         <Panel>
-          <PanelHeader title="Variantes generadas" description={variants.length > 0 ? `${variants.length} opciones` : undefined} />
+          <PanelHeader
+            title="Variantes generadas"
+            description={variants.length > 0 ? `${variants.length} opciones` : undefined}
+          />
           <div className="p-4">
             {generate.isPending ? (
               <div className="space-y-3">
                 {[0, 1, 2].map((i) => (
-                  <div key={i} className="h-24 animate-pulse rounded-lg bg-panel-raised" />
+                  <div key={i} className="bg-panel-raised h-24 animate-pulse rounded-lg" />
                 ))}
               </div>
             ) : variants.length > 0 ? (
               <ul className="space-y-3">
                 {variants.map((v, i) => (
-                  <li key={i} className="rounded-lg border border-line-soft bg-panel-raised p-3">
+                  <li key={i} className="border-line-soft bg-panel-raised rounded-lg border p-3">
                     <div className="mb-2 flex items-center justify-between gap-2">
-                      <span className="rounded-full bg-brand/10 px-2 py-0.5 text-[11px] font-medium text-brand">{v.tag}</span>
-                      <span className="text-[11px] text-ink-faint">{wordCount(v.text)} palabras</span>
+                      <span className="bg-brand/10 text-brand rounded-full px-2 py-0.5 text-[11px] font-medium">
+                        {v.tag}
+                      </span>
+                      <span className="text-ink-faint text-[11px]">
+                        {wordCount(v.text)} palabras
+                      </span>
                     </div>
-                    <p className="whitespace-pre-wrap text-sm text-ink">{v.text}</p>
-                    <div className="mt-2.5 flex flex-wrap items-center gap-1.5 border-t border-line pt-2.5">
-                      <button onClick={() => copy(v.text)} className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs text-ink-muted transition-colors hover:bg-panel-high hover:text-ink">
+                    <p className="text-ink whitespace-pre-wrap text-sm">{v.text}</p>
+                    <div className="border-line mt-2.5 flex flex-wrap items-center gap-1.5 border-t pt-2.5">
+                      <button
+                        onClick={() => copy(v.text)}
+                        className="text-ink-muted hover:bg-panel-high hover:text-ink inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs transition-colors"
+                      >
                         <Copy className="size-3.5" /> Copiar
                       </button>
                       <button
                         onClick={() => improveVariant(i)}
                         disabled={improvingIdx === i}
-                        className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs text-ink-muted transition-colors hover:bg-panel-high hover:text-ink disabled:opacity-60"
+                        className="text-ink-muted hover:bg-panel-high hover:text-ink inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs transition-colors disabled:opacity-60"
                       >
-                        {improvingIdx === i ? <Loader2 className="size-3.5 animate-spin" /> : <Sparkles className="size-3.5" />} Mejorar
+                        {improvingIdx === i ? (
+                          <Loader2 className="size-3.5 animate-spin" />
+                        ) : (
+                          <Sparkles className="size-3.5" />
+                        )}{" "}
+                        Mejorar
                       </button>
                       {hashtags.length > 0 ? (
                         <button
                           onClick={() => setVariantText(i, mergeHashtags(v.text, hashtags))}
-                          className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs text-ink-muted transition-colors hover:bg-panel-high hover:text-ink"
+                          className="text-ink-muted hover:bg-panel-high hover:text-ink inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs transition-colors"
                         >
                           <Hash className="size-3.5" /> Añadir hashtags
                         </button>
                       ) : null}
                       <button
                         onClick={() => saveAsTemplate(v)}
-                        className="ml-auto inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs text-ink-muted transition-colors hover:bg-panel-high hover:text-ink"
+                        className="text-ink-muted hover:bg-panel-high hover:text-ink ml-auto inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs transition-colors"
                       >
                         <Save className="size-3.5" /> Guardar plantilla
                       </button>
@@ -375,13 +424,22 @@ export default function AiStudioPage() {
             />
             <div className="space-y-1.5">
               <Label>Formato</Label>
-              <Chips options={FLYER_SIZES} value={flyerSize} onChange={setFlyerSize} accent="brand-violet" />
+              <Chips
+                options={FLYER_SIZES}
+                value={flyerSize}
+                onChange={setFlyerSize}
+                accent="brand-violet"
+              />
             </div>
             <Button size="sm" onClick={onGenerateFlyer} disabled={flyer.isPending}>
-              {flyer.isPending ? <Loader2 className="size-4 animate-spin" /> : <ImageIcon className="size-4" />}
+              {flyer.isPending ? (
+                <Loader2 className="size-4 animate-spin" />
+              ) : (
+                <ImageIcon className="size-4" />
+              )}
               Generar flyer
             </Button>
-            <p className="text-[11px] text-ink-faint">
+            <p className="text-ink-faint text-[11px]">
               La generación de imágenes usa Google Gemini. Pega tu clave en{" "}
               <Link to={`/w/${ws.slug}/marketplace`} className="text-brand hover:underline">
                 Integraciones → Google Gemini
@@ -395,18 +453,18 @@ export default function AiStudioPage() {
           <PanelHeader title="Vista previa" />
           <div className="p-4">
             {flyer.isPending ? (
-              <div className="aspect-square w-full max-w-md animate-pulse rounded-lg bg-panel-raised" />
+              <div className="bg-panel-raised aspect-square w-full max-w-md animate-pulse rounded-lg" />
             ) : flyerUrl ? (
               <div className="space-y-3">
                 <img
                   src={flyerUrl}
                   alt="Flyer generado"
-                  className="w-full max-w-md rounded-lg border border-line-soft"
+                  className="border-line-soft w-full max-w-md rounded-lg border"
                 />
                 <a
                   href={flyerUrl}
                   download="flyer-nv-core.png"
-                  className="inline-flex items-center gap-1.5 rounded-lg border border-line-soft px-3 py-1.5 text-xs text-ink-muted transition-colors hover:border-brand/60 hover:text-ink"
+                  className="border-line-soft text-ink-muted hover:border-brand/60 hover:text-ink inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs transition-colors"
                 >
                   <Download className="size-3.5" /> Descargar
                 </a>

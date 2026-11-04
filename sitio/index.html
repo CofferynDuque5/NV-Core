@@ -22,9 +22,8 @@
 <link rel="icon" href="favicon.ico" sizes="32x32" />
 <link rel="apple-touch-icon" href="img/apple-touch-icon.png" />
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 1024 1024%22%3E%3Cdefs%3E%3ClinearGradient id=%22g%22 x1=%220%22 y1=%220%22 x2=%221%22 y2=%221%22%3E%3Cstop offset=%220%22 stop-color=%22#5f86f2%22/%3E%3Cstop offset=%221%22 stop-color=%22#8c7bef%22/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width=%221024%22 height=%221024%22 rx=%22230%22 fill=%22url(#g)%22/%3E%3Cg transform=%22translate(194 194) scale(9.9375)%22 fill=%22none%22 stroke-width=%225%22%3E%3Cpath d=%22M8 26h9l17-11v34L17 38H8z%22 stroke=%22#fff%22 stroke-linejoin=%22round%22/%3E%3Cpath d=%22M17 38v11h9v-7%22 stroke=%22#fff%22 stroke-linejoin=%22round%22/%3E%3Cpath d=%22M43 24a11 11 0 0 1 0 16%22 stroke=%22#fff%22 stroke-linecap=%22round%22/%3E%3Cpath d=%22M50 16a21 21 0 0 1 0 32%22 stroke=%22rgba(255,255,255,.55)%22 stroke-linecap=%22round%22/%3E%3C/g%3E%3C/svg%3E">
-<link rel="preconnect" href="https://fonts.googleapis.com" />
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Newsreader:opsz,wght@6..72,500;6..72,600&family=Plus+Jakarta+Sans:wght@500;700;800&display=swap" rel="stylesheet" />
+<link rel="preload" href="fonts/inter-latin-567244.woff2" as="font" type="font/woff2" crossorigin />
+<link rel="stylesheet" href="fonts/fonts.css" />
 <style>
 /* =====================================================================
    NV Marketing · sitio de ventas
@@ -72,7 +71,7 @@ html[data-style="vibrante"]{
   --brand:#4F5BF0; --brand-2:#A24BF5;
   --grad:linear-gradient(120deg,#4F5BF0 0%,#A24BF5 55%,#F0507A 100%);
   --btn-grad:linear-gradient(120deg,#4F5BF0 0%,#8A3FE0 55%,#C0396A 100%);
-  --display:"Plus Jakarta Sans",var(--font); --display-weight:800; --display-track:-.035em;
+  --display:var(--font); --display-weight:800; --display-track:-.035em;
   --radius:24px;
   --hero-glow:radial-gradient(45% 55% at 12% 20%,#DCE2FF,transparent 70%),radial-gradient(40% 50% at 90% 15%,#F6DDFF,transparent 70%),radial-gradient(35% 40% at 70% 90%,#FFE1EA,transparent 70%);
 }
@@ -126,6 +125,9 @@ html[data-style="vibrante"] .btn{border-radius:999px}
 .skip:focus{top:12px}
 .flag{display:inline-block;width:18px;height:12px;vertical-align:-1px;border-radius:2px;margin-left:4px}
 .mnav.open{display:block}
+.mnav-bg{display:none;position:fixed;inset:68px 0 0;z-index:48;background:rgba(3,6,18,.6);backdrop-filter:blur(2px)}
+.mnav-bg.open{display:block}
+body.menu-open{overflow:hidden}
 
 /* ---------- Hero ---------- */
 .hero{position:relative;padding:84px 0 40px;overflow:hidden}
@@ -432,6 +434,7 @@ dialog.install::backdrop{background:rgba(5,7,12,.6);backdrop-filter:blur(3px)}
     </div>
   </div>
 </header>
+<div class="mnav-bg" aria-hidden="true"></div>
 <nav class="mnav" id="mnav" aria-label="Menú">
   <a href="#panel">El panel</a>
   <a href="#beneficios">Lo que ganas</a>
@@ -448,7 +451,7 @@ dialog.install::backdrop{background:rgba(5,7,12,.6);backdrop-filter:blur(3px)}
   <div class="wrap hero-grid">
     <div class="hero-copy">
       <span class="eyebrow">Hecho para vender en Latinoamérica</span>
-      <h1>Vende por WhatsApp y redes <span class="grad-text">desde un solo panel.</span></h1>
+      <h1>Vende por WhatsApp, Telegram y redes <span class="grad-text">desde un solo panel.</span></h1>
       <p class="lead">Tus chats, campañas a grupos, clientes, tienda y cobros en tu país, juntos y en orden. Para que dediques el tiempo a vender y no a saltar entre aplicaciones.</p>
       <div class="cta">
         <a class="btn btn-primary btn-lg" data-app data-path="/register" href="#">Probar 24 horas gratis <svg><use href="#i-arrow"/></svg></a>
@@ -497,14 +500,14 @@ dialog.install::backdrop{background:rgba(5,7,12,.6);backdrop-filter:blur(3px)}
     </div>
     <div class="tour rv">
       <div class="tabs" role="tablist" aria-label="Partes del panel">
-        <button class="tab" id="tab-sh-inicio" tabindex="0" role="tab" aria-selected="true" aria-controls="sh-inicio" data-shot="sh-inicio"><strong><span class="ico"><svg><use href="#i-layers"/></svg></span>Inicio</strong><span>Lo que pasó hoy en tu marca, tus próximos pasos y los avisos que necesitan atención.</span></button>
-        <button class="tab" id="tab-sh-campanas" tabindex="-1" role="tab" aria-selected="false" aria-controls="sh-campanas" data-shot="sh-campanas"><strong><span class="ico"><svg><use href="#i-mega"/></svg></span>Campañas</strong><span>Programa mensajes con imágenes a tus grupos de WhatsApp y Telegram, por días, horas o entre dos fechas.</span></button>
-        <button class="tab" id="tab-sh-grupos" tabindex="-1" role="tab" aria-selected="false" aria-controls="sh-grupos" data-shot="sh-grupos"><strong><span class="ico"><svg><use href="#i-users"/></svg></span>Grupos</strong><span>Tus grupos con país, categoría y reglas. El precio se pone solo en la moneda de cada grupo.</span></button>
-        <button class="tab" id="tab-sh-contactos" tabindex="-1" role="tab" aria-selected="false" aria-controls="sh-contactos" data-shot="sh-contactos"><strong><span class="ico"><svg><use href="#i-users"/></svg></span>Clientes</strong><span>Tu CRM por etapas: de interesado a cliente, con notas, etiquetas y de dónde llegó cada uno.</span></button>
-        <button class="tab" id="tab-sh-cobros" tabindex="-1" role="tab" aria-selected="false" aria-controls="sh-cobros" data-shot="sh-cobros"><strong><span class="ico"><svg><use href="#i-coin"/></svg></span>Cobros</strong><span>Pide pagos con Pago Móvil, Nequi, Yape, Binance, Zinli y más. Confírmalos al ver el comprobante.</span></button>
-        <button class="tab" id="tab-sh-tienda" tabindex="-1" role="tab" aria-selected="false" aria-controls="sh-tienda" data-shot="sh-tienda"><strong><span class="ico"><svg><use href="#i-bag"/></svg></span>Tienda</strong><span>Tu catálogo con precios por moneda. De un producto sale una campaña en un clic.</span></button>
-        <button class="tab" id="tab-sh-calendario" tabindex="-1" role="tab" aria-selected="false" aria-controls="sh-calendario" data-shot="sh-calendario"><strong><span class="ico"><svg><use href="#i-cal"/></svg></span>Calendario</strong><span>Todas tus publicaciones de la semana o del mes, por red social.</span></button>
-        <button class="tab" id="tab-sh-analytics" tabindex="-1" role="tab" aria-selected="false" aria-controls="sh-analytics" data-shot="sh-analytics"><strong><span class="ico"><svg><use href="#i-chart"/></svg></span>Analítica</strong><span>Números que dicen de dónde salen, descargables en CSV o PDF, y un informe cada lunes.</span></button>
+        <button type="button" class="tab" id="tab-sh-inicio" tabindex="0" role="tab" aria-selected="true" aria-controls="sh-inicio" data-shot="sh-inicio"><strong><span class="ico"><svg><use href="#i-layers"/></svg></span>Inicio</strong><span>Lo que pasó hoy en tu marca, tus próximos pasos y los avisos que necesitan atención.</span></button>
+        <button type="button" class="tab" id="tab-sh-campanas" tabindex="-1" role="tab" aria-selected="false" aria-controls="sh-campanas" data-shot="sh-campanas"><strong><span class="ico"><svg><use href="#i-mega"/></svg></span>Campañas</strong><span>Programa mensajes con imágenes a tus grupos de WhatsApp y Telegram, por días, horas o entre dos fechas.</span></button>
+        <button type="button" class="tab" id="tab-sh-grupos" tabindex="-1" role="tab" aria-selected="false" aria-controls="sh-grupos" data-shot="sh-grupos"><strong><span class="ico"><svg><use href="#i-users"/></svg></span>Grupos</strong><span>Tus grupos con país, categoría y reglas. El precio se pone solo en la moneda de cada grupo.</span></button>
+        <button type="button" class="tab" id="tab-sh-contactos" tabindex="-1" role="tab" aria-selected="false" aria-controls="sh-contactos" data-shot="sh-contactos"><strong><span class="ico"><svg><use href="#i-users"/></svg></span>Clientes</strong><span>Tu CRM por etapas: de interesado a cliente, con notas, etiquetas y de dónde llegó cada uno.</span></button>
+        <button type="button" class="tab" id="tab-sh-cobros" tabindex="-1" role="tab" aria-selected="false" aria-controls="sh-cobros" data-shot="sh-cobros"><strong><span class="ico"><svg><use href="#i-coin"/></svg></span>Cobros</strong><span>Pide pagos con Pago Móvil, Nequi, Yape, Binance, Zinli y más. Confírmalos al ver el comprobante.</span></button>
+        <button type="button" class="tab" id="tab-sh-tienda" tabindex="-1" role="tab" aria-selected="false" aria-controls="sh-tienda" data-shot="sh-tienda"><strong><span class="ico"><svg><use href="#i-bag"/></svg></span>Tienda</strong><span>Tu catálogo con precios por moneda. De un producto sale una campaña en un clic.</span></button>
+        <button type="button" class="tab" id="tab-sh-calendario" tabindex="-1" role="tab" aria-selected="false" aria-controls="sh-calendario" data-shot="sh-calendario"><strong><span class="ico"><svg><use href="#i-cal"/></svg></span>Calendario</strong><span>Todas tus publicaciones de la semana o del mes, por red social.</span></button>
+        <button type="button" class="tab" id="tab-sh-analytics" tabindex="-1" role="tab" aria-selected="false" aria-controls="sh-analytics" data-shot="sh-analytics"><strong><span class="ico"><svg><use href="#i-chart"/></svg></span>Analítica</strong><span>Números que dicen de dónde salen, descargables en CSV o PDF, y un informe cada lunes.</span></button>
       </div>
       <div class="shots">
         <div class="frame shot on" id="sh-inicio" role="tabpanel" aria-labelledby="tab-sh-inicio" tabindex="0"><img class="s-d" src="img/dark-dashboard.webp" width="1600" height="1000" alt="Inicio del panel" loading="lazy"/><img class="s-l" src="img/light-dashboard.webp" width="1600" height="1000" alt="Inicio del panel" loading="lazy"/><img class="m-shot" src="img/movil-dashboard.webp" width="600" height="1298" alt="" loading="lazy"/></div>
@@ -698,10 +701,10 @@ dialog.install::backdrop{background:rgba(5,7,12,.6);backdrop-filter:blur(3px)}
   <div class="in-body">
     <p class="muted">Se instala desde el navegador, sin tiendas: queda con su icono, abre en su propia ventana y se actualiza sola.</p>
     <div class="oses" role="tablist" aria-label="Dispositivo">
-      <button class="os" role="tab" id="os-android" aria-controls="install-steps" data-os="android" aria-selected="false">Android</button>
-      <button class="os" role="tab" id="os-ios" aria-controls="install-steps" data-os="ios" aria-selected="false">iPhone y iPad</button>
-      <button class="os" role="tab" id="os-windows" aria-controls="install-steps" data-os="windows" aria-selected="false">Windows</button>
-      <button class="os" role="tab" id="os-mac" aria-controls="install-steps" data-os="mac" aria-selected="false">Mac</button>
+      <button type="button" class="os" role="tab" id="os-android" aria-controls="install-steps" data-os="android" aria-selected="false">Android</button>
+      <button type="button" class="os" role="tab" id="os-ios" aria-controls="install-steps" data-os="ios" aria-selected="false">iPhone y iPad</button>
+      <button type="button" class="os" role="tab" id="os-windows" aria-controls="install-steps" data-os="windows" aria-selected="false">Windows</button>
+      <button type="button" class="os" role="tab" id="os-mac" aria-controls="install-steps" data-os="mac" aria-selected="false">Mac</button>
     </div>
     <ol class="steps" id="install-steps" role="tabpanel" aria-label="Pasos para instalar" aria-live="polite"></ol>
     <div class="in-foot">
@@ -733,9 +736,11 @@ dialog.install::backdrop{background:rgba(5,7,12,.6);backdrop-filter:blur(3px)}
 (function(){
   /* Menú del teléfono */
   var burger=document.querySelector(".burger"),mnav=document.getElementById("mnav");
-  function menu(open){mnav.classList.toggle("open",open);burger.setAttribute("aria-expanded",open?"true":"false");burger.setAttribute("aria-label",open?"Cerrar menú":"Abrir menú");}
+  var mbg=document.querySelector(".mnav-bg");
+  function menu(open){mnav.classList.toggle("open",open);mbg.classList.toggle("open",open);document.body.classList.toggle("menu-open",open);burger.setAttribute("aria-expanded",open?"true":"false");burger.setAttribute("aria-label",open?"Cerrar menú":"Abrir menú");}
   burger.addEventListener("click",function(){menu(!mnav.classList.contains("open"));});
   mnav.addEventListener("click",function(e){if(e.target.closest("a"))menu(false);});
+  mbg.addEventListener("click",function(){menu(false);});
   document.addEventListener("keydown",function(e){if(e.key==="Escape"&&mnav.classList.contains("open")){menu(false);burger.focus();}});
 
   /* El logo vuelve arriba del todo */

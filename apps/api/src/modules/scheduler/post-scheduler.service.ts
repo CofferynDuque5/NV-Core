@@ -58,6 +58,15 @@ export class PostScheduler implements OnModuleInit, OnModuleDestroy {
       await this.publish((payload as { postId: string }).postId);
     });
     if (!this.prisma.enabled) return;
+    // A cPanel app that slept wakes on the next visit: publish what came due meanwhile.
+    const first = setTimeout(
+      () =>
+        void this.sweep().catch((err: unknown) =>
+          this.logger.warn(`Barrido de publicaciones falló: ${(err as Error).message}`),
+        ),
+      10_000,
+    );
+    first.unref?.();
     this.timer = setInterval(
       () =>
         void this.sweep().catch((err: unknown) =>
@@ -197,7 +206,11 @@ export class PostScheduler implements OnModuleInit, OnModuleDestroy {
     });
     for (const p of stuck) {
       const { count } = await this.prisma.post.updateMany({
-        where: { id: p.id, status: "publishing", OR: [{ publishStartedAt: { lte: cutoff } }, { publishStartedAt: null }] },
+        where: {
+          id: p.id,
+          status: "publishing",
+          OR: [{ publishStartedAt: { lte: cutoff } }, { publishStartedAt: null }],
+        },
         data: { status: "error" },
       });
       if (count === 0) continue;

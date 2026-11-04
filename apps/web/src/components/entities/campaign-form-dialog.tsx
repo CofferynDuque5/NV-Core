@@ -25,7 +25,13 @@ import {
   useUpdateCampaign,
   useUploadCampaignAttachment,
 } from "@/hooks/use-domain-mutations";
-import { useBrandLinks, useCampaigns, useGroups, useProducts, useTemplates } from "@/hooks/use-domain-data";
+import {
+  useBrandLinks,
+  useCampaigns,
+  useGroups,
+  useProducts,
+  useTemplates,
+} from "@/hooks/use-domain-data";
 import { productMessage } from "@/lib/products";
 import { CAMPAIGN_STATUS_LABEL, campaignCategories, campaignReadyProblems } from "@/lib/campaigns";
 import { FormDialog, errorMessage } from "./form-dialog";
@@ -34,6 +40,7 @@ import { AiFlyerButton } from "./ai-flyer-button";
 import { AttachmentRows, LibraryPickerButton } from "./attachment-tools";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { BrandTimeZone } from "@/components/common/brand-time-zone";
 import { Textarea } from "@/components/ui/textarea";
 import { TimePicker12h } from "@/components/ui/time-picker";
 
@@ -105,7 +112,10 @@ export function CampaignFormDialog({
   const [statusTouched, setStatusTouched] = React.useState(false);
   const [category, setCategory] = React.useState("");
   const allCampaigns = useCampaigns();
-  const categoryOptions = React.useMemo(() => campaignCategories(allCampaigns.data?.items ?? []), [allCampaigns.data]);
+  const categoryOptions = React.useMemo(
+    () => campaignCategories(allCampaigns.data?.items ?? []),
+    [allCampaigns.data],
+  );
   const [progress, setProgress] = React.useState(0);
   const [message, setMessage] = React.useState("");
   const [scheduleType, setScheduleType] = React.useState<ScheduleType>("once");
@@ -175,7 +185,8 @@ export function CampaignFormDialog({
     setPrices(p.prices);
     if (!name.trim()) setName(p.name);
     const cover = p.images[0];
-    if (cover && !attachments.some((a) => a.url === cover.url)) setAttachments((prev) => [cover, ...prev]);
+    if (cover && !attachments.some((a) => a.url === cover.url))
+      setAttachments((prev) => [cover, ...prev]);
   }
 
   async function onPickFiles(e: React.ChangeEvent<HTMLInputElement>) {
@@ -242,7 +253,9 @@ export function CampaignFormDialog({
     }
     const badPrice = Object.entries(prices).find(([, v]) => !isValidPrice(v));
     if (badPrice) {
-      setError(`El precio en ${badPrice[0]} no es válido: escribe solo un número mayor o igual a 0, por ejemplo 6.50.`);
+      setError(
+        `El precio en ${badPrice[0]} no es válido: escribe solo un número mayor o igual a 0, por ejemplo 6.50.`,
+      );
       return;
     }
 
@@ -299,7 +312,8 @@ export function CampaignFormDialog({
     // content, somewhere to go and (for «una vez») a future date.
     const sentStatus = input.status;
     const hasSchedule = scheduleType === "once" ? Boolean(scheduleAt) : times.length > 0;
-    const finalStatus = sentStatus ?? (hasSchedule ? "programada" : (campaign?.status ?? "borrador"));
+    const finalStatus =
+      sentStatus ?? (hasSchedule ? "programada" : (campaign?.status ?? "borrador"));
     if (finalStatus === "programada" || finalStatus === "activa") {
       const problems = campaignReadyProblems({
         message,
@@ -336,7 +350,8 @@ export function CampaignFormDialog({
 
   const hasImage = attachments.some((a) => a.url);
   /** Why this campaign as written cannot go to `g` (empty = it can). */
-  const groupProblems = (g: (typeof groupItems)[number]) => groupPostingProblems(g, { hasImage, prices, usesPrice: usesPriceVar(message) });
+  const groupProblems = (g: (typeof groupItems)[number]) =>
+    groupPostingProblems(g, { hasImage, prices, usesPrice: usesPriceVar(message) });
   // Currencies the chosen groups need, plus any price already typed.
   const neededCurrencies = [
     ...new Set([
@@ -350,9 +365,12 @@ export function CampaignFormDialog({
   const blocked = selectedGroups.filter((g) => groupProblems(g).length > 0);
   const footer = campaignFooter(brandLinks.data ?? {});
   // The preview shows the first chosen group: its price, and the footer if on.
-  const previewGroup = selectedGroups.find((g) => groupProblems(g).length === 0) ?? selectedGroups[0];
+  const previewGroup =
+    selectedGroups.find((g) => groupProblems(g).length === 0) ?? selectedGroups[0];
   const previewPrice = previewGroup ? priceForGroup(previewGroup, prices) : "";
-  const previewText = previewPrice ? message.replace(/\{\{\s*precio\s*\}\}/g, previewPrice) : message;
+  const previewText = previewPrice
+    ? message.replace(/\{\{\s*precio\s*\}\}/g, previewPrice)
+    : message;
   const previewMessage = addFooter && previewGroup ? withFooter(previewText, footer) : previewText;
   const otherCampaigns = (campaigns.data?.items ?? []).filter(
     (c) => c.id !== campaign?.id && (c.targetGroups?.length ?? 0) > 0,
@@ -638,6 +656,7 @@ export function CampaignFormDialog({
                         {scheduleTimes.includes(time) ? "Agregada ✓" : "Agregar hora"}
                       </button>
                     </div>
+                    <BrandTimeZone id="cp-brand-zone" />
                     {scheduleTimes.length > 0 ? (
                       <div className="flex flex-wrap gap-1.5 pt-1">
                         {scheduleTimes.map((t) => (
@@ -666,7 +685,9 @@ export function CampaignFormDialog({
                     )}
                   </div>
                   <div className="space-y-1.5" data-testid="campaign-date-range">
-                    <Label className="text-ink-muted text-xs">Publicar solo entre estas fechas (opcional)</Label>
+                    <Label className="text-ink-muted text-xs">
+                      Publicar solo entre estas fechas (opcional)
+                    </Label>
                     <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                       <div className="space-y-1">
                         <Label htmlFor="cp-start-date" className="text-ink-faint text-[11px]">
@@ -749,7 +770,8 @@ export function CampaignFormDialog({
                       onClick={() => setAllVisible(true)}
                       className="border-line-soft text-ink-muted hover:border-brand/60 hover:text-ink rounded-md border px-2 py-0.5 transition-colors"
                     >
-                      Seleccionar aptos ({visibleGroups.filter((g) => groupStatus(g).status === "apto").length})
+                      Seleccionar aptos (
+                      {visibleGroups.filter((g) => groupStatus(g).status === "apto").length})
                     </button>
                     <button
                       type="button"
@@ -787,53 +809,57 @@ export function CampaignFormDialog({
                         const locked = st.status !== "apto" && !chosen;
                         const issue = chosen ? groupProblems(g)[0] : st.reasons[0];
                         return (
-                        <label
-                          key={g.id}
-                          title={issue}
-                          className={cn(
-                            "hover:bg-panel-high flex items-center gap-2 rounded-md px-2 py-1.5 text-sm",
-                            locked ? "cursor-not-allowed opacity-50" : "cursor-pointer",
-                          )}
-                        >
-                          <input
-                            type="checkbox"
-                            checked={chosen}
-                            disabled={locked}
-                            onChange={() => toggleGroup(g.id)}
-                            className="border-line-strong accent-brand size-4 rounded"
-                          />
-                          <span className="min-w-0 flex-1">
-                            <span className="text-ink block truncate">{g.name}</span>
-                            {issue ? (
-                              <span
-                                className={cn(
-                                  "block truncate text-[10px]",
-                                  chosen ? "text-state-warning" : "text-ink-faint",
-                                )}
-                              >
-                                {issue}
-                              </span>
-                            ) : null}
-                          </span>
-                          <span
-                            className={
-                              g.channel === "tg"
-                                ? "shrink-0 rounded bg-sky-500/15 px-1.5 py-0.5 text-[10px] font-medium text-sky-400"
-                                : "shrink-0 rounded bg-emerald-500/15 px-1.5 py-0.5 text-[10px] font-medium text-emerald-400"
-                            }
+                          <label
+                            key={g.id}
+                            title={issue}
+                            className={cn(
+                              "hover:bg-panel-high flex items-center gap-2 rounded-md px-2 py-1.5 text-sm",
+                              locked ? "cursor-not-allowed opacity-50" : "cursor-pointer",
+                            )}
                           >
-                            {g.channel === "tg" ? (g.kind === "channel" ? "Canal TG" : "TG") : "WA"}
-                          </span>
-                          {(g.tags ?? []).slice(0, 2).map((t) => (
-                            <span
-                              key={t}
-                              className="bg-panel-high text-ink-faint shrink-0 rounded px-1.5 py-0.5 text-[10px]"
-                            >
-                              {t}
+                            <input
+                              type="checkbox"
+                              checked={chosen}
+                              disabled={locked}
+                              onChange={() => toggleGroup(g.id)}
+                              className="border-line-strong accent-brand size-4 rounded"
+                            />
+                            <span className="min-w-0 flex-1">
+                              <span className="text-ink block truncate">{g.name}</span>
+                              {issue ? (
+                                <span
+                                  className={cn(
+                                    "block truncate text-[10px]",
+                                    chosen ? "text-state-warning" : "text-ink-faint",
+                                  )}
+                                >
+                                  {issue}
+                                </span>
+                              ) : null}
                             </span>
-                          ))}
-                          <span className="text-ink-faint shrink-0 text-[11px]">{g.members}</span>
-                        </label>
+                            <span
+                              className={
+                                g.channel === "tg"
+                                  ? "shrink-0 rounded bg-sky-500/15 px-1.5 py-0.5 text-[10px] font-medium text-sky-400"
+                                  : "shrink-0 rounded bg-emerald-500/15 px-1.5 py-0.5 text-[10px] font-medium text-emerald-400"
+                              }
+                            >
+                              {g.channel === "tg"
+                                ? g.kind === "channel"
+                                  ? "Canal TG"
+                                  : "TG"
+                                : "WA"}
+                            </span>
+                            {(g.tags ?? []).slice(0, 2).map((t) => (
+                              <span
+                                key={t}
+                                className="bg-panel-high text-ink-faint shrink-0 rounded px-1.5 py-0.5 text-[10px]"
+                              >
+                                {t}
+                              </span>
+                            ))}
+                            <span className="text-ink-faint shrink-0 text-[11px]">{g.members}</span>
+                          </label>
                         );
                       })
                     )}
@@ -843,9 +869,15 @@ export function CampaignFormDialog({
             </div>
 
             {blocked.length > 0 ? (
-              <p className="border-state-warning/40 bg-state-warning/10 text-ink rounded-lg border px-3 py-2 text-xs" data-testid="blocked-groups">
-                {blocked.length === 1 ? "1 grupo elegido se omitirá" : `${blocked.length} grupos elegidos se omitirán`} si no
-                lo corriges: {blocked
+              <p
+                className="border-state-warning/40 bg-state-warning/10 text-ink rounded-lg border px-3 py-2 text-xs"
+                data-testid="blocked-groups"
+              >
+                {blocked.length === 1
+                  ? "1 grupo elegido se omitirá"
+                  : `${blocked.length} grupos elegidos se omitirán`}{" "}
+                si no lo corriges:{" "}
+                {blocked
                   .slice(0, 3)
                   .map((g) => `«${g.name}» (${groupProblems(g)[0]?.replace(/\.$/, "")})`)
                   .join("; ")}
@@ -858,14 +890,18 @@ export function CampaignFormDialog({
                 <Label>Precio por moneda</Label>
                 <p className="text-ink-faint text-[11px]">
                   Escribe el precio en cada moneda. En el mensaje usa{" "}
-                  <code className="text-ink-muted">{"{{precio}}"}</code>: cada grupo verá el de su país (Venezuela en Bs,
-                  Colombia en pesos, España en euros). No convertimos monedas.
+                  <code className="text-ink-muted">{"{{precio}}"}</code>: cada grupo verá el de su
+                  país (Venezuela en Bs, Colombia en pesos, España en euros). No convertimos
+                  monedas.
                 </p>
                 {neededCurrencies.length > 0 ? (
                   <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                     {neededCurrencies.map((cur) => (
                       <div key={cur} className="flex items-center gap-2">
-                        <Label htmlFor={`cp-price-${cur}`} className="text-ink-muted w-36 shrink-0 text-xs">
+                        <Label
+                          htmlFor={`cp-price-${cur}`}
+                          className="text-ink-muted w-36 shrink-0 text-xs"
+                        >
                           {CURRENCY_LABEL[cur] ?? cur}
                         </Label>
                         <Input
@@ -882,8 +918,10 @@ export function CampaignFormDialog({
                 ) : null}
                 {noCountry > 0 ? (
                   <p className="text-state-warning text-[11px]">
-                    {noCountry === 1 ? "1 grupo no tiene país" : `${noCountry} grupos no tienen país`}: indícalo en Grupos →
-                    Configurar para saber en qué moneda va el precio.
+                    {noCountry === 1
+                      ? "1 grupo no tiene país"
+                      : `${noCountry} grupos no tienen país`}
+                    : indícalo en Grupos → Configurar para saber en qué moneda va el precio.
                   </p>
                 ) : null}
               </div>
@@ -900,9 +938,14 @@ export function CampaignFormDialog({
                     className="border-line-strong accent-brand mt-0.5 size-4 rounded"
                   />
                   <span className="min-w-0 flex-1">
-                    <span className="text-ink block text-sm">Agregar redes, web y firma de NV Marketing</span>
-                    <span className="text-ink-faint block whitespace-pre-line text-[11px]">{footer}</span>
-                    {(brandLinks.data?.socialLinks.length ?? 0) === 0 && !brandLinks.data?.website ? (
+                    <span className="text-ink block text-sm">
+                      Agregar redes, web y firma de NV Marketing
+                    </span>
+                    <span className="text-ink-faint block whitespace-pre-line text-[11px]">
+                      {footer}
+                    </span>
+                    {(brandLinks.data?.socialLinks.length ?? 0) === 0 &&
+                    !brandLinks.data?.website ? (
                       <span className="text-ink-faint block text-[11px]">
                         Agrega tus redes y tu web en Configuración → Redes y web.
                       </span>

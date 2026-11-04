@@ -9,6 +9,8 @@
 <link rel="canonical" href="https://nvmarketing.nvcorx.com/legal.html" />
 <link rel="icon" href="favicon.ico" sizes="32x32" />
 <link rel="apple-touch-icon" href="img/apple-touch-icon.png" />
+<link rel="preload" href="fonts/inter-latin-567244.woff2" as="font" type="font/woff2" crossorigin />
+<link rel="stylesheet" href="fonts/fonts.css" />
 <style>
 
   /* ==================== TOKENS ==================== */
@@ -34,7 +36,8 @@
     --shadow:0 24px 60px -18px rgba(0,0,0,.65);
     --glow:0 0 0 1px rgba(139,92,246,.35),0 18px 50px -12px rgba(99,102,241,.55);
     --maxw:1180px;
-    --font:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Inter,"Helvetica Neue",Arial,sans-serif;
+    --font:"Inter",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+    --display:"Newsreader",Georgia,serif;
   }
 
   /* ==================== RESET / BASE ==================== */
@@ -54,6 +57,7 @@
   a{color:inherit;text-decoration:none}
   img,svg{display:block;max-width:100%}
   h1,h2,h3,h4{margin:0;line-height:1.12;letter-spacing:-.02em;font-weight:700}
+  h1,h2{font-family:var(--display);font-weight:600}
   p{margin:0}
   ul{margin:0;padding:0;list-style:none}
   button{font-family:inherit;cursor:pointer}
@@ -165,7 +169,16 @@
   .legal-sec a, .legal-part a{color:#a9b9ff;text-decoration:underline;text-underline-offset:3px}
   .people{list-style:none!important;padding-left:0!important}
   .people li{padding:12px 14px;border:1px solid var(--line);border-radius:var(--radius-sm);background:var(--panel-2)}
-  .table-wrap{overflow-x:auto;margin:6px 0 12px}
+  .table-wrap{overflow-x:auto;margin:6px 0 12px;scrollbar-color:rgba(255,255,255,.18) transparent;color-scheme:dark}
+  .table-wrap::-webkit-scrollbar{height:8px}
+  .table-wrap::-webkit-scrollbar-thumb{background:rgba(255,255,255,.18);border-radius:8px}
+  @media (max-width:600px){
+    .table-wrap table{min-width:0}
+    .table-wrap thead{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+    .table-wrap tr{display:block;padding:10px 0;border-bottom:1px solid var(--line)}
+    .table-wrap td{display:block;border:0;padding:3px 0}
+    .table-wrap td::before{content:attr(data-label);display:block;font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+  }
   table{width:100%;border-collapse:collapse;font-size:14.5px;min-width:520px}
   th,td{text-align:left;padding:10px 12px;border-bottom:1px solid var(--line);vertical-align:top;color:#cfd5de}
   th{color:var(--muted);font-size:12px;text-transform:uppercase;letter-spacing:.08em}
@@ -351,11 +364,11 @@
 <div class="table-wrap"><table>
   <thead><tr><th>Qué</th><th>Para qué</th><th>Duración</th></tr></thead>
   <tbody>
-    <tr><td>Cookie de sesión (segura, no accesible desde JavaScript)</td><td>Mantener tu sesión iniciada de forma segura</td><td>Hasta 7 días o hasta que cierres sesión</td></tr>
-    <tr><td>Almacenamiento local del navegador</td><td>Recordar tus preferencias: tema claro u oscuro, vista y filtros del calendario, avance del registro inicial</td><td>Hasta que lo borres desde tu navegador</td></tr>
+    <tr><td data-label="Qué">Cookie de sesión (segura, no accesible desde JavaScript)</td><td data-label="Para qué">Mantener tu sesión iniciada de forma segura</td><td data-label="Duración">Hasta 30 días sin entrar, o hasta que cierres sesión</td></tr>
+    <tr><td data-label="Qué">Almacenamiento local del navegador</td><td data-label="Para qué">Recordar tus preferencias: tema claro u oscuro, vista y filtros del calendario, avance del registro inicial</td><td data-label="Duración">Hasta que lo borres desde tu navegador</td></tr>
   </tbody>
 </table></div>
-<p>Este sitio de presentación no usa cookies. Puedes borrar cookies y almacenamiento local desde la configuración de tu navegador; si borras la cookie de sesión tendrás que volver a ingresar.</p>
+<p>Este sitio de presentación no usa cookies ni carga nada de otros servidores: sus fuentes tipográficas (Inter y Newsreader) se sirven desde nuestro propio dominio. Puedes borrar cookies y almacenamiento local desde la configuración de tu navegador; si borras la cookie de sesión tendrás que volver a ingresar.</p>
 </section>
         </article>
       </div>
@@ -371,7 +384,6 @@
   </div>
 </footer>
 <script>
-  /* Correo oficial: cuando lo tengas, escríbelo aquí y se mostrará en «Contacto». */
   window.NV_CONTACT_EMAIL = "nvmarketing@nvcorx.com";
   (function(){
     var mail = (window.NV_CONTACT_EMAIL || "").trim();

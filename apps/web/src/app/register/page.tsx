@@ -21,7 +21,8 @@ export default function RegisterPage() {
   const [params] = useSearchParams();
   // Only same-app paths (an invite link sends people back to /join/…).
   const nextParam = params.get("next");
-  const next = nextParam && nextParam.startsWith("/") && !nextParam.startsWith("//") ? nextParam : null;
+  const next =
+    nextParam && nextParam.startsWith("/") && !nextParam.startsWith("//") ? nextParam : null;
   const register = useAuthStore((s) => s.register);
   // «Elegir Básico/Pro» on the sales site lands here with ?plan=…: show it and
   // keep it so the payment screen offers that plan first when the trial ends.
@@ -46,13 +47,18 @@ export default function RegisterPage() {
       setError("Escribe tu nombre (al menos 2 letras).");
       return;
     }
+    // The browser accepts «qa@test»; a real address has a domain with a dot.
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email.trim())) {
+      setError("Escribe un email válido (por ejemplo nombre@dominio.com).");
+      return;
+    }
     if (!accepted) {
       setError("Debes aceptar los Términos legales para crear tu cuenta.");
       return;
     }
     setSubmitting(true);
     try {
-      await register({ name: name.trim(), email, password, acceptTerms: true });
+      await register({ name: name.trim(), email: email.trim(), password, acceptTerms: true });
       // New account: send them straight to the guided setup to create their first
       // workspace (unless a pending invitation already added them to one).
       const target = useAuthStore.getState().memberships[0]?.workspaceSlug;
@@ -66,11 +72,14 @@ export default function RegisterPage() {
   return (
     <AuthShell
       title="Crear cuenta"
-      subtitle="Empieza tu Business OS en minutos."
+      subtitle="Empieza a vender por WhatsApp y redes en minutos."
       footer={
         <>
           ¿Ya tienes cuenta?{" "}
-          <Link to={next ? `/login?next=${encodeURIComponent(next)}` : "/login"} className="text-brand font-medium hover:underline">
+          <Link
+            to={next ? `/login?next=${encodeURIComponent(next)}` : "/login"}
+            className="text-brand font-medium hover:underline"
+          >
             Inicia sesión
           </Link>
         </>
@@ -79,9 +88,12 @@ export default function RegisterPage() {
       <BackendNotice />
       <form onSubmit={onSubmit} className="space-y-4">
         {plan ? (
-          <p className="rounded-lg border border-brand/30 bg-brand/10 px-3 py-2 text-xs text-ink" data-testid="register-plan">
-            <span className="font-semibold">Plan elegido: {SALES_PLANS[plan].name}.</span> Empiezas con la prueba gratis de 24 h;
-            cuando termine, te ofrecemos este plan para pagar.
+          <p
+            className="border-brand/30 bg-brand/10 text-ink rounded-lg border px-3 py-2 text-xs"
+            data-testid="register-plan"
+          >
+            <span className="font-semibold">Plan elegido: {SALES_PLANS[plan].name}.</span> Empiezas
+            con la prueba gratis de 24 h; cuando termine, te ofrecemos este plan para pagar.
           </p>
         ) : null}
         <div className="space-y-1.5">
@@ -90,6 +102,7 @@ export default function RegisterPage() {
             id="name"
             name="name"
             autoComplete="name"
+            maxLength={80}
             required
             value={name}
             onChange={(e) => setName(e.target.value)}
@@ -102,6 +115,7 @@ export default function RegisterPage() {
             id="email"
             name="email"
             type="email"
+            maxLength={254}
             autoComplete="email"
             required
             value={email}
@@ -117,12 +131,16 @@ export default function RegisterPage() {
             autoComplete="new-password"
             required
             minLength={8}
+            maxLength={128}
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             placeholder="Mínimo 8 caracteres"
           />
         </div>
-        <label htmlFor="accept-terms" className="flex items-start gap-2.5 text-xs leading-relaxed text-ink-muted">
+        <label
+          htmlFor="accept-terms"
+          className="text-ink-muted flex items-start gap-2.5 text-xs leading-relaxed"
+        >
           <input
             id="accept-terms"
             type="checkbox"
@@ -133,15 +151,30 @@ export default function RegisterPage() {
           />
           <span>
             Acepto los{" "}
-            <a href={`${LEGAL_URL}#terminos`} target="_blank" rel="noopener noreferrer" className="text-brand font-medium hover:underline">
+            <a
+              href={`${LEGAL_URL}#terminos`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-brand font-medium hover:underline"
+            >
               Términos y condiciones
             </a>
             , la{" "}
-            <a href={`${LEGAL_URL}#privacidad`} target="_blank" rel="noopener noreferrer" className="text-brand font-medium hover:underline">
+            <a
+              href={`${LEGAL_URL}#privacidad`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-brand font-medium hover:underline"
+            >
               Política de privacidad
             </a>{" "}
             y la{" "}
-            <a href={`${LEGAL_URL}#cookies`} target="_blank" rel="noopener noreferrer" className="text-brand font-medium hover:underline">
+            <a
+              href={`${LEGAL_URL}#cookies`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-brand font-medium hover:underline"
+            >
               Política de cookies
             </a>
             .

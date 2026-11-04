@@ -127,7 +127,11 @@ export function useContactNotes(contactId: string | null) {
 export function useGroups(opts: { enabled?: boolean } = {}) {
   const svc = useServices();
   const ws = useWorkspace();
-  return useQuery({ queryKey: [ws.id, "groups"], queryFn: () => svc.groups.list(ws.id), enabled: opts.enabled ?? true });
+  return useQuery({
+    queryKey: [ws.id, "groups"],
+    queryFn: () => svc.groups.list(ws.id),
+    enabled: opts.enabled ?? true,
+  });
 }
 
 export function useGroupVars(groupId: string | null) {
@@ -336,7 +340,8 @@ export function useWhatsappLines() {
   return useQuery({
     queryKey: [ws.id, "whatsapp", "lines"],
     queryFn: () => svc.whatsapp.lines(ws.id),
-    refetchInterval: (q) => (q.state.data?.some((l) => l.status === "qr" || l.status === "connecting") ? 3000 : 15000),
+    refetchInterval: (q) =>
+      q.state.data?.some((l) => l.status === "qr" || l.status === "connecting") ? 3000 : 15000,
   });
 }
 
@@ -412,7 +417,10 @@ export function useNotifications() {
 export function usePaymentMethods() {
   const svc = useServices();
   const ws = useWorkspace();
-  return useQuery({ queryKey: [ws.id, "payments", "methods"], queryFn: () => svc.payments.methods(ws.id) });
+  return useQuery({
+    queryKey: [ws.id, "payments", "methods"],
+    queryFn: () => svc.payments.methods(ws.id),
+  });
 }
 
 /** Payment requests, optionally only one contact's. */
@@ -428,13 +436,19 @@ export function usePayments(contactId?: string) {
 export function useWeeklyReports() {
   const svc = useServices();
   const ws = useWorkspace();
-  return useQuery({ queryKey: [ws.id, "reports", "weekly"], queryFn: () => svc.reports.weekly(ws.id) });
+  return useQuery({
+    queryKey: [ws.id, "reports", "weekly"],
+    queryFn: () => svc.reports.weekly(ws.id),
+  });
 }
 
 export function useWeeklyReportSettings() {
   const svc = useServices();
   const ws = useWorkspace();
-  return useQuery({ queryKey: [ws.id, "reports", "settings"], queryFn: () => svc.reports.settings(ws.id) });
+  return useQuery({
+    queryKey: [ws.id, "reports", "settings"],
+    queryFn: () => svc.reports.settings(ws.id),
+  });
 }
 
 /** A stored week, or the current week so far when `week` is "actual". */
@@ -443,7 +457,8 @@ export function useWeeklyReport(week: string | null) {
   const ws = useWorkspace();
   return useQuery({
     queryKey: [ws.id, "reports", "weekly", week],
-    queryFn: () => (week === "actual" ? svc.reports.currentWeek(ws.id) : svc.reports.weeklyReport(ws.id, week!)),
+    queryFn: () =>
+      week === "actual" ? svc.reports.currentWeek(ws.id) : svc.reports.weeklyReport(ws.id, week!),
     enabled: !!week,
   });
 }
@@ -465,12 +480,14 @@ export function useTeam() {
   return useQuery({ queryKey: [ws.id, "team"], queryFn: () => svc.team.members(ws.id) });
 }
 
-export function useTeamInvitations() {
+/** Pending invitations: only Owner/Admin may list them (others would get a 403). */
+export function useTeamInvitations(enabled = true) {
   const svc = useServices();
   const ws = useWorkspace();
   return useQuery({
     queryKey: [ws.id, "invitations"],
     queryFn: () => svc.team.invitations(ws.id),
+    enabled,
   });
 }
 

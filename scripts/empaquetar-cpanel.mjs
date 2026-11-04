@@ -478,6 +478,8 @@ NV_ADMIN_EMAIL=tucorreo@ejemplo.com
 # Tu WhatsApp (con código de país, solo números) para recibir cada pago de plan.
 # Sale del WhatsApp conectado en NV_BILLING_WORKSPACE. También llega por correo a NV_ADMIN_EMAIL.
 # NV_ADMIN_WHATSAPP=584120000000
+# Zona horaria por defecto de las campañas programadas (cada marca puede cambiarla).
+# SCHEDULE_TIME_ZONE=America/Caracas
 # Tasa USDT→Bs: vacía = la del día (Binance P2P). Pon un número para fijarla.
 # USDT_VES_RATE=
 # Comprobantes de pago: carpeta PRIVADA (no la pongas dentro de public_html).
@@ -586,6 +588,20 @@ ARCHIVOS SUBIDOS (Biblioteca y adjuntos de campañas)
   Revisa también el límite de subida de tu hosting.
 - Borrar un archivo de la Biblioteca no lo borra del disco (puede seguir en
   campañas ya enviadas).
+
+CAMPAÑAS PROGRAMADAS: QUE SALGAN A SU HORA
+- Las horas de las campañas y publicaciones usan la zona horaria de cada marca
+  (Venezuela por defecto; se cambia en Informes o al programar una campaña).
+  SCHEDULE_TIME_ZONE cambia el valor por defecto (p.ej. America/Bogota).
+- Muchos hostings cPanel "duermen" la app cuando nadie la visita: entonces no
+  hay nadie que mire el reloj y WhatsApp se desconecta. Para evitarlo:
+    1) Deja "PassengerMinInstances 1" en el .htaccess (ya viene en el ejemplo).
+    2) cPanel → "Cron Jobs" → agrega uno cada 5 minutos (*/5 * * * *) con:
+         curl -fsS https://TU-SUBDOMINIO/api/health > /dev/null
+       Así la app se mantiene despierta. Al despertar, el panel envía en las
+       3 horas siguientes lo que se haya quedado pendiente, sin repetir nada.
+- En Campañas, el botón «Enviar» espera hasta 20 s a que WhatsApp/Telegram
+  terminen de reconectar; si aun así no puede, el aviso dice el motivo.
 
 PRUEBA GRATIS DE 24 H Y COBRO DEL PLAN
 - Cada marca que crea un cliente tiene 24 horas gratis con todo el panel.

@@ -1,6 +1,12 @@
 import { randomUUID } from "node:crypto";
 
-import { Injectable, Logger, Optional, type OnModuleDestroy, type OnModuleInit } from "@nestjs/common";
+import {
+  Injectable,
+  Logger,
+  Optional,
+  type OnModuleDestroy,
+  type OnModuleInit,
+} from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import type { Campaign as PCampaign, Prisma } from "@prisma/client";
 
@@ -12,13 +18,38 @@ import { EventBus } from "../../core/events/event-bus.service";
 import { JobManager } from "../../core/jobs/job-manager.service";
 import { ProviderManager } from "../../providers/provider-manager.service";
 import { NotificationsService } from "../notifications/notifications.module";
-import type { MediaAttachment, ProviderId, PublishInput, PublishResult } from "../../providers/provider.types";
+import type {
+  MediaAttachment,
+  ProviderId,
+  PublishInput,
+  PublishResult,
+} from "../../providers/provider.types";
 import { builtinVars, renderTemplate } from "./render";
-import { campaignFooter, explainError, summarizeSkips, groupPostingProblems, priceForGroup, usesPriceVar, withFooter, type SocialLink } from "@nv/domain";
+import {
+  campaignFooter,
+  explainError,
+  summarizeSkips,
+  groupPostingProblems,
+  priceForGroup,
+  usesPriceVar,
+  withFooter,
+  type SocialLink,
+} from "@nv/domain";
 import { resolvePacing, pacingDelay, type PacingOptions } from "./pacing";
-import { inDateRange, localDayKey } from "./date-range";
+import { inDateRange, wallClock } from "./date-range";
+import { scheduleTimeZone } from "@nv/domain";
 
 const TICK_MS = 30_000;
+/** First tick soon after boot: a cPanel app that slept wakes up and catches up. */
+const FIRST_TICK_MS = 8_000;
+/**
+ * Right after a (re)start WhatsApp/Telegram take a few seconds to reconnect.
+ * During this window a due slot whose channel is still «connecting» waits for
+ * the next tick instead of being claimed and failing every send.
+ */
+const WARMUP_S = 10 * 60;
+/** How long «Enviar ahora» waits for a reconnecting channel before refusing. */
+const CONNECT_WAIT_MS = 20_000;
 /** Minimum spacing between two runs of the same campaign (double click / retries). */
 const RUN_GUARD_MS = 90_000;
 /** Historial marker while a send to a chat is in progress (replaced by the outcome). */
@@ -87,6 +118,7 @@ export class CampaignRunner implements OnModuleInit, OnModuleDestroy {
    */
   private readonly staleRunMs: number;
   private timer?: NodeJS.Timeout;
+  private firstTick?: NodeJS.Timeout;
 
   constructor(
     config: ConfigService<AppConfig, true>,
@@ -170,11 +202,42 @@ export class CampaignRunner implements OnModuleInit, OnModuleDestroy {
         ),
       TICK_MS,
     );
+    this.firstTick = setTimeout(
+      () =>
+        void this.tick().catch((err: unknown) =>
+          this.logger.warn(`Tick del runner falló: ${(err as Error).message}`),
+        ),
+      FIRST_TICK_MS,
+    );
+    this.firstTick.unref?.();
     this.logger.log(`CampaignRunner activo (cada ${TICK_MS / 1000}s).`);
   }
 
   onModuleDestroy(): void {
     if (this.timer) clearInterval(this.timer);
+    if (this.firstTick) clearTimeout(this.firstTick);
+  }
+
+  /** Messaging channels a campaign sends through (groups and WhatsApp status). */
+  private messagingChannels(c: Pick<PCampaign, "channels" | "postToWaStatus">): ProviderId[] {
+    const ch = (c.channels as string[] | null) ?? [];
+    const ids: ProviderId[] = [];
+    if (ch.includes("wa") || c.postToWaStatus) ids.push("whatsapp");
+    if (ch.includes("tg")) ids.push("telegram");
+    return ids;
+  }
+
+  /** True while one of the campaign's channels is still reconnecting after a boot. */
+  async warmingUp(
+    c: Pick<PCampaign, "workspaceSlug" | "channels" | "postToWaStatus">,
+    uptimeS = process.uptime(),
+  ): Promise<boolean> {
+    if (uptimeS > WARMUP_S) return false;
+    for (const id of this.messagingChannels(c)) {
+      const st = await this.providers.status(c.workspaceSlug, id).catch(() => null);
+      if (st?.state === "connecting") return true;
+    }
+    return false;
   }
 
   /**
@@ -186,7 +249,7 @@ export class CampaignRunner implements OnModuleInit, OnModuleDestroy {
    *   a few minutes late — still sends when it comes online. Slots older than the
    *   window are skipped (they fire again the next day) to avoid odd-hour sends.
    */
-  private dueSlot(c: PCampaign, now: Date): string | null {
+  private dueSlot(c: PCampaign, now: Date, tz?: string | null): string | null {
     if (c.status === "pausada" || c.status === "completada") return null;
     const at = c.scheduleAt ?? "";
     if (c.scheduleType === "once") {
@@ -194,18 +257,21 @@ export class CampaignRunner implements OnModuleInit, OnModuleDestroy {
         ? "once"
         : null;
     }
+    // Times are the brand's wall clock (its zone), not the server's: a cPanel
+    // server in another country would otherwise send hours early or late.
+    const clock = wallClock(now, tz);
     // «Desde / hasta»: outside the campaign's date range nothing is sent.
-    if (!inDateRange(localDayKey(now), c.startDate, c.endDate)) return null;
-    if (c.scheduleType === "weekly" && !(c.scheduleDays ?? []).includes(now.getDay())) return null;
+    if (!inDateRange(clock.day, c.startDate, c.endDate)) return null;
+    if (c.scheduleType === "weekly" && !(c.scheduleDays ?? []).includes(clock.weekday)) return null;
     const times = c.scheduleTimes?.length ? c.scheduleTimes : at ? [at] : [];
     for (const t of times) {
       const [h, m] = String(t).split(":").map(Number);
       if (Number.isNaN(h) || Number.isNaN(m)) continue;
-      const slotTime = new Date(now);
-      slotTime.setHours(h, m, 0, 0);
-      const elapsed = now.getTime() - slotTime.getTime();
+      const elapsed = (clock.minutes - (h * 60 + m)) * 60_000;
       if (elapsed < 0 || elapsed > CampaignRunner.CATCHUP_MS) continue; // not yet, or too old
-      const slot = `${todayKey()}T${t}`;
+      // Keyed by the brand's own day: a UTC day here re-fired a slot when UTC
+      // midnight fell inside the catch-up window (duplicate send).
+      const slot = `${clock.day}T${t}`;
       if (c.lastRunSlot !== slot) return slot; // due today and not yet run
     }
     return null;
@@ -218,9 +284,16 @@ export class CampaignRunner implements OnModuleInit, OnModuleDestroy {
     const candidates = await this.prisma.campaign.findMany({
       where: { status: { in: ["programada", "activa"] } },
     });
+    const zones = await this.timeZones(candidates.map((c) => c.workspaceSlug));
     for (const c of candidates) {
-      const slot = this.dueSlot(c, now);
+      const slot = this.dueSlot(c, now, zones.get(c.workspaceSlug));
       if (!slot) continue;
+      if (await this.warmingUp(c)) {
+        this.logger.log(
+          `Campaña "${c.name}": su canal aún se está conectando; se envía en el próximo turno.`,
+        );
+        continue;
+      }
       // SEGURO DE ENVÍO ÚNICO (atómico): en hosting con varias copias de la app
       // (Passenger levanta varios procesos) todas evaluaban la misma campaña a la
       // vez y la lanzaban por duplicado en el mismo instante. Aquí solo UN proceso
@@ -247,6 +320,21 @@ export class CampaignRunner implements OnModuleInit, OnModuleDestroy {
     }
   }
 
+  /** Each brand's schedule zone (its saved zone, else the default for schedules). */
+  async timeZones(slugs: string[]): Promise<Map<string, string>> {
+    const unique = [...new Set(slugs)];
+    const rows = unique.length
+      ? await this.prisma.workspaceSettings.findMany({
+          where: { workspaceSlug: { in: unique } },
+          select: { workspaceSlug: true, timeZone: true },
+        })
+      : [];
+    const saved = new Map(rows.map((r) => [r.workspaceSlug, r.timeZone]));
+    return new Map(
+      unique.map((s) => [s, scheduleTimeZone(saved.get(s), process.env.SCHEDULE_TIME_ZONE)]),
+    );
+  }
+
   /**
    * A daily/weekly campaign whose «hasta» day has passed is done: mark it
    * completed (once nothing is in flight) and tell the team.
@@ -257,13 +345,16 @@ export class CampaignRunner implements OnModuleInit, OnModuleDestroy {
       where: {
         status: { in: ["programada", "activa"] },
         scheduleType: { in: ["daily", "weekly"] },
-        endDate: { not: null, lt: localDayKey(now) },
+        // Earliest possible «today» anywhere (UTC+14): the brand's own day is checked below.
+        endDate: { not: null, lt: wallClock(new Date(now.getTime() + 14 * 3_600_000), "UTC").day },
         runKey: null,
       },
       select: { id: true, workspaceSlug: true, name: true, endDate: true },
     });
+    const zones = await this.timeZones(ended.map((c) => c.workspaceSlug));
     let done = 0;
     for (const c of ended) {
+      if (!(c.endDate! < wallClock(now, zones.get(c.workspaceSlug)).day)) continue;
       const { count } = await this.prisma.campaign.updateMany({
         where: { id: c.id, status: { in: ["programada", "activa"] }, runKey: null },
         data: { status: "completada" },
@@ -300,7 +391,10 @@ export class CampaignRunner implements OnModuleInit, OnModuleDestroy {
       data: { ok: false, error: UNCONFIRMED },
     });
     const stalled = await this.prisma.campaign.findMany({
-      where: { runKey: { not: null }, runHeartbeatAt: { lt: new Date(now.getTime() - this.staleRunMs) } },
+      where: {
+        runKey: { not: null },
+        runHeartbeatAt: { lt: new Date(now.getTime() - this.staleRunMs) },
+      },
     });
     let resumed = 0;
     for (const c of stalled) {
@@ -324,9 +418,21 @@ export class CampaignRunner implements OnModuleInit, OnModuleDestroy {
         data: { runHeartbeatAt: now },
       });
       if (claim.count !== 1) continue;
-      this.logger.warn(`Campaña "${c.name}" (${c.workspaceSlug}) interrumpida: se reanuda la ejecución ${runKey}.`);
-      await this.audit.record(c.workspaceSlug, "system", "campaign.resumed", `${c.id} run=${runKey}`);
-      const payload: CampaignRunPayload = { workspaceSlug: c.workspaceSlug, campaignId: c.id, runKey, resume: true };
+      this.logger.warn(
+        `Campaña "${c.name}" (${c.workspaceSlug}) interrumpida: se reanuda la ejecución ${runKey}.`,
+      );
+      await this.audit.record(
+        c.workspaceSlug,
+        "system",
+        "campaign.resumed",
+        `${c.id} run=${runKey}`,
+      );
+      const payload: CampaignRunPayload = {
+        workspaceSlug: c.workspaceSlug,
+        campaignId: c.id,
+        runKey,
+        resume: true,
+      };
       await this.jobs.dispatch("campaign.run", c.workspaceSlug, payload);
       resumed += 1;
     }
@@ -349,15 +455,27 @@ export class CampaignRunner implements OnModuleInit, OnModuleDestroy {
     if (!campaign) return ["Campaña no encontrada."];
     const out: string[] = [];
     const attachments = ((campaign.attachments as Attachment[]) ?? []).filter((a) => a.url);
-    if (!campaign.message.trim() && attachments.length === 0) out.push("La campaña no tiene mensaje ni imagen.");
-    const own = campaign.targets.map((t) => t.group).filter((g) => g && g.workspaceSlug === workspaceSlug);
+    if (!campaign.message.trim() && attachments.length === 0)
+      out.push("La campaña no tiene mensaje ni imagen.");
+    const own = campaign.targets
+      .map((t) => t.group)
+      .filter((g) => g && g.workspaceSlug === workspaceSlug);
     const prices = (campaign.prices as Record<string, string> | null) ?? {};
     const groups = own.filter(
-      (g) => groupPostingProblems(g!, { hasImage: attachments.length > 0, prices, usesPrice: usesPriceVar(campaign.message) }).length === 0,
+      (g) =>
+        groupPostingProblems(g!, {
+          hasImage: attachments.length > 0,
+          prices,
+          usesPrice: usesPriceVar(campaign.message),
+        }).length === 0,
     );
     if (own.length > 0 && groups.length === 0) {
       const first = own[0]!;
-      const why = groupPostingProblems(first, { hasImage: attachments.length > 0, prices, usesPrice: usesPriceVar(campaign.message) })[0];
+      const why = groupPostingProblems(first, {
+        hasImage: attachments.length > 0,
+        prices,
+        usesPrice: usesPriceVar(campaign.message),
+      })[0];
       out.push(
         `Ningún grupo elegido acepta esta campaña (por ejemplo «${first.name}»: ${why}). Revisa precios, imagen o los grupos.`,
       );
@@ -372,11 +490,23 @@ export class CampaignRunner implements OnModuleInit, OnModuleDestroy {
     if (campaign.postToWaStatus) needed.add("whatsapp");
     if (channels.includes("fb")) needed.add("facebook");
     if (channels.includes("ig")) needed.add("instagram");
-    const label: Record<string, string> = { whatsapp: "WhatsApp", telegram: "Telegram", facebook: "Facebook", instagram: "Instagram" };
+    const label: Record<string, string> = {
+      whatsapp: "WhatsApp",
+      telegram: "Telegram",
+      facebook: "Facebook",
+      instagram: "Instagram",
+    };
     for (const id of needed) {
-      const st = await this.providers.status(workspaceSlug, id).catch(() => null);
+      let st = await this.providers.status(workspaceSlug, id).catch(() => null);
+      // Just woke up (cPanel) and still reconnecting: give it a moment instead of refusing.
+      for (let waited = 0; st?.state === "connecting" && waited < CONNECT_WAIT_MS; waited += 1000) {
+        await sleep(1000);
+        st = await this.providers.status(workspaceSlug, id).catch(() => null);
+      }
       if (st?.state !== "connected") {
-        out.push(`${label[id] ?? id} no está conectado${st?.detail ? ` (${st.detail})` : ""}. Conéctalo en Conexiones.`);
+        out.push(
+          `${label[id] ?? id} no está conectado${st?.detail ? ` (${st.detail})` : ""}. Conéctalo en Conexiones.`,
+        );
       }
     }
     return out;
@@ -384,7 +514,11 @@ export class CampaignRunner implements OnModuleInit, OnModuleDestroy {
 
   async enqueue(workspaceSlug: string, campaignId: string): Promise<void> {
     // The key is fixed BEFORE dispatch so a job retry continues this same run.
-    const payload: CampaignRunPayload = { workspaceSlug, campaignId, runKey: `manual:${randomUUID()}` };
+    const payload: CampaignRunPayload = {
+      workspaceSlug,
+      campaignId,
+      runKey: `manual:${randomUUID()}`,
+    };
     await this.jobs.dispatch("campaign.run", workspaceSlug, payload);
   }
 
@@ -410,7 +544,8 @@ export class CampaignRunner implements OnModuleInit, OnModuleDestroy {
     };
     // Reanudar = continuar una ejecución que este mismo runKey dejó a medias
     // (reinicio detectado por el barrido, o reintento del job tras un error).
-    const resuming = campaign.runKey === runKey && (opts.resume === true || (opts.attempt ?? 1) > 1);
+    const resuming =
+      campaign.runKey === runKey && (opts.resume === true || (opts.attempt ?? 1) > 1);
     if (opts.resume && !resuming) return skip("la ejecución a reanudar ya terminó; no se repite.");
 
     if (resuming) {
@@ -438,7 +573,10 @@ export class CampaignRunner implements OnModuleInit, OnModuleDestroy {
       if (claim.count !== 1) return skip("ya está en ejecución en otro proceso; no se duplica.");
       // Free trial: one campaign send, then the trial closes (after this run).
       if (this.access && (await this.access.claimTrialSend(workspaceSlug)) === "used") {
-        await this.prisma.campaign.update({ where: { id: campaignId }, data: { runKey: null, runHeartbeatAt: null, progress: 0 } });
+        await this.prisma.campaign.update({
+          where: { id: campaignId },
+          data: { runKey: null, runHeartbeatAt: null, progress: 0 },
+        });
         await this.notifications
           .create(workspaceSlug, {
             type: "warning",
@@ -495,7 +633,11 @@ export class CampaignRunner implements OnModuleInit, OnModuleDestroy {
       // validated on write, but this guarantees the historial never shows sends
       // to groups that don't belong to this workspace's WhatsApp/Telegram.
       if (!group || group.workspaceSlug !== workspaceSlug) continue;
-      const blocked = groupPostingProblems(group, { hasImage: !!waAttachment, prices, usesPrice: usesPriceVar(campaign.message) });
+      const blocked = groupPostingProblems(group, {
+        hasImage: !!waAttachment,
+        prices,
+        usesPrice: usesPriceVar(campaign.message),
+      });
       if (blocked.length > 0) {
         omitted.push({ name: group.name, reason: blocked[0]! });
         sent += 1;
@@ -506,10 +648,15 @@ export class CampaignRunner implements OnModuleInit, OnModuleDestroy {
       // bucles de envío sobre la misma campaña.
       const alive = await this.prisma.campaign.updateMany({
         where: { id: campaignId, runKey },
-        data: { runHeartbeatAt: new Date(), progress: Math.floor((sent / Math.max(1, total)) * 100) },
+        data: {
+          runHeartbeatAt: new Date(),
+          progress: Math.floor((sent / Math.max(1, total)) * 100),
+        },
       });
       if (alive.count !== 1) {
-        this.logger.warn(`Campaña "${campaign.name}": otra ejecución tomó el relevo; este proceso se detiene.`);
+        this.logger.warn(
+          `Campaña "${campaign.name}": otra ejecución tomó el relevo; este proceso se detiene.`,
+        );
         return { status: "skipped", reason: "otra ejecución tomó el relevo." };
       }
       // ANTI-SPAM (solo «Enviar ahora»): si este chat YA recibió este mensaje con
@@ -579,7 +726,8 @@ export class CampaignRunner implements OnModuleInit, OnModuleDestroy {
       try {
         let mediaNote: string | null = null;
         const res = await this.withRetry(async () => {
-          if (!waAttachment) return this.providers.sendMessage(workspaceSlug, provider, { to, body: text });
+          if (!waAttachment)
+            return this.providers.sendMessage(workspaceSlug, provider, { to, body: text });
           try {
             return await this.providers.sendMedia(workspaceSlug, provider, {
               to,
@@ -727,7 +875,11 @@ export class CampaignRunner implements OnModuleInit, OnModuleDestroy {
    * True when this run already logged a publish to `target` (FB/IG/Estado) —
    * a resumed run must not publish the same post twice.
    */
-  private async alreadyPublished(campaignId: string, runKey: string, target: string): Promise<boolean> {
+  private async alreadyPublished(
+    campaignId: string,
+    runKey: string,
+    target: string,
+  ): Promise<boolean> {
     const row = await this.prisma.sendLog.findFirst({
       where: { campaignId, runKey, target },
       select: { id: true },
@@ -788,7 +940,9 @@ export class CampaignRunner implements OnModuleInit, OnModuleDestroy {
             },
           });
         } catch (err) {
-          this.logger.warn(`No se pudo guardar la publicación en la campaña: ${(err as Error).message}`);
+          this.logger.warn(
+            `No se pudo guardar la publicación en la campaña: ${(err as Error).message}`,
+          );
         }
       }
       results.push({ ok: r.ok });
@@ -838,16 +992,20 @@ export class CampaignRunner implements OnModuleInit, OnModuleDestroy {
   }
 
   /** The brand's social links and website for the message footer. */
-  private async brandLinks(workspaceSlug: string): Promise<{ socialLinks: SocialLink[]; website: string | null }> {
+  private async brandLinks(
+    workspaceSlug: string,
+  ): Promise<{ socialLinks: SocialLink[]; website: string | null }> {
     const row = await this.prisma.workspaceSettings
       ?.findUnique({ where: { workspaceSlug }, select: { socialLinks: true, website: true } })
       .catch(() => null);
-    return { socialLinks: (row?.socialLinks as SocialLink[] | null) ?? [], website: row?.website ?? null };
+    return {
+      socialLinks: (row?.socialLinks as SocialLink[] | null) ?? [],
+      website: row?.website ?? null,
+    };
   }
 
   private async groupVars(groupId: string): Promise<Record<string, string>> {
     const rows = await this.prisma.groupVariable.findMany({ where: { groupId } });
     return Object.fromEntries(rows.map((r) => [r.key, r.value]));
   }
-
 }

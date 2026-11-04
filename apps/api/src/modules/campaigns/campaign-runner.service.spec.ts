@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { CampaignRunner, UNCONFIRMED, slotRunKey } from "./campaign-runner.service";
 import { checkDateRange, inDateRange, localDayKey } from "./date-range";
+import { scheduleTimeZone } from "@nv/domain";
 
 /**
  * Covers the campaign send loop — a money path that had no test. Two angles:
@@ -36,6 +37,7 @@ function makeRunner(
       // Relectura del estado antes de cada envío («Pausar» detiene de verdad).
       findUnique: vi.fn(async () => ({ status: overrides.campaign?.status ?? "programada" })),
     },
+    workspaceSettings: { findMany: vi.fn(async (): Promise<AnyRec[]> => []) },
     sendLog: {
       // La fila se crea como marca "en curso" y luego se actualiza con el resultado.
       // Igual que el índice único (campaignId, groupId, runKey) de la base de datos.
@@ -100,7 +102,18 @@ function makeRunner(
     audit as never,
     notifications as never,
   );
-  return { runner, prisma, providers, jobs, events, audit, notifications, sendLogs, updates, emitted };
+  return {
+    runner,
+    prisma,
+    providers,
+    jobs,
+    events,
+    audit,
+    notifications,
+    sendLogs,
+    updates,
+    emitted,
+  };
 }
 
 const campaign = (over: AnyRec = {}): AnyRec => {
@@ -160,7 +173,7 @@ describe("CampaignRunner.isDue", () => {
     const c = campaign({ scheduleType: "daily", status: "activa", scheduleAt: `${hh}:${mm}` });
     expect(isDue(c, at)).toBe(true);
     // Already ran this slot → skip (dedupe per "YYYY-MM-DDTHH:MM").
-    const slot = `${new Date().toISOString().slice(0, 10)}T${hh}:${mm}`;
+    const slot = `${localDayKey(at)}T${hh}:${mm}`;
     expect(isDue({ ...c, lastRunSlot: slot }, at)).toBe(false);
   });
 
@@ -178,7 +191,7 @@ describe("CampaignRunner.isDue", () => {
     });
     expect(isDue(c, at)).toBe(true);
     // After running this slot, still due later for the OTHER time (different slot).
-    const slot = `${new Date().toISOString().slice(0, 10)}T${hh}:${mm}`;
+    const slot = `${localDayKey(at)}T${hh}:${mm}`;
     expect(isDue({ ...c, lastRunSlot: slot }, at)).toBe(false);
   });
 
@@ -222,13 +235,86 @@ describe("CampaignRunner.isDue", () => {
   });
 });
 
+describe("CampaignRunner schedule in the brand's time zone", () => {
+  const { runner } = makeRunner();
+  const slotAt = (c: AnyRec, now: Date, tz: string) =>
+    (runner as unknown as { dueSlot: (c: AnyRec, n: Date, tz: string) => string | null }).dueSlot(
+      c,
+      now,
+      tz,
+    );
+
+  it("reads «08:00» as 08:00 in Caracas, whatever the server's clock", () => {
+    const c = campaign({ scheduleType: "daily", status: "activa", scheduleTimes: ["08:00"] });
+    // 08:05 in Caracas (UTC-4) is 12:05 UTC.
+    expect(slotAt(c, new Date("2026-11-04T12:05:00Z"), "America/Caracas")).toBe("2026-11-04T08:00");
+    // 08:05 UTC is 04:05 in Caracas: not yet.
+    expect(slotAt(c, new Date("2026-11-04T08:05:00Z"), "America/Caracas")).toBeNull();
+  });
+
+  it("keys the slot by the brand's day, so UTC midnight never re-fires it", () => {
+    // 19:00 in Caracas = 23:00 UTC; at 20:10 Caracas it is already the next UTC day.
+    const c = campaign({ scheduleType: "daily", status: "activa", scheduleTimes: ["19:00"] });
+    const first = slotAt(c, new Date("2026-11-04T23:01:00Z"), "America/Caracas");
+    expect(first).toBe("2026-11-04T19:00");
+    expect(
+      slotAt({ ...c, lastRunSlot: first }, new Date("2026-11-05T00:10:00Z"), "America/Caracas"),
+    ).toBeNull();
+  });
+
+  it("uses the brand's weekday and «desde/hasta» day", () => {
+    // Sunday 22:00 in Lima (UTC-5) is Monday 03:00 UTC.
+    const now = new Date("2026-11-09T03:00:00Z");
+    const weekly = campaign({
+      scheduleType: "weekly",
+      status: "activa",
+      scheduleTimes: ["22:00"],
+      scheduleDays: [0],
+    });
+    expect(slotAt(weekly, now, "America/Lima")).toBe("2026-11-08T22:00");
+    expect(slotAt({ ...weekly, scheduleDays: [1] }, now, "America/Lima")).toBeNull();
+    const ranged = campaign({
+      scheduleType: "daily",
+      status: "activa",
+      scheduleTimes: ["22:00"],
+      endDate: "2026-11-08",
+    });
+    expect(slotAt(ranged, now, "America/Lima")).toBe("2026-11-08T22:00");
+  });
+
+  it("picks the brand's saved zone, ignoring the never-chosen «UTC» default", async () => {
+    const { runner: r, prisma } = makeRunner();
+    (prisma as unknown as { workspaceSettings: unknown }).workspaceSettings = {
+      findMany: vi.fn().mockResolvedValue([
+        { workspaceSlug: "co", timeZone: "America/Bogota" },
+        { workspaceSlug: "old", timeZone: "UTC" },
+      ]),
+    };
+    const zones = await r.timeZones(["co", "old", "new", "co"]);
+    expect(zones.get("co")).toBe("America/Bogota");
+    expect(zones.get("old")).toBe("America/Caracas");
+    expect(zones.get("new")).toBe("America/Caracas");
+  });
+});
+
+describe("scheduleTimeZone", () => {
+  it("falls back to the deployment default, then Caracas", () => {
+    expect(scheduleTimeZone("America/Lima")).toBe("America/Lima");
+    expect(scheduleTimeZone("UTC", "America/Bogota")).toBe("America/Bogota");
+    expect(scheduleTimeZone(null, "Not/AZone")).toBe("America/Caracas");
+    expect(scheduleTimeZone(undefined)).toBe("America/Caracas");
+  });
+});
+
 describe("CampaignRunner.finishEndedRanges", () => {
   it("completes campaigns whose «hasta» day has passed and tells the team", async () => {
     const { runner, prisma, notifications } = makeRunner();
     const p = prisma as unknown as {
       campaign: { findMany: ReturnType<typeof vi.fn>; updateMany: ReturnType<typeof vi.fn> };
     };
-    p.campaign.findMany.mockResolvedValueOnce([{ id: "c1", workspaceSlug: "w1", name: "Promo 28-30", endDate: "2026-10-30" }]);
+    p.campaign.findMany.mockResolvedValueOnce([
+      { id: "c1", workspaceSlug: "w1", name: "Promo 28-30", endDate: "2026-10-30" },
+    ]);
     const done = await runner.finishEndedRanges(new Date(2026, 9, 31, 9, 0));
     expect(done).toBe(1);
     const where = p.campaign.findMany.mock.calls.at(-1)![0].where;
@@ -236,7 +322,10 @@ describe("CampaignRunner.finishEndedRanges", () => {
     expect(p.campaign.updateMany).toHaveBeenCalledWith(
       expect.objectContaining({ data: { status: "completada" } }),
     );
-    expect(notifications.create).toHaveBeenCalledWith("w1", expect.objectContaining({ title: "Campaña «Promo 28-30» terminada" }));
+    expect(notifications.create).toHaveBeenCalledWith(
+      "w1",
+      expect.objectContaining({ title: "Campaña «Promo 28-30» terminada" }),
+    );
   });
 });
 
@@ -343,13 +432,19 @@ describe("CampaignRunner.run", () => {
         { group: { id: "g2", name: "Grupo B", remoteJid: "2@g.us" } },
       ],
     });
-    const { runner, providers, sendLogs, updates, emitted, notifications } = makeRunner({ campaign: c });
+    const { runner, providers, sendLogs, updates, emitted, notifications } = makeRunner({
+      campaign: c,
+    });
 
     await runner.run("w1", "c1");
 
     expect(notifications.create).toHaveBeenCalledWith(
       "w1",
-      expect.objectContaining({ type: "success", title: "Campaña «Promo» enviada", meta: expect.stringContaining("2 de 2") }),
+      expect.objectContaining({
+        type: "success",
+        title: "Campaña «Promo» enviada",
+        meta: expect.stringContaining("2 de 2"),
+      }),
     );
     expect(providers.sendMessage).toHaveBeenCalledTimes(2);
     expect(sendLogs).toHaveLength(2);
@@ -437,7 +532,10 @@ describe("CampaignRunner.run", () => {
 
     expect(notifications.create).toHaveBeenCalledWith(
       "w1",
-      expect.objectContaining({ type: "error", meta: expect.stringContaining("En «A»: El servicio de envío falló por un momento.") }),
+      expect.objectContaining({
+        type: "error",
+        meta: expect.stringContaining("En «A»: El servicio de envío falló por un momento."),
+      }),
     );
     expect(sendLogs).toHaveLength(1);
     expect(sendLogs[0]!.ok).toBe(false);
@@ -561,7 +659,9 @@ describe("CampaignRunner.run — seguros contra duplicados y pausa", () => {
     const c = campaign({ targets: [g("g1", "Grupo 1"), g("g2", "Grupo 2"), g("g3", "Grupo 3")] });
     const { runner, prisma, providers, updates } = makeRunner({ campaign: c });
     let reads = 0;
-    prisma.campaign.findUnique.mockImplementation(async () => ({ status: ++reads >= 2 ? "pausada" : "programada" }));
+    prisma.campaign.findUnique.mockImplementation(async () => ({
+      status: ++reads >= 2 ? "pausada" : "programada",
+    }));
     await runner.run("w1", "c1");
     expect(providers.sendMessage).toHaveBeenCalledTimes(1);
     expect(updates.some((u) => u.status === "completada")).toBe(false);
@@ -570,7 +670,14 @@ describe("CampaignRunner.run — seguros contra duplicados y pausa", () => {
   it("no repite un chat que otra ejecución ya reservó (índice único por chat y ejecución)", async () => {
     const c = campaign({ targets: [g("g1", "Grupo 1")] });
     const { runner, providers, sendLogs } = makeRunner({ campaign: c });
-    sendLogs.push({ id: "otro", campaignId: "c1", groupId: "g1", runKey: "k1", ok: false, error: "en curso…" });
+    sendLogs.push({
+      id: "otro",
+      campaignId: "c1",
+      groupId: "g1",
+      runKey: "k1",
+      ok: false,
+      error: "en curso…",
+    });
     await runner.run("w1", "c1", { runKey: "k1" });
     expect(providers.sendMessage).not.toHaveBeenCalled();
   });
@@ -642,7 +749,11 @@ describe("CampaignRunner — ejecuciones que sobreviven reinicios", () => {
     expect((providers.sendMessage.mock.calls[0] as unknown[])[2]).toMatchObject({ to: "g3@g.us" });
     // g2 quedó sin confirmar → la ejecución NO se presenta como éxito total.
     expect(out).toEqual({ status: "completed", ok: false, sent: 2, failed: 1 });
-    expect(updates.at(-1)).toMatchObject({ status: "completada", runKey: null, runHeartbeatAt: null });
+    expect(updates.at(-1)).toMatchObject({
+      status: "completada",
+      runKey: null,
+      runHeartbeatAt: null,
+    });
   });
 
   it("el barrido no toca ejecuciones vivas y libera las pausadas sin reanudarlas", async () => {
@@ -656,8 +767,11 @@ describe("CampaignRunner — ejecuciones que sobreviven reinicios", () => {
       data: { runKey: null, runHeartbeatAt: null },
     });
     // La consulta solo pide latidos vencidos (> 10 min por defecto).
-    const where = (prisma.campaign.findMany.mock.calls[0] as unknown as [{ where: AnyRec }])[0].where;
-    expect((where.runHeartbeatAt as { lt: Date }).lt.getTime()).toBeLessThan(Date.now() - 9 * 60 * 1000);
+    const where = (prisma.campaign.findMany.mock.calls[0] as unknown as [{ where: AnyRec }])[0]
+      .where;
+    expect((where.runHeartbeatAt as { lt: Date }).lt.getTime()).toBeLessThan(
+      Date.now() - 9 * 60 * 1000,
+    );
   });
 
   it("si dos procesos intentan reanudar, solo uno lo hace", async () => {
@@ -670,9 +784,21 @@ describe("CampaignRunner — ejecuciones que sobreviven reinicios", () => {
   });
 
   it("el reintento de un job continúa la misma ejecución sin duplicar chats", async () => {
-    const c = campaign({ runKey: "manual:1", runHeartbeatAt: new Date(), lastRunAt: new Date(), targets: threeGroups() });
+    const c = campaign({
+      runKey: "manual:1",
+      runHeartbeatAt: new Date(),
+      lastRunAt: new Date(),
+      targets: threeGroups(),
+    });
     const { runner, providers, sendLogs } = makeRunner({ campaign: c });
-    sendLogs.push({ id: "a", campaignId: "c1", groupId: "g1", runKey: "manual:1", ok: true, error: null });
+    sendLogs.push({
+      id: "a",
+      campaignId: "c1",
+      groupId: "g1",
+      runKey: "manual:1",
+      ok: true,
+      error: null,
+    });
     await runner.run("w1", "c1", { runKey: "manual:1", attempt: 2 });
     expect(providers.sendMessage).toHaveBeenCalledTimes(2); // g2 y g3, nunca g1
   });
@@ -686,7 +812,12 @@ describe("CampaignRunner — ejecuciones que sobreviven reinicios", () => {
   });
 
   it("no arranca otra ejecución mientras hay una viva (latido reciente)", async () => {
-    const c = campaign({ runKey: "manual:1", runHeartbeatAt: new Date(), lastRunAt: longAgo(), targets: [g("g1", "Grupo 1")] });
+    const c = campaign({
+      runKey: "manual:1",
+      runHeartbeatAt: new Date(),
+      lastRunAt: longAgo(),
+      targets: [g("g1", "Grupo 1")],
+    });
     const { runner, providers } = makeRunner({ campaign: c });
     const out = await runner.run("w1", "c1", { runKey: "manual:2" });
     expect(out).toMatchObject({ status: "skipped" });
@@ -752,7 +883,9 @@ describe("CampaignRunner.problems (antes de «Enviar ahora»)", () => {
   });
 
   it("pide mensaje y destino cuando la campaña está vacía", async () => {
-    const { runner, providers } = makeRunner({ campaign: campaign({ message: "  ", channels: ["wa"], targets: [] }) });
+    const { runner, providers } = makeRunner({
+      campaign: campaign({ message: "  ", channels: ["wa"], targets: [] }),
+    });
     (providers as AnyRec).status = vi.fn();
     expect(await runner.problems("w1", "c1")).toEqual([
       "La campaña no tiene mensaje ni imagen.",
@@ -762,10 +895,14 @@ describe("CampaignRunner.problems (antes de «Enviar ahora»)", () => {
 
   it("ignora grupos de otra marca al decidir qué conectar", async () => {
     const { runner, providers } = makeRunner({
-      campaign: campaign({ targets: [{ groupId: "g9", group: { id: "g9", channel: "wa", workspaceSlug: "otra" } }] }),
+      campaign: campaign({
+        targets: [{ groupId: "g9", group: { id: "g9", channel: "wa", workspaceSlug: "otra" } }],
+      }),
     });
     (providers as AnyRec).status = vi.fn();
-    expect(await runner.problems("w1", "c1")).toEqual(["Elige al menos un grupo o una red social de destino."]);
+    expect(await runner.problems("w1", "c1")).toEqual([
+      "Elige al menos un grupo o una red social de destino.",
+    ]);
   });
 });
 
@@ -808,24 +945,67 @@ describe("CampaignRunner.run: reglas de grupo, precio y pie", () => {
     expect(sendLogs).toHaveLength(1);
     const meta = (notifications.create.mock.calls[0]![1] as { meta: string }).meta;
     expect(meta).toContain("Se saltaron");
-    expect(meta).toContain("1 grupo porque son de «Universidad o estudios», donde no se publica publicidad");
+    expect(meta).toContain(
+      "1 grupo porque son de «Universidad o estudios», donde no se publica publicidad",
+    );
     expect(meta).toContain("1 grupo porque la campaña no tiene precio en Euros (€)");
   });
 
   it("sin pie cuando la campaña lo desactiva", async () => {
-    const c = campaign({ addFooter: false, targets: [{ group: { id: "g1", name: "A", remoteJid: "1@g.us" } }] });
+    const c = campaign({
+      addFooter: false,
+      targets: [{ group: { id: "g1", name: "A", remoteJid: "1@g.us" } }],
+    });
     const { runner, providers } = makeRunner({ campaign: c });
     await runner.run("w1", "c1");
-    expect(providers.sendMessage).toHaveBeenCalledWith("w1", "whatsapp", { to: "1@g.us", body: "Hola" });
+    expect(providers.sendMessage).toHaveBeenCalledWith("w1", "whatsapp", {
+      to: "1@g.us",
+      body: "Hola",
+    });
   });
 
   it("«Enviar ahora» avisa si ningún grupo acepta la campaña", async () => {
     const { runner, providers } = makeRunner({
-      campaign: campaign({ targets: [{ groupId: "g1", group: { id: "g1", name: "Equipo", channel: "wa", excluded: true } }] }),
+      campaign: campaign({
+        targets: [
+          { groupId: "g1", group: { id: "g1", name: "Equipo", channel: "wa", excluded: true } },
+        ],
+      }),
     });
     (providers as AnyRec).status = vi.fn(async () => ({ state: "connected" }));
     expect(await runner.problems("w1", "c1")).toEqual([
       "Ningún grupo elegido acepta esta campaña (por ejemplo «Equipo»: Apartado: nunca se publica aquí.). Revisa precios, imagen o los grupos.",
     ]);
+  });
+});
+
+describe("CampaignRunner.warmingUp", () => {
+  it("waits for a reconnecting WhatsApp right after a boot, not later", async () => {
+    const { runner, providers } = makeRunner();
+    (providers as unknown as { status: unknown }).status = vi.fn(async () => ({
+      state: "connecting",
+    }));
+    const c = { workspaceSlug: "w1", channels: ["wa"], postToWaStatus: false } as never;
+    expect(await runner.warmingUp(c, 30)).toBe(true);
+    expect(await runner.warmingUp(c, 3600)).toBe(false);
+    expect(
+      await runner.warmingUp(
+        { workspaceSlug: "w1", channels: ["fb"], postToWaStatus: false } as never,
+        30,
+      ),
+    ).toBe(false);
+  });
+
+  it("does not wait for a channel that is connected", async () => {
+    const { runner, providers } = makeRunner();
+    (providers as unknown as { status: unknown }).status = vi.fn(async () => ({
+      state: "connected",
+    }));
+    expect(
+      await runner.warmingUp(
+        { workspaceSlug: "w1", channels: ["tg"], postToWaStatus: false } as never,
+        30,
+      ),
+    ).toBe(false);
   });
 });

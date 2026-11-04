@@ -49,28 +49,42 @@ interface SheetContentProps
 const SheetContent = React.forwardRef<
   React.ElementRef<typeof DialogPrimitive.Content>,
   SheetContentProps
->(({ side = "right", className, children, showClose = true, onCloseAutoFocus, ...props }, ref) => {
-  const returnFocus = useReturnFocus(onCloseAutoFocus);
-  return (
-    <SheetPortal>
-      <SheetOverlay />
-      <DialogPrimitive.Content
-        ref={ref}
-        className={cn(sheetVariants({ side }), className)}
-        {...props}
-        onCloseAutoFocus={returnFocus}
-      >
-        {showClose ? (
-          <DialogPrimitive.Close className="text-ink-muted hover:bg-panel-raised absolute right-4 top-4 z-10 rounded-md p-1 opacity-80 transition-opacity hover:opacity-100 focus:outline-none">
-            <X className="size-4" />
-            <span className="sr-only">Cerrar</span>
-          </DialogPrimitive.Close>
-        ) : null}
-        {children}
-      </DialogPrimitive.Content>
-    </SheetPortal>
-  );
-});
+>(
+  (
+    {
+      side = "right",
+      className,
+      children,
+      showClose = true,
+      onCloseAutoFocus,
+      onOpenAutoFocus,
+      ...props
+    },
+    ref,
+  ) => {
+    const focus = useReturnFocus(onCloseAutoFocus, onOpenAutoFocus);
+    return (
+      <SheetPortal>
+        <SheetOverlay />
+        <DialogPrimitive.Content
+          ref={ref}
+          className={cn(sheetVariants({ side }), className)}
+          {...props}
+          onOpenAutoFocus={focus.onOpenAutoFocus}
+          onCloseAutoFocus={focus.onCloseAutoFocus}
+        >
+          {showClose ? (
+            <DialogPrimitive.Close className="text-ink-muted hover:bg-panel-raised absolute right-4 top-4 z-10 rounded-md p-1 opacity-80 transition-opacity hover:opacity-100 focus:outline-none">
+              <X className="size-4" />
+              <span className="sr-only">Cerrar</span>
+            </DialogPrimitive.Close>
+          ) : null}
+          {children}
+        </DialogPrimitive.Content>
+      </SheetPortal>
+    );
+  },
+);
 SheetContent.displayName = DialogPrimitive.Content.displayName;
 
 function SheetHeader({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) {

@@ -29,34 +29,49 @@ DialogOverlay.displayName = DialogPrimitive.Overlay.displayName;
  * (WCAG 2.4.3). Radix only does this for its own Trigger; most of our dialogs
  * open from state, which left focus on <body>.
  */
-export function useReturnFocus(onCloseAutoFocus?: (e: Event) => void) {
-  const [opener] = React.useState<HTMLElement | null>(() =>
-    typeof document === "undefined" ? null : (document.activeElement as HTMLElement | null),
+export function useReturnFocus(
+  onCloseAutoFocus?: (e: Event) => void,
+  onOpenAutoFocus?: (e: Event) => void,
+) {
+  // The wrapper stays mounted while the dialog is closed, so the opener must be
+  // read when the dialog opens (before Radix moves focus inside), not on mount.
+  const opener = React.useRef<HTMLElement | null>(null);
+  const onOpen = React.useCallback(
+    (e: Event) => {
+      const active =
+        typeof document === "undefined" ? null : (document.activeElement as HTMLElement | null);
+      opener.current = active && active !== document.body ? active : null;
+      onOpenAutoFocus?.(e);
+    },
+    [onOpenAutoFocus],
   );
-  return React.useCallback(
+  const onClose = React.useCallback(
     (e: Event) => {
       onCloseAutoFocus?.(e);
       if (e.defaultPrevented) return;
-      if (opener && opener !== document.body && opener.isConnected) {
+      const el = opener.current;
+      if (el && el.isConnected) {
         e.preventDefault();
-        opener.focus({ preventScroll: true });
+        el.focus({ preventScroll: true });
       }
     },
-    [onCloseAutoFocus, opener],
+    [onCloseAutoFocus],
   );
+  return { onOpenAutoFocus: onOpen, onCloseAutoFocus: onClose };
 }
 
 const DialogContent = React.forwardRef<
   React.ElementRef<typeof DialogPrimitive.Content>,
   React.ComponentPropsWithoutRef<typeof DialogPrimitive.Content> & { showClose?: boolean }
->(({ className, children, showClose = true, onCloseAutoFocus, ...props }, ref) => {
-  const returnFocus = useReturnFocus(onCloseAutoFocus);
+>(({ className, children, showClose = true, onCloseAutoFocus, onOpenAutoFocus, ...props }, ref) => {
+  const focus = useReturnFocus(onCloseAutoFocus, onOpenAutoFocus);
   return (
     <DialogPortal>
       <DialogOverlay />
       <DialogPrimitive.Content
         ref={ref}
-        onCloseAutoFocus={returnFocus}
+        onOpenAutoFocus={focus.onOpenAutoFocus}
+        onCloseAutoFocus={focus.onCloseAutoFocus}
         className={cn(
           "fixed left-1/2 top-1/2 z-50 grid w-[calc(100%-1.5rem)] max-w-lg -translate-x-1/2 -translate-y-1/2 gap-4",
           "border-line-strong bg-panel-high shadow-panel rounded-2xl border p-4 duration-200 sm:p-6",

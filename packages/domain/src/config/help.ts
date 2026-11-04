@@ -253,12 +253,12 @@ export const HELP_ARTICLES: HelpArticle[] = [
     body: [
       {
         type: "p",
-        text: "El Campaign Builder es el editor visual donde diseñas tu contenido. Una vez creado, lo programas y publicas desde el Calendario.",
+        text: "El Editor de contenido es el editor visual donde diseñas tu contenido. Una vez creado, lo programas y publicas desde el Calendario.",
       },
       {
         type: "steps",
         items: [
-          "Abre el Campaign Builder y crea tu diseño o mensaje.",
+          "Abre el Editor de contenido y crea tu diseño o mensaje.",
           "Elige el canal de destino (WhatsApp, Instagram, Facebook).",
           "Ve al Calendario, asigna fecha y hora, y programa la publicación.",
         ],
@@ -299,18 +299,18 @@ export const HELP_ARTICLES: HelpArticle[] = [
     slug: "generar-contenido-con-ia",
     title: "Genera contenido con IA",
     category: "contenido",
-    summary: "Crea variantes de texto y hashtags con el AI Content Studio.",
+    summary: "Crea variantes de texto y hashtags con Contenido con IA.",
     tags: ["ia", "ai", "contenido", "hashtags", "copy"],
     moduleHref: "ai",
     body: [
       {
         type: "p",
-        text: "El AI Content Studio genera variantes de copy adaptadas al formato y la longitud que necesites, y te sugiere hashtags relevantes.",
+        text: "Contenido con IA genera variantes de copy adaptadas al formato y la longitud que necesites, y te sugiere hashtags relevantes.",
       },
       {
         type: "steps",
         items: [
-          "Describe el mensaje o la campaña en el AI Content Studio.",
+          "Describe el mensaje o la campaña en Contenido con IA.",
           "Elige formato y longitud, y genera varias variantes.",
           "Mejora una variante, guárdala como plantilla o pide hashtags.",
         ],
