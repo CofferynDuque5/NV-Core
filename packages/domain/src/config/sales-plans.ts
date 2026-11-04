@@ -98,7 +98,7 @@ export const SALES_PLANS: Record<SalesPlanId, SalesPlan> = {
     features: [
       "Hasta 5 números de WhatsApp",
       "1 cuenta de Telegram",
-      "Varias marcas (cada una con su plan)",
+      "Varias marcas (cada marca adicional paga su propio plan)",
       ...SHARED_FEATURES,
       ...PRO_EXTRAS,
     ],

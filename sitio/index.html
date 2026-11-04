@@ -292,7 +292,7 @@ html[data-style="vibrante"] .final .btn-primary{background:#fff;color:#2B1F7A}
 html[data-style="vibrante"] .final .btn-ghost{color:#fff;border-color:rgba(255,255,255,.4)}
 footer{border-top:1px solid var(--line);padding:56px 0 34px;font-size:14px}
 .foot{display:grid;grid-template-columns:1.6fr 1fr 1fr 1fr;gap:32px}
-.foot h4{margin:0 0 12px;font-size:13px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);font-weight:600}
+.foot .fh{margin:0 0 12px;font-family:inherit;line-height:1.4;font-size:13px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);font-weight:600}
 .foot a{display:block;color:var(--muted);padding:4px 0}
 .foot a:hover{color:var(--text)}
 .copy{margin-top:40px;padding-top:22px;border-top:1px solid var(--line);color:var(--muted);font-size:13px;display:flex;justify-content:space-between;gap:14px;flex-wrap:wrap}
@@ -497,24 +497,24 @@ dialog.install::backdrop{background:rgba(5,7,12,.6);backdrop-filter:blur(3px)}
     </div>
     <div class="tour rv">
       <div class="tabs" role="tablist" aria-label="Partes del panel">
-        <button class="tab" role="tab" aria-selected="true" aria-controls="sh-inicio" data-shot="sh-inicio"><strong><span class="ico"><svg><use href="#i-layers"/></svg></span>Inicio</strong><span>Lo que pasó hoy en tu marca, tus próximos pasos y los avisos que necesitan atención.</span></button>
-        <button class="tab" role="tab" aria-selected="false" aria-controls="sh-campanas" data-shot="sh-campanas"><strong><span class="ico"><svg><use href="#i-mega"/></svg></span>Campañas</strong><span>Programa mensajes con imágenes a tus grupos de WhatsApp y Telegram, por días, horas o entre dos fechas.</span></button>
-        <button class="tab" role="tab" aria-selected="false" aria-controls="sh-grupos" data-shot="sh-grupos"><strong><span class="ico"><svg><use href="#i-users"/></svg></span>Grupos</strong><span>Tus grupos con país, categoría y reglas. El precio se pone solo en la moneda de cada grupo.</span></button>
-        <button class="tab" role="tab" aria-selected="false" aria-controls="sh-contactos" data-shot="sh-contactos"><strong><span class="ico"><svg><use href="#i-users"/></svg></span>Clientes</strong><span>Tu CRM por etapas: de interesado a cliente, con notas, etiquetas y de dónde llegó cada uno.</span></button>
-        <button class="tab" role="tab" aria-selected="false" aria-controls="sh-cobros" data-shot="sh-cobros"><strong><span class="ico"><svg><use href="#i-coin"/></svg></span>Cobros</strong><span>Pide pagos con Pago Móvil, Nequi, Yape, Binance, Zinli y más. Confírmalos al ver el comprobante.</span></button>
-        <button class="tab" role="tab" aria-selected="false" aria-controls="sh-tienda" data-shot="sh-tienda"><strong><span class="ico"><svg><use href="#i-bag"/></svg></span>Tienda</strong><span>Tu catálogo con precios por moneda. De un producto sale una campaña en un clic.</span></button>
-        <button class="tab" role="tab" aria-selected="false" aria-controls="sh-calendario" data-shot="sh-calendario"><strong><span class="ico"><svg><use href="#i-cal"/></svg></span>Calendario</strong><span>Todas tus publicaciones de la semana o del mes, por red social.</span></button>
-        <button class="tab" role="tab" aria-selected="false" aria-controls="sh-analytics" data-shot="sh-analytics"><strong><span class="ico"><svg><use href="#i-chart"/></svg></span>Analítica</strong><span>Números que dicen de dónde salen, descargables en CSV o PDF, y un informe cada lunes.</span></button>
+        <button class="tab" id="tab-sh-inicio" tabindex="0" role="tab" aria-selected="true" aria-controls="sh-inicio" data-shot="sh-inicio"><strong><span class="ico"><svg><use href="#i-layers"/></svg></span>Inicio</strong><span>Lo que pasó hoy en tu marca, tus próximos pasos y los avisos que necesitan atención.</span></button>
+        <button class="tab" id="tab-sh-campanas" tabindex="-1" role="tab" aria-selected="false" aria-controls="sh-campanas" data-shot="sh-campanas"><strong><span class="ico"><svg><use href="#i-mega"/></svg></span>Campañas</strong><span>Programa mensajes con imágenes a tus grupos de WhatsApp y Telegram, por días, horas o entre dos fechas.</span></button>
+        <button class="tab" id="tab-sh-grupos" tabindex="-1" role="tab" aria-selected="false" aria-controls="sh-grupos" data-shot="sh-grupos"><strong><span class="ico"><svg><use href="#i-users"/></svg></span>Grupos</strong><span>Tus grupos con país, categoría y reglas. El precio se pone solo en la moneda de cada grupo.</span></button>
+        <button class="tab" id="tab-sh-contactos" tabindex="-1" role="tab" aria-selected="false" aria-controls="sh-contactos" data-shot="sh-contactos"><strong><span class="ico"><svg><use href="#i-users"/></svg></span>Clientes</strong><span>Tu CRM por etapas: de interesado a cliente, con notas, etiquetas y de dónde llegó cada uno.</span></button>
+        <button class="tab" id="tab-sh-cobros" tabindex="-1" role="tab" aria-selected="false" aria-controls="sh-cobros" data-shot="sh-cobros"><strong><span class="ico"><svg><use href="#i-coin"/></svg></span>Cobros</strong><span>Pide pagos con Pago Móvil, Nequi, Yape, Binance, Zinli y más. Confírmalos al ver el comprobante.</span></button>
+        <button class="tab" id="tab-sh-tienda" tabindex="-1" role="tab" aria-selected="false" aria-controls="sh-tienda" data-shot="sh-tienda"><strong><span class="ico"><svg><use href="#i-bag"/></svg></span>Tienda</strong><span>Tu catálogo con precios por moneda. De un producto sale una campaña en un clic.</span></button>
+        <button class="tab" id="tab-sh-calendario" tabindex="-1" role="tab" aria-selected="false" aria-controls="sh-calendario" data-shot="sh-calendario"><strong><span class="ico"><svg><use href="#i-cal"/></svg></span>Calendario</strong><span>Todas tus publicaciones de la semana o del mes, por red social.</span></button>
+        <button class="tab" id="tab-sh-analytics" tabindex="-1" role="tab" aria-selected="false" aria-controls="sh-analytics" data-shot="sh-analytics"><strong><span class="ico"><svg><use href="#i-chart"/></svg></span>Analítica</strong><span>Números que dicen de dónde salen, descargables en CSV o PDF, y un informe cada lunes.</span></button>
       </div>
       <div class="shots">
-        <div class="frame shot on" id="sh-inicio" role="tabpanel"><img class="s-d" src="img/dark-dashboard.webp" width="1600" height="1000" alt="Inicio del panel" loading="lazy"/><img class="s-l" src="img/light-dashboard.webp" width="1600" height="1000" alt="Inicio del panel" loading="lazy"/><img class="m-shot" src="img/movil-dashboard.webp" width="600" height="1298" alt="" loading="lazy"/></div>
-        <div class="frame shot" id="sh-campanas" role="tabpanel"><img class="s-d" src="img/dark-campanas.webp" width="1600" height="1000" alt="Campañas programadas" loading="lazy"/><img class="s-l" src="img/light-campanas.webp" width="1600" height="1000" alt="Campañas programadas" loading="lazy"/><img class="m-shot" src="img/movil-campanas.webp" width="600" height="1298" alt="" loading="lazy"/></div>
-        <div class="frame shot" id="sh-grupos" role="tabpanel"><img class="s-d" src="img/dark-grupos.webp" width="1600" height="1000" alt="Grupos de WhatsApp y Telegram" loading="lazy"/><img class="s-l" src="img/light-grupos.webp" width="1600" height="1000" alt="Grupos de WhatsApp y Telegram" loading="lazy"/><img class="m-shot" src="img/movil-grupos.webp" width="600" height="1298" alt="" loading="lazy"/></div>
-        <div class="frame shot" id="sh-contactos" role="tabpanel"><img class="s-d" src="img/dark-contactos.webp" width="1600" height="1000" alt="Clientes por etapas" loading="lazy"/><img class="s-l" src="img/light-contactos.webp" width="1600" height="1000" alt="Clientes por etapas" loading="lazy"/><img class="m-shot" src="img/movil-contactos.webp" width="600" height="1298" alt="" loading="lazy"/></div>
-        <div class="frame shot" id="sh-cobros" role="tabpanel"><img class="s-d" src="img/dark-cobros.webp" width="1600" height="1000" alt="Cobros con métodos locales" loading="lazy"/><img class="s-l" src="img/light-cobros.webp" width="1600" height="1000" alt="Cobros con métodos locales" loading="lazy"/><img class="m-shot" src="img/movil-cobros.webp" width="600" height="1298" alt="" loading="lazy"/></div>
-        <div class="frame shot" id="sh-tienda" role="tabpanel"><img class="s-d" src="img/dark-tienda.webp" width="1600" height="1000" alt="Tienda con productos" loading="lazy"/><img class="s-l" src="img/light-tienda.webp" width="1600" height="1000" alt="Tienda con productos" loading="lazy"/><img class="m-shot" src="img/movil-tienda.webp" width="600" height="1298" alt="" loading="lazy"/></div>
-        <div class="frame shot" id="sh-calendario" role="tabpanel"><img class="s-d" src="img/dark-calendario.webp" width="1600" height="1000" alt="Calendario de publicaciones" loading="lazy"/><img class="s-l" src="img/light-calendario.webp" width="1600" height="1000" alt="Calendario de publicaciones" loading="lazy"/><img class="m-shot" src="img/movil-calendario.webp" width="600" height="1298" alt="" loading="lazy"/></div>
-        <div class="frame shot" id="sh-analytics" role="tabpanel"><img class="s-d" src="img/dark-analytics.webp" width="1600" height="1000" alt="Analítica" loading="lazy"/><img class="s-l" src="img/light-analytics.webp" width="1600" height="1000" alt="Analítica" loading="lazy"/><img class="m-shot" src="img/movil-analytics.webp" width="600" height="1298" alt="" loading="lazy"/></div>
+        <div class="frame shot on" id="sh-inicio" role="tabpanel" aria-labelledby="tab-sh-inicio" tabindex="0"><img class="s-d" src="img/dark-dashboard.webp" width="1600" height="1000" alt="Inicio del panel" loading="lazy"/><img class="s-l" src="img/light-dashboard.webp" width="1600" height="1000" alt="Inicio del panel" loading="lazy"/><img class="m-shot" src="img/movil-dashboard.webp" width="600" height="1298" alt="" loading="lazy"/></div>
+        <div class="frame shot" id="sh-campanas" role="tabpanel" aria-labelledby="tab-sh-campanas" tabindex="0"><img class="s-d" src="img/dark-campanas.webp" width="1600" height="1000" alt="Campañas programadas" loading="lazy"/><img class="s-l" src="img/light-campanas.webp" width="1600" height="1000" alt="Campañas programadas" loading="lazy"/><img class="m-shot" src="img/movil-campanas.webp" width="600" height="1298" alt="" loading="lazy"/></div>
+        <div class="frame shot" id="sh-grupos" role="tabpanel" aria-labelledby="tab-sh-grupos" tabindex="0"><img class="s-d" src="img/dark-grupos.webp" width="1600" height="1000" alt="Grupos de WhatsApp y Telegram" loading="lazy"/><img class="s-l" src="img/light-grupos.webp" width="1600" height="1000" alt="Grupos de WhatsApp y Telegram" loading="lazy"/><img class="m-shot" src="img/movil-grupos.webp" width="600" height="1298" alt="" loading="lazy"/></div>
+        <div class="frame shot" id="sh-contactos" role="tabpanel" aria-labelledby="tab-sh-contactos" tabindex="0"><img class="s-d" src="img/dark-contactos.webp" width="1600" height="1000" alt="Clientes por etapas" loading="lazy"/><img class="s-l" src="img/light-contactos.webp" width="1600" height="1000" alt="Clientes por etapas" loading="lazy"/><img class="m-shot" src="img/movil-contactos.webp" width="600" height="1298" alt="" loading="lazy"/></div>
+        <div class="frame shot" id="sh-cobros" role="tabpanel" aria-labelledby="tab-sh-cobros" tabindex="0"><img class="s-d" src="img/dark-cobros.webp" width="1600" height="1000" alt="Cobros con métodos locales" loading="lazy"/><img class="s-l" src="img/light-cobros.webp" width="1600" height="1000" alt="Cobros con métodos locales" loading="lazy"/><img class="m-shot" src="img/movil-cobros.webp" width="600" height="1298" alt="" loading="lazy"/></div>
+        <div class="frame shot" id="sh-tienda" role="tabpanel" aria-labelledby="tab-sh-tienda" tabindex="0"><img class="s-d" src="img/dark-tienda.webp" width="1600" height="1000" alt="Tienda con productos" loading="lazy"/><img class="s-l" src="img/light-tienda.webp" width="1600" height="1000" alt="Tienda con productos" loading="lazy"/><img class="m-shot" src="img/movil-tienda.webp" width="600" height="1298" alt="" loading="lazy"/></div>
+        <div class="frame shot" id="sh-calendario" role="tabpanel" aria-labelledby="tab-sh-calendario" tabindex="0"><img class="s-d" src="img/dark-calendario.webp" width="1600" height="1000" alt="Calendario de publicaciones" loading="lazy"/><img class="s-l" src="img/light-calendario.webp" width="1600" height="1000" alt="Calendario de publicaciones" loading="lazy"/><img class="m-shot" src="img/movil-calendario.webp" width="600" height="1298" alt="" loading="lazy"/></div>
+        <div class="frame shot" id="sh-analytics" role="tabpanel" aria-labelledby="tab-sh-analytics" tabindex="0"><img class="s-d" src="img/dark-analytics.webp" width="1600" height="1000" alt="Analítica" loading="lazy"/><img class="s-l" src="img/light-analytics.webp" width="1600" height="1000" alt="Analítica" loading="lazy"/><img class="m-shot" src="img/movil-analytics.webp" width="600" height="1298" alt="" loading="lazy"/></div>
       </div>
     </div>
   </div>
@@ -544,7 +544,7 @@ dialog.install::backdrop{background:rgba(5,7,12,.6);backdrop-filter:blur(3px)}
       <article class="card c3 rv"><span class="ico"><svg><use href="#i-chart"/></svg></span><h3>Un informe cada lunes</h3><p>Lo que creció en la semana y lo que necesita atención: chats sin responder, pagos por verificar y tareas vencidas.</p></article>
       <article class="card c3 rv"><span class="ico"><svg><use href="#i-tasks"/></svg></span><h3>Tu equipo en orden</h3><p>Tablero de tareas enlazadas a clientes, roles por persona y enlace de invitación para sumar a tu equipo.</p></article>
       <article class="card c3 rv"><span class="ico"><svg><use href="#i-spark"/></svg></span><h3>IA que te ayuda a escribir</h3><p>Borradores de publicaciones y respuestas que tú revisas y apruebas antes de enviar.</p></article>
-      <article class="card c3 rv"><span class="ico"><svg><use href="#i-layers"/></svg></span><h3>Varias marcas sin mezclas</h3><p>Cada marca con sus propios clientes, grupos y números. Cambias de una a otra en un toque.</p></article>
+      <article class="card c3 rv"><span class="ico"><svg><use href="#i-layers"/></svg></span><h3>Varias marcas sin mezclas</h3><p>Cada marca con sus propios clientes, grupos y números. Cambias de una a otra en un toque. Con Pro creas las que quieras; cada marca adicional paga su propio plan.</p></article>
     </div>
   </div>
 </section>
@@ -620,7 +620,7 @@ dialog.install::backdrop{background:rgba(5,7,12,.6);backdrop-filter:blur(3px)}
         <ul>
           <li><svg><use href="#i-check"/></svg>Hasta 5 números de WhatsApp y 1 de Telegram</li>
           <li><svg><use href="#i-check"/></svg>Instagram y Facebook de cada marca</li>
-          <li><svg><use href="#i-check"/></svg>Varias marcas (cada una con su propio plan)</li>
+          <li><svg><use href="#i-check"/></svg>Varias marcas: cada marca adicional paga su propio plan Pro</li>
           <li><svg><use href="#i-check"/></svg>Todo lo del Básico</li>
           <li><svg><use href="#i-check"/></svg>Tienda, Cobros y mensajes de cobro</li>
           <li><svg><use href="#i-check"/></svg>Automatizaciones, formularios y embudos</li>
@@ -672,7 +672,7 @@ dialog.install::backdrop{background:rgba(5,7,12,.6);backdrop-filter:blur(3px)}
       <details class="rv"><summary>¿Puedo pedir un reembolso?</summary><p>No. Sin reembolsos: los pagos son finales, salvo cuando una ley de cumplimiento obligatorio lo exija. Por eso tienes 24 horas de prueba para decidir con calma.</p></details>
       <details class="rv"><summary>¿Puedo cambiar de plan?</summary><p>Sí, en los dos sentidos, desde «Mi plan». De Básico a Pro puedes subir cuando quieras. De Pro a Básico eliges Básico al renovar: lo que Básico no incluye (Tienda, Cobros, automatizaciones, formularios, embudos y los números o marcas de más) queda en pausa, sin borrarse. Si no renuevas, el panel se pausa y tus datos se conservan para cuando vuelvas.</p></details>
       <details class="rv"><summary>¿Hay app para el teléfono?</summary><p>Sí. NV Marketing se instala desde el navegador en Android, iPhone, Windows y Mac, con su icono y su propia ventana. Mira la sección <a href="#app" style="color:var(--brand)">App</a>.</p></details>
-      <details class="rv"><summary>¿Mis datos están seguros?</summary><p>Cada marca tiene su espacio separado, con roles por persona. Las contraseñas se guardan cifradas y las conexiones usan HTTPS. Más detalles en nuestra <a href="legal.html#privacidad" style="color:var(--brand)">política de privacidad</a>.</p></details>
+      <details class="rv"><summary>¿Mis datos están seguros?</summary><p>Cada marca tiene su espacio separado, con roles por persona. Las contraseñas se guardan protegidas con hash (scrypt), nunca en texto plano, y las conexiones usan HTTPS. Más detalles en nuestra <a href="legal.html#privacidad" style="color:var(--brand)">política de privacidad</a>.</p></details>
     </div>
   </div>
 </section>
@@ -698,12 +698,12 @@ dialog.install::backdrop{background:rgba(5,7,12,.6);backdrop-filter:blur(3px)}
   <div class="in-body">
     <p class="muted">Se instala desde el navegador, sin tiendas: queda con su icono, abre en su propia ventana y se actualiza sola.</p>
     <div class="oses" role="tablist" aria-label="Dispositivo">
-      <button class="os" role="tab" data-os="android" aria-selected="false">Android</button>
-      <button class="os" role="tab" data-os="ios" aria-selected="false">iPhone y iPad</button>
-      <button class="os" role="tab" data-os="windows" aria-selected="false">Windows</button>
-      <button class="os" role="tab" data-os="mac" aria-selected="false">Mac</button>
+      <button class="os" role="tab" id="os-android" aria-controls="install-steps" data-os="android" aria-selected="false">Android</button>
+      <button class="os" role="tab" id="os-ios" aria-controls="install-steps" data-os="ios" aria-selected="false">iPhone y iPad</button>
+      <button class="os" role="tab" id="os-windows" aria-controls="install-steps" data-os="windows" aria-selected="false">Windows</button>
+      <button class="os" role="tab" id="os-mac" aria-controls="install-steps" data-os="mac" aria-selected="false">Mac</button>
     </div>
-    <ol class="steps" id="install-steps" role="tabpanel" aria-live="polite"></ol>
+    <ol class="steps" id="install-steps" role="tabpanel" aria-label="Pasos para instalar" aria-live="polite"></ol>
     <div class="in-foot">
       <a class="btn btn-primary" data-app data-path="/login" href="#">Abrir el panel para instalar</a>
       <small>La instalación se hace en el panel: ábrelo en este dispositivo y sigue los pasos.</small>
@@ -718,9 +718,9 @@ dialog.install::backdrop{background:rgba(5,7,12,.6);backdrop-filter:blur(3px)}
         <a class="logo" href="#" data-top aria-label="NV Marketing, ir arriba"><svg><use href="#logo"/></svg>NV Marketing</a>
         <p class="muted" style="margin-top:14px;max-width:320px">El panel para vender por WhatsApp, Telegram y redes, con tus clientes y cobros en un solo lugar.</p>
       </div>
-      <div><h4>Producto</h4><a href="#panel">El panel</a><a href="#beneficios">Lo que ganas</a><a href="#precios">Precios</a><a href="#app">App</a><a href="#preguntas">Preguntas</a></div>
-      <div><h4>Cuenta</h4><a data-app data-path="/login" href="#">Ingresar</a><a data-app data-path="/register" href="#">Crear cuenta</a><a data-app data-path="/demo" href="#">Ver demo</a></div>
-      <div><h4>Legal y contacto</h4><a href="legal.html#terminos">Términos</a><a href="legal.html#privacidad">Privacidad</a><a href="legal.html#cookies">Cookies</a><a class="mail" href="mailto:nvmarketing@nvcorx.com">nvmarketing@nvcorx.com</a></div>
+      <div><h3 class="fh">Producto</h3><a href="#panel">El panel</a><a href="#beneficios">Lo que ganas</a><a href="#precios">Precios</a><a href="#app">App</a><a href="#preguntas">Preguntas</a></div>
+      <div><h3 class="fh">Cuenta</h3><a data-app data-path="/login" href="#">Ingresar</a><a data-app data-path="/register" href="#">Crear cuenta</a><a data-app data-path="/demo" href="#">Ver demo</a></div>
+      <div><h3 class="fh">Legal y contacto</h3><a href="legal.html#terminos">Términos</a><a href="legal.html#privacidad">Privacidad</a><a href="legal.html#cookies">Cookies</a><a class="mail" href="mailto:nvmarketing@nvcorx.com">nvmarketing@nvcorx.com</a></div>
     </div>
     <div class="copy">
       <span>© <span id="yr">2026</span> NV Marketing · Valeryn Duque y Nathan Quevedo</span>
@@ -743,10 +743,16 @@ dialog.install::backdrop{background:rgba(5,7,12,.6);backdrop-filter:blur(3px)}
 
   /* Menú superior: resalta la sección en la que estás */
   var links={};document.querySelectorAll(".nav a[href^='#']").forEach(function(a){links[a.getAttribute("href").slice(1)]=a;});
-  if("IntersectionObserver" in window){
-    var so=new IntersectionObserver(function(es){es.forEach(function(e){var a=links[e.target.id];if(!a)return;if(e.isIntersecting){Object.keys(links).forEach(function(k){links[k].classList.remove("active");links[k].removeAttribute("aria-current");});a.classList.add("active");a.setAttribute("aria-current","true");}});},{rootMargin:"-45% 0px -50% 0px"});
-    Object.keys(links).forEach(function(id){var el=document.getElementById(id);if(el)so.observe(el);});
+  /* Marca la última sección cuyo inicio ya pasó la mitad de la pantalla; en la portada, ninguna. */
+  var secs=Object.keys(links).map(function(id){return document.getElementById(id);}).filter(Boolean),ticking=false;
+  function markNav(){
+    ticking=false;var mid=window.innerHeight*0.45,cur=null;
+    secs.forEach(function(el){if(el.getBoundingClientRect().top<=mid)cur=el.id;});
+    if(window.innerHeight+window.scrollY>=document.documentElement.scrollHeight-2&&secs.length)cur=secs[secs.length-1].id;
+    Object.keys(links).forEach(function(k){var on=k===cur;links[k].classList.toggle("active",on);if(on)links[k].setAttribute("aria-current","true");else links[k].removeAttribute("aria-current");});
   }
+  window.addEventListener("scroll",function(){if(!ticking){ticking=true;requestAnimationFrame(markNav);}},{passive:true});
+  window.addEventListener("resize",markNav);markNav();
 
   /* Guía de instalación de la app (en la propia página) */
   var GUIDES={
@@ -757,8 +763,8 @@ dialog.install::backdrop{background:rgba(5,7,12,.6);backdrop-filter:blur(3px)}
   };
   function guessOs(){var ua=navigator.userAgent.toLowerCase();if(/android/.test(ua))return"android";if(/iphone|ipad|ipod/.test(ua)||(/macintosh/.test(ua)&&navigator.maxTouchPoints>1))return"ios";if(/macintosh|mac os x/.test(ua))return"mac";return"windows";}
   var dlg=document.getElementById("install"),stepsEl=document.getElementById("install-steps"),oses=[].slice.call(dlg.querySelectorAll(".os"));
-  function showOs(os){oses.forEach(function(b){b.setAttribute("aria-selected",b.dataset.os===os?"true":"false");});stepsEl.innerHTML="";GUIDES[os].forEach(function(t){var li=document.createElement("li");li.textContent=t;stepsEl.appendChild(li);});}
-  oses.forEach(function(b,i){b.addEventListener("click",function(){showOs(b.dataset.os);});b.addEventListener("keydown",function(e){var d=e.key==="ArrowRight"?1:e.key==="ArrowLeft"?-1:0;if(d){e.preventDefault();var n=oses[(i+d+oses.length)%oses.length];n.focus();showOs(n.dataset.os);}});});
+  function showOs(os){oses.forEach(function(b){var on=b.dataset.os===os;b.setAttribute("aria-selected",on?"true":"false");b.tabIndex=on?0:-1;});stepsEl.innerHTML="";GUIDES[os].forEach(function(t){var li=document.createElement("li");li.textContent=t;stepsEl.appendChild(li);});}
+  oses.forEach(function(b,i){b.addEventListener("click",function(){showOs(b.dataset.os);});b.addEventListener("keydown",function(e){tabKeys(oses,i,e,function(n){showOs(n.dataset.os);});});});
   function openGuide(os){showOs(os||guessOs());if(dlg.showModal){dlg.showModal();}else{dlg.setAttribute("open","");}}
   document.querySelectorAll("[data-install]").forEach(function(a){a.addEventListener("click",function(e){e.preventDefault();openGuide(a.getAttribute("data-install"));});});
   dlg.querySelector("[data-close]").addEventListener("click",function(){dlg.close?dlg.close():dlg.removeAttribute("open");});
@@ -766,10 +772,17 @@ dialog.install::backdrop{background:rgba(5,7,12,.6);backdrop-filter:blur(3px)}
 
   /* Pestañas del recorrido */
   var tabs=[].slice.call(document.querySelectorAll(".tab"));
-  function pick(t){tabs.forEach(function(x){var on=x===t;x.setAttribute("aria-selected",on?"true":"false");document.getElementById(x.dataset.shot).classList.toggle("on",on);});}
+  function pick(t){tabs.forEach(function(x){var on=x===t;x.setAttribute("aria-selected",on?"true":"false");x.tabIndex=on?0:-1;document.getElementById(x.dataset.shot).classList.toggle("on",on);});}
+  /* Teclado de pestañas: flechas, Inicio y Fin; solo la pestaña activa entra con Tab */
+  function tabKeys(list,i,e,go){
+    var k=e.key,n=null;
+    if(k==="ArrowDown"||k==="ArrowRight")n=(i+1)%list.length;else if(k==="ArrowUp"||k==="ArrowLeft")n=(i-1+list.length)%list.length;
+    else if(k==="Home")n=0;else if(k==="End")n=list.length-1;
+    if(n!==null){e.preventDefault();list[n].focus();go(list[n]);}
+  }
   tabs.forEach(function(t,i){
     t.addEventListener("click",function(){pick(t);});
-    t.addEventListener("keydown",function(e){var d=e.key==="ArrowDown"||e.key==="ArrowRight"?1:e.key==="ArrowUp"||e.key==="ArrowLeft"?-1:0;if(d){e.preventDefault();var n=tabs[(i+d+tabs.length)%tabs.length];n.focus();pick(n);}});
+    t.addEventListener("keydown",function(e){tabKeys(tabs,i,e,pick);});
   });
 
   /* Aparición suave */

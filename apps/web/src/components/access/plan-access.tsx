@@ -46,6 +46,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { STATUS_BADGE } from "@/lib/payments";
+import { chosenPlan } from "@/lib/chosen-plan";
 
 const day = (iso: string) => new Date(iso).toLocaleDateString("es", { day: "numeric", month: "long", year: "numeric" });
 
@@ -93,10 +94,13 @@ export function PlanCards({
   access,
   onChoose,
   canPay,
+  suggested,
 }: {
   access: AccessOverview;
   onChoose?: (id: SalesPlanId) => void;
   canPay: boolean;
+  /** The plan picked on the sales site (marked «Lo elegiste»). */
+  suggested?: SalesPlanId;
 }) {
   const current = paidPlan(access);
   const unlimited = access.state === "unlimited";
@@ -105,7 +109,8 @@ export function PlanCards({
       {planOptions(access).map((option) => {
         const plan = SALES_PLANS[option.id];
         const isCurrent = current === option.id;
-        const featured = option.id === "pro";
+        const picked = !current && suggested === option.id;
+        const featured = suggested && !current ? picked : option.id === "pro";
         const action = isCurrent ? "Renovar" : current === "basico" && option.id === "pro" ? "Mejorar a Pro" : `Elegir ${plan.name}`;
         return (
           <div
@@ -122,6 +127,10 @@ export function PlanCards({
               {isCurrent ? (
                 <span className="ml-auto rounded-full bg-state-success/15 px-2 py-0.5 text-[11px] font-semibold text-state-success">
                   Tu plan
+                </span>
+              ) : picked ? (
+                <span className="ml-auto rounded-full bg-brand/15 px-2 py-0.5 text-[11px] font-semibold text-brand" data-testid="plan-picked">
+                  Lo elegiste
                 </span>
               ) : featured ? (
                 <span className="ml-auto rounded-full bg-brand/15 px-2 py-0.5 text-[11px] font-semibold text-brand">
@@ -538,7 +547,7 @@ export function PlanPicker({ slug, access, canPay }: { slug: string; access: Acc
   return (
     <div className="space-y-4">
       <LastPayment access={access} />
-      <PlanCards access={access} canPay={canPay} onChoose={setChosen} />
+      <PlanCards access={access} canPay={canPay} onChoose={setChosen} suggested={chosenPlan()} />
       {chosen && access.methods.length === 0 ? (
         <p className="rounded-lg border border-line-soft p-3 text-sm text-ink-muted">
           Los métodos de pago aún no están configurados. Escríbenos a{" "}

@@ -1,10 +1,11 @@
 import * as React from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { Loader2 } from "lucide-react";
-import { DEFAULT_LEGAL_URL } from "@nv/domain";
+import { DEFAULT_LEGAL_URL, SALES_PLANS } from "@nv/domain";
 
 import { useAuthStore } from "@/stores/auth-store";
 import { isBackendConfigured } from "@/lib/env";
+import { chosenPlan, planFromSearch, rememberChosenPlan } from "@/lib/chosen-plan";
 import { AuthShell } from "@/components/auth/auth-shell";
 import { BackendNotice } from "@/components/auth/backend-notice";
 import { Button } from "@/components/ui/button";
@@ -22,6 +23,10 @@ export default function RegisterPage() {
   const nextParam = params.get("next");
   const next = nextParam && nextParam.startsWith("/") && !nextParam.startsWith("//") ? nextParam : null;
   const register = useAuthStore((s) => s.register);
+  // «Elegir Básico/Pro» on the sales site lands here with ?plan=…: show it and
+  // keep it so the payment screen offers that plan first when the trial ends.
+  const plan = planFromSearch(params) ?? chosenPlan();
+  React.useEffect(() => rememberChosenPlan(planFromSearch(params)), [params]);
 
   const [name, setName] = React.useState("");
   const [email, setEmail] = React.useState("");
@@ -73,10 +78,18 @@ export default function RegisterPage() {
     >
       <BackendNotice />
       <form onSubmit={onSubmit} className="space-y-4">
+        {plan ? (
+          <p className="rounded-lg border border-brand/30 bg-brand/10 px-3 py-2 text-xs text-ink" data-testid="register-plan">
+            <span className="font-semibold">Plan elegido: {SALES_PLANS[plan].name}.</span> Empiezas con la prueba gratis de 24 h;
+            cuando termine, te ofrecemos este plan para pagar.
+          </p>
+        ) : null}
         <div className="space-y-1.5">
           <Label htmlFor="name">Nombre</Label>
           <Input
             id="name"
+            name="name"
+            autoComplete="name"
             required
             value={name}
             onChange={(e) => setName(e.target.value)}
@@ -87,6 +100,7 @@ export default function RegisterPage() {
           <Label htmlFor="email">Email</Label>
           <Input
             id="email"
+            name="email"
             type="email"
             autoComplete="email"
             required
@@ -99,6 +113,7 @@ export default function RegisterPage() {
           <Label htmlFor="password">Contraseña</Label>
           <PasswordInput
             id="password"
+            name="password"
             autoComplete="new-password"
             required
             minLength={8}

@@ -112,7 +112,8 @@
   }
   header.site.scrolled{border-bottom-color:var(--line);background:rgba(11,13,16,.86)}
   .nav{display:flex;align-items:center;justify-content:space-between;height:68px;gap:20px}
-  .brand{display:flex;align-items:center;gap:11px;font-weight:750;font-size:18px;letter-spacing:-.01em}
+  .brand{display:flex;align-items:center;gap:11px;font-weight:750;font-size:18px;letter-spacing:-.01em;white-space:nowrap}
+  @media (max-width:340px){header.site .brand{font-size:0;gap:0}}
   .brand .logo{width:34px;height:34px;flex:none}
   .nav-links{display:flex;align-items:center;gap:6px}
   .nav-links a{
@@ -186,7 +187,7 @@
 <header class="site" id="site-header">
   <div class="container">
     <nav class="nav" aria-label="Principal">
-      <a class="brand" href="index.html" aria-label="NV Marketing inicio">
+      <a class="brand" href="./" aria-label="NV Marketing inicio">
         <svg class="logo" viewBox="0 0 40 40" fill="none" aria-hidden="true">
           <defs>
             <linearGradient id="lg" x1="0" y1="0" x2="40" y2="40" gradientUnits="userSpaceOnUse">
@@ -198,7 +199,7 @@
         <span>NV Marketing</span>
       </a>
       <div class="nav-cta">
-        <a class="btn btn-ghost btn-ingresar" href="index.html">Volver al inicio</a>
+        <a class="btn btn-ghost btn-ingresar" href="./">Volver al inicio</a>
       </div>
     </nav>
   </div>
@@ -269,7 +270,7 @@
 </section>
 <section class="legal-sec" id="pagos"><h3>8. Planes, pagos y cancelación</h3>
 <ul>
-  <li>Cada persona tiene una sola prueba gratis de 24 horas, que incluye <strong>un envío de campaña</strong>: al enviarlo, la prueba termina. Para evitar abusos, recordamos el dispositivo y la cuenta que usaron la prueba (guardamos solo un código cifrado del navegador, no datos personales), y una cuenta o dispositivo que ya la usó no recibe otra. Después hay dos planes de pago por períodos de 30 días: <strong>Básico</strong> (1 número de WhatsApp, 1 cuenta de Telegram y 1 marca; no incluye Tienda, Cobros, Automatizaciones, Formularios ni Embudos) y <strong>Pro</strong> (todo lo anterior, hasta 5 números de WhatsApp y varias marcas, cada una con su plan).</li>
+  <li>Cada persona tiene una sola prueba gratis de 24 horas, que incluye <strong>un envío de campaña</strong>: al enviarlo, la prueba termina. Para evitar abusos, recordamos el dispositivo y la cuenta que usaron la prueba (guardamos solo un código cifrado del navegador, no datos personales), y una cuenta o dispositivo que ya la usó no recibe otra. Después hay dos planes de pago por períodos de 30 días: <strong>Básico</strong> (1 número de WhatsApp, 1 cuenta de Telegram y 1 marca; no incluye Tienda, Cobros, Automatizaciones, Formularios ni Embudos) y <strong>Pro</strong> (todo lo anterior, hasta 5 números de WhatsApp y la opción de crear varias marcas; cada marca adicional paga su propio plan).</li>
   <li>Para pagar envías el comprobante y los datos del pago (nombre de quien pagó, banco o cuenta de origen, fecha, monto y referencia). Los usamos solo para verificar el pago y los guardamos en privado. Si pagas en bolívares, el monto se calcula con la tasa USDT del día que te mostramos al pagar. Los precios se muestran en la sección de precios de este sitio y en el panel, en dólares estadounidenses (USD), y pueden cambiar; si cambian, te avisaremos antes de tu siguiente pago.</li>
   <li>Los planes se pagan a nuestras cuentas (pago manual) y se activan cuando confirmamos el pago. Si pagas en otra moneda, pagas el equivalente del día.</li>
   <li>Puedes mejorar de plan en cualquier momento desde «Mi plan». Si no renuevas, el acceso termina al final del período pagado y tus datos se conservan.</li>
@@ -365,7 +366,7 @@
 <footer class="site">
   <div class="container">
     <div class="foot-bottom" style="margin-top:0;border-top:0;padding-top:0">
-      <p>© 2026 NV Marketing · Valeryn Duque y Nathan Quevedo. Todos los derechos reservados. · <a href="index.html" style="color:inherit">Inicio</a></p>
+      <p>© 2026 NV Marketing · Valeryn Duque y Nathan Quevedo. Todos los derechos reservados. · <a href="./" style="color:inherit">Inicio</a></p>
     </div>
   </div>
 </footer>
