@@ -6,10 +6,14 @@ Node ni base de datos. El panel (la aplicación) va por separado.
 
 QUÉ HAY AQUÍ
 ------------
-  index.html   La página principal (rediseñada el 01/11/2026).
+  index.html   La página principal (rediseñada el 01/11/2026, ajustes del 04/11).
   legal.html   Términos, privacidad y cookies.
+  404.html     Página propia para direcciones que no existen.
+  robots.txt, sitemap.xml   Para Google (apuntan a nvmarketing.nvcorx.com).
+  favicon.ico  Icono de la pestaña.
   img/         Capturas reales del panel (.webp). Súbela COMPLETA.
-  .htaccess    Hace que la web cargue directa, fuerza HTTPS y cachea las imágenes.
+  .htaccess    Hace que la web cargue directa, fuerza HTTPS, cachea las imágenes,
+               usa 404.html y añade cabeceras de seguridad (CSP, HSTS…).
                (Es un archivo oculto: en el Administrador de archivos de cPanel
                activa "Mostrar archivos ocultos" para verlo.)
 
@@ -18,7 +22,8 @@ CÓMO SUBIRLO A CPANEL
   1) Administrador de archivos → raíz del dominio del sitio
      (por ejemplo public_html o la carpeta del subdominio nvmarketing).
   2) Sube el zip del sitio y extráelo AHÍ. Deben quedar index.html, legal.html,
-     .htaccess y la carpeta img/ juntos en esa raíz.
+     404.html, robots.txt, sitemap.xml, favicon.ico, .htaccess y la carpeta img/
+     juntos en esa raíz.
   3) Recarga la web con Ctrl+F5.
 
 ELEGIR EL ESTILO (3 diseños en el mismo archivo)
@@ -34,16 +39,24 @@ CONECTAR LOS BOTONES CON TU PANEL
      window.NV_APP_URL = "https://nvmarketingpanel.nvcorx.com";
   Pon ahí la dirección de tu panel. Todos los botones la usan:
      Ingresar → /login · Probar gratis y planes → /register · Ver demo → /demo
-     Instalar la app → /instalar (con ?so=android, ios, windows o mac)
+     «Instalar la app» abre una guía dentro de la misma página (no depende del
+     panel) con un botón «Abrir el panel para instalar» → /login.
   El correo de contacto está en window.NV_CONTACT_EMAIL.
 
 LA APP PARA TELÉFONO Y PC
 -------------------------
   El panel se instala como app (PWA) desde el navegador, sin tiendas:
   Android (Chrome), iPhone/iPad (Safari → Compartir → Añadir a pantalla de
-  inicio), Windows y Mac (Chrome o Edge → Instalar). La página /instalar del
-  panel muestra el botón «Instalar ahora» y los pasos de cada dispositivo.
+  inicio), Windows y Mac (Chrome o Edge → Instalar). El panel nuevo trae además
+  la página /instalar con el botón «Instalar ahora» (sube el zip del panel nuevo
+  para tenerla; con el panel viejo esa dirección da «Página no encontrada»).
   Necesita que el panel esté en HTTPS (cPanel lo da con AutoSSL).
+
+SI CAMBIAS DE DOMINIO
+---------------------
+  La dirección https://nvmarketing.nvcorx.com/ está escrita en index.html
+  (canonical y og:*), legal.html (canonical), robots.txt y sitemap.xml.
+  Cámbiala en esos cuatro archivos.
 
 PRECIOS
 -------
