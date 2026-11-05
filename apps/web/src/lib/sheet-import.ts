@@ -53,7 +53,7 @@ export function guessMapping(headers: string[]): ContactField[] {
 
 /** Parse CSV text (comma, semicolon or tab, detected from the first line). */
 export function parseDelimited(text: string): string[][] {
-  const clean = text.replace(/^﻿/, "");
+  const clean = text.replace(/^\uFEFF/, "");
   const firstLine = clean.split(/\r?\n/, 1)[0] ?? "";
   const counts = [",", ";", "\t"].map((d) => [d, firstLine.split(d).length] as const);
   const delim = counts.sort((a, b) => b[1] - a[1])[0]![0];
