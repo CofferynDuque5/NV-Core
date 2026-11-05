@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Body,
   Controller,
   Delete,
@@ -25,8 +26,11 @@ import {
   type ChannelId,
   type Group,
   type GroupRulesCheck,
+  type SendSettings,
 } from "@nv/domain";
-import { IsArray, IsBoolean, IsIn, IsInt, IsOptional, IsString, Min, MinLength, ValidateIf } from "class-validator";
+import { IsArray, IsBoolean, IsIn, IsInt, IsOptional, IsString, Matches, Max, Min, MinLength, ValidateIf } from "class-validator";
+
+const HHMM = /^([01]\d|2[0-3]):[0-5]\d$/;
 
 import { ListResultDto } from "../../common/dto/list-result.dto";
 import { WorkspaceId } from "../../common/tenant/workspace.decorator";
@@ -94,6 +98,24 @@ export class UpdateGroupDto {
   @IsOptional() @IsBoolean() requiresImage?: boolean;
   @IsOptional() @IsBoolean() forbidsAds?: boolean;
   @IsOptional() @ValidateIf((_o, v) => v !== null) @IsIn(GROUP_COUNTRY_IDS) country?: string | null;
+  // Own sending hours (both or none) and daily limit; null = the brand's.
+  @IsOptional() @ValidateIf((_o, v) => v !== null) @Matches(HHMM, { message: "La hora debe ser HH:MM." }) sendFrom?: string | null;
+  @IsOptional() @ValidateIf((_o, v) => v !== null) @Matches(HHMM, { message: "La hora debe ser HH:MM." }) sendUntil?: string | null;
+  @IsOptional() @ValidateIf((_o, v) => v !== null) @IsInt() @Min(1) @Max(50) maxPerDay?: number | null;
+}
+
+export class SendSettingsDto {
+  @IsOptional() @ValidateIf((_o, v) => v !== null) @Matches(HHMM, { message: "La hora debe ser HH:MM." }) sendFrom?: string | null;
+  @IsOptional() @ValidateIf((_o, v) => v !== null) @Matches(HHMM, { message: "La hora debe ser HH:MM." }) sendUntil?: string | null;
+  @IsOptional() @ValidateIf((_o, v) => v !== null) @IsInt() @Min(1) @Max(50) groupMaxPerDay?: number | null;
+}
+
+/** Both ends of a window, or neither. */
+function pairHours(from: string | null | undefined, until: string | null | undefined): void {
+  const a = from === undefined ? undefined : from || null;
+  const b = until === undefined ? undefined : until || null;
+  if (a === undefined && b === undefined) return;
+  if (!!a !== !!b) throw new BadRequestException("Indica las dos horas (desde y hasta) o ninguna.");
 }
 
 /** Keep (or bring back) several groups at once. */
@@ -166,9 +188,38 @@ export class GroupsService {
   async update(workspaceId: string, actor: string, id: string, dto: UpdateGroupDto): Promise<Group> {
     const existing = await this.db().group.findFirst({ where: { id, workspaceSlug: workspaceId } });
     if (!existing) throw new NotFoundException("Grupo no encontrado.");
+    if (dto.sendFrom !== undefined || dto.sendUntil !== undefined) {
+      pairHours(dto.sendFrom ?? (dto.sendFrom === undefined ? existing.sendFrom : null), dto.sendUntil ?? (dto.sendUntil === undefined ? existing.sendUntil : null));
+    }
     const row = await this.prisma.group.update({ where: { id }, data: dto });
     await this.audit.record(workspaceId, actor, "group.update", id);
     return mapGroup(row);
+  }
+
+  /** Brand sending hours for campaigns and default daily limit per group. */
+  async sendSettings(workspaceId: string): Promise<SendSettings> {
+    if (!this.prisma.enabled) return { sendFrom: null, sendUntil: null, groupMaxPerDay: null };
+    const row = await this.prisma.workspaceSettings.findUnique({
+      where: { workspaceSlug: workspaceId },
+      select: { sendFrom: true, sendUntil: true, groupMaxPerDay: true },
+    });
+    return { sendFrom: row?.sendFrom ?? null, sendUntil: row?.sendUntil ?? null, groupMaxPerDay: row?.groupMaxPerDay ?? null };
+  }
+
+  async saveSendSettings(workspaceId: string, actor: string, dto: SendSettingsDto): Promise<SendSettings> {
+    const data = {
+      sendFrom: dto.sendFrom || null,
+      sendUntil: dto.sendUntil || null,
+      groupMaxPerDay: dto.groupMaxPerDay ?? null,
+    };
+    pairHours(data.sendFrom, data.sendUntil);
+    await this.db().workspaceSettings.upsert({
+      where: { workspaceSlug: workspaceId },
+      create: { workspaceSlug: workspaceId, ...data },
+      update: data,
+    });
+    await this.audit.record(workspaceId, actor, "groups.send_settings", `${data.sendFrom ?? "-"}-${data.sendUntil ?? "-"} max ${data.groupMaxPerDay ?? "-"}`);
+    return data;
   }
 
   async remove(workspaceId: string, actor: string, id: string): Promise<void> {
@@ -287,6 +338,22 @@ export class GroupsController {
   @Get()
   list(@WorkspaceId() workspaceId: string) {
     return this.service.list(workspaceId);
+  }
+
+  @Get("send-settings")
+  sendSettings(@WorkspaceId() workspaceId: string) {
+    return this.service.sendSettings(workspaceId);
+  }
+
+  @Put("send-settings")
+  @Roles("Owner", "Admin")
+  @UseGuards(RolesGuard)
+  saveSendSettings(
+    @WorkspaceId() workspaceId: string,
+    @CurrentUser() user: AuthenticatedUser,
+    @Body() dto: SendSettingsDto,
+  ) {
+    return this.service.saveSendSettings(workspaceId, user.email, dto);
   }
 
   @Get(":id/vars")

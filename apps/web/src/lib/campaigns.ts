@@ -1,4 +1,13 @@
-import type { Campaign, CampaignStatus } from "@nv/domain";
+import {
+  effectiveHours,
+  hhmmMinutes,
+  inSendWindow,
+  sendHoursLabel,
+  type Campaign,
+  type CampaignStatus,
+  type Group,
+  type SendHours,
+} from "@nv/domain";
 
 /** How each status reads in the panel. */
 export const CAMPAIGN_STATUS_LABEL: Record<CampaignStatus, string> = {
@@ -175,4 +184,27 @@ export function previewCountries(
       count,
     }))
     .sort((a, b) => (a.code === "" ? 1 : b.code === "" ? -1 : b.count - a.count || a.name.localeCompare(b.name)));
+}
+
+/**
+ * Groups that would NOT get the campaign at its chosen time(s) because the
+ * time falls outside their sending hours (own window, else the brand's).
+ * They aren't lost: they get it when their hours open.
+ */
+export function groupsOutsideHours(
+  times: string[],
+  groups: Pick<Group, "id" | "name" | "sendFrom" | "sendUntil">[],
+  brand: SendHours | null | undefined,
+): { name: string; hours: string; time: string }[] {
+  const out: { name: string; hours: string; time: string }[] = [];
+  for (const g of groups) {
+    const w = effectiveHours(g, brand ?? {});
+    if (!w) continue;
+    const bad = times.find((t) => {
+      const m = hhmmMinutes(t);
+      return m !== null && !inSendWindow(m, w);
+    });
+    if (bad) out.push({ name: g.name, hours: sendHoursLabel(w), time: bad });
+  }
+  return out;
 }

@@ -214,6 +214,8 @@ export const emptyAdapters: Services = {
     exclude: () => delay({ updated: 0 }),
     getVars: () => delay({}),
     setVars: () => notAvailable(),
+    sendSettings: () => delay({ sendFrom: null, sendUntil: null, groupMaxPerDay: null }),
+    saveSendSettings: () => notAvailable(),
   },
   social: {
     status: () => delay({ facebook: false, instagram: false }),

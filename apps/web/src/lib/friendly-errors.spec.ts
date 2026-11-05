@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { explainError, simplifyNotice, summarizeSkips } from "@nv/domain";
+import { explainError, explainSkip, simplifyNotice, summarizeSkips } from "@nv/domain";
 
 describe("friendly errors", () => {
   it("explains the Telegram 'input entity' error in plain words", () => {
@@ -30,5 +30,16 @@ describe("friendly errors", () => {
     expect(out).not.toMatch(/Could not find|telethon|channelId/);
     expect(out).toMatch(/En «MUNDO STREAMING PERÚ»: Ese grupo ya no está en tu Telegram/);
     expect(out).toMatch(/52 grupos se saltaron, por ejemplo porque no tienen país/);
+  });
+});
+
+describe("explainSkip: horario y máximo diario", () => {
+  it("explica el máximo por día y el número no elegido", () => {
+    expect(explainSkip("ya recibió 2 mensajes hoy (máximo 2 por día)")).toBe(
+      "ya recibieron hoy su máximo de mensajes de campaña",
+    );
+    expect(explainSkip("es de un número que no elegiste para esta campaña")).toBe(
+      "son de un número que no elegiste para esta campaña",
+    );
   });
 });

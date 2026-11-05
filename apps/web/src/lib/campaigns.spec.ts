@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  groupsOutsideHours,
   previewCountries,
   CAMPAIGN_STATUS_LABEL,
   CAMPAIGN_STATUS_SHORT,
@@ -82,5 +83,23 @@ describe("previewCountries", () => {
       { code: "CO", name: "Colombia", currency: "COP", count: 1 },
       { code: "", name: "Sin país", currency: null, count: 2 },
     ]);
+  });
+});
+
+describe("groupsOutsideHours", () => {
+  const g = (id: string, sendFrom: string | null = null, sendUntil: string | null = null) => ({
+    id,
+    name: id,
+    sendFrom,
+    sendUntil,
+  });
+  it("uses the group's own window, else the brand's", () => {
+    const out = groupsOutsideHours(["22:30"], [g("a"), g("b", "20:00", "23:00")], { sendFrom: "08:00", sendUntil: "21:00" });
+    expect(out).toEqual([{ name: "a", hours: "08:00 a 21:00", time: "22:30" }]);
+  });
+  it("supports windows that cross midnight and no window at all", () => {
+    expect(groupsOutsideHours(["01:00"], [g("n", "20:00", "02:00")], null)).toEqual([]);
+    expect(groupsOutsideHours(["03:00"], [g("n", "20:00", "02:00")], null)).toHaveLength(1);
+    expect(groupsOutsideHours(["03:00"], [g("x")], null)).toEqual([]);
   });
 });

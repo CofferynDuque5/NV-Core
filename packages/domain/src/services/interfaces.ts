@@ -72,6 +72,7 @@ import type { ChannelId, ContactStage, Role, WorkspaceKind } from "../enums";
 import type { PlanId, PlanLimits } from "../config/plans";
 import type { DayActivity } from "../config/activity";
 import type { ContactFieldDef } from "../config/contact-fields";
+import type { SendSettings } from "../config/send-hours";
 
 /** Server-side query for the contacts list (search + stage + pagination). */
 export interface ContactListQuery {
@@ -151,6 +152,9 @@ export interface CreateCampaignInput {
   tgLines?: number[];
   /** One extra message per product, each with its own text and image. */
   items?: CampaignItem[];
+  /** Batches: after N groups pause M minutes; null = default pacing. */
+  batchSize?: number | null;
+  batchPauseMin?: number | null;
 }
 export type UpdateCampaignInput = Partial<CreateCampaignInput>;
 
@@ -174,7 +178,12 @@ export interface CreateGroupInput {
 }
 
 export type UpdateGroupInput = Partial<Pick<CreateGroupInput, "name" | "tags" | "description">> &
-  GroupPostingSettings;
+  GroupPostingSettings & {
+    /** «HH:MM»; null on both = the brand's hours. */
+    sendFrom?: string | null;
+    sendUntil?: string | null;
+    maxPerDay?: number | null;
+  };
 
 export interface CreateTemplateInput {
   name: string;
@@ -373,6 +382,9 @@ export interface GroupService {
     id: string,
     vars: Record<string, string>,
   ): Promise<Record<string, string>>;
+  /** Brand sending hours and default daily limit per group. */
+  sendSettings(workspaceId: string): Promise<SendSettings>;
+  saveSendSettings(workspaceId: string, input: SendSettings): Promise<SendSettings>;
 }
 
 export interface SocialStatus {

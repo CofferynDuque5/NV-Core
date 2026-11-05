@@ -5,6 +5,7 @@ import type {
   SampleDataSummary,
   BrandLinks,
   GroupRulesCheck,
+  SendSettings,
   AdminAccessRow,
   AdminLogins,
   MailProvider,
@@ -366,6 +367,8 @@ export function createHttpAdapters(opts: HttpAdapterOptions): Services {
       exclude: (id, ids, excluded) => post<{ updated: number }>(`${ws(id)}/groups/exclude`, { ids, excluded }),
       getVars: (id, gid) => get<Record<string, string>>(`${ws(id)}/groups/${gid}/vars`),
       setVars: (id, gid, vars) => put<Record<string, string>>(`${ws(id)}/groups/${gid}/vars`, vars),
+      sendSettings: (id) => get<SendSettings>(`${ws(id)}/groups/send-settings`),
+      saveSendSettings: (id, input) => put<SendSettings>(`${ws(id)}/groups/send-settings`, input),
     },
     social: {
       status: (id) => get<SocialStatus>(`${ws(id)}/social/status`),

@@ -3,6 +3,7 @@ import { useSearchParams } from "react-router-dom";
 import { categoryLabel, type Group, type GroupRulesCheck } from "@nv/domain";
 import {
   Ban,
+  Clock,
   Loader2,
   Plus,
   RotateCcw,
@@ -47,6 +48,7 @@ import {
 import { GroupCreateDialog } from "@/components/entities/group-create-dialog";
 import { GroupVarsDialog } from "@/components/entities/group-vars-dialog";
 import { GroupRulesDialog } from "@/components/entities/group-rules-dialog";
+import { SendHoursDialog } from "@/components/entities/send-hours-dialog";
 import { CampaignFormDialog } from "@/components/entities/campaign-form-dialog";
 
 const COLUMNS = ["", "Grupo", "País", "Reglas", "Miembros", "Actividad", "Estado", ""];
@@ -156,6 +158,7 @@ export function GruposContent({ showHeader = true }: { showHeader?: boolean }) {
   const [varsGroup, setVarsGroup] = React.useState<Group | null>(null);
   const [rulesGroup, setRulesGroup] = React.useState<Group | null>(null);
   const [campaignOpen, setCampaignOpen] = React.useState(false);
+  const [hoursOpen, setHoursOpen] = React.useState(false);
   const [summary, setSummary] = React.useState<GroupRulesCheck[] | null>(null);
   const [searchParams] = useSearchParams();
   const [q, setQ] = React.useState(() => searchParams.get("q") ?? "");
@@ -219,6 +222,9 @@ export function GruposContent({ showHeader = true }: { showHeader?: boolean }) {
           Revisar reglas
         </Button>
       ) : null}
+      <Button variant="secondary" size="sm" onClick={() => setHoursOpen(true)}>
+        <Clock className="size-4" /> Horario de envío
+      </Button>
       <Button variant="secondary" size="sm" onClick={() => setCampaignOpen(true)}>
         <Send className="size-4" /> Enviar a grupos
       </Button>
@@ -466,6 +472,13 @@ export function GruposContent({ showHeader = true }: { showHeader?: boolean }) {
                                   Mensajes {relativeTime(g.lastActivityAt)}
                                 </div>
                               ) : null}
+                              {(g.sendFrom && g.sendUntil) || g.maxPerDay ? (
+                                <div className="text-ink-faint" data-testid="group-hours">
+                                  {g.sendFrom && g.sendUntil ? `Envía ${g.sendFrom}–${g.sendUntil}` : ""}
+                                  {g.sendFrom && g.sendUntil && g.maxPerDay ? " · " : ""}
+                                  {g.maxPerDay ? `máx. ${g.maxPerDay}/día` : ""}
+                                </div>
+                              ) : null}
                             </td>
                             <td className="px-4 py-3">
                               <StatusBadge g={g} />
@@ -509,6 +522,7 @@ export function GruposContent({ showHeader = true }: { showHeader?: boolean }) {
         group={varsGroup}
       />
       <GroupRulesDialog group={rulesGroup} onOpenChange={(v) => !v && setRulesGroup(null)} />
+      <SendHoursDialog open={hoursOpen} onOpenChange={setHoursOpen} />
       <RulesSummary results={summary} onClose={() => setSummary(null)} />
       <CampaignFormDialog open={campaignOpen} onOpenChange={setCampaignOpen} campaign={null} />
     </div>

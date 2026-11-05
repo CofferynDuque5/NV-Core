@@ -39,7 +39,15 @@ import {
 } from "@nv/domain";
 import { resolvePacing, pacingDelay, type PacingOptions } from "./pacing";
 import { inDateRange, wallClock } from "./date-range";
-import { scheduleTimeZone } from "@nv/domain";
+import {
+  effectiveHours,
+  inSendWindow,
+  minutesUntilOpen,
+  scheduleTimeZone,
+  sendHoursLabel,
+  type SendSettings,
+} from "@nv/domain";
+import { zonedMidnight } from "../reports/weekly-report";
 
 const TICK_MS = 30_000;
 /** First tick soon after boot: a cPanel app that slept wakes up and catches up. */
@@ -142,6 +150,8 @@ export class CampaignRunner implements OnModuleInit, OnModuleDestroy {
    * longest legit gap between heartbeats: pacing cool-down + a send with retries.
    */
   private readonly staleRunMs: number;
+  /** One «minute» of a between-batches pause (tests shorten it). */
+  private readonly batchMinuteMs: number;
   private timer?: NodeJS.Timeout;
   private firstTick?: NodeJS.Timeout;
 
@@ -160,6 +170,7 @@ export class CampaignRunner implements OnModuleInit, OnModuleDestroy {
     this.retryBaseMs = Number(process.env.WHATSAPP_RETRY_BASE_MS ?? 1000);
     this.maxAttempts = Math.max(1, Number(process.env.WHATSAPP_MAX_ATTEMPTS ?? 3));
     this.staleRunMs = Math.max(60_000, Number(process.env.CAMPAIGN_RUN_STALE_MS ?? 10 * 60 * 1000));
+    this.batchMinuteMs = Math.max(1, Number(process.env.CAMPAIGN_BATCH_MINUTE_MS ?? 60_000));
     void config; // reserved for future tuning
   }
 
@@ -307,6 +318,7 @@ export class CampaignRunner implements OnModuleInit, OnModuleDestroy {
     const now = new Date();
     await this.recoverInterruptedRuns(now);
     await this.finishEndedRanges(now);
+    await this.dispatchPending(now);
     const candidates = await this.prisma.campaign.findMany({
       where: { status: { in: ["programada", "activa"] }, workspaceSlug: { not: DEMO_SLUG } },
     });
@@ -344,6 +356,89 @@ export class CampaignRunner implements OnModuleInit, OnModuleDestroy {
       };
       await this.jobs.dispatch("campaign.run", c.workspaceSlug, payload);
     }
+  }
+
+  /**
+   * Groups a run left waiting for their sending hours: once their time comes
+   * (pendingAt), a run sends to just those groups. One process claims each
+   * batch atomically; a campaign that is paused or mid-run waits.
+   */
+  async dispatchPending(now = new Date()): Promise<number> {
+    if (!this.prisma.enabled) return 0;
+    const due = await this.prisma.campaign.findMany({
+      where: {
+        pendingAt: { not: null, lte: now },
+        status: { not: "pausada" },
+        runKey: null,
+        workspaceSlug: { not: DEMO_SLUG },
+        OR: [{ lastRunAt: null }, { lastRunAt: { lt: new Date(now.getTime() - RUN_GUARD_MS) } }],
+      },
+      select: { id: true, workspaceSlug: true, name: true, pendingGroups: true, pendingAt: true },
+    });
+    let n = 0;
+    for (const c of due) {
+      const claim = await this.prisma.campaign.updateMany({
+        where: { id: c.id, pendingAt: c.pendingAt, runKey: null },
+        data: { pendingAt: null, pendingGroups: [] },
+      });
+      if (claim.count !== 1 || c.pendingGroups.length === 0) continue;
+      this.logger.log(`Campaña "${c.name}": ${c.pendingGroups.length} grupos llegaron a su horario.`);
+      const payload: CampaignRunPayload = {
+        workspaceSlug: c.workspaceSlug,
+        campaignId: c.id,
+        runKey: `pending:${c.id}:${now.toISOString()}`,
+        onlyGroups: c.pendingGroups,
+      };
+      await this.jobs.dispatch("campaign.run", c.workspaceSlug, payload);
+      n++;
+    }
+    return n;
+  }
+
+  /** Keep groups waiting for their hours (merged with any already waiting). */
+  private async savePending(campaignId: string, groupIds: string[], at: Date): Promise<void> {
+    const cur = await this.prisma.campaign.findUnique({
+      where: { id: campaignId },
+      select: { pendingGroups: true, pendingAt: true },
+    });
+    const groups = [...new Set([...(cur?.pendingGroups ?? []), ...groupIds])];
+    const when = cur?.pendingAt && cur.pendingAt < at ? cur.pendingAt : at;
+    await this.prisma.campaign.update({
+      where: { id: campaignId },
+      data: { pendingGroups: groups, pendingAt: when },
+    });
+  }
+
+  /** The brand's sending hours and default per-group daily limit. */
+  private async sendSettings(workspaceSlug: string): Promise<SendSettings> {
+    const row = await Promise.resolve()
+      .then(() =>
+        this.prisma.workspaceSettings?.findUnique({
+          where: { workspaceSlug },
+          select: { sendFrom: true, sendUntil: true, groupMaxPerDay: true },
+        }),
+      )
+      .catch(() => null);
+    return { sendFrom: row?.sendFrom ?? null, sendUntil: row?.sendUntil ?? null, groupMaxPerDay: row?.groupMaxPerDay ?? null };
+  }
+
+  /**
+   * Wait between batches without looking dead: the heartbeat is refreshed
+   * every ≤30 s and «Pausar» is honoured during the wait.
+   */
+  private async batchPause(campaignId: string, runKey: string, ms: number): Promise<"ok" | "paused" | "lost"> {
+    const end = Date.now() + ms;
+    while (Date.now() < end) {
+      await sleep(Math.min(30_000, end - Date.now()));
+      const fresh = await this.prisma.campaign.findUnique({ where: { id: campaignId }, select: { status: true } });
+      if (fresh?.status === "pausada") return "paused";
+      const alive = await this.prisma.campaign.updateMany({
+        where: { id: campaignId, runKey },
+        data: { runHeartbeatAt: new Date() },
+      });
+      if (alive.count !== 1) return "lost";
+    }
+    return "ok";
   }
 
   /** Each brand's schedule zone (its saved zone, else the default for schedules). */
@@ -599,6 +694,11 @@ export class CampaignRunner implements OnModuleInit, OnModuleDestroy {
     const startedAt = new Date();
     const skip = (reason: string): CampaignRunOutcome => {
       this.logger.warn(`Campaña "${campaign.name}": ${reason}`);
+      // Groups that were waiting for their hours must not be lost: they wait
+      // a couple of minutes more and the next tick tries again.
+      if (runKey.startsWith("pending:") && opts.onlyGroups?.length) {
+        void this.savePending(campaignId, opts.onlyGroups, new Date(Date.now() + 2 * 60_000)).catch(() => undefined);
+      }
       return { status: "skipped", reason };
     };
     // Reanudar = continuar una ejecución que este mismo runKey dejó a medias
@@ -670,6 +770,14 @@ export class CampaignRunner implements OnModuleInit, OnModuleDestroy {
     // Groups this campaign must not go to (kept out, rules, missing price or
     // photo), with the reason, for the end-of-run notice.
     const omitted: { name: string; reason: string }[] = [];
+    // Sending hours (group's own, else the brand's) and daily limits per group.
+    const rules = await this.sendSettings(workspaceSlug);
+    const tz = varOpts.timeZone;
+    const deferred: { id: string; name: string; wait: number; hours: string }[] = [];
+    // Per-campaign batches: N groups, then a pause of M minutes.
+    const batchSize = campaign.batchSize && campaign.batchSize > 0 ? campaign.batchSize : 0;
+    const pacing = batchSize ? { ...this.pacing, batchSize: 0 } : this.pacing;
+    let delivered = 0;
 
     // Deliver to every target group via the provider matching its channel:
     // WhatsApp (Baileys/Cloud) or Telegram (bot). Social (fb/ig) is separate.
@@ -711,6 +819,36 @@ export class CampaignRunner implements OnModuleInit, OnModuleDestroy {
         omitted.push({ name: group.name, reason: blocked[0]! });
         sent += 1;
         continue;
+      }
+      // Outside the allowed hours: the group waits (it gets it when its time comes).
+      const hours = effectiveHours(group, rules);
+      const nowMin = wallClock(new Date(), tz).minutes;
+      if (!inSendWindow(nowMin, hours)) {
+        deferred.push({ id: group.id, name: group.name, wait: minutesUntilOpen(nowMin, hours), hours: sendHoursLabel(hours) });
+        sent += 1;
+        continue;
+      }
+      // Most campaign messages a group may get per day (brand's day).
+      const maxPerDay = group.maxPerDay ?? rules.groupMaxPerDay ?? null;
+      if (maxPerDay && maxPerDay > 0) {
+        const today = await this.prisma.sendLog.count({
+          where: {
+            workspaceSlug,
+            groupId: group.id,
+            ok: true,
+            campaignId: { not: null },
+            createdAt: { gte: zonedMidnight(wallClock(new Date(), tz).day, tz) },
+            NOT: { runKey },
+          },
+        });
+        if (today >= maxPerDay) {
+          omitted.push({
+            name: group.name,
+            reason: `ya recibió ${today} ${today === 1 ? "mensaje" : "mensajes"} hoy (máximo ${maxPerDay} por día)`,
+          });
+          sent += 1;
+          continue;
+        }
       }
       // Latido: demuestra que esta ejecución sigue viva y publica el progreso.
       // Si otro proceso tomó la ejecución (count=0), esta se detiene: nunca dos
@@ -851,8 +989,36 @@ export class CampaignRunner implements OnModuleInit, OnModuleDestroy {
         results.push(await finish(false, (err as Error).message));
       }
       sent += 1;
+      delivered += 1;
       // No trailing wait after the final target.
-      if (sent < total) await sleep(pacingDelay(sent, this.pacing));
+      if (sent < total) {
+        if (batchSize && delivered % batchSize === 0) {
+          const wait = Math.max(1, campaign.batchPauseMin ?? 10) * this.batchMinuteMs;
+          this.logger.log(`Campaña "${campaign.name}": lote de ${batchSize} enviado; pausa de ${campaign.batchPauseMin ?? 10} min.`);
+          const r = await this.batchPause(campaignId, runKey, wait);
+          if (r === "paused") {
+            paused = true;
+            break;
+          }
+          if (r === "lost") return { status: "skipped", reason: "otra ejecución tomó el relevo." };
+        } else await sleep(pacingDelay(sent, pacing));
+      }
+    }
+
+    // Groups outside their hours wait for the earliest opening.
+    if (deferred.length > 0) {
+      const wait = Math.min(...deferred.map((d) => d.wait));
+      const at = new Date(Math.floor(Date.now() / 60_000) * 60_000 + wait * 60_000);
+      await this.savePending(campaignId, deferred.map((d) => d.id), at);
+      const hhmm = new Intl.DateTimeFormat("es", { timeZone: tz, hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).format(at);
+      const names = deferred.slice(0, 3).map((d) => `«${d.name}»`).join(", ");
+      await this.notifications
+        .create(workspaceSlug, {
+          type: "info",
+          title: `Campaña «${campaign.name}»: ${deferred.length} ${deferred.length === 1 ? "grupo espera" : "grupos esperan"} su horario`,
+          meta: `Se ${deferred.length === 1 ? "envía" : "envían"} a partir de las ${hhmm} (horario permitido: ${deferred[0]!.hours}). ${names}${deferred.length > 3 ? ` y ${deferred.length - 3} más` : ""}.`,
+        })
+        .catch(() => undefined);
     }
 
     if (paused) {

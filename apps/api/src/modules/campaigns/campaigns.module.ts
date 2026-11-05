@@ -47,6 +47,7 @@ import {
   MaxLength,
   Min,
   MinLength,
+  ValidateIf,
   ValidateNested,
 } from "class-validator";
 import { Type } from "class-transformer";
@@ -211,6 +212,12 @@ export class CreateCampaignDto {
   @IsOptional()
   @IsArray()
   items?: unknown[];
+
+  @ApiPropertyOptional({ description: "Envío por lotes: grupos por lote (null = ritmo normal)" })
+  @IsOptional() @ValidateIf((_o, v) => v !== null) @IsInt() @Min(1) @Max(500) batchSize?: number | null;
+
+  @ApiPropertyOptional({ description: "Minutos de pausa entre lotes" })
+  @IsOptional() @ValidateIf((_o, v) => v !== null) @IsInt() @Min(1) @Max(240) batchPauseMin?: number | null;
 }
 
 export class ImportCampaignsDto {
@@ -251,6 +258,8 @@ export class UpdateCampaignDto {
   @IsOptional() @IsArray() @IsInt({ each: true }) @Min(1, { each: true }) @Max(5, { each: true }) waLines?: number[];
   @IsOptional() @IsArray() @IsInt({ each: true }) @Min(1, { each: true }) @Max(5, { each: true }) tgLines?: number[];
   @IsOptional() @IsArray() items?: unknown[];
+  @IsOptional() @ValidateIf((_o, v) => v !== null) @IsInt() @Min(1) @Max(500) batchSize?: number | null;
+  @IsOptional() @ValidateIf((_o, v) => v !== null) @IsInt() @Min(1) @Max(240) batchPauseMin?: number | null;
 }
 
 /** Line numbers 1–5, unique and sorted; undefined stays undefined (no change). */
@@ -357,6 +366,8 @@ export class CampaignsService {
       waLines: cleanLines(dto.waLines),
       tgLines: cleanLines(dto.tgLines),
       items: cleanItems(dto.items) as object[] | undefined,
+      batchSize: dto.batchSize,
+      batchPauseMin: dto.batchPauseMin,
     };
   }
 
@@ -422,6 +433,8 @@ export class CampaignsService {
         waLines: cleanLines(dto.waLines) ?? [],
         tgLines: cleanLines(dto.tgLines) ?? [],
         items: items as object[],
+        batchSize: dto.batchSize ?? null,
+        batchPauseMin: dto.batchPauseMin ?? null,
       },
     });
     if (dto.targetGroups) await this.setTargets(workspaceId, created.id, dto.targetGroups);

@@ -31,6 +31,7 @@ import {
   useCampaigns,
   useGroups,
   useProducts,
+  useSendSettings,
   useTemplates,
 } from "@/hooks/use-domain-data";
 import { productMessage } from "@/lib/products";
@@ -38,6 +39,7 @@ import {
   CAMPAIGN_STATUS_LABEL,
   campaignCategories,
   campaignReadyProblems,
+  groupsOutsideHours,
   previewCountries,
   scheduleClashes,
 } from "@/lib/campaigns";
@@ -150,6 +152,9 @@ export function CampaignFormDialog({
   const [waLines, setWaLines] = React.useState<number[]>([]);
   const [tgLines, setTgLines] = React.useState<number[]>([]);
   const [items, setItems] = React.useState<CampaignItem[]>([]);
+  // «Enviar por lotes»: N groups, then a pause of M minutes ("" = off).
+  const [batchSize, setBatchSize] = React.useState("");
+  const [batchPauseMin, setBatchPauseMin] = React.useState("10");
   const [error, setError] = React.useState<string | null>(null);
 
   React.useEffect(() => {
@@ -188,6 +193,8 @@ export function CampaignFormDialog({
     setWaLines(campaign?.waLines ?? []);
     setTgLines(campaign?.tgLines ?? []);
     setItems(campaign?.items ?? []);
+    setBatchSize(campaign?.batchSize ? String(campaign.batchSize) : "");
+    setBatchPauseMin(String(campaign?.batchPauseMin ?? 10));
     setError(null);
     // Reset only when the dialog opens or switches campaign: the list refreshes
     // in the background, and a new copy of the same campaign must not wipe
@@ -334,6 +341,8 @@ export function CampaignFormDialog({
       addFooter,
       waLines,
       tgLines,
+      batchSize: batchSize.trim() ? Number(batchSize) : null,
+      batchPauseMin: batchSize.trim() ? Number(batchPauseMin) || 10 : null,
       items: items.map((it) => ({
         ...it,
         name: it.name.trim() || "Producto",
@@ -451,6 +460,24 @@ export function CampaignFormDialog({
       targetGroups,
     },
     campaigns.data?.items ?? [],
+  );
+
+  // Groups whose sending hours don't include the chosen time (they wait).
+  const sendSettings = useSendSettings();
+  const chosenTimes =
+    scheduleType === "once"
+      ? dateTime
+        ? [dateTime.slice(11, 16)]
+        : []
+      : scheduleTimes.length
+        ? scheduleTimes
+        : time
+          ? [time]
+          : [];
+  const outsideHours = groupsOutsideHours(
+    chosenTimes,
+    groupItems.filter((g) => targetGroups.includes(g.id)),
+    sendSettings.data,
   );
 
   function takeGroupsFrom(id: string) {
@@ -682,6 +709,20 @@ export function CampaignFormDialog({
                   )
                   .join(", ")}
                 . Esos grupos recibirían dos mensajes casi juntos: cambia la hora o los grupos.
+              </p>
+            ) : null}
+            {outsideHours.length > 0 ? (
+              <p
+                data-testid="outside-hours"
+                className="border-line-soft bg-panel-raised text-ink-muted rounded-lg border px-3 py-2 text-xs"
+              >
+                {outsideHours.length === 1 ? "1 grupo" : `${outsideHours.length} grupos`} no{" "}
+                {outsideHours.length === 1 ? "recibe" : "reciben"} mensajes a las {outsideHours[0]!.time} (
+                {outsideHours
+                  .slice(0, 3)
+                  .map((g) => `«${g.name}»: ${g.hours}`)
+                  .join(", ")}
+                {outsideHours.length > 3 ? "…" : ""}). Lo recibirán cuando se abra su horario.
               </p>
             ) : null}
             <div className="space-y-1.5">
@@ -1085,6 +1126,49 @@ export function CampaignFormDialog({
                     ) : null}
                   </span>
                 </label>
+              </div>
+            ) : null}
+
+            {selectedGroups.length > 1 ? (
+              <div className="space-y-1.5" data-testid="campaign-batches">
+                <Label>Enviar por lotes</Label>
+                <div className="border-line-soft bg-panel-raised flex flex-wrap items-center gap-2 rounded-lg border px-3 py-2.5 text-sm">
+                  <label className="flex cursor-pointer items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={batchSize !== ""}
+                      onChange={(e) => setBatchSize(e.target.checked ? "20" : "")}
+                      className="border-line-strong accent-brand size-4 rounded"
+                    />
+                    <span className="text-ink">De a</span>
+                  </label>
+                  <Input
+                    aria-label="Grupos por lote"
+                    type="number"
+                    min={1}
+                    max={500}
+                    className="h-8 w-20"
+                    value={batchSize}
+                    disabled={batchSize === ""}
+                    onChange={(e) => setBatchSize(e.target.value)}
+                  />
+                  <span className="text-ink">grupos, luego pausa de</span>
+                  <Input
+                    aria-label="Minutos de pausa"
+                    type="number"
+                    min={1}
+                    max={240}
+                    className="h-8 w-20"
+                    value={batchPauseMin}
+                    disabled={batchSize === ""}
+                    onChange={(e) => setBatchPauseMin(e.target.value)}
+                  />
+                  <span className="text-ink">min</span>
+                </div>
+                <p className="text-ink-faint text-[11px]">
+                  Reparte un envío grande para que tu número no parezca un robot. Sin marcar, se usan pausas
+                  cortas automáticas.
+                </p>
               </div>
             ) : null}
 

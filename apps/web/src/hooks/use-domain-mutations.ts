@@ -4,6 +4,7 @@ import type {
   ChangelogStatus,
   QuickReply,
   ContactFieldDef,
+  SendSettings,
   CreateProductInput,
   UpdateWorkspaceInput,
   AccessPaymentInput,
@@ -1228,6 +1229,19 @@ export function useSaveQuickReplies() {
       toast.success("Respuestas guardadas");
     },
     onError: (err) => toast.error(errText(err)),
+  });
+}
+
+export function useSaveSendSettings() {
+  const svc = useServices();
+  const ws = useWorkspace();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: SendSettings) => svc.groups.saveSendSettings(ws.id, input),
+    onSuccess: (data) => {
+      qc.setQueryData([ws.id, "send-settings"], data);
+      toast.success("Horario de envío guardado");
+    },
   });
 }
 

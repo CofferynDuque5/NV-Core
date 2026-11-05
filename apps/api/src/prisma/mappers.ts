@@ -116,6 +116,9 @@ export const mapGroup = (g: PGroup): Group => ({
   lastActivityAt: iso(g.lastMessageAt),
   ...(g.channel === "wa" || g.channel === "tg" ? { inactive: isDeadGroup(g) } : {}),
   remoteJid: g.remoteJid ?? undefined,
+  sendFrom: g.sendFrom ?? null,
+  sendUntil: g.sendUntil ?? null,
+  maxPerDay: g.maxPerDay ?? null,
   // The brand's number/account that is in the group and sends to it.
   line: g.channel === "tg" ? g.tgLine : g.waLine,
   synced: g.synced,
@@ -237,6 +240,10 @@ export const mapCampaign = (
   prices: (c.prices as Record<string, string> | null) ?? {},
   addFooter: c.addFooter ?? true,
   category: c.category ?? null,
+  batchSize: c.batchSize ?? null,
+  batchPauseMin: c.batchPauseMin ?? null,
+  pendingGroups: c.pendingGroups?.length ?? 0,
+  pendingAt: iso(c.pendingAt) ?? null,
 });
 
 export const mapPost = (p: PPost & { campaign?: { name: string } | null }): Post => ({

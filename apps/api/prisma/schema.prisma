@@ -207,6 +207,11 @@ model Group {
   lastMessageAt  DateTime?
   /// Since when messages are watched (a group is «sin actividad» after 30 days of silence from here).
   watchedSince   DateTime  @default(now())
+  /// Own sending hours "HH:MM" (brand zone); null = the brand's hours.
+  sendFrom       String?
+  sendUntil      String?
+  /// Most campaign messages this group may get per day; null = the brand's limit.
+  maxPerDay      Int?
   createdAt      DateTime  @default(now())
 
   variables       GroupVariable[]
@@ -389,6 +394,13 @@ model Campaign {
   /// [{ productId?, text, attachments: [{ url, kind, mime, filename, path }] }].
   /// Sent to every target group after the main message (or alone without one).
   items              Json           @default("[]")
+  /// Send in batches: after `batchSize` groups, pause `batchPauseMin` minutes (null = default pacing).
+  batchSize          Int?
+  batchPauseMin      Int?
+  /// Groups left for later because they were outside their sending hours,
+  /// sent by the scheduler at `pendingAt` (when their hours open).
+  pendingGroups      String[]       @default([])
+  pendingAt          DateTime?
   /// Cursor for attachment rotation — which image the next run should use.
   attachmentRotation Int            @default(0)
   /// IG publish format: "feed" | "reel" | "story" | "carousel".
@@ -421,6 +433,7 @@ model Campaign {
 
   @@index([workspaceSlug])
   @@index([workspaceSlug, createdAt])
+  @@index([pendingAt])
 }
 
 /**
@@ -785,21 +798,26 @@ model TrialClaim {
 /// Per-brand settings that apply to built-in and created workspaces alike
 /// (built-in ones have no Workspace row). One row per workspace, created on first save.
 model WorkspaceSettings {
-  workspaceSlug String   @id
+  workspaceSlug  String   @id
   /// IANA zone the weekly report cuts weeks in (Monday 00:00 local).
-  timeZone      String   @default("UTC")
+  timeZone       String   @default("UTC")
   /// Brand links for the campaign footer: [{ label, url }].
-  socialLinks   Json     @default("[]")
-  website       String?
+  socialLinks    Json     @default("[]")
+  website        String?
   /// What the brand wants to achieve first (onboarding «¿Qué quieres lograr
   /// primero?»); orders the sidebar and the dashboard's next steps.
-  goals         String[] @default([])
+  goals          String[] @default([])
   /// Inbox saved replies: [{ id, title, text }] with {{nombre}}-style variables.
-  quickReplies  Json     @default("[]")
+  quickReplies   Json     @default("[]")
   /// Contact custom fields: [{ key, label, type: text|number|date|select, options? }].
-  contactFields Json     @default("[]")
-  updatedBy     String?
-  updatedAt     DateTime @updatedAt
+  contactFields  Json     @default("[]")
+  /// Brand sending hours for campaigns "HH:MM" (its zone); null = any time.
+  sendFrom       String?
+  sendUntil      String?
+  /// Default most campaign messages per group per day; null = no limit.
+  groupMaxPerDay Int?
+  updatedBy      String?
+  updatedAt      DateTime @updatedAt
 }
 
 /**

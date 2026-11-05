@@ -176,6 +176,12 @@ export interface Campaign {
   /** Category the team files it under; null = «Sin categoría». */
   category?: string | null;
   lastRunAt?: string | null;
+  /** Batches: after `batchSize` groups, pause `batchPauseMin` minutes (null = default pacing). */
+  batchSize?: number | null;
+  batchPauseMin?: number | null;
+  /** Groups waiting for their sending hours, and when they go. */
+  pendingGroups?: number;
+  pendingAt?: string | null;
 }
 
 export interface Post {
@@ -322,6 +328,11 @@ export interface Group {
   lastSendOk?: boolean | null;
   /** Nobody wrote in it for 30 days (WhatsApp/Telegram groups seen by the connected session). */
   inactive?: boolean;
+  /** Own sending hours «HH:MM» (brand zone); unset = the brand's hours. */
+  sendFrom?: string | null;
+  sendUntil?: string | null;
+  /** Most campaign messages per day; unset = the brand's limit. */
+  maxPerDay?: number | null;
 }
 
 /** Group fields the user edits to decide where campaigns go. */

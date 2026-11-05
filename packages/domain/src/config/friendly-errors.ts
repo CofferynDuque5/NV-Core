@@ -146,6 +146,8 @@ export function explainError(raw: string | null | undefined): FriendlyError {
 
 /** Plain explanation of why a group was skipped (the reasons from groupPostingProblems). */
 export function explainSkip(reason: string): string {
+  if (/por día\)/i.test(reason)) return "ya recibieron hoy su máximo de mensajes de campaña";
+  if (/número que no elegiste/i.test(reason)) return "son de un número que no elegiste para esta campaña";
   if (/no sabemos de qué país/i.test(reason)) return "no tienen país y el mensaje usa {{precio}} (indícalo en Grupos)";
   const currency = /no tiene precio en (.+?)\.?$/i.exec(reason);
   if (currency) return `la campaña no tiene precio en ${currency[1]}`;

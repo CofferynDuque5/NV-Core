@@ -48,6 +48,9 @@ export function GroupRulesDialog({ group, onOpenChange }: { group: Group | null;
   const [forbidsAds, setForbidsAds] = React.useState(false);
   const [rules, setRules] = React.useState("");
   const [tags, setTags] = React.useState("");
+  const [sendFrom, setSendFrom] = React.useState("");
+  const [sendUntil, setSendUntil] = React.useState("");
+  const [maxPerDay, setMaxPerDay] = React.useState("");
   const [result, setResult] = React.useState<GroupRulesCheck | null>(null);
   const [error, setError] = React.useState<string | null>(null);
 
@@ -60,6 +63,9 @@ export function GroupRulesDialog({ group, onOpenChange }: { group: Group | null;
     setForbidsAds(!!g.forbidsAds);
     setRules(g.description ?? "");
     setTags((g.tags ?? []).join(", "));
+    setSendFrom(g.sendFrom ?? "");
+    setSendUntil(g.sendUntil ?? "");
+    setMaxPerDay(g.maxPerDay ? String(g.maxPerDay) : "");
   }, []);
 
   React.useEffect(() => {
@@ -75,6 +81,15 @@ export function GroupRulesDialog({ group, onOpenChange }: { group: Group | null;
 
   const save = () => {
     setError(null);
+    if (Boolean(sendFrom) !== Boolean(sendUntil)) {
+      setError("Indica las dos horas (desde y hasta) o deja ambas vacías.");
+      return;
+    }
+    const max = maxPerDay.trim() ? Number(maxPerDay) : null;
+    if (max !== null && (!Number.isInteger(max) || max < 1 || max > 50)) {
+      setError("El máximo por día va de 1 a 50 (o vacío para usar el de la marca).");
+      return;
+    }
     update.mutate(
       {
         id: group.id,
@@ -86,6 +101,9 @@ export function GroupRulesDialog({ group, onOpenChange }: { group: Group | null;
           requiresImage,
           forbidsAds,
           tags: tags.split(",").map((t) => t.trim()).filter(Boolean),
+          sendFrom: sendFrom || null,
+          sendUntil: sendUntil || null,
+          maxPerDay: max,
           // Synced groups take their description from WhatsApp.
           ...(group.synced ? {} : { description: rules }),
         },
@@ -163,6 +181,28 @@ export function GroupRulesDialog({ group, onOpenChange }: { group: Group | null;
         <Input id="gr-tags" value={tags} onChange={(e) => setTags(e.target.value)} placeholder="Ej: caracas, ropa, clientes vip" />
         <p className="text-xs text-ink-muted">Separadas por coma. Sirven para filtrar y elegir grupos rápido.</p>
       </div>
+
+      <fieldset className="space-y-2 rounded-lg border border-line-soft p-3">
+        <legend className="px-1 text-sm font-medium text-ink">Horario y frecuencia de este grupo</legend>
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+          <div className="space-y-1.5">
+            <Label htmlFor="gr-from">Enviar desde</Label>
+            <Input id="gr-from" type="time" value={sendFrom} onChange={(e) => setSendFrom(e.target.value)} />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="gr-until">Hasta</Label>
+            <Input id="gr-until" type="time" value={sendUntil} onChange={(e) => setSendUntil(e.target.value)} />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="gr-max">Máximo por día</Label>
+            <Input id="gr-max" type="number" min={1} max={50} inputMode="numeric" value={maxPerDay} onChange={(e) => setMaxPerDay(e.target.value)} placeholder="Sin límite" />
+          </div>
+        </div>
+        <p className="text-xs text-ink-muted">
+          Vacío = usa el horario y el máximo de la marca («Horario de envío» en Grupos). Fuera de su horario, el grupo
+          recibe la campaña cuando se abre su hora.
+        </p>
+      </fieldset>
 
       <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
         <Toggle id="gr-price" label="Exige precio" hint="Solo se envía si la campaña tiene precio en su moneda." checked={requiresPrice} onChange={setRequiresPrice} />

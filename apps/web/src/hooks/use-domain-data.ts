@@ -173,6 +173,17 @@ export function useSegments() {
   return useQuery({ queryKey: [ws.id, "segments"], queryFn: () => svc.segments.list(ws.id) });
 }
 
+/** The brand's sending hours and default daily limit per group. */
+export function useSendSettings() {
+  const svc = useServices();
+  const ws = useWorkspace();
+  return useQuery({
+    queryKey: [ws.id, "send-settings"],
+    queryFn: () => svc.groups.sendSettings(ws.id),
+    staleTime: 60_000,
+  });
+}
+
 /** The brand's custom contact fields. */
 export function useContactFields() {
   const svc = useServices();

@@ -293,6 +293,17 @@ export function CampaignRow({
           {c.lastRunAt ? (
             <span>Último envío {new Date(c.lastRunAt).toLocaleString("es")}</span>
           ) : null}
+          {c.pendingGroups && c.pendingAt ? (
+            <span className="text-brand" data-testid="campaign-pending">
+              {c.pendingGroups === 1 ? "1 grupo espera" : `${c.pendingGroups} grupos esperan`} su horario (
+              {new Date(c.pendingAt).toLocaleTimeString("es", { hour: "2-digit", minute: "2-digit" })})
+            </span>
+          ) : null}
+          {c.batchSize ? (
+            <span>
+              Lotes de {c.batchSize} · pausa {c.batchPauseMin ?? 10} min
+            </span>
+          ) : null}
         </div>
         {sending ? (
           <div className="bg-line mt-2 h-1 w-full max-w-xs overflow-hidden rounded-full">
