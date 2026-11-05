@@ -507,6 +507,8 @@ export interface ConversationQuery {
   status?: "open" | "resolved" | "all";
   /** Assignee email, or INBOX_UNASSIGNED. */
   assignee?: string;
+  /** Only open chats whose last message is from the contact (nobody has answered). */
+  waiting?: boolean;
   limit?: number;
   /** `nextCursor` from the previous page. */
   cursor?: string;
@@ -517,11 +519,15 @@ export interface ConversationPage extends ListResult<Conversation> {
   nextCursor?: string | null;
   /** Open conversations in the whole workspace (ignores the filters). */
   openCount?: number;
+  /** Open chats waiting for an answer in the whole workspace (ignores the filters). */
+  waitingCount?: number;
 }
 
 export interface InboxService {
   conversations(workspaceId: string, query?: ConversationQuery): Promise<ConversationPage>;
   messages(workspaceId: string, conversationId: string): Promise<Message[]>;
+  /** Internal team note in the chat: stored in the panel, never sent to the contact. */
+  addNote(workspaceId: string, conversationId: string, text: string): Promise<Message>;
   createConversation(workspaceId: string, input: CreateConversationInput): Promise<Conversation>;
   sendMessage(
     workspaceId: string,

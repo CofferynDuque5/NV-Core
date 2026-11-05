@@ -108,4 +108,39 @@ describe.skipIf(!url)("Inbox: búsqueda y páginas contra PostgreSQL real", () =
     const page = await inbox.conversations(ws, { limit: 2, cursor: "no-es-un-cursor" });
     expect(page.items.map((c) => c.contactName)).toEqual(["Cliente 0", "Cliente 6"]);
   });
+  it("notas internas: no se envían, no cambian la vista previa ni la actividad", async () => {
+    const ws = `it-inbox-note-${Date.now()}`;
+    await seed(ws);
+    const c1 = await prisma.conversation.findFirst({ where: { workspaceSlug: ws, contactName: "Cliente 1" } });
+    const note = await inbox.addNote(ws, c1!.id, "  Llamar mañana a las 10  ", "ana@nv.tv");
+    expect(note).toMatchObject({ direction: "note", text: "Llamar mañana a las 10", author: "ana@nv.tv" });
+    const page = await inbox.conversations(ws, {});
+    const row = page.items.find((c) => c.id === c1!.id)!;
+    expect(row.preview).toBe("Quiero el precio del plan anual");
+    // Still the oldest activity: the note does not bump the chat to the top.
+    expect(page.items.at(-1)?.contactName).toBe("Cliente 1");
+    const msgs = await inbox.messages(ws, c1!.id);
+    expect(msgs.map((m) => m.direction)).toEqual(["in", "note"]);
+    await expect(inbox.addNote(ws, c1!.id, "   ", "ana@nv.tv")).rejects.toThrow("Escribe la nota.");
+    await expect(inbox.addNote("otra-marca", c1!.id, "x", "ana@nv.tv")).rejects.toThrow("no encontrada");
+  });
+
+  it("filtro «sin responder»: último mensaje del cliente, chat abierto, sin contar notas", async () => {
+    const ws = `it-inbox-wait-${Date.now()}`;
+    await seed(ws);
+    const c2 = await prisma.conversation.findFirst({ where: { workspaceSlug: ws, contactName: "Cliente 2" } });
+    await prisma.message.create({ data: { conversationId: c2!.id, direction: "out", text: "¡Hola! Ya te ayudo" } });
+    const c4 = await prisma.conversation.findFirst({ where: { workspaceSlug: ws, contactName: "Cliente 4" } });
+    await inbox.addNote(ws, c4!.id, "nota", "ana@nv.tv");
+    const page = await inbox.conversations(ws, { waiting: true });
+    // 7 chats − Cliente 3 (resuelto) − Cliente 2 (respondido) = 5; the note on Cliente 4 is not an answer.
+    expect(page.items.map((c) => c.contactName).sort()).toEqual(["Cliente 0", "Cliente 1", "Cliente 4", "Cliente 5", "Cliente 6"]);
+    expect(page.total).toBe(5);
+    expect(page.waitingCount).toBe(5);
+    expect(page.items.every((c) => !!c.waitingSince)).toBe(true);
+    const all = await inbox.conversations(ws, {});
+    expect(all.waitingCount).toBe(5);
+    expect(all.items.find((c) => c.contactName === "Cliente 2")?.waitingSince).toBeUndefined();
+    expect(all.items.find((c) => c.contactName === "Cliente 3")?.waitingSince).toBeUndefined();
+  });
 });

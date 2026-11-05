@@ -58,3 +58,19 @@ export function withLabel(labels: string[] | undefined, label: string): string[]
 export function withoutLabel(labels: string[] | undefined, label: string): string[] {
   return (labels ?? []).filter((l) => l !== label);
 }
+
+/** A chat waiting this long for an answer is shown in red. */
+export const WAIT_LATE_MIN = 60;
+
+/**
+ * How long a chat has been waiting for an answer: «5 min», «2 h», «3 d».
+ * `late` once it passes WAIT_LATE_MIN minutes.
+ */
+export function waitInfo(since: string | undefined, now = Date.now()): { label: string; late: boolean } | null {
+  if (!since) return null;
+  const t = new Date(since).getTime();
+  if (Number.isNaN(t)) return null;
+  const min = Math.max(0, Math.floor((now - t) / 60_000));
+  const label = min < 1 ? "ahora" : min < 60 ? `${min} min` : min < 1440 ? `${Math.floor(min / 60)} h` : `${Math.floor(min / 1440)} d`;
+  return { label, late: min >= WAIT_LATE_MIN };
+}

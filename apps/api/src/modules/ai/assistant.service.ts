@@ -165,7 +165,7 @@ export class AssistantService {
       p.campaign.findMany({ where: { workspaceSlug: ws }, orderBy: { createdAt: "desc" }, take: 25, select: { id: true, name: true, status: true, scheduleType: true, scheduleAt: true, scheduleTimes: true, lastRunAt: true, message: true, targets: { select: { group: { select: { name: true } } } } } }),
       p.group.findMany({ where: { workspaceSlug: ws }, orderBy: { members: "desc" }, take: 40, select: { name: true, channel: true, members: true, kind: true } }),
       p.post.findMany({ where: { workspaceSlug: ws, OR: [{ scheduledAt: { gte: dayAgo } }, { status: { in: ["scheduled", "publishing"] } }] }, orderBy: { scheduledAt: "asc" }, take: 20, select: { title: true, channel: true, status: true, scheduledAt: true } }),
-      p.conversation.findMany({ where: { workspaceSlug: ws, resolved: false }, orderBy: { createdAt: "desc" }, take: 15, select: { contactName: true, channel: true, labels: true, messages: { orderBy: { createdAt: "desc" }, take: 1, select: { text: true, direction: true } } } }),
+      p.conversation.findMany({ where: { workspaceSlug: ws, resolved: false }, orderBy: { createdAt: "desc" }, take: 15, select: { contactName: true, channel: true, labels: true, messages: { where: { direction: { not: "note" } }, orderBy: { createdAt: "desc" }, take: 1, select: { text: true, direction: true } } } }),
       p.automation.findMany({ where: { workspaceSlug: ws }, select: { name: true, status: true, runs: true } }),
       p.sendLog.count({ where: { workspaceSlug: ws, ok: true, createdAt: { gte: dayAgo } } }),
       p.sendLog.count({ where: { workspaceSlug: ws, ok: false, createdAt: { gte: dayAgo } } }),

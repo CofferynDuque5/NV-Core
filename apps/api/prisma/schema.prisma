@@ -680,8 +680,11 @@ model Message {
   id             String       @id @default(cuid())
   conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
   conversationId String
+  /// "in" (from the contact), "out" (to the contact) or "note" (internal team note, never sent).
   direction      String
   text           String
+  /// Who wrote an internal note (team member email); null for chat messages.
+  author         String?
   /// Platform message id (WhatsApp), so a message replayed by the session is stored once.
   externalId     String?
   createdAt      DateTime     @default(now())

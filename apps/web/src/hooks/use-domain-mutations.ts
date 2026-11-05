@@ -1201,6 +1201,20 @@ export function useSendMessage(conversationId: string | null) {
   });
 }
 
+/** Internal note in a chat: only the team sees it, nothing is sent. */
+export function useAddNote(conversationId: string | null) {
+  const svc = useServices();
+  const ws = useWorkspace();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (text: string) => svc.inbox.addNote(ws.id, conversationId as string, text),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: [ws.id, "inbox", conversationId, "messages"] });
+    },
+    onError: (err) => toast.error(errText(err)),
+  });
+}
+
 export function useResolveConversation() {
   const svc = useServices();
   const ws = useWorkspace();

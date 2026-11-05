@@ -9,6 +9,8 @@ import {
 } from "@nv/domain";
 import {
   CheckCircle2,
+  Clock,
+  Hand,
   Inbox,
   Mail,
   MessageSquare,
@@ -16,6 +18,7 @@ import {
   RotateCcw,
   Search,
   Send,
+  StickyNote,
   Tag,
   Trash2,
   UserRound,
@@ -23,9 +26,11 @@ import {
 } from "lucide-react";
 
 import { cn } from "@/lib/utils";
-import { UNASSIGNED, withLabel, withoutLabel, type InboxStatus } from "@/lib/inbox";
+import { UNASSIGNED, waitInfo, withLabel, withoutLabel, type InboxStatus } from "@/lib/inbox";
+import { useAuthStore } from "@/stores/auth-store";
 import { useConversations, useMessages, useTeam } from "@/hooks/use-domain-data";
 import {
+  useAddNote,
   useDeleteConversation,
   useResolveConversation,
   useSendMessage,
@@ -85,6 +90,10 @@ export default function InboxPage() {
     linked || searchParams.get("q") ? "all" : "open",
   );
   const [assignee, setAssignee] = React.useState("");
+  const [waiting, setWaiting] = React.useState(false);
+  const me = useAuthStore((s) => s.user?.email) ?? "";
+  // Composer mode: reply to the contact, or an internal note only the team sees.
+  const [noteMode, setNoteMode] = React.useState(false);
   const [debouncedQ, setDebouncedQ] = React.useState(() => (searchParams.get("q") ?? "").trim());
   React.useEffect(() => {
     const t = setTimeout(() => setDebouncedQ(q.trim()), 300);
@@ -97,16 +106,19 @@ export default function InboxPage() {
     channel: (channel || undefined) as ChannelId | undefined,
     status,
     assignee: assignee || undefined,
+    waiting: waiting || undefined,
   });
   const pages = conversations.data?.pages ?? [];
   const filtered = React.useMemo(() => pages.flatMap((p) => p.items), [pages]);
   const total = pages[0]?.total ?? 0;
   const openTotal = pages[0]?.openCount ?? 0;
+  const waitingTotal = pages[0]?.waitingCount ?? 0;
   // "Abiertas" is the default view: with nothing open the inbox reads as empty.
-  const hasFilters = !!(debouncedQ || channel || assignee || status === "resolved");
+  const hasFilters = !!(debouncedQ || channel || assignee || waiting || status === "resolved");
 
   const messages = useMessages(selected);
   const send = useSendMessage(selected);
+  const addNote = useAddNote(selected);
   const resolve = useResolveConversation();
   const updateConv = useUpdateConversation();
   const deleteConv = useDeleteConversation();
@@ -173,7 +185,8 @@ export default function InboxPage() {
     e.preventDefault();
     if (!draft.trim() || !selected) return;
     atBottom.current = true;
-    send.mutate(draft.trim(), { onSuccess: () => setDraft("") });
+    if (noteMode) addNote.mutate(draft.trim(), { onSuccess: () => setDraft("") });
+    else send.mutate(draft.trim(), { onSuccess: () => setDraft("") });
   }
 
   function addLabel() {
@@ -230,6 +243,58 @@ export default function InboxPage() {
               <span className="text-ink-faint ml-auto self-center text-[11px]">
                 {openTotal} abiertas
               </span>
+            </div>
+            <div className="flex flex-wrap gap-1.5" data-testid="inbox-quick-filters">
+              {me ? (
+                <button
+                  type="button"
+                  aria-pressed={assignee === me}
+                  onClick={() => setAssignee(assignee === me ? "" : me)}
+                  data-testid="inbox-filter-mine"
+                  className={cn(
+                    "inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs transition-colors",
+                    assignee === me ? "border-brand/60 bg-brand/10 text-ink" : "border-line-soft text-ink-muted hover:text-ink",
+                  )}
+                >
+                  <UserRound className="size-3.5" /> Mías
+                </button>
+              ) : null}
+              <button
+                type="button"
+                aria-pressed={assignee === UNASSIGNED}
+                onClick={() => setAssignee(assignee === UNASSIGNED ? "" : UNASSIGNED)}
+                data-testid="inbox-filter-unassigned"
+                className={cn(
+                  "rounded-full border px-2.5 py-1 text-xs transition-colors",
+                  assignee === UNASSIGNED ? "border-brand/60 bg-brand/10 text-ink" : "border-line-soft text-ink-muted hover:text-ink",
+                )}
+              >
+                Sin asignar
+              </button>
+              <button
+                type="button"
+                aria-pressed={waiting}
+                onClick={() => setWaiting((w) => !w)}
+                data-testid="inbox-filter-waiting"
+                title="Chats abiertos cuyo último mensaje es del cliente: nadie le ha respondido todavía."
+                className={cn(
+                  "inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs transition-colors",
+                  waiting
+                    ? "border-state-warning/60 bg-state-warning/10 text-ink"
+                    : "border-line-soft text-ink-muted hover:text-ink",
+                )}
+              >
+                <Clock className="size-3.5" /> Sin responder
+                <span
+                  className={cn(
+                    "rounded-full px-1.5 text-[10px] font-bold tabular-nums",
+                    waitingTotal > 0 ? "bg-state-warning/20 text-state-warning" : "bg-panel-high text-ink-faint",
+                  )}
+                  data-testid="inbox-waiting-count"
+                >
+                  {waitingTotal}
+                </span>
+              </button>
             </div>
             <div className="flex gap-1.5">
               <select
@@ -326,6 +391,21 @@ export default function InboxPage() {
                             </span>
                           ) : null}
                         </span>
+                        {(() => {
+                          const w = waitInfo(c.waitingSince);
+                          return w ? (
+                            <span
+                              data-testid="inbox-wait"
+                              title="Tiempo que el cliente lleva esperando respuesta"
+                              className={cn(
+                                "mt-1 inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-medium",
+                                w.late ? "bg-state-danger/12 text-state-danger" : "bg-state-warning/12 text-state-warning",
+                              )}
+                            >
+                              <Clock className="size-3" /> Espera {w.label}
+                            </span>
+                          ) : null;
+                        })()}
                         {(c.labels ?? []).length > 0 ? (
                           <span className="mt-1 flex flex-wrap gap-1">
                             {(c.labels ?? []).map((l) => (
@@ -385,7 +465,23 @@ export default function InboxPage() {
                 title={active.contactName}
                 description={`${CHANNELS[active.channel].name}${active.contactHandle ? ` · ${active.contactHandle}` : ""}`}
                 action={
-                  <div className="flex items-center gap-2">
+                  <div className="flex flex-wrap items-center justify-end gap-2">
+                    {me && active.assignee !== me && members.some((m) => m.email === me) ? (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        data-testid="inbox-take"
+                        title="Asignarme este chat"
+                        onClick={() =>
+                          updateConv.mutate(
+                            { id: active.id, input: { assignee: me } },
+                            { onSuccess: setPinned },
+                          )
+                        }
+                      >
+                        <Hand className="size-4" /> Tomar
+                      </Button>
+                    ) : null}
                     <label className="text-ink-faint flex items-center gap-1 text-xs">
                       <UserRound className="size-3.5" />
                       <select
@@ -517,6 +613,7 @@ export default function InboxPage() {
                     const prev = thread[i - 1];
                     const newDay = !prev || dayLabel(prev.at) !== dayLabel(m.at);
                     const out = m.direction === "out";
+                    const note = m.direction === "note";
                     return (
                       <React.Fragment key={m.id}>
                         {newDay ? (
@@ -528,6 +625,21 @@ export default function InboxPage() {
                             <span className="bg-line-soft h-px flex-1" />
                           </div>
                         ) : null}
+                        {note ? (
+                          <div className="flex justify-center" data-testid="inbox-note">
+                            <div className="w-full max-w-[85%] rounded-lg border border-dashed border-amber-400/60 bg-amber-300/10 px-3 py-2 text-sm">
+                              <div className="mb-0.5 flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wide text-amber-500">
+                                <StickyNote className="size-3" />
+                                Nota interna
+                                {m.author ? <span className="normal-case tracking-normal">· {nameByEmail[m.author] ?? m.author}</span> : null}
+                                <span className="text-ink-faint ml-auto font-normal normal-case tracking-normal">
+                                  el cliente no la ve · {timeOf(m.at)}
+                                </span>
+                              </div>
+                              <span className="text-ink whitespace-pre-wrap break-words">{m.text}</span>
+                            </div>
+                          </div>
+                        ) : (
                         <div className={cn("flex", out ? "justify-end" : "justify-start")}>
                           <div
                             className={cn(
@@ -548,6 +660,7 @@ export default function InboxPage() {
                             </span>
                           </div>
                         </div>
+                        )}
                       </React.Fragment>
                     );
                   })
@@ -556,23 +669,55 @@ export default function InboxPage() {
 
               <form
                 onSubmit={submitMessage}
-                className="border-line flex items-center gap-2 border-t p-3"
+                className={cn("border-line space-y-2 border-t p-3", noteMode && "bg-amber-300/5")}
               >
-                <Input
-                  value={draft}
-                  onChange={(e) => setDraft(e.target.value)}
-                  placeholder={`Responder a ${active.contactName}…`}
-                  className="flex-1"
-                  aria-label="Respuesta"
-                />
-                <Button
-                  type="submit"
-                  size="icon"
-                  disabled={send.isPending || !draft.trim()}
-                  aria-label="Enviar"
-                >
-                  <Send className="size-4" />
-                </Button>
+                <div className="flex gap-1" role="tablist" aria-label="Tipo de mensaje">
+                  <button
+                    type="button"
+                    role="tab"
+                    aria-selected={!noteMode}
+                    onClick={() => setNoteMode(false)}
+                    className={cn(
+                      "inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs",
+                      !noteMode ? "bg-brand/15 text-ink-bright" : "text-ink-muted hover:text-ink",
+                    )}
+                  >
+                    <Send className="size-3.5" /> Responder
+                  </button>
+                  <button
+                    type="button"
+                    role="tab"
+                    aria-selected={noteMode}
+                    onClick={() => setNoteMode(true)}
+                    data-testid="inbox-note-mode"
+                    className={cn(
+                      "inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs",
+                      noteMode ? "bg-amber-300/20 text-amber-500" : "text-ink-muted hover:text-ink",
+                    )}
+                  >
+                    <StickyNote className="size-3.5" /> Nota interna
+                  </button>
+                  {noteMode ? (
+                    <span className="text-ink-faint self-center text-[11px]">Solo la ve tu equipo. No se envía al cliente.</span>
+                  ) : null}
+                </div>
+                <div className="flex items-center gap-2">
+                  <Input
+                    value={draft}
+                    onChange={(e) => setDraft(e.target.value)}
+                    placeholder={noteMode ? "Nota para el equipo (el cliente no la ve)…" : `Responder a ${active.contactName}…`}
+                    className={cn("flex-1", noteMode && "border-dashed border-amber-400/60")}
+                    aria-label={noteMode ? "Nota interna" : "Respuesta"}
+                  />
+                  <Button
+                    type="submit"
+                    size="icon"
+                    disabled={(noteMode ? addNote.isPending : send.isPending) || !draft.trim()}
+                    aria-label={noteMode ? "Guardar nota" : "Enviar"}
+                  >
+                    {noteMode ? <StickyNote className="size-4" /> : <Send className="size-4" />}
+                  </Button>
+                </div>
               </form>
             </>
           )}

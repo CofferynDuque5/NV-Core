@@ -498,7 +498,7 @@ export class ReportsService implements OnModuleInit, OnModuleDestroy {
         FROM "Conversation" c
         JOIN LATERAL (
           SELECT direction, "createdAt" FROM "Message"
-          WHERE "conversationId" = c.id ORDER BY "createdAt" DESC LIMIT 1
+          WHERE "conversationId" = c.id AND direction <> 'note' ORDER BY "createdAt" DESC LIMIT 1
         ) m ON true
         WHERE c."workspaceSlug" = ${workspaceSlug} AND c.resolved = false AND m.direction = 'in'
         ORDER BY m."createdAt" ASC

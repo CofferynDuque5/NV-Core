@@ -260,6 +260,7 @@ export const emptyAdapters: Services = {
     setResolved: () => notAvailable(),
     updateConversation: () => notAvailable(),
     deleteConversation: () => notAvailable(),
+    addNote: () => notAvailable(),
   },
   media: {
     folders: () => delay([]),

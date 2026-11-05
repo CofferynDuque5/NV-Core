@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { Conversation } from "@nv/domain";
 
-import { UNASSIGNED, allLabels, filterConversations, openCount, withLabel, withoutLabel } from "./inbox";
+import { UNASSIGNED, allLabels, filterConversations, openCount, waitInfo, withLabel, withoutLabel } from "./inbox";
 
 const conv = (over: Partial<Conversation> = {}): Conversation => ({
   id: "c1",
@@ -65,5 +65,19 @@ describe("withLabel / withoutLabel", () => {
   });
   it("removes a label", () => {
     expect(withoutLabel(["a", "b"], "a")).toEqual(["b"]);
+  });
+});
+
+describe("waitInfo", () => {
+  const now = new Date("2026-11-05T12:00:00Z").getTime();
+  it("is null without a waiting time", () => {
+    expect(waitInfo(undefined, now)).toBeNull();
+    expect(waitInfo("nope", now)).toBeNull();
+  });
+  it("labels minutes, hours and days and flags late chats", () => {
+    expect(waitInfo("2026-11-05T11:59:40Z", now)).toEqual({ label: "ahora", late: false });
+    expect(waitInfo("2026-11-05T11:15:00Z", now)).toEqual({ label: "45 min", late: false });
+    expect(waitInfo("2026-11-05T10:59:00Z", now)).toEqual({ label: "1 h", late: true });
+    expect(waitInfo("2026-11-03T11:00:00Z", now)).toEqual({ label: "2 d", late: true });
   });
 });

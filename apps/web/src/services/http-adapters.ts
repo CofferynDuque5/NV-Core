@@ -412,6 +412,7 @@ export function createHttpAdapters(opts: HttpAdapterOptions): Services {
         if (query?.channel) p.set("channel", query.channel);
         if (query?.status) p.set("status", query.status);
         if (query?.assignee) p.set("assignee", query.assignee);
+        if (query?.waiting) p.set("waiting", "true");
         if (query?.limit) p.set("limit", String(query.limit));
         if (query?.cursor) p.set("cursor", query.cursor);
         const qs = p.toString();
@@ -426,6 +427,7 @@ export function createHttpAdapters(opts: HttpAdapterOptions): Services {
       updateConversation: (id, cid, input) =>
         patch<Conversation>(`${ws(id)}/inbox/conversations/${cid}`, input),
       deleteConversation: (id, cid) => del<void>(`${ws(id)}/inbox/conversations/${cid}`),
+      addNote: (id, cid, text) => post<Message>(`${ws(id)}/inbox/conversations/${cid}/notes`, { text }),
     },
     media: {
       folders: (id) => get<MediaFolder[]>(`${ws(id)}/media/folders`),

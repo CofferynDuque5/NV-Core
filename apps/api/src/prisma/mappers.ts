@@ -334,14 +334,17 @@ export const mapConversation = (c: PConversation, last?: PMessage | null): Conve
   assignee: c.assignee ?? undefined,
   labels: c.labels ?? [],
   resolved: c.resolved,
+  // Open chat whose last message came from the contact: someone has to answer.
+  ...(!c.resolved && last?.direction === "in" ? { waitingSince: last.createdAt.toISOString() } : {}),
 });
 
 export const mapMessage = (m: PMessage): Message => ({
   id: m.id,
   conversationId: m.conversationId,
-  direction: m.direction === "in" ? "in" : "out",
+  direction: m.direction === "in" ? "in" : m.direction === "note" ? "note" : "out",
   text: m.text,
   at: m.createdAt.toISOString(),
+  ...(m.direction === "note" && m.author ? { author: m.author } : {}),
 });
 
 export const mapNotification = (n: PNotification): Notification => ({

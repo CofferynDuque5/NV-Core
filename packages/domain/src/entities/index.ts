@@ -716,14 +716,19 @@ export interface Conversation {
   /** Triage labels. */
   labels?: string[];
   resolved: boolean;
+  /** Open chat whose last message is from the contact: when that message arrived (nobody has answered yet). */
+  waitingSince?: string;
 }
 
 export interface Message {
   id: string;
   conversationId: string;
-  direction: "in" | "out";
+  /** "note" = internal team note: shown only in the panel, never sent to the contact. */
+  direction: "in" | "out" | "note";
   text: string;
   at: string;
+  /** Team member who wrote the note (email). */
+  author?: string;
 }
 
 export interface Notification {

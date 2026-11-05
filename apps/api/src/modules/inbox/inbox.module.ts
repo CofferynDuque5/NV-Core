@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Body,
   Controller,
   ForbiddenException,
@@ -31,7 +32,7 @@ import {
   type ConversationPage,
   type Message,
 } from "@nv/domain";
-import { Type } from "class-transformer";
+import { Transform, Type } from "class-transformer";
 import {
   IsArray,
   IsBoolean,
@@ -58,6 +59,8 @@ import { mapConversation, mapMessage } from "../../prisma/mappers";
 import { RolesGuard } from "../../auth/guards/roles.guard";
 import { Roles } from "../../auth/decorators/roles.decorator";
 import { Public } from "../../auth/decorators/public.decorator";
+import { CurrentUser } from "../../auth/decorators/current-user.decorator";
+import type { AuthenticatedUser } from "../../auth/auth.types";
 import { ProviderManager } from "../../providers/provider-manager.service";
 import { phoneKey } from "../consent/consent.service";
 import { isBareName, isSampleContact, phoneFromHandle } from "./inbox-contacts";
@@ -96,6 +99,12 @@ export class ConversationsQueryDto {
   @IsString()
   @MaxLength(320)
   assignee?: string;
+
+  @ApiPropertyOptional({ description: "true = solo chats abiertos cuyo último mensaje es del cliente (sin responder)." })
+  @IsOptional()
+  @Transform(({ value }) => value === true || value === "true" || value === "1")
+  @IsBoolean()
+  waiting?: boolean;
 
   @ApiPropertyOptional({ default: INBOX_PAGE_SIZE, minimum: 1, maximum: 100 })
   @IsOptional()
@@ -169,6 +178,15 @@ export class CreateConversationDto {
 export class SendMessageDto {
   @IsString() @MinLength(1) text!: string;
 }
+
+export class AddNoteDto {
+  @IsString() @MinLength(1) @MaxLength(4000) text!: string;
+}
+
+/** Direction of a chat's last real message (internal notes don't count). */
+const lastDirection = Prisma.sql`(SELECT lmd."direction" FROM "Message" lmd
+  WHERE lmd."conversationId" = c."id" AND lmd."direction" <> 'note'
+  ORDER BY lmd."createdAt" DESC LIMIT 1)`;
 
 export class UpdateConversationDto {
   @ApiPropertyOptional()
@@ -452,7 +470,7 @@ export class InboxService implements OnModuleInit {
     workspaceId: string,
     query: ConversationsQueryDto = {},
   ): Promise<ConversationPage> {
-    if (!this.prisma.enabled) return { items: [], total: 0, nextCursor: null, openCount: 0 };
+    if (!this.prisma.enabled) return { items: [], total: 0, nextCursor: null, openCount: 0, waitingCount: 0 };
     const limit = query.limit ?? INBOX_PAGE_SIZE;
     const filters: Prisma.Sql[] = [Prisma.sql`c."workspaceSlug" = ${workspaceId}`];
     if (query.channel) filters.push(Prisma.sql`c."channel"::text = ${query.channel}`);
@@ -460,6 +478,7 @@ export class InboxService implements OnModuleInit {
     if (query.status === "resolved") filters.push(Prisma.sql`c."resolved" = true`);
     if (query.assignee === INBOX_UNASSIGNED) filters.push(Prisma.sql`c."assignee" IS NULL`);
     else if (query.assignee) filters.push(Prisma.sql`c."assignee" = ${query.assignee}`);
+    if (query.waiting) filters.push(Prisma.sql`c."resolved" = false AND ${lastDirection} = 'in'`);
     const q = query.q?.trim();
     if (q) {
       // Accent-free: «maria» finds «María» and the other way round.
@@ -482,16 +501,19 @@ export class InboxService implements OnModuleInit {
         SELECT c."id", ${activity} AS "activity"
         FROM "Conversation" c
         LEFT JOIN LATERAL (
-          SELECT MAX(m."createdAt") AS "last" FROM "Message" m WHERE m."conversationId" = c."id"
+          SELECT MAX(m."createdAt") AS "last" FROM "Message" m
+          WHERE m."conversationId" = c."id" AND m."direction" <> 'note'
         ) lm ON TRUE
         WHERE ${where} ${after}
         ORDER BY ${activity} DESC, c."id" DESC
         LIMIT ${limit + 1}
       `),
-      this.prisma.$queryRaw<{ total: bigint; open: bigint }[]>(Prisma.sql`
+      this.prisma.$queryRaw<{ total: bigint; open: bigint; waiting: bigint }[]>(Prisma.sql`
         SELECT
           (SELECT COUNT(*) FROM "Conversation" c WHERE ${where}) AS "total",
-          (SELECT COUNT(*) FROM "Conversation" WHERE "workspaceSlug" = ${workspaceId} AND "resolved" = false) AS "open"
+          (SELECT COUNT(*) FROM "Conversation" WHERE "workspaceSlug" = ${workspaceId} AND "resolved" = false) AS "open",
+          (SELECT COUNT(*) FROM "Conversation" c
+            WHERE c."workspaceSlug" = ${workspaceId} AND c."resolved" = false AND ${lastDirection} = 'in') AS "waiting"
       `),
     ]);
     const more = page.length > limit;
@@ -500,7 +522,7 @@ export class InboxService implements OnModuleInit {
       ? await this.prisma.conversation.findMany({
           where: { workspaceSlug: workspaceId, id: { in: ids } },
           // Newest message per thread → preview + "last activity".
-          include: { messages: { orderBy: { createdAt: "desc" }, take: 1 } },
+          include: { messages: { where: { direction: { not: "note" } }, orderBy: { createdAt: "desc" }, take: 1 } },
         })
       : [];
     const byId = new Map(rows.map((r) => [r.id, r]));
@@ -513,6 +535,7 @@ export class InboxService implements OnModuleInit {
       items,
       total: Number(counts[0]?.total ?? 0),
       openCount: Number(counts[0]?.open ?? 0),
+      waitingCount: Number(counts[0]?.waiting ?? 0),
       nextCursor: more && last ? encodeInboxCursor(new Date(last.activity), last.id) : null,
     };
   }
@@ -565,6 +588,20 @@ export class InboxService implements OnModuleInit {
         );
     }
 
+    return mapMessage(row);
+  }
+
+  /**
+   * Internal note in the chat (who to call back, what was promised…). Stays in
+   * the panel: never delivered, never counted as a reply or as unread.
+   */
+  async addNote(workspaceId: string, conversationId: string, text: string, author: string): Promise<Message> {
+    const clean = text.trim();
+    if (!clean) throw new BadRequestException("Escribe la nota.");
+    await this.owned(workspaceId, conversationId);
+    const row = await this.db().message.create({
+      data: { conversationId, direction: "note", text: clean, author },
+    });
     return mapMessage(row);
   }
 
@@ -633,6 +670,18 @@ export class InboxController {
     @Body() dto: SendMessageDto,
   ) {
     return this.service.sendMessage(workspaceId, id, dto);
+  }
+
+  @Post("conversations/:id/notes")
+  @Roles("Owner", "Admin", "Editor")
+  @UseGuards(RolesGuard)
+  addNote(
+    @WorkspaceId() workspaceId: string,
+    @CurrentUser() user: AuthenticatedUser,
+    @Param("id") id: string,
+    @Body() dto: AddNoteDto,
+  ) {
+    return this.service.addNote(workspaceId, id, dto.text, user.email);
   }
 
   @Patch("conversations/:id")
