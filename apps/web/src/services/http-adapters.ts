@@ -84,6 +84,7 @@ import type {
   UploadFileResult,
   UsdtRate,
   WhatsappAlertStatus,
+  QuickReply,
 } from "@nv/domain";
 import { deviceHeaders } from "@/lib/device";
 
@@ -428,6 +429,9 @@ export function createHttpAdapters(opts: HttpAdapterOptions): Services {
         patch<Conversation>(`${ws(id)}/inbox/conversations/${cid}`, input),
       deleteConversation: (id, cid) => del<void>(`${ws(id)}/inbox/conversations/${cid}`),
       addNote: (id, cid, text) => post<Message>(`${ws(id)}/inbox/conversations/${cid}/notes`, { text }),
+      quickReplies: (id) => get<QuickReply[]>(`${ws(id)}/inbox/quick-replies`),
+      saveQuickReplies: (id, items) => put<QuickReply[]>(`${ws(id)}/inbox/quick-replies`, { items }),
+      conversationContact: (id, cid) => get<{ contact: Contact | null }>(`${ws(id)}/inbox/conversations/${cid}/contact`),
     },
     media: {
       folders: (id) => get<MediaFolder[]>(`${ws(id)}/media/folders`),

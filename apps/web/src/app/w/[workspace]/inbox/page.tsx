@@ -4,12 +4,17 @@ import {
   CHANNELS,
   INBOX_CHANNEL_IDS,
   initialsOf,
+  paymentInstructions,
   type ChannelId,
   type Conversation,
 } from "@nv/domain";
 import {
   CheckCircle2,
   Clock,
+  IdCard,
+  Package,
+  Wallet,
+  Zap,
   Hand,
   Inbox,
   Mail,
@@ -26,9 +31,20 @@ import {
 } from "lucide-react";
 
 import { cn } from "@/lib/utils";
-import { UNASSIGNED, waitInfo, withLabel, withoutLabel, type InboxStatus } from "@/lib/inbox";
+import { UNASSIGNED, fillReply, waitInfo, withLabel, withoutLabel, type InboxStatus } from "@/lib/inbox";
+import { productChatText } from "@/lib/products";
+import { methodsFor } from "@/lib/payments";
 import { useAuthStore } from "@/stores/auth-store";
-import { useConversations, useMessages, useTeam } from "@/hooks/use-domain-data";
+import {
+  useConversationContact,
+  useConversations,
+  useMessages,
+  usePaymentMethods,
+  useProducts,
+  useQuickReplies,
+  useTeam,
+} from "@/hooks/use-domain-data";
+import { useWorkspace } from "@/hooks/use-workspace";
 import {
   useAddNote,
   useDeleteConversation,
@@ -45,6 +61,18 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ChannelChip } from "@/components/common/channel-badge";
 import { ConversationCreateDialog } from "@/components/entities/conversation-create-dialog";
+import { Textarea } from "@/components/ui/textarea";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { PaymentDialog } from "@/components/payments/payment-dialog";
+import { QuickRepliesDialog, matchReplies } from "@/components/inbox/quick-replies";
+import { ChatContactCard } from "@/components/inbox/chat-contact-card";
 
 const selectClass =
   "h-9 rounded-lg border border-line-soft bg-panel px-2 text-xs text-ink focus-visible:border-brand/60 focus-visible:outline-none";
@@ -94,6 +122,14 @@ export default function InboxPage() {
   const me = useAuthStore((s) => s.user?.email) ?? "";
   // Composer mode: reply to the contact, or an internal note only the team sees.
   const [noteMode, setNoteMode] = React.useState(false);
+  const [repliesOpen, setRepliesOpen] = React.useState(false);
+  const [charging, setCharging] = React.useState(false);
+  const [showCard, setShowCard] = React.useState(true);
+  const workspace = useWorkspace();
+  const replies = useQuickReplies();
+  const products = useProducts();
+  const payMethods = usePaymentMethods();
+  const draftRef = React.useRef<HTMLTextAreaElement>(null);
   const [debouncedQ, setDebouncedQ] = React.useState(() => (searchParams.get("q") ?? "").trim());
   React.useEffect(() => {
     const t = setTimeout(() => setDebouncedQ(q.trim()), 300);
@@ -119,6 +155,7 @@ export default function InboxPage() {
   const messages = useMessages(selected);
   const send = useSendMessage(selected);
   const addNote = useAddNote(selected);
+  const chatContact = useConversationContact(selected);
   const resolve = useResolveConversation();
   const updateConv = useUpdateConversation();
   const deleteConv = useDeleteConversation();
@@ -189,6 +226,25 @@ export default function InboxPage() {
     else send.mutate(draft.trim(), { onSuccess: () => setDraft("") });
   }
 
+  /** Put text in the reply box (replacing a «/atajo» being typed) and focus it. */
+  function insert(text: string) {
+    setNoteMode(false);
+    setDraft((cur) => (cur.startsWith("/") || !cur.trim() ? text : `${cur.trimEnd()}\n${text}`));
+    window.setTimeout(() => {
+      const el = draftRef.current;
+      if (!el) return;
+      el.focus();
+      el.setSelectionRange(el.value.length, el.value.length);
+    }, 0);
+  }
+
+  const pickReply = (text: string) =>
+    insert(fillReply(text, { contactName: active?.contactName, brandName: workspace.name }));
+
+  // Typing «/pre» suggests saved replies whose name or text match.
+  const slash = draft.startsWith("/") && !draft.includes("\n") ? draft.slice(1) : null;
+  const suggestions = slash !== null ? matchReplies(replies.data ?? [], slash) : [];
+
   function addLabel() {
     if (!active || !labelDraft.trim()) return;
     updateConv.mutate(
@@ -211,7 +267,12 @@ export default function InboxPage() {
         }
       />
 
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,360px)_1fr]">
+      <div
+        className={cn(
+          "grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,360px)_1fr]",
+          active && showCard && "2xl:grid-cols-[minmax(0,340px)_1fr_280px]",
+        )}
+      >
         {/* Conversation list + filters */}
         <Panel className="flex max-h-[74vh] flex-col overflow-hidden">
           <div className="border-line space-y-2 border-b p-3">
@@ -466,6 +527,17 @@ export default function InboxPage() {
                 description={`${CHANNELS[active.channel].name}${active.contactHandle ? ` · ${active.contactHandle}` : ""}`}
                 action={
                   <div className="flex flex-wrap items-center justify-end gap-2">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      title={showCard ? "Ocultar ficha del cliente" : "Ver ficha del cliente"}
+                      aria-label="Ficha del cliente"
+                      aria-pressed={showCard}
+                      data-testid="inbox-card-toggle"
+                      onClick={() => setShowCard((v) => !v)}
+                    >
+                      <IdCard className="size-4" />
+                    </Button>
                     {me && active.assignee !== me && members.some((m) => m.email === me) ? (
                       <Button
                         variant="outline"
@@ -700,13 +772,107 @@ export default function InboxPage() {
                   {noteMode ? (
                     <span className="text-ink-faint self-center text-[11px]">Solo la ve tu equipo. No se envía al cliente.</span>
                   ) : null}
+                  <div className="ml-auto flex items-center gap-0.5">
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <button
+                          type="button"
+                          className="text-ink-muted hover:text-ink inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs"
+                          data-testid="inbox-replies-menu"
+                        >
+                          <Zap className="size-3.5" /> Respuestas
+                        </button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end" className="max-h-80 w-72 overflow-y-auto">
+                        <DropdownMenuLabel className="text-ink-faint text-[11px]">
+                          Tip: escribe «/» en el mensaje para buscarlas
+                        </DropdownMenuLabel>
+                        {(replies.data ?? []).map((r) => (
+                          <DropdownMenuItem key={r.id} onSelect={() => pickReply(r.text)} className="flex-col items-start gap-0.5">
+                            <span className="text-ink text-xs font-medium">{r.title}</span>
+                            <span className="text-ink-faint line-clamp-1 text-[11px]">{r.text}</span>
+                          </DropdownMenuItem>
+                        ))}
+                        {(replies.data ?? []).length === 0 ? (
+                          <p className="text-ink-faint px-2.5 py-2 text-xs">Aún no tienes respuestas guardadas.</p>
+                        ) : null}
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem onSelect={() => setRepliesOpen(true)} data-testid="inbox-replies-edit">
+                          Editar respuestas…
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <button
+                          type="button"
+                          className="text-ink-muted hover:text-ink inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs"
+                          data-testid="inbox-product-menu"
+                        >
+                          <Package className="size-3.5" /> Producto
+                        </button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end" className="max-h-80 w-64 overflow-y-auto">
+                        <DropdownMenuLabel className="text-ink-faint text-[11px]">Inserta nombre, descripción y precios</DropdownMenuLabel>
+                        {(products.data ?? [])
+                          .filter((pr) => pr.active)
+                          .map((pr) => (
+                            <DropdownMenuItem key={pr.id} onSelect={() => insert(productChatText(pr))}>
+                              <span className="truncate text-xs">{pr.name}</span>
+                            </DropdownMenuItem>
+                          ))}
+                        {(products.data ?? []).filter((pr) => pr.active).length === 0 ? (
+                          <p className="text-ink-faint px-2.5 py-2 text-xs">No hay productos activos en la Tienda.</p>
+                        ) : null}
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                    <button
+                      type="button"
+                      onClick={() => setCharging(true)}
+                      className="text-ink-muted hover:text-ink inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs"
+                      data-testid="inbox-charge"
+                    >
+                      <Wallet className="size-3.5" /> Cobrar
+                    </button>
+                  </div>
                 </div>
-                <div className="flex items-center gap-2">
-                  <Input
+                {suggestions.length > 0 ? (
+                  <ul className="border-line-soft bg-panel-high rounded-lg border p-1" data-testid="inbox-slash-suggestions">
+                    {suggestions.map((r) => (
+                      <li key={r.id}>
+                        <button
+                          type="button"
+                          onClick={() => pickReply(r.text)}
+                          className="hover:bg-panel-raised w-full rounded-md px-2 py-1.5 text-left"
+                        >
+                          <span className="text-ink text-xs font-medium">/{r.title}</span>
+                          <span className="text-ink-faint ml-2 line-clamp-1 text-[11px]">{r.text}</span>
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                ) : null}
+                <div className="flex items-end gap-2">
+                  <Textarea
+                    ref={draftRef}
                     value={draft}
+                    rows={1}
                     onChange={(e) => setDraft(e.target.value)}
-                    placeholder={noteMode ? "Nota para el equipo (el cliente no la ve)…" : `Responder a ${active.contactName}…`}
-                    className={cn("flex-1", noteMode && "border-dashed border-amber-400/60")}
+                    onKeyDown={(e) => {
+                      if (e.key !== "Enter" || e.shiftKey || e.nativeEvent.isComposing) return;
+                      e.preventDefault();
+                      if (suggestions[0]) pickReply(suggestions[0].text);
+                      else e.currentTarget.form?.requestSubmit();
+                    }}
+                    placeholder={
+                      noteMode
+                        ? "Nota para el equipo (el cliente no la ve)…"
+                        : `Responder a ${active.contactName}… (escribe / para tus respuestas guardadas)`
+                    }
+                    className={cn(
+                      "max-h-40 min-h-9 flex-1 resize-none py-2 [field-sizing:content]",
+                      noteMode && "border-dashed border-amber-400/60",
+                    )}
                     aria-label={noteMode ? "Nota interna" : "Respuesta"}
                   />
                   <Button
@@ -722,7 +888,35 @@ export default function InboxPage() {
             </>
           )}
         </Panel>
+
+        {active && showCard ? (
+          <Panel className="h-fit overflow-hidden lg:col-span-2 2xl:col-span-1">
+            <PanelHeader title="Ficha del cliente" description="Lo que sabes de esta persona" />
+            <ChatContactCard conversation={active} onCharge={() => setCharging(true)} />
+          </Panel>
+        ) : null}
       </div>
+
+      <QuickRepliesDialog open={repliesOpen} onOpenChange={setRepliesOpen} />
+      {active ? (
+        <PaymentDialog
+          open={charging}
+          onOpenChange={setCharging}
+          defaultContactId={chatContact.data?.contact?.id}
+          defaultContactName={chatContact.data?.contact?.name}
+          onCreated={(_id, p) =>
+            insert(
+              paymentInstructions({
+                contactName: fillReply("{{nombre}}", { contactName: active.contactName }),
+                concept: p.concept,
+                amount: p.amount,
+                currency: p.currency,
+                methods: methodsFor(payMethods.data ?? [], p.currency),
+              }),
+            )
+          }
+        />
+      ) : null}
 
       <ConversationCreateDialog
         open={dialogOpen}

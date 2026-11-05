@@ -74,3 +74,47 @@ export function waitInfo(since: string | undefined, now = Date.now()): { label: 
   const label = min < 1 ? "ahora" : min < 60 ? `${min} min` : min < 1440 ? `${Math.floor(min / 60)} h` : `${Math.floor(min / 1440)} d`;
   return { label, late: min >= WAIT_LATE_MIN };
 }
+
+/** Variables a saved reply can use; filled with the open chat's data. */
+export const REPLY_VARS = ["{{nombre}}", "{{nombre_completo}}", "{{saludo}}", "{{fecha}}", "{{nombre_marca}}"] as const;
+
+/** «Buenos días» / «Buenas tardes» / «Buenas noches» for a local hour. */
+export function greetingFor(hour: number): string {
+  if (hour >= 5 && hour < 12) return "Buenos días";
+  if (hour >= 12 && hour < 19) return "Buenas tardes";
+  return "Buenas noches";
+}
+
+/**
+ * Fill a saved reply for one chat. {{nombre}} is the first name only when the
+ * chat has a real name (a bare phone number becomes empty, never «+58 412…»).
+ */
+export function fillReply(
+  text: string,
+  ctx: { contactName?: string; brandName?: string; now?: Date },
+): string {
+  const now = ctx.now ?? new Date();
+  const full = (ctx.contactName ?? "").trim();
+  const isName = !!full && !/^\+?[\d\s()-]+$/.test(full);
+  const first = isName ? full.split(/\s+/)[0]! : "";
+  const vars: Record<string, string> = {
+    nombre: first,
+    nombre_completo: isName ? full : "",
+    saludo: greetingFor(now.getHours()),
+    fecha: now.toLocaleDateString("es", { day: "numeric", month: "long" }),
+    nombre_marca: ctx.brandName?.trim() ?? "",
+  };
+  return text
+    .replace(/\{\{\s*(\w+)\s*\}\}/g, (m, k: string) => (k in vars ? vars[k]! : m))
+    // «Hola , ¿cómo…» → «Hola, ¿cómo…» when the name was empty.
+    .replace(/ +([,.!?])/g, "$1")
+    .replace(/ {2,}/g, " ");
+}
+
+/** Example saved replies offered when the brand has none yet. */
+export const EXAMPLE_REPLIES = [
+  { title: "Saludo", text: "{{saludo}} {{nombre}}, gracias por escribir a {{nombre_marca}}. ¿En qué te puedo ayudar?" },
+  { title: "Precios", text: "Hola {{nombre}}, te paso la lista de precios de hoy. Cualquier duda me dices." },
+  { title: "Pago recibido", text: "¡Listo {{nombre}}! Recibimos tu pago. Muchas gracias por tu compra." },
+  { title: "Fuera de horario", text: "Hola {{nombre}}, ya cerramos por hoy. Te respondemos mañana a primera hora." },
+];

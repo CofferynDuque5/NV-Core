@@ -28,6 +28,7 @@ import type {
   CalendarEvent,
   Connection,
   Contact,
+  QuickReply,
   ContactNote,
   ContactImportResult,
   Conversation,
@@ -528,6 +529,12 @@ export interface InboxService {
   messages(workspaceId: string, conversationId: string): Promise<Message[]>;
   /** Internal team note in the chat: stored in the panel, never sent to the contact. */
   addNote(workspaceId: string, conversationId: string, text: string): Promise<Message>;
+  /** The brand's saved replies. */
+  quickReplies(workspaceId: string): Promise<QuickReply[]>;
+  /** Replace the brand's saved replies (max 50). */
+  saveQuickReplies(workspaceId: string, items: QuickReply[]): Promise<QuickReply[]>;
+  /** CRM contact whose phone matches the chat (null when there is none). */
+  conversationContact(workspaceId: string, conversationId: string): Promise<{ contact: Contact | null }>;
   createConversation(workspaceId: string, input: CreateConversationInput): Promise<Conversation>;
   sendMessage(
     workspaceId: string,

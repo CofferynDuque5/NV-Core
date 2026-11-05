@@ -15,6 +15,7 @@ import {
   Patch,
   Delete,
   Post,
+  Put,
   Query,
   Req,
   Res,
@@ -30,10 +31,13 @@ import {
   type ChannelId,
   type Conversation,
   type ConversationPage,
+  type Contact,
   type Message,
+  type QuickReply,
 } from "@nv/domain";
 import { Transform, Type } from "class-transformer";
 import {
+  ArrayMaxSize,
   IsArray,
   IsBoolean,
   IsIn,
@@ -44,7 +48,9 @@ import {
   MaxLength,
   Min,
   MinLength,
+  ValidateNested,
 } from "class-validator";
+import { randomUUID } from "node:crypto";
 import { Prisma } from "@prisma/client";
 import type { Response } from "express";
 
@@ -55,7 +61,7 @@ import { WorkspaceGuard } from "../../common/tenant/workspace.guard";
 import { WorkspaceRegistry } from "../../common/workspace-registry.service";
 import { safeEqual } from "../../common/crypto/crypto.util";
 import { PrismaService } from "../../prisma/prisma.service";
-import { mapConversation, mapMessage } from "../../prisma/mappers";
+import { mapContact, mapConversation, mapMessage } from "../../prisma/mappers";
 import { RolesGuard } from "../../auth/guards/roles.guard";
 import { Roles } from "../../auth/decorators/roles.decorator";
 import { Public } from "../../auth/decorators/public.decorator";
@@ -177,6 +183,41 @@ export class CreateConversationDto {
 
 export class SendMessageDto {
   @IsString() @MinLength(1) text!: string;
+}
+
+export const MAX_QUICK_REPLIES = 50;
+
+export class QuickReplyDto {
+  @IsOptional() @IsString() @MaxLength(40) id?: string;
+  @IsString() @MinLength(1) @MaxLength(60) title!: string;
+  @IsString() @MinLength(1) @MaxLength(2000) text!: string;
+}
+
+export class SaveQuickRepliesDto {
+  @IsArray()
+  @ArrayMaxSize(MAX_QUICK_REPLIES)
+  @ValidateNested({ each: true })
+  @Type(() => QuickReplyDto)
+  items!: QuickReplyDto[];
+}
+
+/** Stored saved replies, cleaned: trimmed, with an id, no empties. */
+export function cleanQuickReplies(raw: unknown): QuickReply[] {
+  if (!Array.isArray(raw)) return [];
+  const out: QuickReply[] = [];
+  const seen = new Set<string>();
+  for (const r of raw.slice(0, MAX_QUICK_REPLIES)) {
+    if (!r || typeof r !== "object") continue;
+    const o = r as Record<string, unknown>;
+    const title = typeof o.title === "string" ? o.title.trim().slice(0, 60) : "";
+    const text = typeof o.text === "string" ? o.text.trim().slice(0, 2000) : "";
+    if (!title || !text) continue;
+    let id = typeof o.id === "string" && o.id.trim() ? o.id.trim().slice(0, 40) : "";
+    if (!id || seen.has(id)) id = `qr_${randomUUID().slice(0, 8)}`;
+    seen.add(id);
+    out.push({ id, title, text });
+  }
+  return out;
 }
 
 export class AddNoteDto {
@@ -605,6 +646,42 @@ export class InboxService implements OnModuleInit {
     return mapMessage(row);
   }
 
+  async quickReplies(workspaceId: string): Promise<QuickReply[]> {
+    if (!this.prisma.enabled) return [];
+    const row = await this.prisma.workspaceSettings.findUnique({
+      where: { workspaceSlug: workspaceId },
+      select: { quickReplies: true },
+    });
+    return cleanQuickReplies(row?.quickReplies);
+  }
+
+  async saveQuickReplies(workspaceId: string, items: QuickReply[], actor: string): Promise<QuickReply[]> {
+    const clean = cleanQuickReplies(items);
+    await this.db().workspaceSettings.upsert({
+      where: { workspaceSlug: workspaceId },
+      create: { workspaceSlug: workspaceId, quickReplies: clean as unknown as Prisma.InputJsonValue, updatedBy: actor },
+      update: { quickReplies: clean as unknown as Prisma.InputJsonValue, updatedBy: actor },
+    });
+    return clean;
+  }
+
+  /**
+   * The CRM contact behind a chat, matched by phone (last 9 digits), for the
+   * customer card next to the conversation. Most recent match wins.
+   */
+  async conversationContact(workspaceId: string, conversationId: string): Promise<{ contact: Contact | null }> {
+    const conv = await this.owned(workspaceId, conversationId);
+    const key = phoneKey(conv.contactHandle);
+    if (!key) return { contact: null };
+    const candidates = await this.db().contact.findMany({
+      where: { workspaceSlug: workspaceId, phone: { contains: key.slice(-2) } },
+      orderBy: { createdAt: "desc" },
+      take: 200,
+    });
+    const hit = candidates.find((c) => phoneKey(c.phone) === key);
+    return { contact: hit ? mapContact(hit) : null };
+  }
+
   /** Partial triage update: resolve, assign (or unassign with ""/null), labels. */
   async updateConversation(
     workspaceId: string,
@@ -670,6 +747,27 @@ export class InboxController {
     @Body() dto: SendMessageDto,
   ) {
     return this.service.sendMessage(workspaceId, id, dto);
+  }
+
+  @Get("quick-replies")
+  quickReplies(@WorkspaceId() workspaceId: string) {
+    return this.service.quickReplies(workspaceId);
+  }
+
+  @Put("quick-replies")
+  @Roles("Owner", "Admin", "Editor")
+  @UseGuards(RolesGuard)
+  saveQuickReplies(
+    @WorkspaceId() workspaceId: string,
+    @CurrentUser() user: AuthenticatedUser,
+    @Body() dto: SaveQuickRepliesDto,
+  ) {
+    return this.service.saveQuickReplies(workspaceId, dto.items as QuickReply[], user.email);
+  }
+
+  @Get("conversations/:id/contact")
+  conversationContact(@WorkspaceId() workspaceId: string, @Param("id") id: string) {
+    return this.service.conversationContact(workspaceId, id);
   }
 
   @Post("conversations/:id/notes")

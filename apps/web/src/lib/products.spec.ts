@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { Product } from "@nv/domain";
 
-import { filterProducts, priceLine, productCategories, productMessage, STORE_CURRENCIES } from "./products";
+import { filterProducts, priceLine, productCategories, productChatText, productMessage, STORE_CURRENCIES } from "./products";
 
 const product = (over: Partial<Product> = {}): Product => ({
   id: "p1",
@@ -38,5 +38,14 @@ describe("Tienda helpers", () => {
 
   it("builds a campaign message with {{precio}}", () => {
     expect(productMessage(product())).toBe("*Combo Netflix*\nPantalla 1 mes\nPrecio: {{precio}}");
+  });
+});
+
+describe("productChatText", () => {
+  it("lists the product's own prices, without converting", () => {
+    expect(productChatText({ name: "Plan 1 mes", description: "Pantalla HD", prices: { USD: "10", VES: "350", COP: "" } })).toBe(
+      `*Plan 1 mes*\nPantalla HD\nPrecio: ${priceLine({ prices: { USD: "10", VES: "350" } })}`,
+    );
+    expect(productChatText({ name: "Kit", description: null, prices: {} })).toBe("*Kit*");
   });
 });

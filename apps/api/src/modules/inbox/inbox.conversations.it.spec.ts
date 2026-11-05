@@ -143,4 +143,37 @@ describe.skipIf(!url)("Inbox: búsqueda y páginas contra PostgreSQL real", () =
     expect(all.items.find((c) => c.contactName === "Cliente 2")?.waitingSince).toBeUndefined();
     expect(all.items.find((c) => c.contactName === "Cliente 3")?.waitingSince).toBeUndefined();
   });
+  it("respuestas guardadas: se limpian, llevan id y son de cada marca", async () => {
+    const ws = `it-inbox-qr-${Date.now()}`;
+    expect(await inbox.quickReplies(ws)).toEqual([]);
+    const saved = await inbox.saveQuickReplies(
+      ws,
+      [
+        { id: "a", title: " Precios ", text: " Hola {{nombre}} " },
+        { id: "a", title: "Duplicado", text: "otro id" },
+        { id: "", title: "", text: "sin nombre" },
+      ],
+      "ana@nv.tv",
+    );
+    expect(saved.map((r) => [r.title, r.text])).toEqual([
+      ["Precios", "Hola {{nombre}}"],
+      ["Duplicado", "otro id"],
+    ]);
+    expect(saved[0]!.id).toBe("a");
+    expect(saved[1]!.id).toMatch(/^qr_/);
+    expect(await inbox.quickReplies(ws)).toEqual(saved);
+    expect(await inbox.quickReplies(`${ws}-otra`)).toEqual([]);
+  });
+
+  it("ficha del cliente: encuentra el contacto por teléfono (últimos 9 dígitos)", async () => {
+    const ws = `it-inbox-card-${Date.now()}`;
+    await seed(ws);
+    await prisma.contact.create({ data: { workspaceSlug: ws, name: "Cliente Cuatro", phone: "+57 300 000 004", tags: ["vip"] } });
+    await prisma.contact.create({ data: { workspaceSlug: `${ws}-x`, name: "Otra marca", phone: "+57300000005" } });
+    const c4 = await prisma.conversation.findFirst({ where: { workspaceSlug: ws, contactName: "Cliente 4" } });
+    const c5 = await prisma.conversation.findFirst({ where: { workspaceSlug: ws, contactName: "Cliente 5" } });
+    expect((await inbox.conversationContact(ws, c4!.id)).contact).toMatchObject({ name: "Cliente Cuatro", tags: ["vip"] });
+    expect((await inbox.conversationContact(ws, c5!.id)).contact).toBeNull();
+    await expect(inbox.conversationContact(`${ws}-x`, c4!.id)).rejects.toThrow("no encontrada");
+  });
 });

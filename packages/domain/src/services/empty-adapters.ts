@@ -261,6 +261,9 @@ export const emptyAdapters: Services = {
     updateConversation: () => notAvailable(),
     deleteConversation: () => notAvailable(),
     addNote: () => notAvailable(),
+    quickReplies: () => delay([]),
+    saveQuickReplies: () => notAvailable(),
+    conversationContact: () => delay({ contact: null }),
   },
   media: {
     folders: () => delay([]),

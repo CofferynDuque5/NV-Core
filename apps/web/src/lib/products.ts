@@ -59,3 +59,12 @@ export function stockLevel(p: { stock: number | null; active?: boolean }): "agot
   if (p.stock <= 0) return "agotado";
   return p.stock <= LOW_STOCK ? "bajo" : null;
 }
+
+/**
+ * A product as a chat message: name, description and its prices as they are
+ * (no conversion), e.g. «Precio: USD 10 · VES 350».
+ */
+export function productChatText(p: Pick<Product, "name" | "description" | "prices">): string {
+  const prices = priceLine(p);
+  return [`*${p.name}*`, p.description?.trim(), prices ? `Precio: ${prices}` : null].filter(Boolean).join("\n");
+}

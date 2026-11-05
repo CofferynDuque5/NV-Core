@@ -2,6 +2,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import type {
   ChangelogStatus,
+  QuickReply,
   CreateProductInput,
   UpdateWorkspaceInput,
   AccessPaymentInput,
@@ -1210,6 +1211,20 @@ export function useAddNote(conversationId: string | null) {
     mutationFn: (text: string) => svc.inbox.addNote(ws.id, conversationId as string, text),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: [ws.id, "inbox", conversationId, "messages"] });
+    },
+    onError: (err) => toast.error(errText(err)),
+  });
+}
+
+export function useSaveQuickReplies() {
+  const svc = useServices();
+  const ws = useWorkspace();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (items: QuickReply[]) => svc.inbox.saveQuickReplies(ws.id, items),
+    onSuccess: (items) => {
+      qc.setQueryData([ws.id, "inbox", "quick-replies"], items);
+      toast.success("Respuestas guardadas");
     },
     onError: (err) => toast.error(errText(err)),
   });

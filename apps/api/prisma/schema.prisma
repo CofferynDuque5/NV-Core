@@ -785,6 +785,8 @@ model WorkspaceSettings {
   /// What the brand wants to achieve first (onboarding «¿Qué quieres lograr
   /// primero?»); orders the sidebar and the dashboard's next steps.
   goals         String[] @default([])
+  /// Inbox saved replies: [{ id, title, text }] with {{nombre}}-style variables.
+  quickReplies  Json     @default("[]")
   updatedBy     String?
   updatedAt     DateTime @updatedAt
 }

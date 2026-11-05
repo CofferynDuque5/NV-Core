@@ -731,6 +731,13 @@ export interface Message {
   author?: string;
 }
 
+/** Inbox saved reply. {{nombre}}, {{nombre_completo}}, {{saludo}}, {{fecha}} and {{nombre_marca}} are filled in the chat. */
+export interface QuickReply {
+  id: string;
+  title: string;
+  text: string;
+}
+
 export interface Notification {
   id: string;
   type: "info" | "success" | "warning" | "error";

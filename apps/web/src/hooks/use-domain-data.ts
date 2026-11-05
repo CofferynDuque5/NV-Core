@@ -234,6 +234,28 @@ export function useMessages(conversationId: string | null) {
   });
 }
 
+export function useQuickReplies() {
+  const svc = useServices();
+  const ws = useWorkspace();
+  return useQuery({
+    queryKey: [ws.id, "inbox", "quick-replies"],
+    queryFn: () => svc.inbox.quickReplies(ws.id),
+    staleTime: 60_000,
+  });
+}
+
+/** CRM contact behind a chat (matched by phone), for the card next to it. */
+export function useConversationContact(conversationId: string | null) {
+  const svc = useServices();
+  const ws = useWorkspace();
+  return useQuery({
+    queryKey: [ws.id, "inbox", conversationId, "contact"],
+    queryFn: () => svc.inbox.conversationContact(ws.id, conversationId as string),
+    enabled: Boolean(conversationId),
+    staleTime: 30_000,
+  });
+}
+
 export function useMediaFolders() {
   const svc = useServices();
   const ws = useWorkspace();
