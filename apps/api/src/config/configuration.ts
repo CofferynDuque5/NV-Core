@@ -1,4 +1,5 @@
 import type { Env } from "./env.validation";
+import { DEMO_SLUG } from "../modules/demo/demo-slug";
 
 /**
  * Structured config derived from validated env. Injected via
@@ -144,7 +145,7 @@ export function buildConfig(env: Env): AppConfig {
       // On unless DEMO_ENABLED=false: the demo account can't change anything.
       enabled: !["false", "0", "no"].includes((env.DEMO_ENABLED ?? "").trim().toLowerCase()),
       email: "demo@demo.nvmarketing.invalid",
-      slug: "nv-demo",
+      slug: DEMO_SLUG,
     },
     metricsToken: env.METRICS_TOKEN,
     sentry: { dsn: env.SENTRY_DSN },
@@ -153,9 +154,18 @@ export function buildConfig(env: Env): AppConfig {
     mail: {
       from:
         env.MAIL_FROM?.trim() ||
-        (env.SMTP_USER ? `NV Marketing <${env.SMTP_USER.trim()}>` : "NV Marketing <onboarding@resend.dev>"),
+        (env.SMTP_USER
+          ? `NV Marketing <${env.SMTP_USER.trim()}>`
+          : "NV Marketing <onboarding@resend.dev>"),
       ...(env.SMTP_HOST && env.SMTP_USER && env.SMTP_PASS
-        ? { smtp: { host: env.SMTP_HOST.trim(), port: env.SMTP_PORT, user: env.SMTP_USER.trim(), pass: env.SMTP_PASS } }
+        ? {
+            smtp: {
+              host: env.SMTP_HOST.trim(),
+              port: env.SMTP_PORT,
+              user: env.SMTP_USER.trim(),
+              pass: env.SMTP_PASS,
+            },
+          }
         : {}),
     },
     media: {
@@ -168,7 +178,11 @@ export function buildConfig(env: Env): AppConfig {
       defaultPlan: env.DEFAULT_PLAN === "free" ? "free" : "pro",
       trialHours: env.TRIAL_HOURS ?? 24,
       operatorWorkspace: env.NV_BILLING_WORKSPACE?.trim().toLowerCase() ?? "",
-      plan: { price: env.PLAN_PRICE ?? 19, currency: env.PLAN_CURRENCY ?? "USD", days: env.PLAN_DAYS ?? 30 },
+      plan: {
+        price: env.PLAN_PRICE ?? 19,
+        currency: env.PLAN_CURRENCY ?? "USD",
+        days: env.PLAN_DAYS ?? 30,
+      },
       basicPrice: env.PLAN_BASIC_PRICE ?? 7,
       receiptsDir: env.RECEIPTS_DIR,
       usdtVesRate: env.USDT_VES_RATE,

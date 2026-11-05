@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { DEMO_SLUG } from "../demo/demo-slug";
 
 import {
   Injectable,
@@ -282,7 +283,7 @@ export class CampaignRunner implements OnModuleInit, OnModuleDestroy {
     await this.recoverInterruptedRuns(now);
     await this.finishEndedRanges(now);
     const candidates = await this.prisma.campaign.findMany({
-      where: { status: { in: ["programada", "activa"] } },
+      where: { status: { in: ["programada", "activa"] }, workspaceSlug: { not: DEMO_SLUG } },
     });
     const zones = await this.timeZones(candidates.map((c) => c.workspaceSlug));
     for (const c of candidates) {

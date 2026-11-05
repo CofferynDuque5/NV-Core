@@ -297,6 +297,8 @@ footer{border-top:1px solid var(--line);padding:56px 0 34px;font-size:14px}
 .foot .fh{margin:0 0 12px;font-family:inherit;line-height:1.4;font-size:13px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);font-weight:600}
 .foot a{display:block;color:var(--muted);padding:4px 0}
 .foot a:hover{color:var(--text)}
+.foot a.logo{display:inline-flex;align-items:center;gap:10px;color:var(--text);padding:0}
+.copy a{display:inline-block;padding:8px 2px}
 .copy{margin-top:40px;padding-top:22px;border-top:1px solid var(--line);color:var(--muted);font-size:13px;display:flex;justify-content:space-between;gap:14px;flex-wrap:wrap}
 
 /* ---------- Guía de instalación (diálogo) ---------- */
@@ -326,7 +328,9 @@ dialog.install::backdrop{background:rgba(5,7,12,.6);backdrop-filter:blur(3px)}
   .nav,.top .hide-sm{display:none}
   .burger{display:inline-flex}
   .tour{grid-template-columns:1fr}
-  .tabs{flex-direction:row;overflow-x:auto;gap:8px;padding-bottom:4px;scrollbar-width:none}
+  .tabs{flex-direction:row;overflow-x:auto;gap:8px;padding-bottom:4px;scrollbar-width:none;-webkit-mask-image:linear-gradient(90deg,#000 82%,transparent);mask-image:linear-gradient(90deg,#000 82%,transparent)}
+  .tabs.at-end{-webkit-mask-image:none;mask-image:none}
+  .foot a{padding:10px 0}
   .tab{flex:none;padding:10px 14px;border:1px solid var(--line)}
   .tab span{display:none!important}
   .split,.app-box{grid-template-columns:1fr}
@@ -748,16 +752,20 @@ dialog.install::backdrop{background:rgba(5,7,12,.6);backdrop-filter:blur(3px)}
 
   /* Menú superior: resalta la sección en la que estás */
   var links={};document.querySelectorAll(".nav a[href^='#']").forEach(function(a){links[a.getAttribute("href").slice(1)]=a;});
-  /* Marca la última sección cuyo inicio ya pasó la mitad de la pantalla; en la portada, ninguna. */
+  /* Marca la sección del menú que está a media pantalla; si no hay ninguna (portada, Cobros, cierre), nada. */
   var secs=Object.keys(links).map(function(id){return document.getElementById(id);}).filter(Boolean),ticking=false;
   function markNav(){
     ticking=false;var mid=window.innerHeight*0.45,cur=null;
-    secs.forEach(function(el){if(el.getBoundingClientRect().top<=mid)cur=el.id;});
-    if(window.innerHeight+window.scrollY>=document.documentElement.scrollHeight-2&&secs.length)cur=secs[secs.length-1].id;
+    /* Solo la sección del menú que ocupa la mitad de la pantalla; en Cobros o en el cierre, ninguna. */
+    secs.forEach(function(el){var r=el.getBoundingClientRect();if(r.top<=mid&&r.bottom>mid)cur=el.id;});
     Object.keys(links).forEach(function(k){var on=k===cur;links[k].classList.toggle("active",on);if(on)links[k].setAttribute("aria-current","true");else links[k].removeAttribute("aria-current");});
   }
   window.addEventListener("scroll",function(){if(!ticking){ticking=true;requestAnimationFrame(markNav);}},{passive:true});
   window.addEventListener("resize",markNav);markNav();
+
+  /* Pestañas en el teléfono: el borde se difumina mientras quedan más a la derecha */
+  var tabsBar=document.querySelector(".tabs");
+  if(tabsBar){var edge=function(){tabsBar.classList.toggle("at-end",tabsBar.scrollLeft+tabsBar.clientWidth>=tabsBar.scrollWidth-4);};tabsBar.addEventListener("scroll",edge,{passive:true});window.addEventListener("resize",edge);edge();}
 
   /* Guía de instalación de la app (en la propia página) */
   var GUIDES={

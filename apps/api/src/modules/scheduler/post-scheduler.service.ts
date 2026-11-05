@@ -1,4 +1,5 @@
 import { Injectable, Logger, type OnModuleDestroy, type OnModuleInit } from "@nestjs/common";
+import { DEMO_SLUG } from "../demo/demo-slug";
 
 import { AuditLogger } from "../../common/audit-logger.service";
 import { PrismaService } from "../../prisma/prisma.service";
@@ -104,7 +105,11 @@ export class PostScheduler implements OnModuleInit, OnModuleDestroy {
     try {
       await this.failStuck(now);
       const due = await this.prisma.post.findMany({
-        where: { status: "scheduled", scheduledAt: { lte: now } },
+        where: {
+          status: "scheduled",
+          scheduledAt: { lte: now },
+          workspaceSlug: { not: DEMO_SLUG },
+        },
         orderBy: { scheduledAt: "asc" },
         take: SWEEP_BATCH,
         select: { id: true },
