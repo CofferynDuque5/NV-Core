@@ -118,3 +118,11 @@ export const EXAMPLE_REPLIES = [
   { title: "Pago recibido", text: "¡Listo {{nombre}}! Recibimos tu pago. Muchas gracias por tu compra." },
   { title: "Fuera de horario", text: "Hola {{nombre}}, ya cerramos por hoy. Te respondemos mañana a primera hora." },
 ];
+
+/** «Respondido en 12 min» / «en 3 h» / «en 2 d»; null/undefined → nothing to show. */
+export function firstReplyLabel(mins: number | null | undefined): string | null {
+  if (mins === undefined) return null;
+  if (mins === null) return "Aún sin primera respuesta";
+  const t = mins < 1 ? "menos de 1 min" : mins < 60 ? `${mins} min` : mins < 1440 ? `${Math.round(mins / 60)} h` : `${Math.round(mins / 1440)} d`;
+  return `Primera respuesta en ${t}`;
+}

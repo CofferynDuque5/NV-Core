@@ -338,8 +338,12 @@ export interface ContactService {
   setOptOut(workspaceId: string, contactId: string, optedOut: boolean): Promise<Contact>;
   /** Export every contact in the workspace as CSV text. */
   exportCsv(workspaceId: string): Promise<string>;
-  /** Bulk-create contacts from CSV; dedupes by email. Returns a summary. */
-  importCsv(workspaceId: string, csv: string): Promise<ContactImportResult>;
+  /** Bulk-create contacts from CSV; dedupes by email and phone. `dryRun` only previews. */
+  importCsv(workspaceId: string, csv: string, opts?: { dryRun?: boolean }): Promise<ContactImportResult>;
+  /** Groups of contacts that share a phone or email. */
+  duplicates(workspaceId: string): Promise<{ groups: Contact[][] }>;
+  /** Merge `mergeIds` into `keepId` (notes, tasks, payments move; the others are deleted). */
+  merge(workspaceId: string, keepId: string, mergeIds: string[]): Promise<Contact>;
 }
 
 export interface GroupService {

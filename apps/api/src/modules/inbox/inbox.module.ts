@@ -567,10 +567,14 @@ export class InboxService implements OnModuleInit {
         })
       : [];
     const byId = new Map(rows.map((r) => [r.id, r]));
+    const replies = await this.firstReplies(ids);
     const items = ids
       .map((id) => byId.get(id))
       .filter((r): r is NonNullable<typeof r> => !!r)
-      .map((r) => mapConversation(r, r.messages[0]));
+      .map((r) => {
+        const c = mapConversation(r, r.messages[0]);
+        return replies.has(r.id) ? { ...c, firstReplyMins: replies.get(r.id)! } : c;
+      });
     const last = page[limit - 1];
     return {
       items,
@@ -579,6 +583,26 @@ export class InboxService implements OnModuleInit {
       waitingCount: Number(counts[0]?.waiting ?? 0),
       nextCursor: more && last ? encodeInboxCursor(new Date(last.activity), last.id) : null,
     };
+  }
+
+  /**
+   * Minutes from each chat's first inbound message to the first answer after
+   * it (null while unanswered). Chats the contact never wrote to are absent.
+   */
+  private async firstReplies(ids: string[]): Promise<Map<string, number | null>> {
+    if (ids.length === 0) return new Map();
+    const rows = await this.prisma.$queryRaw<{ id: string; mins: number | null }[]>(Prisma.sql`
+      SELECT f."conversationId" AS id,
+        (SELECT EXTRACT(EPOCH FROM (MIN(o."createdAt") - f."firstIn")) / 60
+           FROM "Message" o
+          WHERE o."conversationId" = f."conversationId" AND o."direction" = 'out' AND o."createdAt" >= f."firstIn") AS mins
+      FROM (
+        SELECT "conversationId", MIN("createdAt") AS "firstIn" FROM "Message"
+        WHERE "conversationId" IN (${Prisma.join(ids)}) AND "direction" = 'in'
+        GROUP BY "conversationId"
+      ) f
+    `);
+    return new Map(rows.map((r) => [r.id, r.mins === null ? null : Math.max(0, Math.round(Number(r.mins)))]));
   }
 
   async messages(workspaceId: string, conversationId: string): Promise<Message[]> {

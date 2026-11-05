@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { Conversation } from "@nv/domain";
 
-import { UNASSIGNED, allLabels, fillReply, filterConversations, greetingFor, openCount, waitInfo, withLabel, withoutLabel } from "./inbox";
+import { UNASSIGNED, allLabels, fillReply, filterConversations, firstReplyLabel, greetingFor, openCount, waitInfo, withLabel, withoutLabel } from "./inbox";
 
 const conv = (over: Partial<Conversation> = {}): Conversation => ({
   id: "c1",
@@ -104,5 +104,16 @@ describe("fillReply", () => {
     expect(greetingFor(8)).toBe("Buenos días");
     expect(greetingFor(15)).toBe("Buenas tardes");
     expect(greetingFor(22)).toBe("Buenas noches");
+  });
+});
+
+describe("firstReplyLabel", () => {
+  it("says how fast the team answered", () => {
+    expect(firstReplyLabel(undefined)).toBeNull();
+    expect(firstReplyLabel(null)).toBe("Aún sin primera respuesta");
+    expect(firstReplyLabel(0)).toBe("Primera respuesta en menos de 1 min");
+    expect(firstReplyLabel(12)).toBe("Primera respuesta en 12 min");
+    expect(firstReplyLabel(150)).toBe("Primera respuesta en 3 h");
+    expect(firstReplyLabel(2900)).toBe("Primera respuesta en 2 d");
   });
 });

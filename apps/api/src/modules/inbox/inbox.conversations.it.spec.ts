@@ -176,4 +176,26 @@ describe.skipIf(!url)("Inbox: búsqueda y páginas contra PostgreSQL real", () =
     expect((await inbox.conversationContact(ws, c5!.id)).contact).toBeNull();
     await expect(inbox.conversationContact(`${ws}-x`, c4!.id)).rejects.toThrow("no encontrada");
   });
+  it("tiempo de primera respuesta por chat", async () => {
+    const ws = `it-inbox-frt-${Date.now()}`;
+    const t0 = Date.UTC(2026, 0, 1, 10);
+    const a = await prisma.conversation.create({ data: { workspaceSlug: ws, channel: "wa", contactName: "A" } });
+    const b = await prisma.conversation.create({ data: { workspaceSlug: ws, channel: "wa", contactName: "B" } });
+    const c = await prisma.conversation.create({ data: { workspaceSlug: ws, channel: "wa", contactName: "C" } });
+    await prisma.message.createMany({
+      data: [
+        { conversationId: a.id, direction: "out", text: "campaña", createdAt: new Date(t0 - 3_600_000) },
+        { conversationId: a.id, direction: "in", text: "hola", createdAt: new Date(t0) },
+        { conversationId: a.id, direction: "note", text: "lo veo", createdAt: new Date(t0 + 60_000) },
+        { conversationId: a.id, direction: "out", text: "¡hola!", createdAt: new Date(t0 + 12 * 60_000) },
+        { conversationId: b.id, direction: "in", text: "hola", createdAt: new Date(t0) },
+        { conversationId: c.id, direction: "out", text: "promo", createdAt: new Date(t0) },
+      ],
+    });
+    const page = await inbox.conversations(ws, {});
+    const by = new Map(page.items.map((x) => [x.contactName, x]));
+    expect(by.get("A")?.firstReplyMins).toBe(12);
+    expect(by.get("B")?.firstReplyMins).toBeNull();
+    expect(by.get("C")?.firstReplyMins).toBeUndefined();
+  });
 });

@@ -340,7 +340,10 @@ export function createHttpAdapters(opts: HttpAdapterOptions): Services {
       setOptOut: (id, cid, optedOut) =>
         post<Contact>(`${ws(id)}/contacts/${cid}/${optedOut ? "opt-out" : "opt-in"}`, {}),
       exportCsv: (id) => get<{ csv: string }>(`${ws(id)}/contacts/export`).then((r) => r.csv),
-      importCsv: (id, csv) => post<ContactImportResult>(`${ws(id)}/contacts/import`, { csv }),
+      importCsv: (id, csv, opts) =>
+        post<ContactImportResult>(`${ws(id)}/contacts/import`, { csv, ...(opts?.dryRun ? { dryRun: true } : {}) }),
+      duplicates: (id) => get<{ groups: Contact[][] }>(`${ws(id)}/contacts/duplicates`),
+      merge: (id, keepId, mergeIds) => post<Contact>(`${ws(id)}/contacts/merge`, { keepId, mergeIds }),
     },
     groups: {
       list: (id) => get<ListResult<Group>>(`${ws(id)}/groups`),

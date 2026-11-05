@@ -199,6 +199,8 @@ export const emptyAdapters: Services = {
     setOptOut: () => notAvailable(),
     exportCsv: () => delay(""),
     importCsv: () => notAvailable(),
+    duplicates: () => delay({ groups: [] }),
+    merge: () => notAvailable(),
   },
   groups: {
     list: () => emptyList(),

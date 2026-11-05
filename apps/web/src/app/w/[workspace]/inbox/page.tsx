@@ -31,7 +31,7 @@ import {
 } from "lucide-react";
 
 import { cn } from "@/lib/utils";
-import { UNASSIGNED, fillReply, waitInfo, withLabel, withoutLabel, type InboxStatus } from "@/lib/inbox";
+import { UNASSIGNED, fillReply, firstReplyLabel, waitInfo, withLabel, withoutLabel, type InboxStatus } from "@/lib/inbox";
 import { productChatText } from "@/lib/products";
 import { methodsFor } from "@/lib/payments";
 import { useAuthStore } from "@/stores/auth-store";
@@ -524,7 +524,13 @@ export default function InboxPage() {
             <>
               <PanelHeader
                 title={active.contactName}
-                description={`${CHANNELS[active.channel].name}${active.contactHandle ? ` · ${active.contactHandle}` : ""}`}
+                description={[
+                  CHANNELS[active.channel].name,
+                  active.contactHandle,
+                  firstReplyLabel(active.firstReplyMins),
+                ]
+                  .filter(Boolean)
+                  .join(" · ")}
                 action={
                   <div className="flex flex-wrap items-center justify-end gap-2">
                     <Button

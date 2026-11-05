@@ -268,9 +268,13 @@ export interface AttributionInput {
 
 /** Result of a bulk contact CSV import. */
 export interface ContactImportResult {
+  /** Created (or, in a preview, that would be created). */
   created: number;
+  /** Already in Contactos (same email or phone) or repeated in the file. */
   skipped: number;
   errors: string[];
+  /** true when nothing was saved (preview). */
+  dryRun?: boolean;
 }
 
 export interface Group {
@@ -723,6 +727,8 @@ export interface Conversation {
   resolved: boolean;
   /** Open chat whose last message is from the contact: when that message arrived (nobody has answered yet). */
   waitingSince?: string;
+  /** Minutes from the contact's first message to the team's first answer (null = not answered yet). */
+  firstReplyMins?: number | null;
 }
 
 export interface Message {
