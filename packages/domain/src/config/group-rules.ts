@@ -145,9 +145,43 @@ export function currencyForCountry(country: string | null | undefined): string |
   return country ? (GROUP_COUNTRIES[country]?.currency ?? null) : null;
 }
 
-/** "Bs 350", "$ 40.000 COP", "9 €", "S/ 35", "$ 10 USD". */
+/** Currencies written without cents, with "." between thousands (40.000 COP). */
+const WHOLE_CURRENCIES = new Set(["COP", "CLP", "PYG"]);
+
+/**
+ * The number in a price as people type it: "6.5", "6,50", "12000", "12.000",
+ * "1,250.00". null when it isn't a number (or is negative).
+ */
+export function parseAmount(raw: string): number | null {
+  const a = raw.replace(/\s+/g, "");
+  if (!a || a.startsWith("-")) return null;
+  let n: number;
+  if (/^\d+$/.test(a)) n = Number(a);
+  else if (/^\d{1,3}([.,])\d{3}(\1\d{3})*$/.test(a)) n = Number(a.replace(/[.,]/g, "")); // 12.000 / 1,250,000
+  else if (/^\d+[.,]\d{1,2}$/.test(a)) n = Number(a.replace(",", ".")); // 6.5 / 6,50
+  else if (/^\d{1,3}(,\d{3})+\.\d{1,2}$/.test(a)) n = Number(a.replace(/,/g, "")); // 1,250.50
+  else if (/^\d{1,3}(\.\d{3})+,\d{1,2}$/.test(a)) n = Number(a.replace(/\./g, "").replace(",", ".")); // 1.250,50
+  else return null;
+  return Number.isFinite(n) && n >= 0 ? n : null;
+}
+
+/** A price field is valid when empty or a number ≥ 0. */
+export function isValidPrice(raw: string | null | undefined): boolean {
+  return !raw?.trim() || parseAmount(raw) !== null;
+}
+
+/** "6.50", "12.000": the amount written the same way every time (text that isn't a number stays as typed). */
+export function formatAmount(raw: string, currency: string): string {
+  const n = parseAmount(raw);
+  if (n === null) return raw.trim();
+  if (WHOLE_CURRENCIES.has(currency)) return Math.round(n).toLocaleString("de-DE");
+  const cents = !Number.isInteger(n);
+  return n.toLocaleString("en-US", { minimumFractionDigits: cents ? 2 : 0, maximumFractionDigits: 2 });
+}
+
+/** "Bs 350", "$ 40.000 COP", "9 €", "S/ 35", "$ 6.50 USD". */
 export function formatPrice(amount: string, currency: string): string {
-  const a = amount.trim();
+  const a = formatAmount(amount, currency);
   switch (currency) {
     case "VES":
       return `Bs ${a}`;
@@ -277,6 +311,9 @@ export function priceForGroup(g: GroupPostingInfo, prices: Record<string, string
 
 /** Official site of NV Marketing, credited at the end of every group message. */
 export const NV_MARKETING_URL = "https://nvmarketing.nvcorx.com/";
+
+/** Official contact email of NV Marketing. */
+export const NV_CONTACT_EMAIL = "nvmarketing@nvcorx.com";
 
 export interface SocialLink {
   /** "Instagram", "TikTok", "Facebook"… */

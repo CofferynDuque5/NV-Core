@@ -14,9 +14,27 @@ const LOGIN_HISTORY_MS = 90 * 86_400_000;
  * register/invite actions and persist across restarts. The AuthService depends
  * only on these method signatures.
  */
+/** How long a just-rotated refresh token keeps working (concurrent refreshes). */
+export const REFRESH_REUSE_GRACE_MS = 60_000;
+
 @Injectable()
 export class AuthStore {
+  /**
+   * Memberships checked on every request (workspace + roles guards). A short
+   * cache saves those round trips to a remote database (Neon from cPanel:
+   * ~0.3 s each). Writes through this store drop the entry at once.
+   */
+  private readonly memberships = new Map<
+    string,
+    { at: number; value: MembershipRecord | undefined }
+  >();
+  private static readonly MEMBERSHIP_TTL_MS = 10_000;
+
   constructor(private readonly prisma: PrismaService) {}
+
+  private forgetMembership(userId: string, workspaceSlug: string): void {
+    this.memberships.delete(`${userId}|${workspaceSlug}`);
+  }
 
   private toUser(u: {
     id: string;
@@ -45,7 +63,12 @@ export class AuthStore {
    * browser) for the super-admin panel. Login history older than 90 days is
    * dropped. Best-effort: never blocks the sign-in.
    */
-  async recordLogin(userId: string, method: string, meta: LoginMeta = {}, now = new Date()): Promise<void> {
+  async recordLogin(
+    userId: string,
+    method: string,
+    meta: LoginMeta = {},
+    now = new Date(),
+  ): Promise<void> {
     try {
       await this.prisma.user.update({
         where: { id: userId },
@@ -60,7 +83,9 @@ export class AuthStore {
           at: now,
         },
       });
-      await this.prisma.loginEvent.deleteMany({ where: { at: { lt: new Date(now.getTime() - LOGIN_HISTORY_MS) } } });
+      await this.prisma.loginEvent.deleteMany({
+        where: { at: { lt: new Date(now.getTime() - LOGIN_HISTORY_MS) } },
+      });
     } catch {
       /* tracking must never stop someone from signing in */
     }
@@ -68,7 +93,9 @@ export class AuthStore {
 
   /** The session was renewed (the panel is open): last time we saw the user. */
   async touchSeen(userId: string, now = new Date()): Promise<void> {
-    await this.prisma.user.update({ where: { id: userId }, data: { lastSeenAt: now } }).catch(() => undefined);
+    await this.prisma.user
+      .update({ where: { id: userId }, data: { lastSeenAt: now } })
+      .catch(() => undefined);
   }
 
   /** Every user with sign-in data, and the latest sign-ins (super-admin panel). */
@@ -92,7 +119,14 @@ export class AuthStore {
       this.prisma.loginEvent.findMany({
         orderBy: { at: "desc" },
         take: limit,
-        select: { id: true, at: true, method: true, ip: true, userAgent: true, user: { select: { email: true, name: true } } },
+        select: {
+          id: true,
+          at: true,
+          method: true,
+          ip: true,
+          userAgent: true,
+          user: { select: { email: true, name: true } },
+        },
       }),
     ]);
     return { users, events };
@@ -120,7 +154,9 @@ export class AuthStore {
         email: input.email.toLowerCase(),
         name: input.name,
         passwordHash: input.passwordHash,
-        ...(input.termsVersion ? { termsVersion: input.termsVersion, termsAcceptedAt: new Date() } : {}),
+        ...(input.termsVersion
+          ? { termsVersion: input.termsVersion, termsAcceptedAt: new Date() }
+          : {}),
       },
     });
     return this.toUser(u);
@@ -151,12 +187,20 @@ export class AuthStore {
 
   async membershipsOf(userId: string): Promise<MembershipRecord[]> {
     const rows = await this.prisma.membership.findMany({ where: { userId } });
-    return rows.map((m) => ({ userId: m.userId, workspaceSlug: m.workspaceSlug, role: m.role as Role }));
+    return rows.map((m) => ({
+      userId: m.userId,
+      workspaceSlug: m.workspaceSlug,
+      role: m.role as Role,
+    }));
   }
 
   async membershipsOfWorkspace(workspaceSlug: string): Promise<MembershipRecord[]> {
     const rows = await this.prisma.membership.findMany({ where: { workspaceSlug } });
-    return rows.map((m) => ({ userId: m.userId, workspaceSlug: m.workspaceSlug, role: m.role as Role }));
+    return rows.map((m) => ({
+      userId: m.userId,
+      workspaceSlug: m.workspaceSlug,
+      role: m.role as Role,
+    }));
   }
 
   /** Every user with their memberships (platform admin view). */
@@ -188,11 +232,22 @@ export class AuthStore {
     return rows.map((m) => ({ user: this.toUser(m.user), role: m.role as Role }));
   }
 
-  async getMembership(userId: string, workspaceSlug: string): Promise<MembershipRecord | undefined> {
+  async getMembership(
+    userId: string,
+    workspaceSlug: string,
+  ): Promise<MembershipRecord | undefined> {
+    const key = `${userId}|${workspaceSlug}`;
+    const hit = this.memberships.get(key);
+    if (hit && Date.now() - hit.at < AuthStore.MEMBERSHIP_TTL_MS) return hit.value;
     const m = await this.prisma.membership.findUnique({
       where: { userId_workspaceSlug: { userId, workspaceSlug } },
     });
-    return m ? { userId: m.userId, workspaceSlug: m.workspaceSlug, role: m.role as Role } : undefined;
+    const value = m
+      ? { userId: m.userId, workspaceSlug: m.workspaceSlug, role: m.role as Role }
+      : undefined;
+    if (this.memberships.size > 5000) this.memberships.clear();
+    this.memberships.set(key, { at: Date.now(), value });
+    return value;
   }
 
   async workspaceHasMembers(workspaceSlug: string): Promise<boolean> {
@@ -200,7 +255,12 @@ export class AuthStore {
     return count > 0;
   }
 
-  async upsertMembership(userId: string, workspaceSlug: string, role: Role): Promise<MembershipRecord> {
+  async upsertMembership(
+    userId: string,
+    workspaceSlug: string,
+    role: Role,
+  ): Promise<MembershipRecord> {
+    this.forgetMembership(userId, workspaceSlug);
     const m = await this.prisma.membership.upsert({
       where: { userId_workspaceSlug: { userId, workspaceSlug } },
       create: { userId, workspaceSlug, role },
@@ -210,6 +270,7 @@ export class AuthStore {
   }
 
   async removeMembership(userId: string, workspaceSlug: string): Promise<number> {
+    this.forgetMembership(userId, workspaceSlug);
     const { count } = await this.prisma.membership.deleteMany({ where: { userId, workspaceSlug } });
     return count;
   }
@@ -236,7 +297,12 @@ export class AuthStore {
         invitedByName: input.invitedByName ?? null,
         expiresAt: input.expiresAt,
       },
-      update: { role: input.role, token: input.token, expiresAt: input.expiresAt, acceptedAt: null },
+      update: {
+        role: input.role,
+        token: input.token,
+        expiresAt: input.expiresAt,
+        acceptedAt: null,
+      },
     });
   }
 
@@ -296,7 +362,12 @@ export class AuthStore {
     tokenHash: string,
   ): Promise<{ id: string; userId: string } | undefined> {
     const row = await this.prisma.refreshToken.findUnique({ where: { tokenHash } });
-    if (!row || row.revokedAt || row.expiresAt.getTime() < Date.now()) return undefined;
+    if (!row || row.expiresAt.getTime() < Date.now()) return undefined;
+    // A token rotated a moment ago is still accepted: two tabs (or a reload in
+    // the middle of a refresh) send the same cookie at once, and the loser
+    // must not be signed out.
+    if (row.revokedAt && Date.now() - row.revokedAt.getTime() > REFRESH_REUSE_GRACE_MS)
+      return undefined;
     return { id: row.id, userId: row.userId };
   }
 
@@ -324,9 +395,16 @@ export class AuthStore {
   }
 
   /** Account details shown on the profile page (never the password hash). */
-  async profileOf(userId: string): Promise<{ createdAt: string; emailVerified: boolean } | undefined> {
-    const u = await this.prisma.user.findUnique({ where: { id: userId }, select: { createdAt: true, emailVerifiedAt: true } });
-    return u ? { createdAt: u.createdAt.toISOString(), emailVerified: !!u.emailVerifiedAt } : undefined;
+  async profileOf(
+    userId: string,
+  ): Promise<{ createdAt: string; emailVerified: boolean } | undefined> {
+    const u = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { createdAt: true, emailVerifiedAt: true },
+    });
+    return u
+      ? { createdAt: u.createdAt.toISOString(), emailVerified: !!u.emailVerifiedAt }
+      : undefined;
   }
 
   async setEmailVerified(userId: string): Promise<void> {

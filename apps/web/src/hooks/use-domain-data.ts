@@ -21,6 +21,20 @@ export function useCampaigns(opts: { enabled?: boolean } = {}) {
   });
 }
 
+/** «Lo que pasó hoy»: campaign runs and Inbox movement since local midnight. */
+export function useDayActivity() {
+  const svc = useServices();
+  const ws = useWorkspace();
+  const start = new Date();
+  start.setHours(0, 0, 0, 0);
+  const since = start.toISOString();
+  return useQuery({
+    queryKey: [ws.id, "campaigns", "activity", since],
+    queryFn: () => svc.campaigns.activity(ws.id, since),
+    refetchInterval: 30_000,
+  });
+}
+
 export function useTodayPosts() {
   const svc = useServices();
   const ws = useWorkspace();
@@ -113,7 +127,11 @@ export function useContactNotes(contactId: string | null) {
 export function useGroups(opts: { enabled?: boolean } = {}) {
   const svc = useServices();
   const ws = useWorkspace();
-  return useQuery({ queryKey: [ws.id, "groups"], queryFn: () => svc.groups.list(ws.id), enabled: opts.enabled ?? true });
+  return useQuery({
+    queryKey: [ws.id, "groups"],
+    queryFn: () => svc.groups.list(ws.id),
+    enabled: opts.enabled ?? true,
+  });
 }
 
 export function useGroupVars(groupId: string | null) {
@@ -196,8 +214,9 @@ export function useConversations(filters: Omit<ConversationQuery, "cursor"> = {}
     queryFn: ({ pageParam }) => svc.inbox.conversations(ws.id, { ...filters, cursor: pageParam }),
     initialPageParam: undefined as string | undefined,
     getNextPageParam: (last) => last.nextCursor ?? undefined,
-    // Inbox en vivo: nuevos chats entrantes aparecen solos.
-    refetchInterval: 10_000,
+    // Inbox en vivo: nuevos chats entrantes aparecen solos (también en segundo plano).
+    refetchInterval: 5_000,
+    refetchIntervalInBackground: true,
     refetchOnWindowFocus: true,
   });
 }
@@ -209,8 +228,31 @@ export function useMessages(conversationId: string | null) {
     queryKey: [ws.id, "inbox", conversationId, "messages"],
     queryFn: () => svc.inbox.messages(ws.id, conversationId as string),
     enabled: Boolean(conversationId),
-    refetchInterval: 8_000,
+    refetchInterval: 4_000,
+    refetchIntervalInBackground: true,
     refetchOnWindowFocus: true,
+  });
+}
+
+export function useQuickReplies() {
+  const svc = useServices();
+  const ws = useWorkspace();
+  return useQuery({
+    queryKey: [ws.id, "inbox", "quick-replies"],
+    queryFn: () => svc.inbox.quickReplies(ws.id),
+    staleTime: 60_000,
+  });
+}
+
+/** CRM contact behind a chat (matched by phone), for the card next to it. */
+export function useConversationContact(conversationId: string | null) {
+  const svc = useServices();
+  const ws = useWorkspace();
+  return useQuery({
+    queryKey: [ws.id, "inbox", conversationId, "contact"],
+    queryFn: () => svc.inbox.conversationContact(ws.id, conversationId as string),
+    enabled: Boolean(conversationId),
+    staleTime: 30_000,
   });
 }
 
@@ -313,6 +355,18 @@ export function useWhatsappStatus() {
   });
 }
 
+/** All the brand's WhatsApp numbers; polls fast while one waits for its QR. */
+export function useWhatsappLines() {
+  const svc = useServices();
+  const ws = useWorkspace();
+  return useQuery({
+    queryKey: [ws.id, "whatsapp", "lines"],
+    queryFn: () => svc.whatsapp.lines(ws.id),
+    refetchInterval: (q) =>
+      q.state.data?.some((l) => l.status === "qr" || l.status === "connecting") ? 3000 : 15000,
+  });
+}
+
 /** Health of the PC companion that publishes to Facebook/Instagram (polls every 10 s). */
 export function usePcAgentStatus() {
   const svc = useServices();
@@ -321,6 +375,32 @@ export function usePcAgentStatus() {
     queryKey: [ws.id, "pc-agent", "status"],
     queryFn: () => svc.pcAgent.status(ws.id),
     refetchInterval: 10_000,
+  });
+}
+
+/** All the brand's Telegram accounts; polls fast while one waits for its QR. */
+export function useTelegramLines() {
+  const svc = useServices();
+  const ws = useWorkspace();
+  return useQuery({
+    queryKey: [ws.id, "telegram", "lines"],
+    queryFn: () => svc.telegram.lines(ws.id),
+    refetchInterval: (q) =>
+      q.state.data?.some((l) => l.status === "qr" || l.status === "connecting" || l.status === "password")
+        ? 3000
+        : 15000,
+  });
+}
+
+/** Today's USDT → Bs rate (refreshes every 30 min); null when unknown. */
+export function useVesRate(enabled = true) {
+  const svc = useServices();
+  const ws = useWorkspace();
+  return useQuery({
+    queryKey: [ws.id, "payments", "ves-rate"],
+    queryFn: () => svc.payments.vesRate(ws.id),
+    enabled,
+    staleTime: 30 * 60 * 1000,
   });
 }
 
@@ -385,7 +465,10 @@ export function useNotifications() {
 export function usePaymentMethods() {
   const svc = useServices();
   const ws = useWorkspace();
-  return useQuery({ queryKey: [ws.id, "payments", "methods"], queryFn: () => svc.payments.methods(ws.id) });
+  return useQuery({
+    queryKey: [ws.id, "payments", "methods"],
+    queryFn: () => svc.payments.methods(ws.id),
+  });
 }
 
 /** Payment requests, optionally only one contact's. */
@@ -401,13 +484,19 @@ export function usePayments(contactId?: string) {
 export function useWeeklyReports() {
   const svc = useServices();
   const ws = useWorkspace();
-  return useQuery({ queryKey: [ws.id, "reports", "weekly"], queryFn: () => svc.reports.weekly(ws.id) });
+  return useQuery({
+    queryKey: [ws.id, "reports", "weekly"],
+    queryFn: () => svc.reports.weekly(ws.id),
+  });
 }
 
 export function useWeeklyReportSettings() {
   const svc = useServices();
   const ws = useWorkspace();
-  return useQuery({ queryKey: [ws.id, "reports", "settings"], queryFn: () => svc.reports.settings(ws.id) });
+  return useQuery({
+    queryKey: [ws.id, "reports", "settings"],
+    queryFn: () => svc.reports.settings(ws.id),
+  });
 }
 
 /** A stored week, or the current week so far when `week` is "actual". */
@@ -416,7 +505,8 @@ export function useWeeklyReport(week: string | null) {
   const ws = useWorkspace();
   return useQuery({
     queryKey: [ws.id, "reports", "weekly", week],
-    queryFn: () => (week === "actual" ? svc.reports.currentWeek(ws.id) : svc.reports.weeklyReport(ws.id, week!)),
+    queryFn: () =>
+      week === "actual" ? svc.reports.currentWeek(ws.id) : svc.reports.weeklyReport(ws.id, week!),
     enabled: !!week,
   });
 }
@@ -438,12 +528,24 @@ export function useTeam() {
   return useQuery({ queryKey: [ws.id, "team"], queryFn: () => svc.team.members(ws.id) });
 }
 
-export function useTeamInvitations() {
+/** Pending invitations: only Owner/Admin may list them (others would get a 403). */
+export function useTeamInvitations(enabled = true) {
   const svc = useServices();
   const ws = useWorkspace();
   return useQuery({
     queryKey: [ws.id, "invitations"],
     queryFn: () => svc.team.invitations(ws.id),
+    enabled,
+  });
+}
+
+export function useInviteLinks(enabled = true) {
+  const svc = useServices();
+  const ws = useWorkspace();
+  return useQuery({
+    queryKey: [ws.id, "invite-links"],
+    queryFn: () => svc.team.inviteLinks(ws.id),
+    enabled,
   });
 }
 
@@ -478,6 +580,11 @@ export function useAccess(slug: string | undefined, enabled = true) {
 export function useAdminAccess(enabled = true) {
   const svc = useServices();
   return useQuery({ queryKey: ["admin", "access"], queryFn: () => svc.admin.access(), enabled });
+}
+
+export function useAdminMail(enabled = true) {
+  const svc = useServices();
+  return useQuery({ queryKey: ["admin", "mail"], queryFn: () => svc.admin.mailStatus(), enabled });
 }
 
 /** Example records still loaded in the brand (from older versions). */

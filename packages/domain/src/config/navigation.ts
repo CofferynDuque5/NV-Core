@@ -19,7 +19,7 @@ export const NAV_SECTIONS: NavSection[] = [
   {
     label: "PRINCIPAL",
     items: [
-      { module: "dashboard", label: "Dashboard", icon: "LayoutDashboard" },
+      { module: "dashboard", label: "Inicio", icon: "LayoutDashboard" },
       { module: "calendario", label: "Calendario", icon: "Calendar" },
       { module: "campanas", label: "Campañas", icon: "Megaphone" },
     ],
@@ -43,8 +43,8 @@ export const NAV_SECTIONS: NavSection[] = [
   {
     label: "CREACIÓN",
     items: [
-      { module: "builder", label: "Campaign Builder", icon: "Layers" },
-      { module: "ai", label: "AI Content Studio", icon: "Sparkles" },
+      { module: "builder", label: "Editor de contenido", icon: "Layers" },
+      { module: "ai", label: "Contenido con IA", icon: "Sparkles" },
       { module: "plantillas", label: "Plantillas", icon: "FileText" },
       { module: "biblioteca", label: "Biblioteca", icon: "Image" },
     ],
@@ -53,7 +53,7 @@ export const NAV_SECTIONS: NavSection[] = [
     label: "AUTOMATIZACIÓN",
     items: [
       { module: "automatizaciones", label: "Automatizaciones", icon: "Workflow" },
-      { module: "analytics", label: "Analytics", icon: "BarChart3" },
+      { module: "analytics", label: "Analítica", icon: "BarChart3" },
     ],
   },
   {
@@ -68,7 +68,7 @@ export const NAV_SECTIONS: NavSection[] = [
 
 /** Human labels + descriptions for each module (used in headers, palette). */
 export const MODULE_META: Record<ModuleId, { label: string; description: string }> = {
-  dashboard: { label: "Dashboard", description: "Resumen operativo del workspace" },
+  dashboard: { label: "Inicio", description: "Resumen de lo que pasa en tu marca" },
   calendario: { label: "Calendario", description: "Planificación de publicaciones" },
   campanas: { label: "Campañas", description: "Operaciones de marketing" },
   contactos: { label: "Contactos", description: "CRM y audiencia" },
@@ -79,12 +79,12 @@ export const MODULE_META: Record<ModuleId, { label: string; description: string 
   secuencias: { label: "Secuencias", description: "Autoresponders (drip)" },
   afiliados: { label: "Afiliados", description: "Programa de referidos" },
   inbox: { label: "Inbox", description: "Conversaciones unificadas" },
-  builder: { label: "Campaign Builder", description: "Editor visual de contenido" },
-  ai: { label: "AI Content Studio", description: "Generación de contenido con IA" },
+  builder: { label: "Editor de contenido", description: "Editor visual de contenido" },
+  ai: { label: "Contenido con IA", description: "Generación de contenido con IA" },
   plantillas: { label: "Plantillas", description: "Mensajes reutilizables" },
   biblioteca: { label: "Biblioteca", description: "Gestor de medios" },
   automatizaciones: { label: "Automatizaciones", description: "Flujos sin código" },
-  analytics: { label: "Analytics", description: "Business Intelligence" },
+  analytics: { label: "Analítica", description: "Resultados de tu marca" },
   marketplace: { label: "Integraciones", description: "Conecta tus herramientas" },
   conexiones: { label: "Conexiones", description: "Proveedores & OAuth" },
   configuracion: { label: "Configuración", description: "Equipo, roles y sistema" },
@@ -107,7 +107,11 @@ export const WORKSPACE_GOALS: {
     modules: ["campanas", "grupos", "conexiones"],
     steps: [
       { title: "Conecta tu WhatsApp", href: "conexiones", cta: "Conectar" },
-      { title: "Revisa las reglas de tus grupos y aparta los que no uses", href: "grupos", cta: "Ver grupos" },
+      {
+        title: "Revisa las reglas de tus grupos y aparta los que no uses",
+        href: "grupos",
+        cta: "Ver grupos",
+      },
       { title: "Crea tu primera campaña a grupos", href: "campanas", cta: "Nueva campaña" },
     ],
   },
@@ -116,7 +120,11 @@ export const WORKSPACE_GOALS: {
     label: "Captar clientes con formularios",
     modules: ["formularios", "embudos", "contactos"],
     steps: [
-      { title: "Crea un formulario para captar datos", href: "formularios", cta: "Crear formulario" },
+      {
+        title: "Crea un formulario para captar datos",
+        href: "formularios",
+        cta: "Crear formulario",
+      },
       { title: "Arma un embudo con tu oferta", href: "embudos", cta: "Crear embudo" },
       { title: "Revisa los contactos que llegan", href: "contactos", cta: "Ver contactos" },
     ],
@@ -127,7 +135,11 @@ export const WORKSPACE_GOALS: {
     modules: ["tienda", "cobros", "inbox"],
     steps: [
       { title: "Carga tus productos y precios en la Tienda", href: "tienda", cta: "Abrir Tienda" },
-      { title: "Configura cómo te pagan (pago móvil, Binance, Zinli…)", href: "cobros", cta: "Configurar cobros" },
+      {
+        title: "Configura cómo te pagan (pago móvil, Binance, Zinli…)",
+        href: "cobros",
+        cta: "Configurar cobros",
+      },
       { title: "Responde a tus clientes desde el Inbox", href: "inbox", cta: "Abrir Inbox" },
     ],
   },
@@ -136,7 +148,11 @@ export const WORKSPACE_GOALS: {
     label: "Automatizar seguimientos",
     modules: ["automatizaciones", "secuencias", "segmentos"],
     steps: [
-      { title: "Activa una automatización de plantilla", href: "automatizaciones", cta: "Ver plantillas" },
+      {
+        title: "Activa una automatización de plantilla",
+        href: "automatizaciones",
+        cta: "Ver plantillas",
+      },
       { title: "Crea una secuencia de seguimiento", href: "secuencias", cta: "Crear secuencia" },
       { title: "Agrupa a tus clientes en segmentos", href: "segmentos", cta: "Crear segmento" },
     ],

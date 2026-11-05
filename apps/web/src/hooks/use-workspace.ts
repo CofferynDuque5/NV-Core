@@ -3,15 +3,19 @@ import { MODULE_IDS, getWorkspaceBySlug, WORKSPACES, type Workspace } from "@nv/
 
 import { useWorkspaceStore } from "@/stores/workspace-store";
 
-/** Stand-in for a brand whose details haven't loaded yet: same slug, so every query hits the right brand. */
+/**
+ * Stand-in for a brand whose details haven't loaded yet: same slug, so every
+ * query hits the right brand. No name yet (showing the raw slug, e.g.
+ * «nv-demo», flashed before the real name arrived).
+ */
 function placeholder(slug: string): Workspace {
   return {
     id: slug,
     slug,
-    name: slug,
+    name: "",
     kind: "creative",
     accent: "#5F86F2",
-    initials: slug.slice(0, 2).toUpperCase(),
+    initials: "",
     enabledModules: [...MODULE_IDS],
   };
 }

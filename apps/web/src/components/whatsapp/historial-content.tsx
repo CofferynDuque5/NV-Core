@@ -1,5 +1,5 @@
 import * as React from "react";
-import type { ChannelId, SendLogEntry } from "@nv/domain";
+import { explainError, type ChannelId, type SendLogEntry } from "@nv/domain";
 import { BarChart2, Download, History, Loader2, Trash2 } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 
@@ -285,9 +285,19 @@ export function HistorialContent({ showHeader = true }: { showHeader?: boolean }
                             )}
                           </td>
                           <td className="text-ink-muted max-w-xs px-4 py-3">
-                            <span className={entry.ok ? undefined : "text-state-danger"}>
-                              {entry.ok ? (entry.preview ?? "—") : (entry.error ?? "—")}
-                            </span>
+                            {entry.ok ? (
+                              <span>{entry.preview ?? "—"}</span>
+                            ) : (
+                              <span className="block">
+                                <span className="block text-state-danger">{explainError(entry.error).title}</span>
+                                <span className="block text-xs">{explainError(entry.error).hint}</span>
+                                {entry.error ? (
+                                  <span className="mt-1 block truncate text-[11px] text-ink-faint" title={entry.error}>
+                                    Detalle técnico: {entry.error}
+                                  </span>
+                                ) : null}
+                              </span>
+                            )}
                           </td>
                           <td className="px-4 py-3 text-right">
                             {showMetrics ? (

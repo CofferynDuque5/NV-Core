@@ -6,6 +6,7 @@ import type {
   GroupRulesCheck,
   AdminAccessRow,
   AdminLogins,
+  MailProvider,
   WorkspaceAccess,
   AiContentPlanItem,
   AiRecommendationsResult,
@@ -30,6 +31,7 @@ import type {
   Design,
   BillingStatus,
   Campaign,
+  DayActivity,
   CalendarEvent,
   Connection,
   Contact,
@@ -63,6 +65,8 @@ import type {
   TemplateImportResult,
   TeamMember,
   TeamInvitation,
+  InviteLink,
+  CreatedInviteLink,
   AddMemberResult,
   AuditLogEntry,
   AdminUser,
@@ -76,8 +80,13 @@ import type {
   WeeklyReportSummary,
   PaymentMethod,
   PaymentRequest,
+  PlanPaymentReview,
   UploadFileResult,
+  UsdtRate,
+  WhatsappAlertStatus,
+  QuickReply,
 } from "@nv/domain";
+import { deviceHeaders } from "@/lib/device";
 
 /**
  * HTTP adapters — implement the shared `Services` contract against the NestJS
@@ -102,7 +111,12 @@ function createClient(opts: HttpAdapterOptions) {
     return token ? { Authorization: `Bearer ${token}` } : {};
   }
 
-  async function raw(method: string, path: string, body?: unknown): Promise<Response> {
+  async function raw(
+    method: string,
+    path: string,
+    body?: unknown,
+    extraHeaders: Record<string, string> = {},
+  ): Promise<Response> {
     // FormData (file uploads) goes as-is: the browser sets the multipart boundary.
     const isForm = typeof FormData !== "undefined" && body instanceof FormData;
     return fetch(`${base}/api${path}`, {
@@ -112,6 +126,7 @@ function createClient(opts: HttpAdapterOptions) {
         Accept: "application/json",
         ...(body !== undefined && !isForm ? { "Content-Type": "application/json" } : {}),
         ...authHeaders(),
+        ...extraHeaders,
       },
       body: isForm ? body : body !== undefined ? JSON.stringify(body) : undefined,
     });
@@ -135,17 +150,28 @@ function createClient(opts: HttpAdapterOptions) {
   }
 
   /** Runs a request; on 401 tries a single refresh + retry, else signs out. */
-  async function send<T>(method: string, path: string, body?: unknown): Promise<T> {
-    let res = await raw(method, path, body);
+  async function authed(method: string, path: string, body?: unknown, headers?: Record<string, string>): Promise<Response> {
+    let res = await raw(method, path, body, headers);
     if (res.status === 401 && opts.refresh) {
       const token = await opts.refresh();
-      if (token) res = await raw(method, path, body);
+      if (token) res = await raw(method, path, body, headers);
     }
     if (res.status === 401) {
       opts.onUnauthorized?.();
       throw new Error(`API 401 on ${method} ${path}`);
     }
-    return parse<T>(res, `${method} ${path}`);
+    return res;
+  }
+
+  async function send<T>(method: string, path: string, body?: unknown, headers?: Record<string, string>): Promise<T> {
+    return parse<T>(await authed(method, path, body, headers), `${method} ${path}`);
+  }
+
+  /** A file the API serves (e.g. a payment receipt), as a Blob. */
+  async function blob(path: string): Promise<Blob> {
+    const res = await authed("GET", path);
+    if (!res.ok) await parse(res, `GET ${path}`);
+    return res.blob();
   }
 
   const get = <T>(path: string) => send<T>("GET", path);
@@ -153,18 +179,20 @@ function createClient(opts: HttpAdapterOptions) {
   const patch = <T>(path: string, body: unknown) => send<T>("PATCH", path, body);
   const put = <T>(path: string, body: unknown) => send<T>("PUT", path, body);
   const del = <T>(path: string, body?: unknown) => send<T>("DELETE", path, body);
+  /** POST that also says which device asks (one free trial per device). */
+  const postFromDevice = async <T>(path: string, body: unknown) => send<T>("POST", path, body, await deviceHeaders());
 
-  return { get, post, patch, put, del };
+  return { get, post, patch, put, del, blob, postFromDevice };
 }
 
 export function createHttpAdapters(opts: HttpAdapterOptions): Services {
-  const { get, post, patch, put, del } = createClient(opts);
+  const { get, post, patch, put, del, blob, postFromDevice } = createClient(opts);
   const ws = (id: string) => `/workspaces/${encodeURIComponent(id)}`;
 
   return {
     workspaces: {
       list: () => get<Workspace[]>(`/workspaces`),
-      create: (input) => post<Workspace>(`/workspaces`, input),
+      create: (input) => postFromDevice<Workspace>(`/workspaces`, input),
       update: (slug, input) => patch<Workspace>(`/workspaces/${slug}`, input),
       remove: (slug, confirmName) => del<void>(`/workspaces/${slug}`, { confirmName }),
     },
@@ -190,6 +218,11 @@ export function createHttpAdapters(opts: HttpAdapterOptions): Services {
       sync: (id) => post<WhatsappStatus>(`${ws(id)}/whatsapp/sync`, {}),
       relink: (id) => post<WhatsappStatus>(`${ws(id)}/whatsapp/relink`, {}),
       diagnose: (id) => post<{ lines: string[] }>(`${ws(id)}/whatsapp/diagnose`, {}),
+      lines: (id) => get<WhatsappStatus[]>(`${ws(id)}/whatsapp/lines`),
+      addLine: (id, label) => post<WhatsappStatus>(`${ws(id)}/whatsapp/lines`, { label }),
+      renameLine: (id, line, label) => patch<WhatsappStatus>(`${ws(id)}/whatsapp/lines/${line}`, { label }),
+      lineAction: (id, line, action) => post<WhatsappStatus>(`${ws(id)}/whatsapp/lines/${line}/${action}`, {}),
+      removeLine: (id, line) => del<void>(`${ws(id)}/whatsapp/lines/${line}`),
     },
     pcAgent: {
       status: (id) => get<PcAgentStatus>(`${ws(id)}/pc-agent/status`),
@@ -202,6 +235,13 @@ export function createHttpAdapters(opts: HttpAdapterOptions): Services {
       sync: (id) => post<TelegramStatus>(`${ws(id)}/telegram/sync`, {}),
       submitPassword: (id, password) =>
         post<TelegramStatus>(`${ws(id)}/telegram/password`, { password }),
+      lines: (id) => get<TelegramStatus[]>(`${ws(id)}/telegram/lines`),
+      addLine: (id, label) => post<TelegramStatus>(`${ws(id)}/telegram/lines`, { label }),
+      renameLine: (id, line, label) => patch<TelegramStatus>(`${ws(id)}/telegram/lines/${line}`, { label }),
+      lineAction: (id, line, action) => post<TelegramStatus>(`${ws(id)}/telegram/lines/${line}/${action}`, {}),
+      linePassword: (id, line, password) =>
+        post<TelegramStatus>(`${ws(id)}/telegram/lines/${line}/password`, { password }),
+      removeLine: (id, line) => del<void>(`${ws(id)}/telegram/lines/${line}`),
     },
     admin: {
       users: () => get<AdminUser[]>(`/admin/users`),
@@ -213,6 +253,16 @@ export function createHttpAdapters(opts: HttpAdapterOptions): Services {
         ),
       access: () => get<AdminAccessRow[]>(`/admin/access`),
       logins: () => get<AdminLogins>(`/admin/logins`),
+      mailStatus: () => get<{ provider: MailProvider }>(`/admin/mail`),
+      mailTest: () => post<{ provider: MailProvider; sent: boolean; to: string }>(`/admin/mail/test`, {}),
+      planPayments: () => get<PlanPaymentReview[]>(`/admin/plan-payments`),
+      planPaymentReceipt: (id) => blob(`/admin/plan-payments/${encodeURIComponent(id)}/receipt`),
+      approvePlanPayment: (id) => post<PlanPaymentReview>(`/admin/plan-payments/${encodeURIComponent(id)}/approve`, {}),
+      rejectPlanPayment: (id, reason) =>
+        post<PlanPaymentReview>(`/admin/plan-payments/${encodeURIComponent(id)}/reject`, { reason }),
+      usdtRate: () => get<{ rate: UsdtRate | null }>(`/admin/usdt-rate`),
+      whatsappAlert: () => get<WhatsappAlertStatus>(`/admin/whatsapp-alert`),
+      whatsappAlertTest: () => post<WhatsappAlertStatus & { sent: boolean }>(`/admin/whatsapp-alert/test`, {}),
       activate: (slug, days) =>
         post<WorkspaceAccess>(`/admin/access/${encodeURIComponent(slug)}/activate`, { days }),
     },
@@ -232,7 +282,15 @@ export function createHttpAdapters(opts: HttpAdapterOptions): Services {
     },
     access: {
       overview: (id) => get<AccessOverview>(`${ws(id)}/access`),
-      pay: (id, input) => post<AccessOverview>(`${ws(id)}/access/pay`, input),
+      pay: (id, input) => {
+        const form = new FormData();
+        if (input.planId) form.set("planId", input.planId);
+        form.set("methodId", input.methodId);
+        form.set("reference", input.reference);
+        form.set("payer", JSON.stringify(input.payer));
+        form.set("receipt", input.receipt, input.receipt.name);
+        return post<AccessOverview>(`${ws(id)}/access/pay`, form);
+      },
     },
     campaigns: {
       list: (id) => get<ListResult<Campaign>>(`${ws(id)}/campaigns`),
@@ -241,6 +299,8 @@ export function createHttpAdapters(opts: HttpAdapterOptions): Services {
       update: (id, cid, input) => patch<Campaign>(`${ws(id)}/campaigns/${cid}`, input),
       remove: (id, cid) => del<void>(`${ws(id)}/campaigns/${cid}`),
       run: (id, cid) => post<Campaign | null>(`${ws(id)}/campaigns/${cid}/run`, {}),
+      activity: (id, since) =>
+        get<DayActivity>(`${ws(id)}/campaigns/activity?since=${encodeURIComponent(since)}`),
       pause: (id, cid) => post<Campaign>(`${ws(id)}/campaigns/${cid}/pause`, {}),
       resume: (id, cid) => post<Campaign>(`${ws(id)}/campaigns/${cid}/resume`, {}),
       logs: (id) => get<SendLogEntry[]>(`${ws(id)}/campaigns/logs`),
@@ -248,6 +308,8 @@ export function createHttpAdapters(opts: HttpAdapterOptions): Services {
       exportCsv: (id) => get<{ csv: string }>(`${ws(id)}/campaigns/export`).then((r) => r.csv),
       importCsv: (id, csv) => post<CampaignImportResult>(`${ws(id)}/campaigns/import`, { csv }),
       duplicate: (id, cid) => post<Campaign>(`${ws(id)}/campaigns/${cid}/duplicate`, {}),
+      retryFailed: (id, cid) => post<{ retried: number }>(`${ws(id)}/campaigns/${cid}/retry-failed`, {}),
+      pauseAll: (id) => post<{ paused: number }>(`${ws(id)}/campaigns/pause-all`, {}),
     },
     posts: {
       list: (id) => get<ListResult<Post>>(`${ws(id)}/posts`),
@@ -278,7 +340,10 @@ export function createHttpAdapters(opts: HttpAdapterOptions): Services {
       setOptOut: (id, cid, optedOut) =>
         post<Contact>(`${ws(id)}/contacts/${cid}/${optedOut ? "opt-out" : "opt-in"}`, {}),
       exportCsv: (id) => get<{ csv: string }>(`${ws(id)}/contacts/export`).then((r) => r.csv),
-      importCsv: (id, csv) => post<ContactImportResult>(`${ws(id)}/contacts/import`, { csv }),
+      importCsv: (id, csv, opts) =>
+        post<ContactImportResult>(`${ws(id)}/contacts/import`, { csv, ...(opts?.dryRun ? { dryRun: true } : {}) }),
+      duplicates: (id) => get<{ groups: Contact[][] }>(`${ws(id)}/contacts/duplicates`),
+      merge: (id, keepId, mergeIds) => post<Contact>(`${ws(id)}/contacts/merge`, { keepId, mergeIds }),
     },
     groups: {
       list: (id) => get<ListResult<Group>>(`${ws(id)}/groups`),
@@ -351,6 +416,7 @@ export function createHttpAdapters(opts: HttpAdapterOptions): Services {
         if (query?.channel) p.set("channel", query.channel);
         if (query?.status) p.set("status", query.status);
         if (query?.assignee) p.set("assignee", query.assignee);
+        if (query?.waiting) p.set("waiting", "true");
         if (query?.limit) p.set("limit", String(query.limit));
         if (query?.cursor) p.set("cursor", query.cursor);
         const qs = p.toString();
@@ -364,6 +430,11 @@ export function createHttpAdapters(opts: HttpAdapterOptions): Services {
         patch<Conversation>(`${ws(id)}/inbox/conversations/${cid}`, { resolved }),
       updateConversation: (id, cid, input) =>
         patch<Conversation>(`${ws(id)}/inbox/conversations/${cid}`, input),
+      deleteConversation: (id, cid) => del<void>(`${ws(id)}/inbox/conversations/${cid}`),
+      addNote: (id, cid, text) => post<Message>(`${ws(id)}/inbox/conversations/${cid}/notes`, { text }),
+      quickReplies: (id) => get<QuickReply[]>(`${ws(id)}/inbox/quick-replies`),
+      saveQuickReplies: (id, items) => put<QuickReply[]>(`${ws(id)}/inbox/quick-replies`, { items }),
+      conversationContact: (id, cid) => get<{ contact: Contact | null }>(`${ws(id)}/inbox/conversations/${cid}/contact`),
     },
     media: {
       folders: (id) => get<MediaFolder[]>(`${ws(id)}/media/folders`),
@@ -453,6 +524,7 @@ export function createHttpAdapters(opts: HttpAdapterOptions): Services {
       markAllRead: (id) => post<{ updated: number }>(`${ws(id)}/notifications/read-all`, {}),
     },
     payments: {
+      vesRate: (id) => get<UsdtRate | null>(`${ws(id)}/payments/ves-rate`),
       methods: (id) => get<PaymentMethod[]>(`${ws(id)}/payments/methods`),
       createMethod: (id, input) => post<PaymentMethod>(`${ws(id)}/payments/methods`, input),
       updateMethod: (id, mid, input) => patch<PaymentMethod>(`${ws(id)}/payments/methods/${mid}`, input),
@@ -466,6 +538,7 @@ export function createHttpAdapters(opts: HttpAdapterOptions): Services {
       },
       create: (id, input) => post<PaymentRequest>(`${ws(id)}/payments`, input),
       update: (id, pid, input) => patch<PaymentRequest>(`${ws(id)}/payments/${pid}`, input),
+      receipt: (id, pid) => blob(`${ws(id)}/payments/${encodeURIComponent(pid)}/receipt`),
     },
     reports: {
       weekly: (id) => get<WeeklyReportSummary[]>(`${ws(id)}/reports/weekly`),
@@ -488,6 +561,9 @@ export function createHttpAdapters(opts: HttpAdapterOptions): Services {
       invitations: (id) => get<TeamInvitation[]>(`${ws(id)}/members/invitations`),
       revokeInvitation: (id, invitationId) =>
         del<void>(`${ws(id)}/members/invitations/${invitationId}`),
+      inviteLinks: (id) => get<InviteLink[]>(`${ws(id)}/members/invite-links`),
+      createInviteLink: (id, input) => post<CreatedInviteLink>(`${ws(id)}/members/invite-links`, input),
+      revokeInviteLink: (id, linkId) => del<void>(`${ws(id)}/members/invite-links/${linkId}`),
     },
     audit: { logs: (id) => get<AuditLogEntry[]>(`${ws(id)}/audit/logs`) },
     ai: {

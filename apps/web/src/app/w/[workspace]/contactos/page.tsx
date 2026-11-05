@@ -1,7 +1,7 @@
 import * as React from "react";
-import { useSearchParams } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { CONTACT_STAGES, type Contact as ContactEntity, type ContactStage } from "@nv/domain";
-import { Columns3, Contact, Download, Loader2, Pencil, Plus, Search, Send, Table2, Trash2, Upload } from "lucide-react";
+import { Columns3, Contact, Download, Loader2, Pencil, Plug, Plus, Search, Send, Merge, Table2, Trash2, Upload } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { STAGE_ACCENTS } from "@/lib/crm";
@@ -9,17 +9,8 @@ import { useContacts } from "@/hooks/use-domain-data";
 import {
   useDeleteContact,
   useExportContacts,
-  useImportContacts,
   useMoveContactStage,
 } from "@/hooks/use-domain-mutations";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
 import { useConfirm } from "@/providers/confirm-provider";
 import { useUiStore } from "@/stores/ui-store";
 import { PageHeader } from "@/components/common/page-header";
@@ -30,6 +21,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { ContactFormDialog } from "@/components/entities/contact-form-dialog";
+import { ContactImportDialog } from "@/components/contacts/contact-import-dialog";
+import { DuplicatesDialog } from "@/components/contacts/duplicates-dialog";
 import { CrmBoard } from "@/components/crm/crm-board";
 import { ContactDetailDrawer } from "@/components/crm/contact-detail-drawer";
 import { SampleDataBanner } from "@/components/dashboard/sample-data-banner";
@@ -51,15 +44,15 @@ function StageBadge({ stage }: { stage: ContactStage }) {
 
 export default function ContactosPage() {
   const ws = useWorkspace();
+  const navigate = useNavigate();
   const openCompose = useUiStore((s) => s.openCompose);
   const del = useDeleteContact();
   const move = useMoveContactStage();
   const exportContacts = useExportContacts();
-  const importContacts = useImportContacts();
   const confirm = useConfirm();
 
   const [importOpen, setImportOpen] = React.useState(false);
-  const [importCsvText, setImportCsvText] = React.useState("");
+  const [dupesOpen, setDupesOpen] = React.useState(false);
 
   const PAGE_SIZE = 100;
   const [view, setView] = React.useState<"table" | "board">("board");
@@ -97,6 +90,13 @@ export default function ContactosPage() {
   const hasFilters = Boolean(debouncedQ || stage);
 
   // Keep the drawer's contact in sync with fresh data after mutations.
+  // `?contacto=` (from the global search) opens that contact's card.
+  const linkedId = searchParams.get("contacto");
+  React.useEffect(() => {
+    if (!linkedId) return;
+    const hit = items.find((c) => c.id === linkedId);
+    if (hit) setDrawer(hit);
+  }, [linkedId, items]);
   const drawerContact = drawer ? (items.find((c) => c.id === drawer.id) ?? drawer) : null;
 
   function openCreate() {
@@ -140,6 +140,9 @@ export default function ContactosPage() {
             </Button>
             <Button variant="secondary" size="sm" onClick={() => setImportOpen(true)}>
               <Upload className="size-4" /> Importar
+            </Button>
+            <Button variant="secondary" size="sm" onClick={() => setDupesOpen(true)} data-testid="contacts-duplicates">
+              <Merge className="size-4" /> Duplicados
             </Button>
             <Button variant="secondary" size="sm" onClick={openCompose}>
               <Send className="size-4" /> Mensaje masivo
@@ -195,12 +198,18 @@ export default function ContactosPage() {
         isEmpty={(d) => d.items.length === 0 && !hasFilters}
         empty={{
           icon: Contact,
-          title: "Tu CRM está vacío",
-          description: "Crea el primer contacto para empezar a segmentar, hacer difusión y gestionar tu pipeline.",
+          title: "Aún no tienes contactos",
+          description:
+            "Aparecen solos cuando conectas tu WhatsApp o Telegram y te escriben, o cuando alguien llena un formulario. También puedes importarlos o crearlos a mano.",
           action: (
-            <Button size="sm" onClick={openCreate}>
-              <Plus className="size-4" /> Nuevo contacto
-            </Button>
+            <div className="flex flex-wrap justify-center gap-2">
+              <Button size="sm" onClick={() => navigate(`/w/${ws.slug}/conexiones`)}>
+                <Plug className="size-4" /> Conectar WhatsApp o Telegram
+              </Button>
+              <Button size="sm" variant="outline" onClick={openCreate}>
+                <Plus className="size-4" /> Nuevo contacto
+              </Button>
+            </div>
           ),
         }}
       >
@@ -294,56 +303,8 @@ export default function ContactosPage() {
         }
       </QueryBoundary>
 
-      <Dialog open={importOpen} onOpenChange={setImportOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Importar contactos (CSV)</DialogTitle>
-            <DialogDescription>
-              Cabeceras admitidas: <code>name, phone, email, company, tags, stage</code> (o sus
-              equivalentes en español). Se omiten los emails ya existentes.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-3">
-            <input
-              type="file"
-              accept=".csv,text/csv"
-              aria-label="Archivo CSV"
-              onChange={async (e) => {
-                const file = e.target.files?.[0];
-                if (file) setImportCsvText(await file.text());
-              }}
-              className="block w-full text-sm text-ink-muted file:mr-3 file:rounded-md file:border-0 file:bg-panel-raised file:px-3 file:py-1.5 file:text-sm file:text-ink"
-            />
-            <textarea
-              value={importCsvText}
-              onChange={(e) => setImportCsvText(e.target.value)}
-              placeholder={"name,email,stage\nAna,ana@x.com,Lead"}
-              rows={6}
-              className="w-full rounded-lg border border-line-soft bg-panel p-2 font-mono text-xs text-ink"
-            />
-          </div>
-          <DialogFooter>
-            <Button variant="secondary" size="sm" onClick={() => setImportOpen(false)}>
-              Cancelar
-            </Button>
-            <Button
-              size="sm"
-              disabled={!importCsvText.trim() || importContacts.isPending}
-              onClick={() =>
-                importContacts.mutate(importCsvText, {
-                  onSuccess: () => {
-                    setImportOpen(false);
-                    setImportCsvText("");
-                  },
-                })
-              }
-            >
-              {importContacts.isPending ? <Loader2 className="size-4 animate-spin" /> : <Upload className="size-4" />}
-              Importar
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <ContactImportDialog open={importOpen} onOpenChange={setImportOpen} />
+      <DuplicatesDialog open={dupesOpen} onOpenChange={setDupesOpen} />
 
       <ContactFormDialog open={dialogOpen} onOpenChange={setDialogOpen} contact={editing} />
       <ContactDetailDrawer

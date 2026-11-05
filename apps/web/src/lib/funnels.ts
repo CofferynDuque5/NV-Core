@@ -8,9 +8,15 @@ export const STEP_TYPE_LABEL: Record<FunnelStepType, string> = {
   thankyou: "Gracias",
 };
 
+/** A step's visits; 0 when the server sent none (a new funnel). */
+export function stepViews(step: Pick<FunnelPage, "views"> | undefined): number {
+  const n = Number(step?.views);
+  return Number.isFinite(n) && n > 0 ? n : 0;
+}
+
 /** Total visits into the funnel (visits to the first step). */
 export function funnelEntries(steps: FunnelPage[]): number {
-  return steps[0]?.views ?? 0;
+  return stepViews(steps[0]);
 }
 
 /**
@@ -19,8 +25,8 @@ export function funnelEntries(steps: FunnelPage[]): number {
  */
 export function funnelConversion(steps: FunnelPage[]): number {
   if (steps.length < 2) return 0;
-  const first = steps[0]!.views;
-  const last = steps[steps.length - 1]!.views;
+  const first = stepViews(steps[0]);
+  const last = stepViews(steps[steps.length - 1]);
   if (first <= 0) return 0;
   return Math.round((last / first) * 1000) / 10;
 }

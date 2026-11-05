@@ -7,6 +7,7 @@ import {
   Injectable,
   Module,
   NotFoundException,
+  Optional,
   Param,
   ParseIntPipe,
   Patch,
@@ -14,6 +15,7 @@ import {
   ServiceUnavailableException,
   UseGuards,
 } from "@nestjs/common";
+import { WorkspaceAccessService } from "../../common/access/workspace-access.service";
 import { ApiBearerAuth, ApiPropertyOptional, ApiTags } from "@nestjs/swagger";
 import {
   FUNNEL_STEP_TYPES,
@@ -83,6 +85,7 @@ export class FunnelsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly audit: AuditLogger,
+    @Optional() private readonly access?: WorkspaceAccessService,
   ) {}
 
   private db() {
@@ -133,6 +136,10 @@ export class FunnelsService {
   async getPublicStep(id: string, index: number): Promise<PublicFunnelStep> {
     const row = await this.db().funnel.findUnique({ where: { id } });
     if (!row) throw new NotFoundException("Embudo no encontrado.");
+    // Funnels are a Pro extra: a Básico brand's public funnel is not served.
+    if (this.access && !(await this.access.allows(row.workspaceSlug, "embudos"))) {
+      throw new NotFoundException("Este embudo no está disponible.");
+    }
     const steps = (row.steps as unknown as FunnelPage[]) ?? [];
     if (index < 0 || index >= steps.length) throw new NotFoundException("Paso no encontrado.");
     const step = steps[index]!;

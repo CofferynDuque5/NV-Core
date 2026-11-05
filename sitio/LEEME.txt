@@ -1,62 +1,65 @@
 NV Marketing — Página de ventas (sitio web estático)
-================================================
+=====================================================
 
-Esta carpeta ES tu página de ventas. Es estática (solo HTML), NO necesita Node
-ni base de datos. NO subas aquí el resto del proyecto: eso es la aplicación y va
-por separado (Setup Node.js App).
+Esta carpeta ES tu página de ventas. Es estática (HTML + imágenes): NO necesita
+Node ni base de datos. El panel (la aplicación) va por separado.
 
-POR QUÉ VEÍAS "Index of /"
---------------------------
-Subiste toda la carpeta del proyecto a la raíz del subdominio, y en la raíz no
-había ningún index.html, así que el servidor mostró el listado de carpetas.
-La solución es que en la RAÍZ del subdominio esté el index.html de ESTA carpeta.
-
-CÓMO DEJARLO CARGANDO DIRECTO (elige UNA opción)
-------------------------------------------------
-Opción A (la más simple):
-  1) En el Administrador de archivos de cPanel, entra a la raíz del subdominio
-     nvmarketing (donde ahora ves la carpeta "NV-Core").
-  2) Sube AQUÍ el contenido de esta carpeta: "index.html" y ".htaccess"
-     (o sube el zip "sitio-nvcore.zip" y extráelo AQUÍ).
-  3) Recarga nvmarketing.nvcorx.com → ya carga la página directa.
-  (Puedes borrar la carpeta "NV-Core" de este subdominio; la app va en otro sitio.)
-
-Opción B (sin mover archivos):
-  1) cPanel → "Dominios" (o "Subdominios") → nvmarketing.
-  2) Cambia el "Document Root" (Raíz del documento) a:  .../NV-Core/sitio
-  3) Guarda y recarga. El servidor servirá esta carpeta directamente.
-
-CONECTAR LA PÁGINA CON TU APLICACIÓN (¡IMPORTANTE!)
----------------------------------------------------
-Todos los botones (Iniciar sesión, Empezar gratis y Elegir plan) llevan a tu
-aplicación. Solo tienes que poner UNA vez la URL de tu app:
-
-  1) Abre index.html.
-  2) Arriba del todo verás:
-        window.NV_APP_URL = "https://app.nvcorx.com";
-     Cambia esa URL por la de TU aplicación (donde instalaste NV Marketing, por
-     ejemplo el subdominio app.tudominio.com). Deja "" si aún no la tienes
-     (los botones avisarán con un mensaje en vez de no hacer nada).
-  3) Guarda. Listo: "Iniciar sesión" abre /login y los planes abren /register.
-
-PERSONALIZAR
+QUÉ HAY AQUÍ
 ------------
-- Precios: busca  data-monthly  /  data-annual  y cámbialos a tu gusto.
+  index.html   La página principal (rediseñada el 01/11/2026, ajustes del 04/11).
+  legal.html   Términos, privacidad y cookies.
+  404.html     Página propia para direcciones que no existen.
+  robots.txt, sitemap.xml   Para Google (apuntan a nvmarketing.nvcorx.com).
+  favicon.ico  Icono de la pestaña.
+  img/         Capturas reales del panel (.webp). Súbela COMPLETA.
+  .htaccess    Hace que la web cargue directa, fuerza HTTPS, cachea las imágenes,
+               usa 404.html y añade cabeceras de seguridad (CSP, HSTS…).
+               (Es un archivo oculto: en el Administrador de archivos de cPanel
+               activa "Mostrar archivos ocultos" para verlo.)
 
-COBRAR A TUS CLIENTES (pagos reales)
-------------------------------------
-Los botones de plan llevan a tu app a registrarse. Para COBRAR con tarjeta
-necesitas configurar Stripe DENTRO de la aplicación (variable STRIPE_SECRET_KEY
-y su webhook). Sin Stripe, el registro funciona igual pero no cobra: los
-usuarios entran con el plan por defecto. Tú, como dueño del servidor, no pagas
-nada por usar tu propio software.
+CÓMO SUBIRLO A CPANEL
+---------------------
+  1) Administrador de archivos → raíz del dominio del sitio
+     (por ejemplo public_html o la carpeta del subdominio nvmarketing).
+  2) Sube el zip del sitio y extráelo AHÍ. Deben quedar index.html, legal.html,
+     404.html, robots.txt, sitemap.xml, favicon.ico, .htaccess y la carpeta img/
+     juntos en esa raíz.
+  3) Recarga la web con Ctrl+F5.
 
-PÁGINA LEGAL (legal.html)
+ELEGIR EL ESTILO (3 diseños en el mismo archivo)
+------------------------------------------------
+  En la línea 2 de index.html:
+     <html lang="es" data-style="noche">
+  Cambia "noche" por "claro" o "vibrante" y guarda.
+  Para verlos sin editar nada: tu-sitio.com/?estilo=claro  (o noche / vibrante).
+
+CONECTAR LOS BOTONES CON TU PANEL
+---------------------------------
+  Al principio del <body> de index.html:
+     window.NV_APP_URL = "https://nvmarketingpanel.nvcorx.com";
+  Pon ahí la dirección de tu panel. Todos los botones la usan:
+     Ingresar → /login · Probar gratis y planes → /register · Ver demo → /demo
+     «Instalar la app» abre una guía dentro de la misma página (no depende del
+     panel) con un botón «Abrir el panel para instalar» → /login.
+  El correo de contacto está en window.NV_CONTACT_EMAIL.
+
+LA APP PARA TELÉFONO Y PC
 -------------------------
-Sube "legal.html" junto a index.html. Tiene los Términos y condiciones, la
-Política de privacidad y la Política de cookies, y está enlazada desde el pie
-de página. Cuando tengas el correo oficial, abre legal.html y escríbelo en:
-     window.NV_CONTACT_EMAIL = "";
-Mientras esté vacío, el contacto apunta al portafolio de Valeryn Duque.
-Si cambias de proveedor (base de datos, IA, correo, pagos), actualiza la
-sección «Dónde se guardan y con quién se comparten».
+  El panel se instala como app (PWA) desde el navegador, sin tiendas:
+  Android (Chrome), iPhone/iPad (Safari → Compartir → Añadir a pantalla de
+  inicio), Windows y Mac (Chrome o Edge → Instalar). El panel nuevo trae además
+  la página /instalar con el botón «Instalar ahora» (sube el zip del panel nuevo
+  para tenerla; con el panel viejo esa dirección da «Página no encontrada»).
+  Necesita que el panel esté en HTTPS (cPanel lo da con AutoSSL).
+
+SI CAMBIAS DE DOMINIO
+---------------------
+  La dirección https://nvmarketing.nvcorx.com/ está escrita en index.html
+  (canonical y og:*), legal.html (canonical), robots.txt y sitemap.xml.
+  Cámbiala en esos cuatro archivos.
+
+PRECIOS
+-------
+  Están escritos en la sección «Precios» de index.html (Prueba 24 h, Básico
+  US$7, Pro US$19). Si los cambias, cámbialos también en el panel
+  (PLAN_BASIC_PRICE y PLAN_PRICE) para que coincidan.

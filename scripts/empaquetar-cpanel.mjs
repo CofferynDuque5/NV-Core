@@ -470,9 +470,20 @@ NV_ADMIN_EMAIL=tucorreo@ejemplo.com
 # bloquea y le muestra tus métodos de pago. Pon aquí el identificador (slug) de
 # TU marca donde configuraste esos métodos en Cobros (créala con NV_ADMIN_EMAIL
 # para que no tenga prueba). Al confirmar su pago como «Pagado», la marca del
-# cliente se activa PLAN_DAYS días más.
+# cliente se activa PLAN_DAYS días más con el plan que eligió.
+# PLAN_PRICE es el plan Pro y PLAN_BASIC_PRICE el Básico (1 WhatsApp, 1 Telegram, 1 marca).
 # NV_BILLING_WORKSPACE=nv-cobros
 # PLAN_PRICE=19
+# PLAN_BASIC_PRICE=7
+# Tu WhatsApp (con código de país, solo números) para recibir cada pago de plan.
+# Sale del WhatsApp conectado en NV_BILLING_WORKSPACE. También llega por correo a NV_ADMIN_EMAIL.
+# NV_ADMIN_WHATSAPP=584120000000
+# Zona horaria por defecto de las campañas programadas (cada marca puede cambiarla).
+# SCHEDULE_TIME_ZONE=America/Caracas
+# Tasa USDT→Bs: vacía = la del día (Binance P2P). Pon un número para fijarla.
+# USDT_VES_RATE=
+# Comprobantes de pago: carpeta PRIVADA (no la pongas dentro de public_html).
+# RECEIPTS_DIR=data/receipts
 # PLAN_CURRENCY=USD
 # PLAN_DAYS=30
 # TRIAL_HOURS=24
@@ -483,7 +494,15 @@ NV_ADMIN_EMAIL=tucorreo@ejemplo.com
 # TELEGRAM_API_HASH=
 # STRIPE_SECRET_KEY=
 # OPENAI_API_KEY=
-# RESEND_API_KEY=
+
+# CORREO GRATIS con tu propio buzón de cPanel (verificación, contraseña, invitaciones).
+# La contraseña del buzón va SOLO aquí, nunca en el código.
+# SMTP_HOST=mail.nvcorx.com
+# SMTP_PORT=465
+# SMTP_USER=nvmarketing@nvcorx.com
+# SMTP_PASS=
+# MAIL_FROM=NV Marketing <nvmarketing@nvcorx.com>
+# (Alternativa: RESEND_API_KEY=, se usa solo si no hay SMTP)
 `,
 );
 
@@ -569,6 +588,20 @@ ARCHIVOS SUBIDOS (Biblioteca y adjuntos de campañas)
   Revisa también el límite de subida de tu hosting.
 - Borrar un archivo de la Biblioteca no lo borra del disco (puede seguir en
   campañas ya enviadas).
+
+CAMPAÑAS PROGRAMADAS: QUE SALGAN A SU HORA
+- Las horas de las campañas y publicaciones usan la zona horaria de cada marca
+  (Venezuela por defecto; se cambia en Informes o al programar una campaña).
+  SCHEDULE_TIME_ZONE cambia el valor por defecto (p.ej. America/Bogota).
+- Muchos hostings cPanel "duermen" la app cuando nadie la visita: entonces no
+  hay nadie que mire el reloj y WhatsApp se desconecta. Para evitarlo:
+    1) Deja "PassengerMinInstances 1" en el .htaccess (ya viene en el ejemplo).
+    2) cPanel → "Cron Jobs" → agrega uno cada 5 minutos (*/5 * * * *) con:
+         curl -fsS https://TU-SUBDOMINIO/api/health > /dev/null
+       Así la app se mantiene despierta. Al despertar, el panel envía en las
+       3 horas siguientes lo que se haya quedado pendiente, sin repetir nada.
+- En Campañas, el botón «Enviar» espera hasta 20 s a que WhatsApp/Telegram
+  terminen de reconectar; si aun así no puede, el aviso dice el motivo.
 
 PRUEBA GRATIS DE 24 H Y COBRO DEL PLAN
 - Cada marca que crea un cliente tiene 24 horas gratis con todo el panel.

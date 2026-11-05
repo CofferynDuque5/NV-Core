@@ -8,6 +8,9 @@ import type {
   AccessPaymentInput,
   AdminAccessRow,
   AdminLogins,
+  PlanPaymentReview,
+  WhatsappAlertStatus,
+  UsdtRate,
   WorkspaceAccess,
   AnalyticsSnapshot,
   Task,
@@ -21,9 +24,11 @@ import type {
   AutomationTestResult,
   Campaign,
   CampaignImportResult,
+  CampaignItem,
   CalendarEvent,
   Connection,
   Contact,
+  QuickReply,
   ContactNote,
   ContactImportResult,
   Conversation,
@@ -65,6 +70,7 @@ import type {
 } from "../entities";
 import type { ChannelId, ContactStage, Role, WorkspaceKind } from "../enums";
 import type { PlanId, PlanLimits } from "../config/plans";
+import type { DayActivity } from "../config/activity";
 
 /** Server-side query for the contacts list (search + stage + pagination). */
 export interface ContactListQuery {
@@ -130,7 +136,14 @@ export interface CreateCampaignInput {
   targetGroups?: string[];
   /** currency → amount for {{precio}}. */
   prices?: Record<string, string>;
+  category?: string | null;
   addFooter?: boolean;
+  /** WhatsApp numbers that send (empty = all the brand's numbers). */
+  waLines?: number[];
+  /** Telegram accounts that send (empty = all). */
+  tgLines?: number[];
+  /** One extra message per product, each with its own text and image. */
+  items?: CampaignItem[];
 }
 export type UpdateCampaignInput = Partial<CreateCampaignInput>;
 
@@ -257,6 +270,8 @@ export interface CampaignService {
   pause(workspaceId: string, id: string): Promise<Campaign>;
   resume(workspaceId: string, id: string): Promise<Campaign>;
   logs(workspaceId: string): Promise<SendLogEntry[]>;
+  /** What happened since `since` (start of the user's day). */
+  activity(workspaceId: string, since: string): Promise<DayActivity>;
   clearLogs(workspaceId: string): Promise<{ deleted: number }>;
   /** Export all campaigns as CSV, incl. recipient groups by name. */
   exportCsv(workspaceId: string): Promise<string>;
@@ -264,6 +279,10 @@ export interface CampaignService {
   importCsv(workspaceId: string, csv: string): Promise<CampaignImportResult>;
   /** Copy as a new draft (message, images, channels, schedule, prices, groups). */
   duplicate(workspaceId: string, id: string): Promise<Campaign>;
+  /** Send again only to the groups that failed last time. */
+  retryFailed(workspaceId: string, id: string): Promise<{ retried: number }>;
+  /** Emergency stop: pause every scheduled or running campaign. */
+  pauseAll(workspaceId: string): Promise<{ paused: number }>;
 }
 
 export interface CreatePostInput {
@@ -319,8 +338,12 @@ export interface ContactService {
   setOptOut(workspaceId: string, contactId: string, optedOut: boolean): Promise<Contact>;
   /** Export every contact in the workspace as CSV text. */
   exportCsv(workspaceId: string): Promise<string>;
-  /** Bulk-create contacts from CSV; dedupes by email. Returns a summary. */
-  importCsv(workspaceId: string, csv: string): Promise<ContactImportResult>;
+  /** Bulk-create contacts from CSV; dedupes by email and phone. `dryRun` only previews. */
+  importCsv(workspaceId: string, csv: string, opts?: { dryRun?: boolean }): Promise<ContactImportResult>;
+  /** Groups of contacts that share a phone or email. */
+  duplicates(workspaceId: string): Promise<{ groups: Contact[][] }>;
+  /** Merge `mergeIds` into `keepId` (notes, tasks, payments move; the others are deleted). */
+  merge(workspaceId: string, keepId: string, mergeIds: string[]): Promise<Contact>;
 }
 
 export interface GroupService {
@@ -475,6 +498,8 @@ export interface UpdateConversationInput {
   /** Assignee email, or null / "" to unassign. */
   assignee?: string | null;
   labels?: string[];
+  /** true = mark as unread again; false = mark as read. */
+  unread?: boolean;
 }
 
 /** Assignee filter value meaning "only unassigned conversations". */
@@ -487,6 +512,8 @@ export interface ConversationQuery {
   status?: "open" | "resolved" | "all";
   /** Assignee email, or INBOX_UNASSIGNED. */
   assignee?: string;
+  /** Only open chats whose last message is from the contact (nobody has answered). */
+  waiting?: boolean;
   limit?: number;
   /** `nextCursor` from the previous page. */
   cursor?: string;
@@ -497,11 +524,21 @@ export interface ConversationPage extends ListResult<Conversation> {
   nextCursor?: string | null;
   /** Open conversations in the whole workspace (ignores the filters). */
   openCount?: number;
+  /** Open chats waiting for an answer in the whole workspace (ignores the filters). */
+  waitingCount?: number;
 }
 
 export interface InboxService {
   conversations(workspaceId: string, query?: ConversationQuery): Promise<ConversationPage>;
   messages(workspaceId: string, conversationId: string): Promise<Message[]>;
+  /** Internal team note in the chat: stored in the panel, never sent to the contact. */
+  addNote(workspaceId: string, conversationId: string, text: string): Promise<Message>;
+  /** The brand's saved replies. */
+  quickReplies(workspaceId: string): Promise<QuickReply[]>;
+  /** Replace the brand's saved replies (max 50). */
+  saveQuickReplies(workspaceId: string, items: QuickReply[]): Promise<QuickReply[]>;
+  /** CRM contact whose phone matches the chat (null when there is none). */
+  conversationContact(workspaceId: string, conversationId: string): Promise<{ contact: Contact | null }>;
   createConversation(workspaceId: string, input: CreateConversationInput): Promise<Conversation>;
   sendMessage(
     workspaceId: string,
@@ -518,6 +555,8 @@ export interface InboxService {
     conversationId: string,
     input: UpdateConversationInput,
   ): Promise<Conversation>;
+  /** Delete a chat and its messages from the panel. */
+  deleteConversation(workspaceId: string, conversationId: string): Promise<void>;
 }
 
 export interface MediaUploadSignature {
@@ -630,6 +669,8 @@ export interface UpdatePaymentRequestInput {
 }
 
 export interface PaymentService {
+  /** Today's USDT → bolívares rate, or null when unknown. */
+  vesRate(workspaceId: string): Promise<UsdtRate | null>;
   methods(workspaceId: string): Promise<PaymentMethod[]>;
   createMethod(workspaceId: string, input: PaymentMethodInput): Promise<PaymentMethod>;
   updateMethod(workspaceId: string, id: string, input: Partial<PaymentMethodInput>): Promise<PaymentMethod>;
@@ -637,6 +678,8 @@ export interface PaymentService {
   list(workspaceId: string, filter?: { status?: PaymentRequest["status"]; contactId?: string }): Promise<PaymentRequest[]>;
   create(workspaceId: string, input: CreatePaymentRequestInput): Promise<PaymentRequest>;
   update(workspaceId: string, id: string, input: UpdatePaymentRequestInput): Promise<PaymentRequest>;
+  /** The receipt a customer sent with a plan payment (Owner/Admin). */
+  receipt(workspaceId: string, id: string): Promise<Blob>;
 }
 
 export interface ReportService {
@@ -736,6 +779,41 @@ export interface TeamInvitation {
   createdAt: string;
 }
 
+/** A shareable link that lets teammates join the brand with a fixed role. */
+export interface InviteLink {
+  id: string;
+  role: Role;
+  createdByName: string | null;
+  /** How many people may use it; null = no limit. */
+  maxUses: number | null;
+  uses: number;
+  expiresAt: string;
+  createdAt: string;
+}
+
+/** A link just created: the only time its address is shown. */
+export interface CreatedInviteLink extends InviteLink {
+  url: string;
+}
+
+export interface CreateInviteLinkInput {
+  role: Role;
+  /** Days it lasts (1–30, default 7). */
+  days?: number;
+  maxUses?: number;
+}
+
+/** What the /join page shows before joining. */
+export interface InviteLinkPreview {
+  workspaceSlug: string;
+  workspaceName: string;
+  role: Role;
+  invitedByName: string | null;
+  expiresAt: string;
+  /** Why the link can't be used, or null while it works. */
+  problem: string | null;
+}
+
 /** Result of addMember: whether an existing user was added or an email invited. */
 export interface AddMemberResult {
   status: "added" | "invited";
@@ -754,6 +832,10 @@ export interface TeamService {
   invitations(workspaceId: string): Promise<TeamInvitation[]>;
   /** Revoke a pending invitation. */
   revokeInvitation(workspaceId: string, invitationId: string): Promise<void>;
+  /** Shareable invite links that still work. */
+  inviteLinks(workspaceId: string): Promise<InviteLink[]>;
+  createInviteLink(workspaceId: string, input: CreateInviteLinkInput): Promise<CreatedInviteLink>;
+  revokeInviteLink(workspaceId: string, linkId: string): Promise<void>;
 }
 
 export interface AuditService {
@@ -924,6 +1006,10 @@ export interface ProductService {
 export interface WhatsappStatus {
   status: "disconnected" | "connecting" | "qr" | "connected";
   provider: "baileys";
+  /** 1 = the brand's main number; 2, 3… = extra numbers. */
+  line?: number;
+  /** Name the user gave the number («Ventas»). */
+  label?: string | null;
   number: string | null;
   lastConnectionAt: string | null;
   groupsCount: number;
@@ -953,7 +1039,17 @@ export interface WhatsappService {
   relink(workspaceId: string): Promise<WhatsappStatus>;
   /** Active checks (Baileys load, WhatsApp reachability, writable dir…) as readable lines. */
   diagnose(workspaceId: string): Promise<{ lines: string[] }>;
+  /** Every WhatsApp number of the brand (main first). */
+  lines(workspaceId: string): Promise<WhatsappStatus[]>;
+  /** Link one more number; it shows its own QR. */
+  addLine(workspaceId: string, label?: string): Promise<WhatsappStatus>;
+  renameLine(workspaceId: string, line: number, label: string): Promise<WhatsappStatus>;
+  lineAction(workspaceId: string, line: number, action: WhatsappLineAction): Promise<WhatsappStatus>;
+  /** Unlink an extra number (its groups go; its chats stay). */
+  removeLine(workspaceId: string, line: number): Promise<void>;
 }
+
+export type WhatsappLineAction = "connect" | "relink" | "disconnect" | "sync";
 
 /** Health of the "NV Agente PC" companion that publishes to Facebook/Instagram from the operator's computer. */
 export interface PcAgentStatus {
@@ -974,6 +1070,12 @@ export interface TelegramStatus {
   // "password" = the account has 2FA; it's waiting for the user's password.
   status: "disconnected" | "connecting" | "qr" | "password" | "connected";
   provider: "mtproto";
+  /** 1 = the brand's main account; 2, 3… = extra accounts. */
+  line?: number;
+  /** Name the user gave the account («Ventas»). */
+  label?: string | null;
+  /** QR (data URL) while status is "qr", for extra accounts (polled over HTTP). */
+  qr?: string | null;
   username: string | null;
   phone: string | null;
   lastConnectionAt: string | null;
@@ -990,7 +1092,19 @@ export interface TelegramService {
   sync(workspaceId: string): Promise<TelegramStatus>;
   /** Submit the 2FA password when status is "password". */
   submitPassword(workspaceId: string, password: string): Promise<TelegramStatus>;
+  /** Every Telegram account of the brand (main first). */
+  lines(workspaceId: string): Promise<TelegramStatus[]>;
+  /** Link one more account; it shows its own QR. */
+  addLine(workspaceId: string, label?: string): Promise<TelegramStatus>;
+  renameLine(workspaceId: string, line: number, label: string): Promise<TelegramStatus>;
+  lineAction(workspaceId: string, line: number, action: TelegramLineAction): Promise<TelegramStatus>;
+  /** 2FA password of an extra account. */
+  linePassword(workspaceId: string, line: number, password: string): Promise<TelegramStatus>;
+  /** Unlink an extra account (its groups go; its chats stay). */
+  removeLine(workspaceId: string, line: number): Promise<void>;
 }
+
+export type TelegramLineAction = "connect" | "disconnect" | "sync";
 
 /** A user as seen by the platform super-admin, with all their memberships. */
 export interface AdminUser {
@@ -1012,7 +1126,26 @@ export interface AdminService {
   activate(workspaceSlug: string, days: number): Promise<WorkspaceAccess>;
   /** Every user with their last access, and the latest sign-ins. */
   logins(): Promise<AdminLogins>;
+  /** How outgoing email is set up. */
+  mailStatus(): Promise<{ provider: MailProvider }>;
+  /** Plan payments customers sent (waiting ones first). */
+  planPayments(): Promise<PlanPaymentReview[]>;
+  /** The receipt file of a plan payment. */
+  planPaymentReceipt(id: string): Promise<Blob>;
+  approvePlanPayment(id: string): Promise<PlanPaymentReview>;
+  rejectPlanPayment(id: string, reason: string): Promise<PlanPaymentReview>;
+  /** Today's USDT rate used for bolívares, and where it came from. */
+  usdtRate(): Promise<{ rate: UsdtRate | null }>;
+  /** Send a test email to the signed-in admin. */
+  mailTest(): Promise<{ provider: MailProvider; sent: boolean; to: string }>;
+  /** Whether plan payments can be announced by WhatsApp. */
+  whatsappAlert(): Promise<WhatsappAlertStatus>;
+  /** Send a test WhatsApp alert to the operator's number. */
+  whatsappAlertTest(): Promise<WhatsappAlertStatus & { sent: boolean }>;
 }
+
+/** Outgoing email: own mailbox (SMTP), Resend, or not set up. */
+export type MailProvider = "smtp" | "resend" | "none";
 
 /** Free trial and plan payment of a customer brand (open after the trial ends). */
 export interface AccessService {

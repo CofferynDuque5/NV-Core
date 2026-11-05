@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Body,
   Controller,
   ForbiddenException,
@@ -12,7 +13,9 @@ import {
   type OnModuleInit,
   Param,
   Patch,
+  Delete,
   Post,
+  Put,
   Query,
   Req,
   Res,
@@ -28,10 +31,13 @@ import {
   type ChannelId,
   type Conversation,
   type ConversationPage,
+  type Contact,
   type Message,
+  type QuickReply,
 } from "@nv/domain";
-import { Type } from "class-transformer";
+import { Transform, Type } from "class-transformer";
 import {
+  ArrayMaxSize,
   IsArray,
   IsBoolean,
   IsIn,
@@ -42,7 +48,9 @@ import {
   MaxLength,
   Min,
   MinLength,
+  ValidateNested,
 } from "class-validator";
+import { randomUUID } from "node:crypto";
 import { Prisma } from "@prisma/client";
 import type { Response } from "express";
 
@@ -53,10 +61,12 @@ import { WorkspaceGuard } from "../../common/tenant/workspace.guard";
 import { WorkspaceRegistry } from "../../common/workspace-registry.service";
 import { safeEqual } from "../../common/crypto/crypto.util";
 import { PrismaService } from "../../prisma/prisma.service";
-import { mapConversation, mapMessage } from "../../prisma/mappers";
+import { mapContact, mapConversation, mapMessage } from "../../prisma/mappers";
 import { RolesGuard } from "../../auth/guards/roles.guard";
 import { Roles } from "../../auth/decorators/roles.decorator";
 import { Public } from "../../auth/decorators/public.decorator";
+import { CurrentUser } from "../../auth/decorators/current-user.decorator";
+import type { AuthenticatedUser } from "../../auth/auth.types";
 import { ProviderManager } from "../../providers/provider-manager.service";
 import { phoneKey } from "../consent/consent.service";
 import { isBareName, isSampleContact, phoneFromHandle } from "./inbox-contacts";
@@ -96,6 +106,12 @@ export class ConversationsQueryDto {
   @MaxLength(320)
   assignee?: string;
 
+  @ApiPropertyOptional({ description: "true = solo chats abiertos cuyo último mensaje es del cliente (sin responder)." })
+  @IsOptional()
+  @Transform(({ value }) => value === true || value === "true" || value === "1")
+  @IsBoolean()
+  waiting?: boolean;
+
   @ApiPropertyOptional({ default: INBOX_PAGE_SIZE, minimum: 1, maximum: 100 })
   @IsOptional()
   @Type(() => Number)
@@ -131,6 +147,30 @@ function likePattern(q: string): string {
   return `%${q.replace(/[\\%_]/g, (c) => `\\${c}`)}%`;
 }
 
+/** Accented letters (both cases) and their plain form, for accent-free search. */
+const ACCENTED_LOWER = "áàäâãéèëêíìïîóòöôõúùüûñç";
+const PLAIN_LOWER = "aaaaaeeeeiiiiooooouuuunc";
+const FOLD_PAIRS: [string, string][] = [...ACCENTED_LOWER + ACCENTED_LOWER.toUpperCase()].map((c, i) => [
+  c,
+  PLAIN_LOWER[i % PLAIN_LOWER.length]!,
+]);
+
+/** Lowercase without accents: «María» → «maria» (matches `folded()` in SQL). */
+export function foldSearch(text: string): string {
+  return text.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+}
+
+/**
+ * SQL expression: the column without accents, lowercased. Nested replace()
+ * (not translate) because it works on whole letters whatever the database
+ * encoding is; accents go first so lower() only meets ASCII letters. The
+ * pairs are constants of this file, never user input.
+ */
+const FOLD_SQL = FOLD_PAIRS.reduce((acc, [a, b]) => `replace(${acc}, '${a}', '${b}')`, "$COL");
+function folded(column: string): Prisma.Sql {
+  return Prisma.raw(`lower(${FOLD_SQL.replace("$COL", column)})`);
+}
+
 export class CreateConversationDto {
   @IsIn(CHANNEL_IDS) channel!: ChannelId;
   @IsString() @MinLength(1) contactName!: string;
@@ -145,11 +185,60 @@ export class SendMessageDto {
   @IsString() @MinLength(1) text!: string;
 }
 
+export const MAX_QUICK_REPLIES = 50;
+
+export class QuickReplyDto {
+  @IsOptional() @IsString() @MaxLength(40) id?: string;
+  @IsString() @MinLength(1) @MaxLength(60) title!: string;
+  @IsString() @MinLength(1) @MaxLength(2000) text!: string;
+}
+
+export class SaveQuickRepliesDto {
+  @IsArray()
+  @ArrayMaxSize(MAX_QUICK_REPLIES)
+  @ValidateNested({ each: true })
+  @Type(() => QuickReplyDto)
+  items!: QuickReplyDto[];
+}
+
+/** Stored saved replies, cleaned: trimmed, with an id, no empties. */
+export function cleanQuickReplies(raw: unknown): QuickReply[] {
+  if (!Array.isArray(raw)) return [];
+  const out: QuickReply[] = [];
+  const seen = new Set<string>();
+  for (const r of raw.slice(0, MAX_QUICK_REPLIES)) {
+    if (!r || typeof r !== "object") continue;
+    const o = r as Record<string, unknown>;
+    const title = typeof o.title === "string" ? o.title.trim().slice(0, 60) : "";
+    const text = typeof o.text === "string" ? o.text.trim().slice(0, 2000) : "";
+    if (!title || !text) continue;
+    let id = typeof o.id === "string" && o.id.trim() ? o.id.trim().slice(0, 40) : "";
+    if (!id || seen.has(id)) id = `qr_${randomUUID().slice(0, 8)}`;
+    seen.add(id);
+    out.push({ id, title, text });
+  }
+  return out;
+}
+
+export class AddNoteDto {
+  @IsString() @MinLength(1) @MaxLength(4000) text!: string;
+}
+
+/** Direction of a chat's last real message (internal notes don't count). */
+const lastDirection = Prisma.sql`(SELECT lmd."direction" FROM "Message" lmd
+  WHERE lmd."conversationId" = c."id" AND lmd."direction" <> 'note'
+  ORDER BY lmd."createdAt" DESC LIMIT 1)`;
+
 export class UpdateConversationDto {
   @ApiPropertyOptional()
   @IsOptional()
   @IsBoolean()
   resolved?: boolean;
+
+  @ApiPropertyOptional({ description: "true = marcar como no leído; false = marcar como leído" })
+  @IsOptional()
+  @IsBoolean()
+  unread?: boolean;
 
   @ApiPropertyOptional({ description: "Email del responsable; vacío o null para desasignar." })
   @IsOptional()
@@ -198,6 +287,8 @@ export class InboxService implements OnModuleInit {
         at: p.at,
         externalId: p.externalId,
         history: p.history,
+        waLine: p.waLine,
+        tgLine: p.tgLine,
       }).catch((err: unknown) => this.logger.warn(`Mensaje no guardado: ${(err as Error).message}`));
     });
     this.events.on("session.contact-names", (p) => {
@@ -256,7 +347,21 @@ export class InboxService implements OnModuleInit {
           channel: msg.channel,
           contactName: bestName ?? msg.contactName ?? msg.contactHandle,
           contactHandle: msg.contactHandle,
+          waLine: msg.waLine ?? null,
+          tgLine: msg.tgLine ?? null,
         },
+      });
+    } else if (msg.tgLine && conversation.tgLine !== msg.tgLine && !msg.history) {
+      // The contact now writes to another of the brand's Telegram accounts: reply from that one.
+      conversation = await this.prisma.conversation.update({
+        where: { id: conversation.id },
+        data: { tgLine: msg.tgLine },
+      });
+    } else if (msg.waLine && conversation.waLine !== msg.waLine && !msg.history) {
+      // The contact now writes to another of the brand's numbers: reply from that one.
+      conversation = await this.prisma.conversation.update({
+        where: { id: conversation.id },
+        data: { waLine: msg.waLine, ...(bestName && isBareName(conversation.contactName, conversation.contactHandle) ? { contactName: bestName } : {}) },
       });
     } else if (bestName && isBareName(conversation.contactName, conversation.contactHandle)) {
       // The chat was created with the number: now the real name is known.
@@ -281,6 +386,13 @@ export class InboxService implements OnModuleInit {
       // Same message delivered twice at once (history + live): keep one.
       if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") return;
       throw err;
+    }
+    // A new incoming message makes the chat unread; replying from the phone reads it.
+    if (!msg.history || direction === "out") {
+      await this.prisma.conversation.update({
+        where: { id: conversation.id },
+        data: direction === "in" ? { unreadCount: { increment: 1 } } : { unreadCount: 0 },
+      });
     }
     if (direction !== "in" || msg.history) return;
     this.logger.log(`Mensaje entrante (${msg.channel}) de ${msg.contactHandle} → ${slug}.`);
@@ -399,7 +511,7 @@ export class InboxService implements OnModuleInit {
     workspaceId: string,
     query: ConversationsQueryDto = {},
   ): Promise<ConversationPage> {
-    if (!this.prisma.enabled) return { items: [], total: 0, nextCursor: null, openCount: 0 };
+    if (!this.prisma.enabled) return { items: [], total: 0, nextCursor: null, openCount: 0, waitingCount: 0 };
     const limit = query.limit ?? INBOX_PAGE_SIZE;
     const filters: Prisma.Sql[] = [Prisma.sql`c."workspaceSlug" = ${workspaceId}`];
     if (query.channel) filters.push(Prisma.sql`c."channel"::text = ${query.channel}`);
@@ -407,14 +519,16 @@ export class InboxService implements OnModuleInit {
     if (query.status === "resolved") filters.push(Prisma.sql`c."resolved" = true`);
     if (query.assignee === INBOX_UNASSIGNED) filters.push(Prisma.sql`c."assignee" IS NULL`);
     else if (query.assignee) filters.push(Prisma.sql`c."assignee" = ${query.assignee}`);
+    if (query.waiting) filters.push(Prisma.sql`c."resolved" = false AND ${lastDirection} = 'in'`);
     const q = query.q?.trim();
     if (q) {
-      const p = likePattern(q);
+      // Accent-free: «maria» finds «María» and the other way round.
+      const p = likePattern(foldSearch(q));
       filters.push(Prisma.sql`(
-        c."contactName" ILIKE ${p}
+        ${folded('c."contactName"')} LIKE ${p}
         OR c."contactHandle" ILIKE ${p}
-        OR EXISTS (SELECT 1 FROM unnest(c."labels") l WHERE l ILIKE ${p})
-        OR EXISTS (SELECT 1 FROM "Message" mq WHERE mq."conversationId" = c."id" AND mq."text" ILIKE ${p})
+        OR EXISTS (SELECT 1 FROM unnest(c."labels") l WHERE ${folded("l")} LIKE ${p})
+        OR EXISTS (SELECT 1 FROM "Message" mq WHERE mq."conversationId" = c."id" AND ${folded('mq."text"')} LIKE ${p})
       )`);
     }
     const where = Prisma.join(filters, " AND ");
@@ -428,16 +542,19 @@ export class InboxService implements OnModuleInit {
         SELECT c."id", ${activity} AS "activity"
         FROM "Conversation" c
         LEFT JOIN LATERAL (
-          SELECT MAX(m."createdAt") AS "last" FROM "Message" m WHERE m."conversationId" = c."id"
+          SELECT MAX(m."createdAt") AS "last" FROM "Message" m
+          WHERE m."conversationId" = c."id" AND m."direction" <> 'note'
         ) lm ON TRUE
         WHERE ${where} ${after}
         ORDER BY ${activity} DESC, c."id" DESC
         LIMIT ${limit + 1}
       `),
-      this.prisma.$queryRaw<{ total: bigint; open: bigint }[]>(Prisma.sql`
+      this.prisma.$queryRaw<{ total: bigint; open: bigint; waiting: bigint }[]>(Prisma.sql`
         SELECT
           (SELECT COUNT(*) FROM "Conversation" c WHERE ${where}) AS "total",
-          (SELECT COUNT(*) FROM "Conversation" WHERE "workspaceSlug" = ${workspaceId} AND "resolved" = false) AS "open"
+          (SELECT COUNT(*) FROM "Conversation" WHERE "workspaceSlug" = ${workspaceId} AND "resolved" = false) AS "open",
+          (SELECT COUNT(*) FROM "Conversation" c
+            WHERE c."workspaceSlug" = ${workspaceId} AND c."resolved" = false AND ${lastDirection} = 'in') AS "waiting"
       `),
     ]);
     const more = page.length > limit;
@@ -446,21 +563,46 @@ export class InboxService implements OnModuleInit {
       ? await this.prisma.conversation.findMany({
           where: { workspaceSlug: workspaceId, id: { in: ids } },
           // Newest message per thread → preview + "last activity".
-          include: { messages: { orderBy: { createdAt: "desc" }, take: 1 } },
+          include: { messages: { where: { direction: { not: "note" } }, orderBy: { createdAt: "desc" }, take: 1 } },
         })
       : [];
     const byId = new Map(rows.map((r) => [r.id, r]));
+    const replies = await this.firstReplies(ids);
     const items = ids
       .map((id) => byId.get(id))
       .filter((r): r is NonNullable<typeof r> => !!r)
-      .map((r) => mapConversation(r, r.messages[0]));
+      .map((r) => {
+        const c = mapConversation(r, r.messages[0]);
+        return replies.has(r.id) ? { ...c, firstReplyMins: replies.get(r.id)! } : c;
+      });
     const last = page[limit - 1];
     return {
       items,
       total: Number(counts[0]?.total ?? 0),
       openCount: Number(counts[0]?.open ?? 0),
+      waitingCount: Number(counts[0]?.waiting ?? 0),
       nextCursor: more && last ? encodeInboxCursor(new Date(last.activity), last.id) : null,
     };
+  }
+
+  /**
+   * Minutes from each chat's first inbound message to the first answer after
+   * it (null while unanswered). Chats the contact never wrote to are absent.
+   */
+  private async firstReplies(ids: string[]): Promise<Map<string, number | null>> {
+    if (ids.length === 0) return new Map();
+    const rows = await this.prisma.$queryRaw<{ id: string; mins: number | null }[]>(Prisma.sql`
+      SELECT f."conversationId" AS id,
+        (SELECT EXTRACT(EPOCH FROM (MIN(o."createdAt") - f."firstIn")) / 60
+           FROM "Message" o
+          WHERE o."conversationId" = f."conversationId" AND o."direction" = 'out' AND o."createdAt" >= f."firstIn") AS mins
+      FROM (
+        SELECT "conversationId", MIN("createdAt") AS "firstIn" FROM "Message"
+        WHERE "conversationId" IN (${Prisma.join(ids)}) AND "direction" = 'in'
+        GROUP BY "conversationId"
+      ) f
+    `);
+    return new Map(rows.map((r) => [r.id, r.mins === null ? null : Math.max(0, Math.round(Number(r.mins)))]));
   }
 
   async messages(workspaceId: string, conversationId: string): Promise<Message[]> {
@@ -499,6 +641,7 @@ export class InboxService implements OnModuleInit {
     const row = await this.prisma.message.create({
       data: { conversationId, direction: "out", text: dto.text },
     });
+    await this.prisma.conversation.update({ where: { id: conversationId }, data: { unreadCount: 0 } });
 
     // Best-effort external delivery (Baileys when connected, else Cloud API).
     // Never blocks or fails the persisted reply.
@@ -511,6 +654,56 @@ export class InboxService implements OnModuleInit {
     }
 
     return mapMessage(row);
+  }
+
+  /**
+   * Internal note in the chat (who to call back, what was promised…). Stays in
+   * the panel: never delivered, never counted as a reply or as unread.
+   */
+  async addNote(workspaceId: string, conversationId: string, text: string, author: string): Promise<Message> {
+    const clean = text.trim();
+    if (!clean) throw new BadRequestException("Escribe la nota.");
+    await this.owned(workspaceId, conversationId);
+    const row = await this.db().message.create({
+      data: { conversationId, direction: "note", text: clean, author },
+    });
+    return mapMessage(row);
+  }
+
+  async quickReplies(workspaceId: string): Promise<QuickReply[]> {
+    if (!this.prisma.enabled) return [];
+    const row = await this.prisma.workspaceSettings.findUnique({
+      where: { workspaceSlug: workspaceId },
+      select: { quickReplies: true },
+    });
+    return cleanQuickReplies(row?.quickReplies);
+  }
+
+  async saveQuickReplies(workspaceId: string, items: QuickReply[], actor: string): Promise<QuickReply[]> {
+    const clean = cleanQuickReplies(items);
+    await this.db().workspaceSettings.upsert({
+      where: { workspaceSlug: workspaceId },
+      create: { workspaceSlug: workspaceId, quickReplies: clean as unknown as Prisma.InputJsonValue, updatedBy: actor },
+      update: { quickReplies: clean as unknown as Prisma.InputJsonValue, updatedBy: actor },
+    });
+    return clean;
+  }
+
+  /**
+   * The CRM contact behind a chat, matched by phone (last 9 digits), for the
+   * customer card next to the conversation. Most recent match wins.
+   */
+  async conversationContact(workspaceId: string, conversationId: string): Promise<{ contact: Contact | null }> {
+    const conv = await this.owned(workspaceId, conversationId);
+    const key = phoneKey(conv.contactHandle);
+    if (!key) return { contact: null };
+    const candidates = await this.db().contact.findMany({
+      where: { workspaceSlug: workspaceId, phone: { contains: key.slice(-2) } },
+      orderBy: { createdAt: "desc" },
+      take: 200,
+    });
+    const hit = candidates.find((c) => phoneKey(c.phone) === key);
+    return { contact: hit ? mapContact(hit) : null };
   }
 
   /** Partial triage update: resolve, assign (or unassign with ""/null), labels. */
@@ -526,9 +719,22 @@ export class InboxService implements OnModuleInit {
         ...(dto.resolved !== undefined ? { resolved: dto.resolved } : {}),
         ...(dto.assignee !== undefined ? { assignee: dto.assignee ? dto.assignee : null } : {}),
         ...(dto.labels !== undefined ? { labels: dto.labels } : {}),
+        ...(dto.unread === false ? { unreadCount: 0 } : {}),
       },
     });
+    if (dto.unread === true && row.unreadCount === 0) {
+      return mapConversation(
+        await this.prisma.conversation.update({ where: { id: conversationId }, data: { unreadCount: 1 } }),
+      );
+    }
     return mapConversation(row);
+  }
+
+  /** Delete a chat and its messages from the panel (WhatsApp itself is not touched). */
+  async deleteConversation(workspaceId: string, conversationId: string): Promise<{ ok: true }> {
+    await this.owned(workspaceId, conversationId);
+    await this.prisma.conversation.delete({ where: { id: conversationId } });
+    return { ok: true };
   }
 }
 
@@ -567,6 +773,39 @@ export class InboxController {
     return this.service.sendMessage(workspaceId, id, dto);
   }
 
+  @Get("quick-replies")
+  quickReplies(@WorkspaceId() workspaceId: string) {
+    return this.service.quickReplies(workspaceId);
+  }
+
+  @Put("quick-replies")
+  @Roles("Owner", "Admin", "Editor")
+  @UseGuards(RolesGuard)
+  saveQuickReplies(
+    @WorkspaceId() workspaceId: string,
+    @CurrentUser() user: AuthenticatedUser,
+    @Body() dto: SaveQuickRepliesDto,
+  ) {
+    return this.service.saveQuickReplies(workspaceId, dto.items as QuickReply[], user.email);
+  }
+
+  @Get("conversations/:id/contact")
+  conversationContact(@WorkspaceId() workspaceId: string, @Param("id") id: string) {
+    return this.service.conversationContact(workspaceId, id);
+  }
+
+  @Post("conversations/:id/notes")
+  @Roles("Owner", "Admin", "Editor")
+  @UseGuards(RolesGuard)
+  addNote(
+    @WorkspaceId() workspaceId: string,
+    @CurrentUser() user: AuthenticatedUser,
+    @Param("id") id: string,
+    @Body() dto: AddNoteDto,
+  ) {
+    return this.service.addNote(workspaceId, id, dto.text, user.email);
+  }
+
   @Patch("conversations/:id")
   @Roles("Owner", "Admin", "Editor")
   @UseGuards(RolesGuard)
@@ -576,6 +815,13 @@ export class InboxController {
     @Body() dto: UpdateConversationDto,
   ) {
     return this.service.updateConversation(workspaceId, id, dto);
+  }
+
+  @Delete("conversations/:id")
+  @Roles("Owner", "Admin", "Editor")
+  @UseGuards(RolesGuard)
+  deleteConversation(@WorkspaceId() workspaceId: string, @Param("id") id: string) {
+    return this.service.deleteConversation(workspaceId, id);
   }
 }
 

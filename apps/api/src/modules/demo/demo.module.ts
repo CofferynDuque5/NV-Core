@@ -7,48 +7,16 @@ import type { AppConfig } from "../../config/configuration";
 import { PrismaService } from "../../prisma/prisma.service";
 import { SampleDataService } from "../../common/sample-data.service";
 import { hashPassword } from "../../auth/password.util";
+import { DEMO_SHOWCASE_SQL } from "./demo-showcase";
 
 /** Marks the demo brand as ours, so a customer brand with the same slug is never touched. */
 export const DEMO_OWNER = "sistema-demo";
 
 /**
- * Example numbers for the demo: Venezuela has no 000 area code, so they can't
- * belong to anyone (the old example data used real-looking numbers).
- */
-export function demoPhone(i: number): string {
-  return `+58 000 000 ${String(100 + i).padStart(4, "0")}`;
-}
-
-/** Example chats shown in the demo Inbox: [name, handle, messages (in/out)]. */
-export const DEMO_CHATS: [string, string, ["in" | "out", string][]][] = [
-  ["María González", "+580000000101", [
-    ["in", "Hola, ¿tienen Disney+ disponible?"],
-    ["out", "¡Hola María! Sí, tenemos perfiles de Disney+ por 30 días. ¿Te paso los precios?"],
-    ["in", "Sí, por favor 🙏"],
-  ]],
-  ["Carlos Pérez", "+580000000102", [
-    ["in", "Buenas, mi HBO Max vence mañana, ¿cómo renuevo?"],
-    ["out", "Hola Carlos, te envío el enlace de pago y lo activamos apenas confirmes."],
-  ]],
-  ["Valentina Díaz", "+580000000109", [
-    ["in", "¿Tienen combos de Netflix + Spotify?"],
-  ]],
-];
-
-/** Example products for the demo Tienda (prices are illustrative). */
-export const DEMO_PRODUCTS = [
-  { name: "Netflix · 1 perfil", category: "Streaming", prices: { USD: "4", VES: "160" }, description: "Perfil propio por 30 días." },
-  { name: "Disney+ · 1 perfil", category: "Streaming", prices: { USD: "3", VES: "120" }, description: "Perfil propio por 30 días." },
-  { name: "Spotify Premium", category: "Música", prices: { USD: "3", COP: "12000" }, description: "Cuenta individual por 30 días." },
-  { name: "Combo Netflix + Spotify", category: "Combos", prices: { USD: "6.5" }, description: "Los dos servicios con un solo pago." },
-];
-
-/**
  * Prepares the public «Ver demo»: one shared account that can only look
  * (every write is refused by the auth guard) and an example brand with
- * contacts, chats, products, segments, forms, funnels and paused
- * automations. Nothing in it can be messaged: the numbers are fictitious and
- * the brand has no connections.
+ * fictional customers, chats, groups, campaigns, payments, products, forms,
+ * funnels and paused automations (see demo-showcase.ts).
  */
 @Injectable()
 export class DemoService implements OnApplicationBootstrap {
@@ -73,7 +41,9 @@ export class DemoService implements OnApplicationBootstrap {
 
     const ws = await this.prisma.workspace.findUnique({ where: { slug: demo.slug } });
     if (ws && ws.createdBy !== DEMO_OWNER) {
-      this.logger.warn(`La marca "${demo.slug}" ya existe y no es la demo: la demo queda desactivada.`);
+      this.logger.warn(
+        `La marca "${demo.slug}" ya existe y no es la demo: la demo queda desactivada.`,
+      );
       return false;
     }
     if (!ws) {
@@ -106,41 +76,63 @@ export class DemoService implements OnApplicationBootstrap {
       create: { userId: user.id, workspaceSlug: demo.slug, role: "Visor" },
       update: { role: "Visor" },
     });
+    // Only the fictitious visitor belongs to the demo: a real account (e.g. the
+    // admin, made Owner of every brand at boot) would show its email to anyone.
+    await this.prisma.membership.deleteMany({
+      where: { workspaceSlug: demo.slug, userId: { not: user.id } },
+    });
 
-    if ((await this.prisma.contact.count({ where: { workspaceSlug: demo.slug } })) === 0) {
+    if ((await this.prisma.segment.count({ where: { workspaceSlug: demo.slug } })) === 0) {
       await this.fill(demo.slug);
-      this.logger.log(`Demo lista en "${demo.slug}".`);
     }
+    await this.showcase(demo.slug);
+    this.logger.log(`Demo lista en "${demo.slug}".`);
     return true;
   }
 
-  /** Example content of the demo brand. */
+  /** Rebuild the demo's example people, chats, campaigns, payments and products. */
+  private async showcase(slug: string): Promise<void> {
+    await this.prisma.$transaction(
+      async (tx) => {
+        const convs = await tx.conversation.findMany({
+          where: { workspaceSlug: slug },
+          select: { id: true },
+        });
+        await tx.message.deleteMany({ where: { conversationId: { in: convs.map((c) => c.id) } } });
+        const camps = await tx.campaign.findMany({
+          where: { workspaceSlug: slug },
+          select: { id: true },
+        });
+        await tx.campaignTarget.deleteMany({
+          where: { campaignId: { in: camps.map((c) => c.id) } },
+        });
+        const where = { workspaceSlug: slug };
+        await tx.notification.deleteMany({ where });
+        await tx.post.deleteMany({ where });
+        await tx.task.deleteMany({ where });
+        await tx.paymentRequest.deleteMany({ where });
+        await tx.paymentMethod.deleteMany({ where });
+        await tx.product.deleteMany({ where });
+        await tx.sendLog.deleteMany({ where });
+        await tx.campaign.deleteMany({ where });
+        await tx.group.deleteMany({ where });
+        await tx.conversation.deleteMany({ where });
+        await tx.contact.deleteMany({ where });
+        for (const sql of DEMO_SHOWCASE_SQL) await tx.$executeRawUnsafe(sql, slug);
+        // A remote database (Neon) can take longer than Prisma's default 5 s:
+        // without room the transaction rolls back and the demo stays empty.
+      },
+      { maxWait: 20000, timeout: 120000 },
+    );
+  }
+
+  /** Example forms, funnels, segments and automations (made once). */
   private async fill(slug: string): Promise<void> {
     await this.samples.seed(slug);
-    // Fictitious numbers only, and nothing that runs by itself.
-    const contacts = await this.prisma.contact.findMany({ where: { workspaceSlug: slug }, orderBy: { createdAt: "asc" } });
-    for (const [i, c] of contacts.entries()) {
-      await this.prisma.contact.update({ where: { id: c.id }, data: { phone: demoPhone(i + 1), email: null } });
-    }
-    await this.prisma.automation.updateMany({ where: { workspaceSlug: slug }, data: { status: "pausado" } });
-
-    const now = Date.now();
-    for (const [ci, [name, handle, lines]] of DEMO_CHATS.entries()) {
-      const conv = await this.prisma.conversation.create({
-        data: { workspaceSlug: slug, channel: "wa", contactName: name, contactHandle: handle, labels: ci === 0 ? ["ventas"] : [] },
-      });
-      const start = now - (ci + 1) * 3_600_000;
-      await this.prisma.message.createMany({
-        data: lines.map(([direction, text], i) => ({
-          conversationId: conv.id,
-          direction,
-          text,
-          createdAt: new Date(start + i * 90_000),
-        })),
-      });
-    }
-    await this.prisma.product.createMany({
-      data: DEMO_PRODUCTS.map((p) => ({ workspaceSlug: slug, ...p })),
+    // Nothing that runs by itself.
+    await this.prisma.automation.updateMany({
+      where: { workspaceSlug: slug },
+      data: { status: "pausado" },
     });
   }
 }

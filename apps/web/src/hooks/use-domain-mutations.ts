@@ -1,6 +1,8 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import type {
+  ChangelogStatus,
+  QuickReply,
   CreateProductInput,
   UpdateWorkspaceInput,
   AccessPaymentInput,
@@ -10,6 +12,9 @@ import type {
   UpdatePaymentRequestInput,
   WeeklyReportSettings,
   AddMemberInput,
+  CreateInviteLinkInput,
+  WhatsappLineAction,
+  TelegramLineAction,
   CampaignAttachment,
   ChannelId,
   Contact,
@@ -122,6 +127,13 @@ export function useMarkChangelogSeen() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: () => svc.changelog.markSeen(),
+    // Clear the badge right away: the read-only demo can't save "seen", and the
+    // counter shouldn't stay up while the page is open either way.
+    onMutate: () => {
+      qc.setQueryData<ChangelogStatus>(["changelog"], (prev) =>
+        prev ? { ...prev, unseenCount: 0 } : prev,
+      );
+    },
     onSuccess: (status) => {
       qc.setQueryData(["changelog"], status);
     },
@@ -437,6 +449,8 @@ export function useRunCampaign() {
       toast.success("Campaña en marcha: los envíos van saliendo con ritmo anti-ban. Míralos en Historial.");
     },
     onError: (err) => toast.error(errText(err)),
+    // On the free trial the one send closes it: refresh the plan state.
+    onSettled: () => qc.invalidateQueries({ queryKey: [ws.slug, "access"] }),
   });
 }
 
@@ -449,6 +463,44 @@ export function usePauseCampaign() {
     onSuccess: () => {
       invalidateCampaigns(qc, ws.id);
       toast.success("Campaña pausada");
+    },
+    onError: (err) => toast.error(errText(err)),
+  });
+}
+
+/** Send again only to the groups that failed last time. */
+export function useRetryFailedCampaign() {
+  const svc = useServices();
+  const ws = useWorkspace();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => svc.campaigns.retryFailed(ws.id, id),
+    onSuccess: ({ retried }) => {
+      invalidateCampaigns(qc, ws.id);
+      toast.success(
+        retried === 1 ? "Reintentando 1 grupo que falló" : `Reintentando ${retried} grupos que fallaron`,
+      );
+    },
+    onError: (err) => toast.error(errText(err)),
+  });
+}
+
+/** Emergency stop: pause every scheduled or running campaign of the brand. */
+export function usePauseAllCampaigns() {
+  const svc = useServices();
+  const ws = useWorkspace();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () => svc.campaigns.pauseAll(ws.id),
+    onSuccess: ({ paused }) => {
+      invalidateCampaigns(qc, ws.id);
+      toast.success(
+        paused === 0
+          ? "No había campañas programadas ni enviándose"
+          : paused === 1
+            ? "1 campaña pausada"
+            : `${paused} campañas pausadas`,
+      );
     },
     onError: (err) => toast.error(errText(err)),
   });
@@ -1150,6 +1202,34 @@ export function useSendMessage(conversationId: string | null) {
   });
 }
 
+/** Internal note in a chat: only the team sees it, nothing is sent. */
+export function useAddNote(conversationId: string | null) {
+  const svc = useServices();
+  const ws = useWorkspace();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (text: string) => svc.inbox.addNote(ws.id, conversationId as string, text),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: [ws.id, "inbox", conversationId, "messages"] });
+    },
+    onError: (err) => toast.error(errText(err)),
+  });
+}
+
+export function useSaveQuickReplies() {
+  const svc = useServices();
+  const ws = useWorkspace();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (items: QuickReply[]) => svc.inbox.saveQuickReplies(ws.id, items),
+    onSuccess: (items) => {
+      qc.setQueryData([ws.id, "inbox", "quick-replies"], items);
+      toast.success("Respuestas guardadas");
+    },
+    onError: (err) => toast.error(errText(err)),
+  });
+}
+
 export function useResolveConversation() {
   const svc = useServices();
   const ws = useWorkspace();
@@ -1174,6 +1254,20 @@ export function useUpdateConversation() {
       svc.inbox.updateConversation(ws.id, args.id, args.input),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: [ws.id, "inbox"] });
+    },
+    onError: (err) => toast.error(errText(err)),
+  });
+}
+
+export function useDeleteConversation() {
+  const svc = useServices();
+  const ws = useWorkspace();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => svc.inbox.deleteConversation(ws.id, id),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: [ws.id, "inbox"] });
+      toast.success("Chat eliminado del panel");
     },
     onError: (err) => toast.error(errText(err)),
   });
@@ -1208,6 +1302,60 @@ export const useWhatsappDisconnect = () => useWhatsappAction("disconnect");
 export const useWhatsappSync = () => useWhatsappAction("sync");
 export const useWhatsappRelink = () => useWhatsappAction("relink");
 
+function invalidateLines(qc: ReturnType<typeof useQueryClient>, wsId: string) {
+  void qc.invalidateQueries({ queryKey: [wsId, "whatsapp", "lines"] });
+  void qc.invalidateQueries({ queryKey: [wsId, "groups"] });
+}
+
+/** Link one more WhatsApp number to the brand. */
+export function useAddWhatsappLine() {
+  const svc = useServices();
+  const ws = useWorkspace();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (label?: string) => svc.whatsapp.addLine(ws.id, label),
+    onSuccess: () => invalidateLines(qc, ws.id),
+    onError: (err) => toast.error(errText(err)),
+  });
+}
+
+export function useWhatsappLineAction() {
+  const svc = useServices();
+  const ws = useWorkspace();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ line, action }: { line: number; action: WhatsappLineAction }) =>
+      svc.whatsapp.lineAction(ws.id, line, action),
+    onSuccess: () => invalidateLines(qc, ws.id),
+    onError: (err) => toast.error(errText(err)),
+  });
+}
+
+export function useRenameWhatsappLine() {
+  const svc = useServices();
+  const ws = useWorkspace();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ line, label }: { line: number; label: string }) => svc.whatsapp.renameLine(ws.id, line, label),
+    onSuccess: () => invalidateLines(qc, ws.id),
+    onError: (err) => toast.error(errText(err)),
+  });
+}
+
+export function useRemoveWhatsappLine() {
+  const svc = useServices();
+  const ws = useWorkspace();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (line: number) => svc.whatsapp.removeLine(ws.id, line),
+    onSuccess: () => {
+      invalidateLines(qc, ws.id);
+      toast.success("Número quitado de esta marca");
+    },
+    onError: (err) => toast.error(errText(err)),
+  });
+}
+
 function useTelegramAction(action: "connect" | "reconnect" | "disconnect" | "sync") {
   const svc = useServices();
   const ws = useWorkspace();
@@ -1235,6 +1383,72 @@ export function useTelegramSubmitPassword() {
     onSuccess: (status) => {
       qc.setQueryData([ws.id, "telegram", "status"], status);
       void qc.invalidateQueries({ queryKey: [ws.id, "telegram", "status"] });
+    },
+    onError: (err) => toast.error(errText(err)),
+  });
+}
+
+function invalidateTgLines(qc: ReturnType<typeof useQueryClient>, wsId: string) {
+  void qc.invalidateQueries({ queryKey: [wsId, "telegram"] });
+  void qc.invalidateQueries({ queryKey: [wsId, "groups"] });
+}
+
+/** Link one more Telegram account to the brand. */
+export function useAddTelegramLine() {
+  const svc = useServices();
+  const ws = useWorkspace();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (label?: string) => svc.telegram.addLine(ws.id, label),
+    onSuccess: () => invalidateTgLines(qc, ws.id),
+    onError: (err) => toast.error(errText(err)),
+  });
+}
+
+export function useTelegramLineAction() {
+  const svc = useServices();
+  const ws = useWorkspace();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ line, action }: { line: number; action: TelegramLineAction }) =>
+      svc.telegram.lineAction(ws.id, line, action),
+    onSuccess: () => invalidateTgLines(qc, ws.id),
+    onError: (err) => toast.error(errText(err)),
+  });
+}
+
+export function useRenameTelegramLine() {
+  const svc = useServices();
+  const ws = useWorkspace();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ line, label }: { line: number; label: string }) => svc.telegram.renameLine(ws.id, line, label),
+    onSuccess: () => invalidateTgLines(qc, ws.id),
+    onError: (err) => toast.error(errText(err)),
+  });
+}
+
+export function useTelegramLinePassword() {
+  const svc = useServices();
+  const ws = useWorkspace();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ line, password }: { line: number; password: string }) =>
+      svc.telegram.linePassword(ws.id, line, password),
+    onSuccess: () => invalidateTgLines(qc, ws.id),
+    onError: (err) => toast.error(errText(err)),
+  });
+}
+
+export function useRemoveTelegramLine() {
+  const svc = useServices();
+  const ws = useWorkspace();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (line: number) => svc.telegram.removeLine(ws.id, line),
+    onSuccess: () => {
+      invalidateTgLines(qc, ws.id);
+      toast.success("Cuenta de Telegram quitada de esta marca");
     },
     onError: (err) => toast.error(errText(err)),
   });
@@ -1585,6 +1799,7 @@ function invalidateTeam(qc: ReturnType<typeof useQueryClient>, wsId: string) {
   void qc.invalidateQueries({ queryKey: [wsId, "team"] });
   void qc.invalidateQueries({ queryKey: [wsId, "roles"] });
   void qc.invalidateQueries({ queryKey: [wsId, "invitations"] });
+  void qc.invalidateQueries({ queryKey: [wsId, "invite-links"] });
 }
 
 export function useAddMember() {
@@ -1614,6 +1829,31 @@ export function useRevokeInvitation() {
     onSuccess: () => {
       invalidateTeam(qc, ws.id);
       toast.success("Invitación cancelada");
+    },
+    onError: (err) => toast.error(errText(err)),
+  });
+}
+
+export function useCreateInviteLink() {
+  const svc = useServices();
+  const ws = useWorkspace();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: CreateInviteLinkInput) => svc.team.createInviteLink(ws.id, input),
+    onSuccess: () => invalidateTeam(qc, ws.id),
+    onError: (err) => toast.error(errText(err)),
+  });
+}
+
+export function useRevokeInviteLink() {
+  const svc = useServices();
+  const ws = useWorkspace();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (linkId: string) => svc.team.revokeInviteLink(ws.id, linkId),
+    onSuccess: () => {
+      invalidateTeam(qc, ws.id);
+      toast.success("Enlace desactivado");
     },
     onError: (err) => toast.error(errText(err)),
   });

@@ -1,5 +1,5 @@
 import { Link, useLocation } from "react-router-dom";
-import { ChevronsUpDown } from "lucide-react";
+import { ChevronsUpDown, Lock } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { useUiStore } from "@/stores/ui-store";
@@ -7,12 +7,14 @@ import { useWorkspace } from "@/hooks/use-workspace";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { getNavIcon } from "./sidebar-icon";
 import { navSectionsFor } from "@/lib/goal-nav";
+import { usePlanLocks } from "@/hooks/use-plan-locks";
 import { BrandTile } from "./brand-mark";
 
 export function MobileNav({ onOpenSwitcher }: { onOpenSwitcher: () => void }) {
   const open = useUiStore((s) => s.mobileNavOpen);
   const setOpen = useUiStore((s) => s.setMobileNavOpen);
   const ws = useWorkspace();
+  const locks = usePlanLocks(ws.slug) as string[];
   const { pathname } = useLocation();
 
   return (
@@ -69,6 +71,7 @@ export function MobileNav({ onOpenSwitcher }: { onOpenSwitcher: () => void }) {
                       >
                         <Icon className={cn("size-[18px]", active ? "text-brand" : "text-ink-muted")} />
                         {item.label}
+                        {locks.includes(item.module) ? <Lock className="ml-auto size-3.5 text-ink-faint" aria-label="Solo en el plan Pro" /> : null}
                       </Link>
                     </li>
                   );

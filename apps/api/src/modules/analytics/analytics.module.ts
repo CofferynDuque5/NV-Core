@@ -308,7 +308,7 @@ export class AnalyticsService {
       SELECT to_char(date_trunc('day', m."createdAt"), 'YYYY-MM-DD') AS day, COUNT(*)::int AS n
       FROM "Message" m
       JOIN "Conversation" c ON c."id" = m."conversationId"
-      WHERE c."workspaceSlug" = ${workspaceSlug} AND m."createdAt" >= ${from} AND m."createdAt" < ${to}
+      WHERE c."workspaceSlug" = ${workspaceSlug} AND m."direction" <> 'note' AND m."createdAt" >= ${from} AND m."createdAt" < ${to}
       GROUP BY 1
     `);
   }
@@ -339,7 +339,7 @@ export class AnalyticsService {
              COUNT(*)::int AS n
       FROM "Message" m
       JOIN "Conversation" c ON c."id" = m."conversationId"
-      WHERE c."workspaceSlug" = ${workspaceSlug} AND m."createdAt" >= ${from} AND m."createdAt" < ${to}
+      WHERE c."workspaceSlug" = ${workspaceSlug} AND m."direction" <> 'note' AND m."createdAt" >= ${from} AND m."createdAt" < ${to}
       GROUP BY 1, 2
     `);
   }

@@ -1,13 +1,35 @@
-
 import * as React from "react";
+import { useSearchParams } from "react-router-dom";
 import { categoryLabel, type Group, type GroupRulesCheck } from "@nv/domain";
-import { Ban, Loader2, Plus, RotateCcw, Send, Settings2, ShieldCheck, SlidersHorizontal, Trash2, Users } from "lucide-react";
+import {
+  Ban,
+  Loader2,
+  Plus,
+  RotateCcw,
+  Send,
+  Settings2,
+  ShieldCheck,
+  SlidersHorizontal,
+  Trash2,
+  Users,
+} from "lucide-react";
 
 import { useGroups } from "@/hooks/use-domain-data";
-import { useCheckGroupRules, useClearSyncedGroups, useExcludeGroups } from "@/hooks/use-domain-mutations";
+import {
+  useCheckGroupRules,
+  useClearSyncedGroups,
+  useExcludeGroups,
+} from "@/hooks/use-domain-mutations";
 import { useConfirm } from "@/providers/confirm-provider";
-import { countryLine, filterGroups, groupCategories, groupStatus, requirementLabels, type GroupPostingStatus } from "@/lib/groups";
-import { cn } from "@/lib/utils";
+import {
+  countryLine,
+  filterGroups,
+  groupCategories,
+  groupStatus,
+  requirementLabels,
+  type GroupPostingStatus,
+} from "@/lib/groups";
+import { cn, relativeTime } from "@/lib/utils";
 import { PageHeader } from "@/components/common/page-header";
 import { QueryBoundary } from "@/components/common/query-boundary";
 import { TableSkeleton } from "@/components/common/skeletons";
@@ -15,34 +37,44 @@ import { Panel } from "@/components/common/panel";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { GroupCreateDialog } from "@/components/entities/group-create-dialog";
 import { GroupVarsDialog } from "@/components/entities/group-vars-dialog";
 import { GroupRulesDialog } from "@/components/entities/group-rules-dialog";
 import { CampaignFormDialog } from "@/components/entities/campaign-form-dialog";
 
-const COLUMNS = ["", "Grupo", "País", "Reglas", "Miembros", "Estado", ""];
+const COLUMNS = ["", "Grupo", "País", "Reglas", "Miembros", "Actividad", "Estado", ""];
 
-type StatusFilter = "" | GroupPostingStatus | "requisitos";
+type StatusFilter = "" | GroupPostingStatus | "requisitos" | "inactivo";
 const STATUS_FILTERS: { id: StatusFilter; label: string }[] = [
   { id: "", label: "Todos" },
   { id: "apto", label: "Aptos" },
   { id: "requisitos", label: "Con requisitos" },
   { id: "no-apto", label: "No aptos" },
   { id: "apartado", label: "Apartados" },
+  { id: "inactivo", label: "Sin actividad" },
 ];
 
 /** Status filter for the groups table. */
 export function matchesStatus(g: Group, filter: StatusFilter): boolean {
   if (!filter) return true;
   if (filter === "requisitos") return !g.excluded && !!(g.requiresPrice || g.requiresImage);
+  if (filter === "inactivo") return !!g.inactive;
   return groupStatus(g).status === filter;
 }
 
 const chip = (active: boolean) =>
   cn(
     "rounded-full border px-2.5 py-1 text-xs transition-colors",
-    active ? "border-brand/60 bg-brand/10 text-ink" : "border-line-soft text-ink-muted hover:border-line-bright",
+    active
+      ? "border-brand/60 bg-brand/10 text-ink"
+      : "border-line-soft text-ink-muted hover:border-line-bright",
   );
 
 function StatusBadge({ g }: { g: Group }) {
@@ -52,13 +84,21 @@ function StatusBadge({ g }: { g: Group }) {
     return (
       <span title={reasons.join(" ")}>
         <Badge variant="danger">No apto</Badge>
-        <span className="mt-0.5 block max-w-[180px] truncate text-[11px] text-ink-faint">{reasons[0]}</span>
+        <span className="text-ink-faint mt-0.5 block max-w-[180px] truncate text-[11px]">
+          {reasons[0]}
+        </span>
       </span>
     );
   return <Badge variant="success">Apto</Badge>;
 }
 
-function RulesSummary({ results, onClose }: { results: GroupRulesCheck[] | null; onClose: () => void }) {
+function RulesSummary({
+  results,
+  onClose,
+}: {
+  results: GroupRulesCheck[] | null;
+  onClose: () => void;
+}) {
   const ok = results?.filter((r) => r.canPost) ?? [];
   const bad = results?.filter((r) => !r.canPost) ?? [];
   const withReq = ok.filter((r) => r.group.requiresPrice || r.group.requiresImage);
@@ -74,25 +114,25 @@ function RulesSummary({ results, onClose }: { results: GroupRulesCheck[] | null;
           </DialogDescription>
         </DialogHeader>
         <div className="grid grid-cols-1 gap-2 sm:grid-cols-3" data-testid="rules-summary">
-          <div className="rounded-lg border border-line-soft p-3">
-            <p className="text-2xl font-semibold text-state-success">{ok.length}</p>
-            <p className="text-xs text-ink-muted">puedes publicar</p>
+          <div className="border-line-soft rounded-lg border p-3">
+            <p className="text-state-success text-2xl font-semibold">{ok.length}</p>
+            <p className="text-ink-muted text-xs">puedes publicar</p>
           </div>
-          <div className="rounded-lg border border-line-soft p-3">
-            <p className="text-2xl font-semibold text-state-warning">{withReq.length}</p>
-            <p className="text-xs text-ink-muted">piden precio o foto</p>
+          <div className="border-line-soft rounded-lg border p-3">
+            <p className="text-state-warning text-2xl font-semibold">{withReq.length}</p>
+            <p className="text-ink-muted text-xs">piden precio o foto</p>
           </div>
-          <div className="rounded-lg border border-line-soft p-3">
-            <p className="text-2xl font-semibold text-state-danger">{bad.length}</p>
-            <p className="text-xs text-ink-muted">no aptos o apartados</p>
+          <div className="border-line-soft rounded-lg border p-3">
+            <p className="text-state-danger text-2xl font-semibold">{bad.length}</p>
+            <p className="text-ink-muted text-xs">no aptos o apartados</p>
           </div>
         </div>
         {bad.length + withReq.length > 0 ? (
           <ul className="max-h-72 space-y-2 overflow-y-auto text-sm">
             {[...bad, ...withReq].map((r) => (
-              <li key={r.group.id} className="rounded-lg border border-line-soft p-2.5">
-                <p className="font-medium text-ink">{r.group.name}</p>
-                <ul className="text-xs text-ink-muted">
+              <li key={r.group.id} className="border-line-soft rounded-lg border p-2.5">
+                <p className="text-ink font-medium">{r.group.name}</p>
+                <ul className="text-ink-muted text-xs">
                   {r.notes.map((n) => (
                     <li key={n}>· {n}</li>
                   ))}
@@ -117,7 +157,8 @@ export function GruposContent({ showHeader = true }: { showHeader?: boolean }) {
   const [rulesGroup, setRulesGroup] = React.useState<Group | null>(null);
   const [campaignOpen, setCampaignOpen] = React.useState(false);
   const [summary, setSummary] = React.useState<GroupRulesCheck[] | null>(null);
-  const [q, setQ] = React.useState("");
+  const [searchParams] = useSearchParams();
+  const [q, setQ] = React.useState(() => searchParams.get("q") ?? "");
   const [category, setCategory] = React.useState("");
   const [status, setStatus] = React.useState<StatusFilter>("");
   const [selected, setSelected] = React.useState<Set<string>>(new Set());
@@ -170,7 +211,12 @@ export function GruposContent({ showHeader = true }: { showHeader?: boolean }) {
           onClick={() => checkRules.mutate(undefined, { onSuccess: (r) => setSummary(r) })}
           disabled={checkRules.isPending}
         >
-          {checkRules.isPending ? <Loader2 className="size-4 animate-spin" /> : <ShieldCheck className="size-4" />} Revisar reglas
+          {checkRules.isPending ? (
+            <Loader2 className="size-4 animate-spin" />
+          ) : (
+            <ShieldCheck className="size-4" />
+          )}{" "}
+          Revisar reglas
         </Button>
       ) : null}
       <Button variant="secondary" size="sm" onClick={() => setCampaignOpen(true)}>
@@ -212,7 +258,9 @@ export function GruposContent({ showHeader = true }: { showHeader?: boolean }) {
         }}
       >
         {(data) => {
-          const filtered = filterGroups(data.items, { q, category }).filter((g) => matchesStatus(g, status));
+          const filtered = filterGroups(data.items, { q, category }).filter((g) =>
+            matchesStatus(g, status),
+          );
           const allSelected = filtered.length > 0 && filtered.every((g) => selected.has(g.id));
           return (
             <div className="space-y-3">
@@ -223,25 +271,43 @@ export function GruposContent({ showHeader = true }: { showHeader?: boolean }) {
                   placeholder="Buscar grupo…"
                   className="h-9 w-full max-w-xs"
                 />
-                <div className="flex flex-wrap items-center gap-1.5" role="group" aria-label="Estado">
+                <div
+                  className="flex flex-wrap items-center gap-1.5"
+                  role="group"
+                  aria-label="Estado"
+                >
                   {STATUS_FILTERS.map((f) => (
-                    <button key={f.id || "all"} type="button" onClick={() => setStatus(f.id)} className={chip(status === f.id)}>
+                    <button
+                      key={f.id || "all"}
+                      type="button"
+                      onClick={() => setStatus(f.id)}
+                      className={chip(status === f.id)}
+                    >
                       {f.label}
                     </button>
                   ))}
                 </div>
-                <span className="ml-auto text-xs text-ink-faint">
+                <span className="text-ink-faint ml-auto text-xs">
                   {filtered.length} de {data.items.length}
                 </span>
               </div>
               {cats.length > 0 ? (
                 <div className="flex flex-wrap items-center gap-1.5">
-                  <span className="text-xs text-ink-faint">Etiquetas:</span>
-                  <button type="button" onClick={() => setCategory("")} className={chip(category === "")}>
+                  <span className="text-ink-faint text-xs">Etiquetas:</span>
+                  <button
+                    type="button"
+                    onClick={() => setCategory("")}
+                    className={chip(category === "")}
+                  >
                     Todas
                   </button>
                   {cats.map((c) => (
-                    <button key={c} type="button" onClick={() => setCategory(c)} className={chip(category === c)}>
+                    <button
+                      key={c}
+                      type="button"
+                      onClick={() => setCategory(c)}
+                      className={chip(category === c)}
+                    >
                       {c}
                     </button>
                   ))}
@@ -249,15 +315,30 @@ export function GruposContent({ showHeader = true }: { showHeader?: boolean }) {
               ) : null}
 
               {selected.size > 0 ? (
-                <div className="flex flex-wrap items-center gap-2 rounded-lg border border-brand/40 bg-brand/5 px-3 py-2 text-sm">
+                <div className="border-brand/40 bg-brand/5 flex flex-wrap items-center gap-2 rounded-lg border px-3 py-2 text-sm">
                   <span className="text-ink">{selected.size} seleccionados</span>
-                  <Button size="sm" variant="secondary" onClick={() => bulk(true)} disabled={exclude.isPending}>
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    onClick={() => bulk(true)}
+                    disabled={exclude.isPending}
+                  >
                     <Ban className="size-4" /> Apartar
                   </Button>
-                  <Button size="sm" variant="ghost" onClick={() => bulk(false)} disabled={exclude.isPending}>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => bulk(false)}
+                    disabled={exclude.isPending}
+                  >
                     <RotateCcw className="size-4" /> Volver a incluir
                   </Button>
-                  <Button size="sm" variant="ghost" className="ml-auto" onClick={() => setSelected(new Set())}>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="ml-auto"
+                    onClick={() => setSelected(new Set())}
+                  >
                     Quitar selección
                   </Button>
                 </div>
@@ -266,7 +347,7 @@ export function GruposContent({ showHeader = true }: { showHeader?: boolean }) {
               <Panel className="overflow-x-auto">
                 <table className="w-full min-w-[760px] text-sm">
                   <thead>
-                    <tr className="border-b border-line text-left text-xs text-ink-faint">
+                    <tr className="border-line text-ink-faint border-b text-left text-xs">
                       {COLUMNS.map((c, i) => (
                         <th key={i} className={cn("px-4 py-3 font-medium", i === 0 && "w-8 pr-0")}>
                           {i === 0 ? (
@@ -276,7 +357,9 @@ export function GruposContent({ showHeader = true }: { showHeader?: boolean }) {
                               className="size-4 accent-[#5F86F2]"
                               checked={allSelected}
                               onChange={() =>
-                                setSelected(allSelected ? new Set() : new Set(filtered.map((g) => g.id)))
+                                setSelected(
+                                  allSelected ? new Set() : new Set(filtered.map((g) => g.id)),
+                                )
                               }
                             />
                           ) : (
@@ -289,7 +372,10 @@ export function GruposContent({ showHeader = true }: { showHeader?: boolean }) {
                   <tbody>
                     {filtered.length === 0 ? (
                       <tr>
-                        <td colSpan={COLUMNS.length} className="px-4 py-8 text-center text-ink-faint">
+                        <td
+                          colSpan={COLUMNS.length}
+                          className="text-ink-faint px-4 py-8 text-center"
+                        >
                           Sin grupos que coincidan con el filtro.
                         </td>
                       </tr>
@@ -303,7 +389,7 @@ export function GruposContent({ showHeader = true }: { showHeader?: boolean }) {
                             key={g.id}
                             data-testid="group-row"
                             className={cn(
-                              "border-b border-line last:border-0 hover:bg-panel-raised/40",
+                              "border-line hover:bg-panel-raised/40 border-b last:border-0",
                               g.excluded && "opacity-60",
                             )}
                           >
@@ -317,8 +403,8 @@ export function GruposContent({ showHeader = true }: { showHeader?: boolean }) {
                               />
                             </td>
                             <td className="px-4 py-3">
-                              <div className="font-medium text-ink">{g.name}</div>
-                              <div className="flex flex-wrap items-center gap-1 text-[11px] text-ink-faint">
+                              <div className="text-ink font-medium">{g.name}</div>
+                              <div className="text-ink-faint flex flex-wrap items-center gap-1 text-[11px]">
                                 {type ? <span>{type}</span> : null}
                                 {(g.tags ?? []).map((t) => (
                                   <Badge key={t} variant="neutral">
@@ -339,18 +425,48 @@ export function GruposContent({ showHeader = true }: { showHeader?: boolean }) {
                               <div className="flex max-w-[220px] flex-wrap gap-1">
                                 {reqs.length > 0 ? (
                                   reqs.map((r) => (
-                                    <Badge key={r} variant={r === "Prohíbe publicidad" || r === "Solo admins" ? "danger" : "warning"}>
+                                    <Badge
+                                      key={r}
+                                      variant={
+                                        r === "Prohíbe publicidad" || r === "Solo admins"
+                                          ? "danger"
+                                          : "warning"
+                                      }
+                                    >
                                       {r}
                                     </Badge>
                                   ))
                                 ) : (
-                                  <span className="text-[11px] text-ink-faint">
+                                  <span className="text-ink-faint text-[11px]">
                                     {g.rulesCheckedAt ? "Sin requisitos" : "Sin revisar"}
                                   </span>
                                 )}
                               </div>
                             </td>
-                            <td className="px-4 py-3 text-ink-muted">{g.members}</td>
+                            <td className="text-ink-muted px-4 py-3">{g.members}</td>
+                            <td className="px-4 py-3 text-[11px]" data-testid="group-activity">
+                              <div
+                                className={
+                                  g.lastSendOk === false ? "text-state-danger" : "text-ink-muted"
+                                }
+                              >
+                                {g.lastSentAt
+                                  ? `Último envío ${relativeTime(g.lastSentAt)}${g.lastSendOk === false ? " (falló)" : ""}`
+                                  : "Sin envíos aún"}
+                              </div>
+                              {g.inactive ? (
+                                <Badge
+                                  variant="warning"
+                                  title="Nadie escribió en este grupo en 30 días. Considera apartarlo."
+                                >
+                                  Sin actividad 30 d
+                                </Badge>
+                              ) : g.lastActivityAt ? (
+                                <div className="text-ink-faint">
+                                  Mensajes {relativeTime(g.lastActivityAt)}
+                                </div>
+                              ) : null}
+                            </td>
                             <td className="px-4 py-3">
                               <StatusBadge g={g} />
                             </td>
@@ -358,14 +474,14 @@ export function GruposContent({ showHeader = true }: { showHeader?: boolean }) {
                               <div className="flex items-center justify-end gap-1">
                                 <button
                                   onClick={() => setRulesGroup(g)}
-                                  className="flex items-center gap-1.5 rounded-md px-2 py-1.5 text-xs text-ink-muted transition-colors hover:bg-panel-high hover:text-ink"
+                                  className="text-ink-muted hover:bg-panel-high hover:text-ink flex items-center gap-1.5 rounded-md px-2 py-1.5 text-xs transition-colors"
                                   title="Reglas, país y tipo"
                                 >
                                   <SlidersHorizontal className="size-4" /> Configurar
                                 </button>
                                 <button
                                   onClick={() => setVarsGroup(g)}
-                                  className="flex items-center gap-1.5 rounded-md px-2 py-1.5 text-xs text-ink-muted transition-colors hover:bg-panel-high hover:text-ink"
+                                  className="text-ink-muted hover:bg-panel-high hover:text-ink flex items-center gap-1.5 rounded-md px-2 py-1.5 text-xs transition-colors"
                                   title="Variables"
                                 >
                                   <Settings2 className="size-4" /> Variables

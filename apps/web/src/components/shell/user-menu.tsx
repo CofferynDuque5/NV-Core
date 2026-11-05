@@ -1,7 +1,9 @@
 import { useNavigate, useParams } from "react-router-dom";
-import { LogIn, LogOut, MessageSquarePlus, Moon, Settings, ShieldCheck, Sparkles, Sun, User } from "lucide-react";
+import { Download, LogIn, LogOut, MessageSquarePlus, Moon, Settings, ShieldCheck, Sparkles, Sun, User } from "lucide-react";
+import { initialsOf } from "@nv/domain";
 
 import { useTheme } from "@/providers/theme-provider";
+import { isInstalledApp } from "@/hooks/use-install-prompt";
 
 import { useAuthStore } from "@/stores/auth-store";
 import { useUiStore } from "@/stores/ui-store";
@@ -13,16 +15,6 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-
-function initialsOf(name: string): string {
-  return name
-    .split(" ")
-    .map((w) => w[0])
-    .filter(Boolean)
-    .slice(0, 2)
-    .join("")
-    .toUpperCase();
-}
 
 export function UserMenu() {
   const navigate = useNavigate();
@@ -73,6 +65,11 @@ export function UserMenu() {
             <DropdownMenuItem className="sm:hidden" onClick={() => setTheme(isDark ? "light" : "dark")}>
               {isDark ? <Sun /> : <Moon />} {isDark ? "Modo claro" : "Modo oscuro"}
             </DropdownMenuItem>
+            {isInstalledApp() ? null : (
+              <DropdownMenuItem onClick={() => navigate("/instalar")} data-testid="menu-install">
+                <Download /> Instalar la app
+              </DropdownMenuItem>
+            )}
             <DropdownMenuItem onClick={openFeedback}>
               <MessageSquarePlus /> Enviar comentarios
             </DropdownMenuItem>

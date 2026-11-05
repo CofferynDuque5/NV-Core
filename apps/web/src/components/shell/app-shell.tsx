@@ -1,12 +1,11 @@
 import * as React from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { Lock } from "lucide-react";
 
 import { Sidebar } from "./sidebar";
 import { MobileNav } from "./mobile-nav";
 import { Topbar } from "./topbar";
 import { WorkspaceSwitcher } from "./workspace-switcher";
-import { CommandPalette } from "./command-palette";
 import { NotificationsPanel } from "./notifications-panel";
 import { ComposeWizard } from "@/components/overlays/compose-wizard";
 import { EntityDrawer } from "@/components/overlays/entity-drawer";
@@ -20,7 +19,8 @@ import { useWorkspaceStore } from "@/stores/workspace-store";
 import { useAuthStore } from "@/stores/auth-store";
 import { isBackendConfigured } from "@/lib/env";
 import { useAccess } from "@/hooks/use-domain-data";
-import { PlanLock, TrialBanner } from "@/components/access/plan-access";
+import { PlanLock, PlanUpgrade, TrialBanner } from "@/components/access/plan-access";
+import { usePlanLocks } from "@/hooks/use-plan-locks";
 import { DemoBanner } from "@/components/access/demo-banner";
 
 export function AppShell({ children }: { children: React.ReactNode }) {
@@ -31,6 +31,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const { workspace: routeSlug } = useParams<{ workspace?: string }>();
   const authStatus = useAuthStore((s) => s.status);
   const memberships = useAuthStore((s) => s.memberships);
+  const { pathname } = useLocation();
+
+  // A new page starts at the top, not where the previous one was scrolled.
+  React.useEffect(() => {
+    window.scrollTo(0, 0);
+    document.getElementById("main-content")?.scrollTo?.(0, 0);
+  }, [pathname]);
 
   // A logged-in user who isn't a member of the workspace in the URL would get a
   // 403 on every data call ("Algo salió mal" everywhere). Show a clear access
@@ -48,6 +55,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const access = useAccess(routeSlug, isBackendConfigured() && authStatus === "authenticated" && !noAccess);
   const locked = access.data?.state === "expired" && !superAdmin;
   const canPay = role === "Owner" || role === "Admin";
+  // A Pro-only module opened on the Básico plan shows how to upgrade instead.
+  const locks = usePlanLocks(noAccess ? undefined : routeSlug);
+  const lockedModule = locks.find((m) => pathname === `/w/${routeSlug}/${m}` || pathname.startsWith(`/w/${routeSlug}/${m}/`));
 
   // Hydrate the workspace list (config + user-created) once signed in: asking
   // before the session is restored answers 401 and leaves the list empty.
@@ -88,7 +98,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           <main
             id="main-content"
             tabIndex={-1}
-            className="flex-1 px-4 py-6 outline-none sm:px-6 lg:px-8"
+            className="min-w-0 flex-1 px-4 py-6 outline-none sm:px-6 lg:px-8"
           >
             <div className="animate-fadein mx-auto w-full max-w-[1400px]">
               {noAccess ? (
@@ -126,7 +136,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                   {routeSlug && access.data ? (
                     <TrialBanner slug={routeSlug} access={access.data} canPay={canPay} />
                   ) : null}
-                  {children}
+                  {lockedModule && routeSlug ? <PlanUpgrade slug={routeSlug} feature={lockedModule} /> : children}
                 </>
               )}
             </div>
@@ -135,7 +145,6 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
         {/* Global overlays */}
         <WorkspaceSwitcher open={switcherOpen} onOpenChange={setSwitcherOpen} />
-        <CommandPalette />
         <NotificationsPanel />
         <ComposeWizard />
         <EntityDrawer />

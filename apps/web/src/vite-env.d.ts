@@ -5,6 +5,7 @@ interface ImportMetaEnv {
   readonly VITE_API_URL?: string;
   /** Public URL of the legal page (sitio/legal.html); defaults to DEFAULT_LEGAL_URL. */
   readonly VITE_LEGAL_URL?: string;
+  readonly VITE_SITE_URL?: string;
 }
 
 interface ImportMeta {

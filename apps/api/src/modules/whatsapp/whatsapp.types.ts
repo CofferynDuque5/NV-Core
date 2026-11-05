@@ -3,6 +3,10 @@ export type WhatsappStatusValue = "disconnected" | "connecting" | "qr" | "connec
 export interface WhatsappStatus {
   status: WhatsappStatusValue;
   provider: "baileys";
+  /** 1 = the brand's main number; 2, 3… = extra numbers. */
+  line?: number;
+  /** Name the user gave the number («Ventas»). */
+  label?: string | null;
   number: string | null;
   lastConnectionAt: string | null;
   groupsCount: number;
@@ -78,6 +82,8 @@ export interface SessionEvents {
   onGroups(workspaceSlug: string, groups: WhatsappGroup[]): void;
   /** A direct (1:1) chat message (received, or sent from the phone), for the Inbox. */
   onInbound(workspaceSlug: string, msg: SessionChatMessage): void;
+  /** Someone (not us) wrote in a group: only the time is used, for «grupos sin actividad». */
+  onGroupActivity?(workspaceSlug: string, groupJid: string, at: Date): void;
   /** Names from the WhatsApp contact list, to replace bare numbers in the Inbox. */
   onContactNames?(workspaceSlug: string, names: { handle: string; name: string }[]): void;
   /** A connection problem worth alerting the user about (disconnect, gave up…). */

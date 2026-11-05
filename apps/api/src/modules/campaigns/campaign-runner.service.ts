@@ -1,23 +1,57 @@
 import { randomUUID } from "node:crypto";
+import { DEMO_SLUG } from "../demo/demo-slug";
 
-import { Injectable, Logger, type OnModuleDestroy, type OnModuleInit } from "@nestjs/common";
+import {
+  Injectable,
+  Logger,
+  Optional,
+  type OnModuleDestroy,
+  type OnModuleInit,
+} from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import type { Campaign as PCampaign, Prisma } from "@prisma/client";
 
 import type { AppConfig } from "../../config/configuration";
 import { PrismaService } from "../../prisma/prisma.service";
 import { AuditLogger } from "../../common/audit-logger.service";
+import { WorkspaceAccessService } from "../../common/access/workspace-access.service";
 import { EventBus } from "../../core/events/event-bus.service";
 import { JobManager } from "../../core/jobs/job-manager.service";
 import { ProviderManager } from "../../providers/provider-manager.service";
 import { NotificationsService } from "../notifications/notifications.module";
-import type { MediaAttachment, ProviderId, PublishInput, PublishResult } from "../../providers/provider.types";
+import type {
+  MediaAttachment,
+  ProviderId,
+  PublishInput,
+  PublishResult,
+} from "../../providers/provider.types";
 import { builtinVars, renderTemplate } from "./render";
-import { campaignFooter, groupPostingProblems, priceForGroup, usesPriceVar, withFooter, type SocialLink } from "@nv/domain";
+import { campaignItems, itemsHaveImage } from "./campaign-items";
+import {
+  campaignFooter,
+  explainError,
+  summarizeSkips,
+  groupPostingProblems,
+  priceForGroup,
+  usesPriceVar,
+  withFooter,
+  type SocialLink,
+} from "@nv/domain";
 import { resolvePacing, pacingDelay, type PacingOptions } from "./pacing";
-import { inDateRange, localDayKey } from "./date-range";
+import { inDateRange, wallClock } from "./date-range";
+import { scheduleTimeZone } from "@nv/domain";
 
 const TICK_MS = 30_000;
+/** First tick soon after boot: a cPanel app that slept wakes up and catches up. */
+const FIRST_TICK_MS = 8_000;
+/**
+ * Right after a (re)start WhatsApp/Telegram take a few seconds to reconnect.
+ * During this window a due slot whose channel is still «connecting» waits for
+ * the next tick instead of being claimed and failing every send.
+ */
+const WARMUP_S = 10 * 60;
+/** How long «Enviar ahora» waits for a reconnecting channel before refusing. */
+const CONNECT_WAIT_MS = 20_000;
 /** Minimum spacing between two runs of the same campaign (double click / retries). */
 const RUN_GUARD_MS = 90_000;
 /** Historial marker while a send to a chat is in progress (replaced by the outcome). */
@@ -43,6 +77,8 @@ export interface CampaignRunPayload {
   runKey?: string;
   /** Set by the recovery sweep: continue an interrupted run instead of starting one. */
   resume?: boolean;
+  /** «Reintentar fallidos»: only these groups; no social posts or Status. */
+  onlyGroups?: string[];
 }
 
 /** What a run actually did — a skipped run is reported as such, never as a success. */
@@ -54,6 +90,27 @@ export type CampaignRunOutcome =
 /** Idempotency key of a scheduled slot: once → "once:<scheduleAt>", recurring → the slot itself. */
 export function slotRunKey(slot: string, scheduleAt: string | null | undefined): string {
   return slot === "once" ? `once:${scheduleAt ?? ""}` : slot;
+}
+
+/** Pause between the products sent to the same group (3–6 s). */
+const itemGapMs = () => {
+  const env = process.env.CAMPAIGN_ITEM_GAP_MS;
+  if (env !== undefined && env !== "") return Math.max(0, Number(env) || 0);
+  return 3000 + Math.floor(Math.random() * 3000);
+};
+
+/**
+ * Whether the group's number/account is one the campaign sends from (an empty
+ * list means every number of the brand).
+ */
+export function lineAllowed(
+  campaign: { waLines?: number[] | null; tgLines?: number[] | null },
+  group: { channel: string; waLine?: number | null; tgLine?: number | null },
+): boolean {
+  const tg = group.channel === "tg";
+  const allowed = (tg ? campaign.tgLines : campaign.waLines) ?? [];
+  if (allowed.length === 0) return true;
+  return allowed.includes((tg ? group.tgLine : group.waLine) ?? 1);
 }
 
 const isUniqueViolation = (err: unknown) => (err as { code?: string })?.code === "P2002";
@@ -86,6 +143,7 @@ export class CampaignRunner implements OnModuleInit, OnModuleDestroy {
    */
   private readonly staleRunMs: number;
   private timer?: NodeJS.Timeout;
+  private firstTick?: NodeJS.Timeout;
 
   constructor(
     config: ConfigService<AppConfig, true>,
@@ -95,6 +153,7 @@ export class CampaignRunner implements OnModuleInit, OnModuleDestroy {
     private readonly events: EventBus,
     private readonly audit: AuditLogger,
     private readonly notifications: NotificationsService,
+    @Optional() private readonly access?: WorkspaceAccessService,
   ) {
     this.pacing = resolvePacing(process.env);
     // Retry policy for transient/rate-limited sends (exponential backoff).
@@ -152,6 +211,7 @@ export class CampaignRunner implements OnModuleInit, OnModuleDestroy {
         runKey: p.runKey,
         resume: p.resume,
         attempt: ctx?.attempt,
+        onlyGroups: p.onlyGroups,
       });
     });
 
@@ -168,11 +228,42 @@ export class CampaignRunner implements OnModuleInit, OnModuleDestroy {
         ),
       TICK_MS,
     );
+    this.firstTick = setTimeout(
+      () =>
+        void this.tick().catch((err: unknown) =>
+          this.logger.warn(`Tick del runner falló: ${(err as Error).message}`),
+        ),
+      FIRST_TICK_MS,
+    );
+    this.firstTick.unref?.();
     this.logger.log(`CampaignRunner activo (cada ${TICK_MS / 1000}s).`);
   }
 
   onModuleDestroy(): void {
     if (this.timer) clearInterval(this.timer);
+    if (this.firstTick) clearTimeout(this.firstTick);
+  }
+
+  /** Messaging channels a campaign sends through (groups and WhatsApp status). */
+  private messagingChannels(c: Pick<PCampaign, "channels" | "postToWaStatus">): ProviderId[] {
+    const ch = (c.channels as string[] | null) ?? [];
+    const ids: ProviderId[] = [];
+    if (ch.includes("wa") || c.postToWaStatus) ids.push("whatsapp");
+    if (ch.includes("tg")) ids.push("telegram");
+    return ids;
+  }
+
+  /** True while one of the campaign's channels is still reconnecting after a boot. */
+  async warmingUp(
+    c: Pick<PCampaign, "workspaceSlug" | "channels" | "postToWaStatus">,
+    uptimeS = process.uptime(),
+  ): Promise<boolean> {
+    if (uptimeS > WARMUP_S) return false;
+    for (const id of this.messagingChannels(c)) {
+      const st = await this.providers.status(c.workspaceSlug, id).catch(() => null);
+      if (st?.state === "connecting") return true;
+    }
+    return false;
   }
 
   /**
@@ -184,7 +275,7 @@ export class CampaignRunner implements OnModuleInit, OnModuleDestroy {
    *   a few minutes late — still sends when it comes online. Slots older than the
    *   window are skipped (they fire again the next day) to avoid odd-hour sends.
    */
-  private dueSlot(c: PCampaign, now: Date): string | null {
+  private dueSlot(c: PCampaign, now: Date, tz?: string | null): string | null {
     if (c.status === "pausada" || c.status === "completada") return null;
     const at = c.scheduleAt ?? "";
     if (c.scheduleType === "once") {
@@ -192,18 +283,21 @@ export class CampaignRunner implements OnModuleInit, OnModuleDestroy {
         ? "once"
         : null;
     }
+    // Times are the brand's wall clock (its zone), not the server's: a cPanel
+    // server in another country would otherwise send hours early or late.
+    const clock = wallClock(now, tz);
     // «Desde / hasta»: outside the campaign's date range nothing is sent.
-    if (!inDateRange(localDayKey(now), c.startDate, c.endDate)) return null;
-    if (c.scheduleType === "weekly" && !(c.scheduleDays ?? []).includes(now.getDay())) return null;
+    if (!inDateRange(clock.day, c.startDate, c.endDate)) return null;
+    if (c.scheduleType === "weekly" && !(c.scheduleDays ?? []).includes(clock.weekday)) return null;
     const times = c.scheduleTimes?.length ? c.scheduleTimes : at ? [at] : [];
     for (const t of times) {
       const [h, m] = String(t).split(":").map(Number);
       if (Number.isNaN(h) || Number.isNaN(m)) continue;
-      const slotTime = new Date(now);
-      slotTime.setHours(h, m, 0, 0);
-      const elapsed = now.getTime() - slotTime.getTime();
+      const elapsed = (clock.minutes - (h * 60 + m)) * 60_000;
       if (elapsed < 0 || elapsed > CampaignRunner.CATCHUP_MS) continue; // not yet, or too old
-      const slot = `${todayKey()}T${t}`;
+      // Keyed by the brand's own day: a UTC day here re-fired a slot when UTC
+      // midnight fell inside the catch-up window (duplicate send).
+      const slot = `${clock.day}T${t}`;
       if (c.lastRunSlot !== slot) return slot; // due today and not yet run
     }
     return null;
@@ -214,11 +308,18 @@ export class CampaignRunner implements OnModuleInit, OnModuleDestroy {
     await this.recoverInterruptedRuns(now);
     await this.finishEndedRanges(now);
     const candidates = await this.prisma.campaign.findMany({
-      where: { status: { in: ["programada", "activa"] } },
+      where: { status: { in: ["programada", "activa"] }, workspaceSlug: { not: DEMO_SLUG } },
     });
+    const zones = await this.timeZones(candidates.map((c) => c.workspaceSlug));
     for (const c of candidates) {
-      const slot = this.dueSlot(c, now);
+      const slot = this.dueSlot(c, now, zones.get(c.workspaceSlug));
       if (!slot) continue;
+      if (await this.warmingUp(c)) {
+        this.logger.log(
+          `Campaña "${c.name}": su canal aún se está conectando; se envía en el próximo turno.`,
+        );
+        continue;
+      }
       // SEGURO DE ENVÍO ÚNICO (atómico): en hosting con varias copias de la app
       // (Passenger levanta varios procesos) todas evaluaban la misma campaña a la
       // vez y la lanzaban por duplicado en el mismo instante. Aquí solo UN proceso
@@ -245,6 +346,21 @@ export class CampaignRunner implements OnModuleInit, OnModuleDestroy {
     }
   }
 
+  /** Each brand's schedule zone (its saved zone, else the default for schedules). */
+  async timeZones(slugs: string[]): Promise<Map<string, string>> {
+    const unique = [...new Set(slugs)];
+    const rows = unique.length
+      ? await this.prisma.workspaceSettings.findMany({
+          where: { workspaceSlug: { in: unique } },
+          select: { workspaceSlug: true, timeZone: true },
+        })
+      : [];
+    const saved = new Map(rows.map((r) => [r.workspaceSlug, r.timeZone]));
+    return new Map(
+      unique.map((s) => [s, scheduleTimeZone(saved.get(s), process.env.SCHEDULE_TIME_ZONE)]),
+    );
+  }
+
   /**
    * A daily/weekly campaign whose «hasta» day has passed is done: mark it
    * completed (once nothing is in flight) and tell the team.
@@ -255,13 +371,16 @@ export class CampaignRunner implements OnModuleInit, OnModuleDestroy {
       where: {
         status: { in: ["programada", "activa"] },
         scheduleType: { in: ["daily", "weekly"] },
-        endDate: { not: null, lt: localDayKey(now) },
+        // Earliest possible «today» anywhere (UTC+14): the brand's own day is checked below.
+        endDate: { not: null, lt: wallClock(new Date(now.getTime() + 14 * 3_600_000), "UTC").day },
         runKey: null,
       },
       select: { id: true, workspaceSlug: true, name: true, endDate: true },
     });
+    const zones = await this.timeZones(ended.map((c) => c.workspaceSlug));
     let done = 0;
     for (const c of ended) {
+      if (!(c.endDate! < wallClock(now, zones.get(c.workspaceSlug)).day)) continue;
       const { count } = await this.prisma.campaign.updateMany({
         where: { id: c.id, status: { in: ["programada", "activa"] }, runKey: null },
         data: { status: "completada" },
@@ -298,7 +417,10 @@ export class CampaignRunner implements OnModuleInit, OnModuleDestroy {
       data: { ok: false, error: UNCONFIRMED },
     });
     const stalled = await this.prisma.campaign.findMany({
-      where: { runKey: { not: null }, runHeartbeatAt: { lt: new Date(now.getTime() - this.staleRunMs) } },
+      where: {
+        runKey: { not: null },
+        runHeartbeatAt: { lt: new Date(now.getTime() - this.staleRunMs) },
+      },
     });
     let resumed = 0;
     for (const c of stalled) {
@@ -322,9 +444,21 @@ export class CampaignRunner implements OnModuleInit, OnModuleDestroy {
         data: { runHeartbeatAt: now },
       });
       if (claim.count !== 1) continue;
-      this.logger.warn(`Campaña "${c.name}" (${c.workspaceSlug}) interrumpida: se reanuda la ejecución ${runKey}.`);
-      await this.audit.record(c.workspaceSlug, "system", "campaign.resumed", `${c.id} run=${runKey}`);
-      const payload: CampaignRunPayload = { workspaceSlug: c.workspaceSlug, campaignId: c.id, runKey, resume: true };
+      this.logger.warn(
+        `Campaña "${c.name}" (${c.workspaceSlug}) interrumpida: se reanuda la ejecución ${runKey}.`,
+      );
+      await this.audit.record(
+        c.workspaceSlug,
+        "system",
+        "campaign.resumed",
+        `${c.id} run=${runKey}`,
+      );
+      const payload: CampaignRunPayload = {
+        workspaceSlug: c.workspaceSlug,
+        campaignId: c.id,
+        runKey,
+        resume: true,
+      };
       await this.jobs.dispatch("campaign.run", c.workspaceSlug, payload);
       resumed += 1;
     }
@@ -347,15 +481,32 @@ export class CampaignRunner implements OnModuleInit, OnModuleDestroy {
     if (!campaign) return ["Campaña no encontrada."];
     const out: string[] = [];
     const attachments = ((campaign.attachments as Attachment[]) ?? []).filter((a) => a.url);
-    if (!campaign.message.trim() && attachments.length === 0) out.push("La campaña no tiene mensaje ni imagen.");
-    const own = campaign.targets.map((t) => t.group).filter((g) => g && g.workspaceSlug === workspaceSlug);
+    const items = campaignItems(campaign.items);
+    if (!campaign.message.trim() && attachments.length === 0 && items.length === 0)
+      out.push("La campaña no tiene mensaje, imagen ni productos.");
+    const brandGroups = campaign.targets
+      .map((t) => t.group)
+      .filter((g) => g && g.workspaceSlug === workspaceSlug);
+    const own = brandGroups.filter((g) => lineAllowed(campaign, g!));
+    if (brandGroups.length > 0 && own.length === 0) {
+      out.push("Ninguno de los grupos elegidos es de los números que elegiste para esta campaña.");
+    }
     const prices = (campaign.prices as Record<string, string> | null) ?? {};
     const groups = own.filter(
-      (g) => groupPostingProblems(g!, { hasImage: attachments.length > 0, prices, usesPrice: usesPriceVar(campaign.message) }).length === 0,
+      (g) =>
+        groupPostingProblems(g!, {
+          hasImage: attachments.length > 0 || itemsHaveImage(items),
+          prices,
+          usesPrice: usesPriceVar(campaign.message),
+        }).length === 0,
     );
     if (own.length > 0 && groups.length === 0) {
       const first = own[0]!;
-      const why = groupPostingProblems(first, { hasImage: attachments.length > 0, prices, usesPrice: usesPriceVar(campaign.message) })[0];
+      const why = groupPostingProblems(first, {
+        hasImage: attachments.length > 0 || itemsHaveImage(items),
+        prices,
+        usesPrice: usesPriceVar(campaign.message),
+      })[0];
       out.push(
         `Ningún grupo elegido acepta esta campaña (por ejemplo «${first.name}»: ${why}). Revisa precios, imagen o los grupos.`,
       );
@@ -370,27 +521,66 @@ export class CampaignRunner implements OnModuleInit, OnModuleDestroy {
     if (campaign.postToWaStatus) needed.add("whatsapp");
     if (channels.includes("fb")) needed.add("facebook");
     if (channels.includes("ig")) needed.add("instagram");
-    const label: Record<string, string> = { whatsapp: "WhatsApp", telegram: "Telegram", facebook: "Facebook", instagram: "Instagram" };
+    const label: Record<string, string> = {
+      whatsapp: "WhatsApp",
+      telegram: "Telegram",
+      facebook: "Facebook",
+      instagram: "Instagram",
+    };
     for (const id of needed) {
-      const st = await this.providers.status(workspaceSlug, id).catch(() => null);
+      let st = await this.providers.status(workspaceSlug, id).catch(() => null);
+      // Just woke up (cPanel) and still reconnecting: give it a moment instead of refusing.
+      for (let waited = 0; st?.state === "connecting" && waited < CONNECT_WAIT_MS; waited += 1000) {
+        await sleep(1000);
+        st = await this.providers.status(workspaceSlug, id).catch(() => null);
+      }
       if (st?.state !== "connected") {
-        out.push(`${label[id] ?? id} no está conectado${st?.detail ? ` (${st.detail})` : ""}. Conéctalo en Conexiones.`);
+        out.push(
+          `${label[id] ?? id} no está conectado${st?.detail ? ` (${st.detail})` : ""}. Conéctalo en Conexiones.`,
+        );
       }
     }
     return out;
   }
 
-  async enqueue(workspaceSlug: string, campaignId: string): Promise<void> {
+  async enqueue(workspaceSlug: string, campaignId: string, onlyGroups?: string[]): Promise<void> {
     // The key is fixed BEFORE dispatch so a job retry continues this same run.
-    const payload: CampaignRunPayload = { workspaceSlug, campaignId, runKey: `manual:${randomUUID()}` };
+    const payload: CampaignRunPayload = {
+      workspaceSlug,
+      campaignId,
+      runKey: `manual:${randomUUID()}`,
+      ...(onlyGroups ? { onlyGroups } : {}),
+    };
     await this.jobs.dispatch("campaign.run", workspaceSlug, payload);
+  }
+
+  /**
+   * Groups whose latest send of this campaign (last 7 days) failed and that are
+   * still targets: what «Reintentar fallidos» sends to.
+   */
+  async failedGroups(workspaceSlug: string, campaignId: string): Promise<string[]> {
+    const logs = await this.prisma.sendLog.findMany({
+      where: {
+        workspaceSlug,
+        campaignId,
+        groupId: { not: null },
+        createdAt: { gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) },
+      },
+      orderBy: { createdAt: "desc" },
+      select: { groupId: true, ok: true },
+    });
+    const latest = new Map<string, boolean>();
+    for (const l of logs) if (l.groupId && !latest.has(l.groupId)) latest.set(l.groupId, Boolean(l.ok));
+    const targets = await this.prisma.campaignTarget.findMany({ where: { campaignId }, select: { groupId: true } });
+    const isTarget = new Set(targets.map((t) => t.groupId));
+    return [...latest].filter(([g, ok]) => !ok && isTarget.has(g)).map(([g]) => g);
   }
 
   /** Execute a campaign now: deliver to each target and log every result. */
   async run(
     workspaceSlug: string,
     campaignId: string,
-    opts: { runKey?: string; resume?: boolean; attempt?: number } = {},
+    opts: { runKey?: string; resume?: boolean; attempt?: number; onlyGroups?: string[] } = {},
   ): Promise<CampaignRunOutcome> {
     if (!this.prisma.enabled) throw new Error("Base de datos no configurada.");
     const campaign = await this.prisma.campaign.findFirst({
@@ -398,6 +588,11 @@ export class CampaignRunner implements OnModuleInit, OnModuleDestroy {
       include: { targets: { include: { group: true } } },
     });
     if (!campaign) throw new Error("Campaña no encontrada.");
+    // «Reintentar fallidos» sends only to the groups that failed last time.
+    if (opts.onlyGroups) {
+      const only = new Set(opts.onlyGroups);
+      campaign.targets = campaign.targets.filter((t) => only.has(t.groupId));
+    }
 
     const runKey = opts.runKey ?? `manual:${randomUUID()}`;
     const manual = runKey.startsWith("manual:");
@@ -408,7 +603,8 @@ export class CampaignRunner implements OnModuleInit, OnModuleDestroy {
     };
     // Reanudar = continuar una ejecución que este mismo runKey dejó a medias
     // (reinicio detectado por el barrido, o reintento del job tras un error).
-    const resuming = campaign.runKey === runKey && (opts.resume === true || (opts.attempt ?? 1) > 1);
+    const resuming =
+      campaign.runKey === runKey && (opts.resume === true || (opts.attempt ?? 1) > 1);
     if (opts.resume && !resuming) return skip("la ejecución a reanudar ya terminó; no se repite.");
 
     if (resuming) {
@@ -434,6 +630,21 @@ export class CampaignRunner implements OnModuleInit, OnModuleDestroy {
         data: { lastRunAt: startedAt, runKey, runHeartbeatAt: startedAt, progress: 0 },
       });
       if (claim.count !== 1) return skip("ya está en ejecución en otro proceso; no se duplica.");
+      // Free trial: one campaign send, then the trial closes (after this run).
+      if (this.access && (await this.access.claimTrialSend(workspaceSlug)) === "used") {
+        await this.prisma.campaign.update({
+          where: { id: campaignId },
+          data: { runKey: null, runHeartbeatAt: null, progress: 0 },
+        });
+        await this.notifications
+          .create(workspaceSlug, {
+            type: "warning",
+            title: `Campaña «${campaign.name}» no enviada`,
+            meta: "Tu prueba gratis incluye un solo envío y ya lo usaste. Elige un plan para seguir enviando.",
+          })
+          .catch(() => undefined);
+        return skip("la prueba gratis ya usó su único envío.");
+      }
     }
 
     const attachments = (campaign.attachments as Attachment[]) ?? [];
@@ -450,8 +661,12 @@ export class CampaignRunner implements OnModuleInit, OnModuleDestroy {
     const channels = campaign.channels as string[];
     const results: { ok: boolean }[] = [];
     const prices = (campaign.prices as Record<string, string> | null) ?? {};
+    // One extra message per product, each with its own text and image.
+    const items = campaignItems(campaign.items);
     // Group messages end with the brand's links and the NV Marketing credit.
     const footer = campaign.addFooter ? campaignFooter(await this.brandLinks(workspaceSlug)) : null;
+    // {{dia}}, {{saludo}}, {{hora}} in the brand's zone; {{nombre_marca}}.
+    const varOpts = await this.varOptions(workspaceSlug);
     // Groups this campaign must not go to (kept out, rules, missing price or
     // photo), with the reason, for the end-of-run notice.
     const omitted: { name: string; reason: string }[] = [];
@@ -481,7 +696,17 @@ export class CampaignRunner implements OnModuleInit, OnModuleDestroy {
       // validated on write, but this guarantees the historial never shows sends
       // to groups that don't belong to this workspace's WhatsApp/Telegram.
       if (!group || group.workspaceSlug !== workspaceSlug) continue;
-      const blocked = groupPostingProblems(group, { hasImage: !!waAttachment, prices, usesPrice: usesPriceVar(campaign.message) });
+      // Only the numbers/accounts chosen for this campaign send.
+      if (!lineAllowed(campaign, group)) {
+        omitted.push({ name: group.name, reason: "es de un número que no elegiste para esta campaña" });
+        sent += 1;
+        continue;
+      }
+      const blocked = groupPostingProblems(group, {
+        hasImage: !!waAttachment || itemsHaveImage(items),
+        prices,
+        usesPrice: usesPriceVar(campaign.message),
+      });
       if (blocked.length > 0) {
         omitted.push({ name: group.name, reason: blocked[0]! });
         sent += 1;
@@ -492,10 +717,15 @@ export class CampaignRunner implements OnModuleInit, OnModuleDestroy {
       // bucles de envío sobre la misma campaña.
       const alive = await this.prisma.campaign.updateMany({
         where: { id: campaignId, runKey },
-        data: { runHeartbeatAt: new Date(), progress: Math.floor((sent / Math.max(1, total)) * 100) },
+        data: {
+          runHeartbeatAt: new Date(),
+          progress: Math.floor((sent / Math.max(1, total)) * 100),
+        },
       });
       if (alive.count !== 1) {
-        this.logger.warn(`Campaña "${campaign.name}": otra ejecución tomó el relevo; este proceso se detiene.`);
+        this.logger.warn(
+          `Campaña "${campaign.name}": otra ejecución tomó el relevo; este proceso se detiene.`,
+        );
         return { status: "skipped", reason: "otra ejecución tomó el relevo." };
       }
       // ANTI-SPAM (solo «Enviar ahora»): si este chat YA recibió este mensaje con
@@ -522,12 +752,22 @@ export class CampaignRunner implements OnModuleInit, OnModuleDestroy {
       const ch = group.channel === "tg" ? "tg" : "wa";
       const provider = ch === "tg" ? "telegram" : "whatsapp";
       const vars = {
-        ...builtinVars(group.name),
+        ...builtinVars(group.name, varOpts),
         precio: priceForGroup(group, prices),
         ...(await this.groupVars(group.id)),
       };
       const rendered = renderTemplate(campaign.message, vars);
-      const text = footer ? withFooter(rendered, footer) : rendered;
+      const hasMain = rendered.trim().length > 0 || !!waAttachment;
+      // The footer goes once, on the last message the group gets.
+      const mainText = footer && items.length === 0 ? withFooter(rendered, footer) : rendered;
+      const itemTexts = items.map((it, i) => {
+        const t = renderTemplate(it.text, {
+          ...vars,
+          precio: priceForGroup(group, it.prices && Object.keys(it.prices).length ? it.prices : prices),
+        });
+        return footer && i === items.length - 1 ? withFooter(t, footer) : t;
+      });
+      const text = hasMain ? mainText : (itemTexts[0] ?? mainText);
       const to = group.remoteJid ?? group.id;
       // SEGURO 3 — reserva del chat ANTES de enviar: la fila «en curso» es única
       // por (campaña, chat, ejecución) en la base de datos. Si ya existe (otro
@@ -544,7 +784,7 @@ export class CampaignRunner implements OnModuleInit, OnModuleDestroy {
             groupName: group.name,
             target: ch,
             format: campaign.socialFormat ?? null,
-            preview: text.slice(0, 140),
+            preview: (items.length ? `${text.slice(0, 100)} (+${items.length} productos)` : text).slice(0, 140),
             ok: false,
             error: IN_FLIGHT,
             runKey,
@@ -562,27 +802,51 @@ export class CampaignRunner implements OnModuleInit, OnModuleDestroy {
         });
         return { ok };
       };
-      try {
-        let mediaNote: string | null = null;
+      /** One message (text, or image with caption) to this group. */
+      const deliver = async (body: string, attachment: MediaAttachment | null) => {
+        let note: string | null = null;
         const res = await this.withRetry(async () => {
-          if (!waAttachment) return this.providers.sendMessage(workspaceSlug, provider, { to, body: text });
+          if (!attachment) return this.providers.sendMessage(workspaceSlug, provider, { to, body });
           try {
-            return await this.providers.sendMedia(workspaceSlug, provider, {
-              to,
-              body: text,
-              attachment: waAttachment,
-            });
+            return await this.providers.sendMedia(workspaceSlug, provider, { to, body, attachment });
           } catch (err) {
             // Only the MEDIA failed (download / file rejected): deliver the text
             // anyway and leave the reason in the Historial, instead of silently
             // dropping the whole message or the image without a trace.
             if (!(err as { mediaFailed?: boolean })?.mediaFailed) throw err;
-            mediaNote = `Imagen NO enviada, se envió solo el texto: ${(err as Error).message}`;
-            this.logger.warn(`[${workspaceSlug}] ${group.name}: ${mediaNote}`);
-            return this.providers.sendMessage(workspaceSlug, provider, { to, body: text });
+            note = `Imagen NO enviada, se envió solo el texto: ${(err as Error).message}`;
+            this.logger.warn(`[${workspaceSlug}] ${group.name}: ${note}`);
+            return this.providers.sendMessage(workspaceSlug, provider, { to, body });
           }
         });
-        results.push(await finish(true, mediaNote, res.id));
+        return { id: res.id, note };
+      };
+      const notes: string[] = [];
+      let firstId: string | undefined;
+      let failed: string | null = null;
+      try {
+        if (hasMain) {
+          const r = await deliver(mainText, waAttachment);
+          firstId = r.id;
+          if (r.note) notes.push(r.note);
+        }
+        for (let i = 0; i < items.length; i++) {
+          // A short, human-like gap between the products of the same group.
+          if (hasMain || i > 0) await sleep(itemGapMs());
+          const it = items[i]!;
+          const img = (it.attachments ?? []).find((a) => a.url);
+          try {
+            const r = await deliver(itemTexts[i]!, img ? (img as MediaAttachment) : null);
+            firstId ??= r.id;
+            if (r.note) notes.push(`${it.name}: ${r.note}`);
+          } catch (err) {
+            failed = `${it.name}: ${(err as Error).message}`;
+            break; // the account is likely in trouble: don't keep hammering this group
+          }
+        }
+        if (failed && firstId === undefined) results.push(await finish(false, failed));
+        else if (failed) results.push(await finish(false, [failed, ...notes].join(" · "), firstId));
+        else results.push(await finish(true, notes.length ? notes.join(" · ") : null, firstId));
       } catch (err) {
         results.push(await finish(false, (err as Error).message));
       }
@@ -599,11 +863,12 @@ export class CampaignRunner implements OnModuleInit, OnModuleDestroy {
         data: { runKey: null, runHeartbeatAt: null },
       });
       await this.audit.record(workspaceSlug, "system", "campaign.paused", campaignId);
+      await this.closeTrialAfterSend(workspaceSlug);
       return { status: "paused" }; // nada de redes ni Estado, y no se marca completada
     }
 
-    await this.publishSocial(workspaceSlug, campaign, channels, attachments, results, runKey);
-    if (campaign.postToWaStatus) {
+    if (!opts.onlyGroups) await this.publishSocial(workspaceSlug, campaign, channels, attachments, results, runKey);
+    if (campaign.postToWaStatus && !opts.onlyGroups) {
       await this.publishWaStatus(workspaceSlug, campaign, statusMedia, results, runKey);
     }
 
@@ -640,7 +905,21 @@ export class CampaignRunner implements OnModuleInit, OnModuleDestroy {
       campaignName: campaign.name,
       ok: allOk,
     });
+    await this.closeTrialAfterSend(workspaceSlug);
     return { status: "completed", ok: allOk, sent: okCount, failed: failedCount };
+  }
+
+  /** After the trial's one send, the trial ends and the panel asks to pay. */
+  private async closeTrialAfterSend(workspaceSlug: string): Promise<void> {
+    if (!this.access || !(await this.access.trialSendTaken(workspaceSlug))) return;
+    await this.access.endTrial(workspaceSlug);
+    await this.notifications
+      .create(workspaceSlug, {
+        type: "info",
+        title: "Tu envío de prueba salió",
+        meta: "La prueba gratis incluía un envío de campaña. Elige un plan para seguir usando NV Marketing.",
+      })
+      .catch(() => undefined);
   }
 
   /**
@@ -657,19 +936,14 @@ export class CampaignRunner implements OnModuleInit, OnModuleDestroy {
     omitted: { name: string; reason: string }[] = [],
   ): Promise<void> {
     const total = ok + failed;
-    const skippedNote = omitted.length
-      ? ` ${omitted.length === 1 ? "1 grupo omitido" : `${omitted.length} grupos omitidos`}: ${omitted
-          .slice(0, 3)
-          .map((o) => `${o.name} (${o.reason})`)
-          .join("; ")}${omitted.length > 3 ? "…" : ""}.`
-      : "";
+    const skippedNote = summarizeSkips(omitted);
     if (total === 0) {
       if (omitted.length === 0) return;
       await this.notifications
         .create(workspaceSlug, {
           type: "warning",
           title: `Campaña «${name}»: no se envió a ningún grupo`,
-          meta: skippedNote.trim(),
+          meta: skippedNote,
         })
         .catch(() => undefined);
       return;
@@ -682,12 +956,17 @@ export class CampaignRunner implements OnModuleInit, OnModuleDestroy {
           select: { error: true, groupName: true },
           orderBy: { createdAt: "asc" },
         });
-        if (first?.error) reason = ` Motivo${first.groupName ? ` (${first.groupName})` : ""}: ${first.error.slice(0, 160)}`;
+        // Plain words here; the raw error stays in the Historial.
+        const f = explainError(first?.error);
+        reason = ` ${first?.groupName ? `En «${first.groupName}»: ` : ""}${f.title} ${f.hint}`;
       }
       await this.notifications.create(workspaceSlug, {
         type: failed === 0 ? "success" : ok === 0 ? "error" : "warning",
-        title: failed === 0 ? `Campaña «${name}» enviada` : `Campaña «${name}»: ${failed} de ${total} envíos fallaron`,
-        meta: `${ok} de ${total} enviados.${reason}${skippedNote} Detalle en Historial.`,
+        title:
+          failed === 0
+            ? `Campaña «${name}» enviada`
+            : `Campaña «${name}»: ${ok} de ${total} enviados`,
+        meta: `${failed > 0 ? `${failed} no salieron.` : `${ok} de ${total} enviados.`}${reason}${skippedNote ? ` ${skippedNote}` : ""}`,
       });
     } catch (err) {
       this.logger.warn(`No se pudo avisar del resultado de la campaña: ${(err as Error).message}`);
@@ -698,7 +977,11 @@ export class CampaignRunner implements OnModuleInit, OnModuleDestroy {
    * True when this run already logged a publish to `target` (FB/IG/Estado) —
    * a resumed run must not publish the same post twice.
    */
-  private async alreadyPublished(campaignId: string, runKey: string, target: string): Promise<boolean> {
+  private async alreadyPublished(
+    campaignId: string,
+    runKey: string,
+    target: string,
+  ): Promise<boolean> {
     const row = await this.prisma.sendLog.findFirst({
       where: { campaignId, runKey, target },
       select: { id: true },
@@ -719,7 +1002,7 @@ export class CampaignRunner implements OnModuleInit, OnModuleDestroy {
       channels.includes(t === "facebook" ? "fb" : "ig"),
     );
     if (!targets.length) return;
-    const text = renderTemplate(campaign.message, builtinVars(""));
+    const text = renderTemplate(campaign.message, builtinVars("", await this.varOptions(workspaceSlug)));
     for (const target of targets) {
       if (await this.alreadyPublished(campaign.id, runKey, target)) continue;
       const r = await this.publishWithRetry(workspaceSlug, target, {
@@ -759,7 +1042,9 @@ export class CampaignRunner implements OnModuleInit, OnModuleDestroy {
             },
           });
         } catch (err) {
-          this.logger.warn(`No se pudo guardar la publicación en la campaña: ${(err as Error).message}`);
+          this.logger.warn(
+            `No se pudo guardar la publicación en la campaña: ${(err as Error).message}`,
+          );
         }
       }
       results.push({ ok: r.ok });
@@ -779,7 +1064,7 @@ export class CampaignRunner implements OnModuleInit, OnModuleDestroy {
     runKey: string,
   ): Promise<void> {
     if (await this.alreadyPublished(campaign.id, runKey, "wa_status")) return;
-    const text = renderTemplate(campaign.message, builtinVars(""));
+    const text = renderTemplate(campaign.message, builtinVars("", await this.varOptions(workspaceSlug)));
     const input: PublishInput = {
       message: text,
       attachments: media.filter((a) => a.url) as MediaAttachment[],
@@ -809,16 +1094,28 @@ export class CampaignRunner implements OnModuleInit, OnModuleDestroy {
   }
 
   /** The brand's social links and website for the message footer. */
-  private async brandLinks(workspaceSlug: string): Promise<{ socialLinks: SocialLink[]; website: string | null }> {
+  private async brandLinks(
+    workspaceSlug: string,
+  ): Promise<{ socialLinks: SocialLink[]; website: string | null }> {
     const row = await this.prisma.workspaceSettings
       ?.findUnique({ where: { workspaceSlug }, select: { socialLinks: true, website: true } })
       .catch(() => null);
-    return { socialLinks: (row?.socialLinks as SocialLink[] | null) ?? [], website: row?.website ?? null };
+    return {
+      socialLinks: (row?.socialLinks as SocialLink[] | null) ?? [],
+      website: row?.website ?? null,
+    };
+  }
+
+  private async varOptions(workspaceSlug: string): Promise<{ timeZone: string; brandName?: string }> {
+    const [zones, ws] = await Promise.all([
+      this.timeZones([workspaceSlug]).catch(() => new Map<string, string>()),
+      this.prisma.workspace?.findUnique({ where: { slug: workspaceSlug }, select: { name: true } }).catch(() => null),
+    ]);
+    return { timeZone: zones.get(workspaceSlug) ?? "America/Caracas", brandName: ws?.name };
   }
 
   private async groupVars(groupId: string): Promise<Record<string, string>> {
     const rows = await this.prisma.groupVariable.findMany({ where: { groupId } });
     return Object.fromEntries(rows.map((r) => [r.key, r.value]));
   }
-
 }

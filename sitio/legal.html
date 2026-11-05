@@ -5,8 +5,12 @@
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <meta name="theme-color" content="#0B0D10" />
 <title>Términos legales — NV Marketing</title>
-<title>NV Marketing — Business Operating System</title>
 <meta name="description" content="Términos y condiciones, política de privacidad y política de cookies de NV Marketing." />
+<link rel="canonical" href="https://nvmarketing.nvcorx.com/legal.html" />
+<link rel="icon" href="favicon.ico" sizes="32x32" />
+<link rel="apple-touch-icon" href="img/apple-touch-icon.png" />
+<link rel="preload" href="fonts/inter-latin-567244.woff2" as="font" type="font/woff2" crossorigin />
+<link rel="stylesheet" href="fonts/fonts.css" />
 <style>
 
   /* ==================== TOKENS ==================== */
@@ -24,6 +28,7 @@
     --brand-2:#8C7BEF;
     --cyan:#22D3EE;
     --grad:linear-gradient(135deg,#5F86F2 0%,#8C7BEF 100%);
+    --btn-grad:linear-gradient(135deg,#3F63D6 0%,#6650D4 100%);
     --grad-soft:linear-gradient(135deg,rgba(99,102,241,.18),rgba(139,92,246,.14));
     --radius:16px;
     --radius-lg:22px;
@@ -31,7 +36,8 @@
     --shadow:0 24px 60px -18px rgba(0,0,0,.65);
     --glow:0 0 0 1px rgba(139,92,246,.35),0 18px 50px -12px rgba(99,102,241,.55);
     --maxw:1180px;
-    --font:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Inter,"Helvetica Neue",Arial,sans-serif;
+    --font:"Inter",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+    --display:"Newsreader",Georgia,serif;
   }
 
   /* ==================== RESET / BASE ==================== */
@@ -51,6 +57,7 @@
   a{color:inherit;text-decoration:none}
   img,svg{display:block;max-width:100%}
   h1,h2,h3,h4{margin:0;line-height:1.12;letter-spacing:-.02em;font-weight:700}
+  h1,h2{font-family:var(--display);font-weight:600}
   p{margin:0}
   ul{margin:0;padding:0;list-style:none}
   button{font-family:inherit;cursor:pointer}
@@ -87,7 +94,7 @@
     white-space:nowrap;
   }
   .btn-primary{
-    background:var(--grad);color:#fff;
+    background:var(--btn-grad);color:#fff;
     box-shadow:0 10px 26px -8px rgba(99,102,241,.6), inset 0 1px 0 rgba(255,255,255,.2);
   }
   .btn-primary:hover{transform:translateY(-2px);box-shadow:0 18px 40px -10px rgba(99,102,241,.75)}
@@ -109,7 +116,8 @@
   }
   header.site.scrolled{border-bottom-color:var(--line);background:rgba(11,13,16,.86)}
   .nav{display:flex;align-items:center;justify-content:space-between;height:68px;gap:20px}
-  .brand{display:flex;align-items:center;gap:11px;font-weight:750;font-size:18px;letter-spacing:-.01em}
+  .brand{display:flex;align-items:center;gap:11px;font-weight:750;font-size:18px;letter-spacing:-.01em;white-space:nowrap}
+  @media (max-width:340px){header.site .brand{font-size:0;gap:0}}
   .brand .logo{width:34px;height:34px;flex:none}
   .nav-links{display:flex;align-items:center;gap:6px}
   .nav-links a{
@@ -161,7 +169,16 @@
   .legal-sec a, .legal-part a{color:#a9b9ff;text-decoration:underline;text-underline-offset:3px}
   .people{list-style:none!important;padding-left:0!important}
   .people li{padding:12px 14px;border:1px solid var(--line);border-radius:var(--radius-sm);background:var(--panel-2)}
-  .table-wrap{overflow-x:auto;margin:6px 0 12px}
+  .table-wrap{overflow-x:auto;margin:6px 0 12px;scrollbar-color:rgba(255,255,255,.18) transparent;color-scheme:dark}
+  .table-wrap::-webkit-scrollbar{height:8px}
+  .table-wrap::-webkit-scrollbar-thumb{background:rgba(255,255,255,.18);border-radius:8px}
+  @media (max-width:600px){
+    .table-wrap table{min-width:0}
+    .table-wrap thead{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+    .table-wrap tr{display:block;padding:10px 0;border-bottom:1px solid var(--line)}
+    .table-wrap td{display:block;border:0;padding:3px 0}
+    .table-wrap td::before{content:attr(data-label);display:block;font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+  }
   table{width:100%;border-collapse:collapse;font-size:14.5px;min-width:520px}
   th,td{text-align:left;padding:10px 12px;border-bottom:1px solid var(--line);vertical-align:top;color:#cfd5de}
   th{color:var(--muted);font-size:12px;text-transform:uppercase;letter-spacing:.08em}
@@ -183,7 +200,7 @@
 <header class="site" id="site-header">
   <div class="container">
     <nav class="nav" aria-label="Principal">
-      <a class="brand" href="index.html" aria-label="NV Marketing inicio">
+      <a class="brand" href="./" aria-label="NV Marketing inicio">
         <svg class="logo" viewBox="0 0 40 40" fill="none" aria-hidden="true">
           <defs>
             <linearGradient id="lg" x1="0" y1="0" x2="40" y2="40" gradientUnits="userSpaceOnUse">
@@ -195,7 +212,7 @@
         <span>NV Marketing</span>
       </a>
       <div class="nav-cta">
-        <a class="btn btn-ghost btn-ingresar" href="index.html">Volver al inicio</a>
+        <a class="btn btn-ghost btn-ingresar" href="./">Volver al inicio</a>
       </div>
     </nav>
   </div>
@@ -220,10 +237,10 @@
 <p>NV Marketing («NV Marketing», «nosotros») es una plataforma de software creada y operada por sus autores y socios:</p>
 <ul class="people">
   <li><strong>Valeryn Rouse Duque Valladares</strong>, desarrolladora full-stack, estudiante de Ingeniería de Sistemas. Isla de Margarita, estado Nueva Esparta, Venezuela. Portafolio: <a href="https://cofferyncode.nvcorx.com/" target="_blank" rel="noopener">cofferyncode.nvcorx.com</a>.</li>
-  <li><strong>Nathan Gabriel Quevedo Morales</strong>, socio. Aragua, estado Barcelona, Venezuela.</li>
+  <li><strong>Nathan Gabriel Quevedo Morales</strong>, socio. Aragua de Barcelona, estado Anzoátegui, Venezuela.</li>
 </ul>
 <p>Ambos son responsables del servicio y del tratamiento de los datos descrito en esta página.</p>
-<p id="contacto"><strong>Contacto.</strong> <span data-contact>Mientras publicamos el correo oficial, puedes escribirnos a través del portafolio de Valeryn Duque en <a href="https://cofferyncode.nvcorx.com/" target="_blank" rel="noopener">cofferyncode.nvcorx.com</a>.</span></p>
+<p id="contacto"><strong>Contacto.</strong> <span data-contact>Escríbenos a <a href="mailto:nvmarketing@nvcorx.com">nvmarketing@nvcorx.com</a>.</span></p>
 </section>
 <section class="legal-sec" id="aceptacion"><h3>2. Aceptación de estos términos</h3>
 <p>Al crear una cuenta, entrar a la aplicación o usar cualquier parte de NV Marketing aceptas estos Términos y condiciones, la Política de privacidad y la Política de cookies de esta página. Si usas NV Marketing en nombre de una empresa o marca, declaras que tienes autorización para aceptarlos en su nombre.</p>
@@ -266,9 +283,10 @@
 </section>
 <section class="legal-sec" id="pagos"><h3>8. Planes, pagos y cancelación</h3>
 <ul>
-  <li>Hay un plan gratuito y planes de pago. Los precios de referencia se muestran en la sección de precios de este sitio, en dólares estadounidenses (USD), y pueden cambiar. Si cambian, te avisaremos antes de tu siguiente renovación.</li>
-  <li>Cuando el cobro con tarjeta está activo, el pago de los planes lo procesa Stripe. NV Marketing no guarda los datos completos de tu tarjeta.</li>
-  <li>Puedes cambiar de plan o cancelar en cualquier momento. Al cancelar, el plan no se renueva y mantienes el acceso hasta el final del período ya pagado.</li>
+  <li>Cada persona tiene una sola prueba gratis de 24 horas, que incluye <strong>un envío de campaña</strong>: al enviarlo, la prueba termina. Para evitar abusos, recordamos el dispositivo y la cuenta que usaron la prueba (guardamos solo un código cifrado del navegador, no datos personales), y una cuenta o dispositivo que ya la usó no recibe otra. Después hay dos planes de pago por períodos de 30 días: <strong>Básico</strong> (1 número de WhatsApp, 1 cuenta de Telegram y 1 marca; no incluye Tienda, Cobros, Automatizaciones, Formularios ni Embudos) y <strong>Pro</strong> (todo lo anterior, hasta 5 números de WhatsApp y la opción de crear varias marcas; cada marca adicional paga su propio plan).</li>
+  <li>Para pagar envías el comprobante y los datos del pago (nombre de quien pagó, banco o cuenta de origen, fecha, monto y referencia). Los usamos solo para verificar el pago y los guardamos en privado. Si pagas en bolívares, el monto se calcula con la tasa USDT del día que te mostramos al pagar. Los precios se muestran en la sección de precios de este sitio y en el panel, en dólares estadounidenses (USD), y pueden cambiar; si cambian, te avisaremos antes de tu siguiente pago.</li>
+  <li>Los planes se pagan a nuestras cuentas (pago manual) y se activan cuando confirmamos el pago. Si pagas en otra moneda, pagas el equivalente del día.</li>
+  <li>Puedes mejorar de plan en cualquier momento desde «Mi plan». Si no renuevas, el acceso termina al final del período pagado y tus datos se conservan.</li>
   <li><strong>No hay reembolsos.</strong> Los pagos de los planes no se devuelven, ni total ni parcialmente, incluso si cancelas antes de terminar el período, salvo cuando una ley de cumplimiento obligatorio lo exija.</li>
 </ul>
 <p><strong>Cobros a tus propios clientes.</strong> La función «Cobros» te ayuda a pedir y registrar pagos de tus clientes a tus propias cuentas (Nequi, Pago Móvil, Yape, Binance, Zinli y otras). NV Marketing no recibe, retiene ni transfiere ese dinero, no se conecta a tus bancos o billeteras y no verifica los pagos por ti: tú confirmas cada pago después de revisarlo en tu cuenta. La relación comercial, las facturas y los impuestos de esas ventas son responsabilidad tuya.</p>
@@ -346,11 +364,11 @@
 <div class="table-wrap"><table>
   <thead><tr><th>Qué</th><th>Para qué</th><th>Duración</th></tr></thead>
   <tbody>
-    <tr><td>Cookie de sesión (segura, no accesible desde JavaScript)</td><td>Mantener tu sesión iniciada de forma segura</td><td>Hasta 7 días o hasta que cierres sesión</td></tr>
-    <tr><td>Almacenamiento local del navegador</td><td>Recordar tus preferencias: tema claro u oscuro, vista y filtros del calendario, avance del registro inicial</td><td>Hasta que lo borres desde tu navegador</td></tr>
+    <tr><td data-label="Qué">Cookie de sesión (segura, no accesible desde JavaScript)</td><td data-label="Para qué">Mantener tu sesión iniciada de forma segura</td><td data-label="Duración">Hasta 30 días sin entrar, o hasta que cierres sesión</td></tr>
+    <tr><td data-label="Qué">Almacenamiento local del navegador</td><td data-label="Para qué">Recordar tus preferencias: tema claro u oscuro, vista y filtros del calendario, avance del registro inicial</td><td data-label="Duración">Hasta que lo borres desde tu navegador</td></tr>
   </tbody>
 </table></div>
-<p>Este sitio de presentación no usa cookies. Puedes borrar cookies y almacenamiento local desde la configuración de tu navegador; si borras la cookie de sesión tendrás que volver a ingresar.</p>
+<p>Este sitio de presentación no usa cookies ni carga nada de otros servidores: sus fuentes tipográficas (Inter y Newsreader) se sirven desde nuestro propio dominio. Puedes borrar cookies y almacenamiento local desde la configuración de tu navegador; si borras la cookie de sesión tendrás que volver a ingresar.</p>
 </section>
         </article>
       </div>
@@ -361,13 +379,12 @@
 <footer class="site">
   <div class="container">
     <div class="foot-bottom" style="margin-top:0;border-top:0;padding-top:0">
-      <p>© 2026 NV Marketing · Valeryn Duque y Nathan Quevedo. Todos los derechos reservados. · <a href="index.html" style="color:inherit">Inicio</a></p>
+      <p>© 2026 NV Marketing · Valeryn Duque y Nathan Quevedo. Todos los derechos reservados. · <a href="./" style="color:inherit">Inicio</a></p>
     </div>
   </div>
 </footer>
 <script>
-  /* Correo oficial: cuando lo tengas, escríbelo aquí y se mostrará en «Contacto». */
-  window.NV_CONTACT_EMAIL = "";
+  window.NV_CONTACT_EMAIL = "nvmarketing@nvcorx.com";
   (function(){
     var mail = (window.NV_CONTACT_EMAIL || "").trim();
     var el = document.querySelector("[data-contact]");

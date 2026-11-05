@@ -71,6 +71,24 @@ describe.skipIf(!url)("Inbox: búsqueda y páginas contra PostgreSQL real", () =
     expect(await names("nadie")).toEqual([]);
   });
 
+  it("busca sin importar tildes ni mayúsculas", async () => {
+    const ws = `it-inbox-acc-${Date.now()}`;
+    await prisma.conversation.create({
+      data: {
+        workspaceSlug: ws,
+        channel: "wa",
+        contactName: "María Ramírez",
+        labels: ["Atención"],
+        messages: { create: [{ direction: "in", text: "Pagué por Pago Móvil" }] },
+      },
+    });
+    const names = async (q: string) => (await inbox.conversations(ws, { q })).items.map((c) => c.contactName);
+    expect(await names("maria ramirez")).toEqual(["María Ramírez"]);
+    expect(await names("MARÍA")).toEqual(["María Ramírez"]);
+    expect(await names("atencion")).toEqual(["María Ramírez"]);
+    expect(await names("pague por pago movil")).toEqual(["María Ramírez"]);
+  });
+
   it("filtra por canal, estado y responsable, y aísla el workspace", async () => {
     const ws = `it-inbox-f-${Date.now()}`;
     await seed(ws);
@@ -89,5 +107,95 @@ describe.skipIf(!url)("Inbox: búsqueda y páginas contra PostgreSQL real", () =
     await seed(ws);
     const page = await inbox.conversations(ws, { limit: 2, cursor: "no-es-un-cursor" });
     expect(page.items.map((c) => c.contactName)).toEqual(["Cliente 0", "Cliente 6"]);
+  });
+  it("notas internas: no se envían, no cambian la vista previa ni la actividad", async () => {
+    const ws = `it-inbox-note-${Date.now()}`;
+    await seed(ws);
+    const c1 = await prisma.conversation.findFirst({ where: { workspaceSlug: ws, contactName: "Cliente 1" } });
+    const note = await inbox.addNote(ws, c1!.id, "  Llamar mañana a las 10  ", "ana@nv.tv");
+    expect(note).toMatchObject({ direction: "note", text: "Llamar mañana a las 10", author: "ana@nv.tv" });
+    const page = await inbox.conversations(ws, {});
+    const row = page.items.find((c) => c.id === c1!.id)!;
+    expect(row.preview).toBe("Quiero el precio del plan anual");
+    // Still the oldest activity: the note does not bump the chat to the top.
+    expect(page.items.at(-1)?.contactName).toBe("Cliente 1");
+    const msgs = await inbox.messages(ws, c1!.id);
+    expect(msgs.map((m) => m.direction)).toEqual(["in", "note"]);
+    await expect(inbox.addNote(ws, c1!.id, "   ", "ana@nv.tv")).rejects.toThrow("Escribe la nota.");
+    await expect(inbox.addNote("otra-marca", c1!.id, "x", "ana@nv.tv")).rejects.toThrow("no encontrada");
+  });
+
+  it("filtro «sin responder»: último mensaje del cliente, chat abierto, sin contar notas", async () => {
+    const ws = `it-inbox-wait-${Date.now()}`;
+    await seed(ws);
+    const c2 = await prisma.conversation.findFirst({ where: { workspaceSlug: ws, contactName: "Cliente 2" } });
+    await prisma.message.create({ data: { conversationId: c2!.id, direction: "out", text: "¡Hola! Ya te ayudo" } });
+    const c4 = await prisma.conversation.findFirst({ where: { workspaceSlug: ws, contactName: "Cliente 4" } });
+    await inbox.addNote(ws, c4!.id, "nota", "ana@nv.tv");
+    const page = await inbox.conversations(ws, { waiting: true });
+    // 7 chats − Cliente 3 (resuelto) − Cliente 2 (respondido) = 5; the note on Cliente 4 is not an answer.
+    expect(page.items.map((c) => c.contactName).sort()).toEqual(["Cliente 0", "Cliente 1", "Cliente 4", "Cliente 5", "Cliente 6"]);
+    expect(page.total).toBe(5);
+    expect(page.waitingCount).toBe(5);
+    expect(page.items.every((c) => !!c.waitingSince)).toBe(true);
+    const all = await inbox.conversations(ws, {});
+    expect(all.waitingCount).toBe(5);
+    expect(all.items.find((c) => c.contactName === "Cliente 2")?.waitingSince).toBeUndefined();
+    expect(all.items.find((c) => c.contactName === "Cliente 3")?.waitingSince).toBeUndefined();
+  });
+  it("respuestas guardadas: se limpian, llevan id y son de cada marca", async () => {
+    const ws = `it-inbox-qr-${Date.now()}`;
+    expect(await inbox.quickReplies(ws)).toEqual([]);
+    const saved = await inbox.saveQuickReplies(
+      ws,
+      [
+        { id: "a", title: " Precios ", text: " Hola {{nombre}} " },
+        { id: "a", title: "Duplicado", text: "otro id" },
+        { id: "", title: "", text: "sin nombre" },
+      ],
+      "ana@nv.tv",
+    );
+    expect(saved.map((r) => [r.title, r.text])).toEqual([
+      ["Precios", "Hola {{nombre}}"],
+      ["Duplicado", "otro id"],
+    ]);
+    expect(saved[0]!.id).toBe("a");
+    expect(saved[1]!.id).toMatch(/^qr_/);
+    expect(await inbox.quickReplies(ws)).toEqual(saved);
+    expect(await inbox.quickReplies(`${ws}-otra`)).toEqual([]);
+  });
+
+  it("ficha del cliente: encuentra el contacto por teléfono (últimos 9 dígitos)", async () => {
+    const ws = `it-inbox-card-${Date.now()}`;
+    await seed(ws);
+    await prisma.contact.create({ data: { workspaceSlug: ws, name: "Cliente Cuatro", phone: "+57 300 000 004", tags: ["vip"] } });
+    await prisma.contact.create({ data: { workspaceSlug: `${ws}-x`, name: "Otra marca", phone: "+57300000005" } });
+    const c4 = await prisma.conversation.findFirst({ where: { workspaceSlug: ws, contactName: "Cliente 4" } });
+    const c5 = await prisma.conversation.findFirst({ where: { workspaceSlug: ws, contactName: "Cliente 5" } });
+    expect((await inbox.conversationContact(ws, c4!.id)).contact).toMatchObject({ name: "Cliente Cuatro", tags: ["vip"] });
+    expect((await inbox.conversationContact(ws, c5!.id)).contact).toBeNull();
+    await expect(inbox.conversationContact(`${ws}-x`, c4!.id)).rejects.toThrow("no encontrada");
+  });
+  it("tiempo de primera respuesta por chat", async () => {
+    const ws = `it-inbox-frt-${Date.now()}`;
+    const t0 = Date.UTC(2026, 0, 1, 10);
+    const a = await prisma.conversation.create({ data: { workspaceSlug: ws, channel: "wa", contactName: "A" } });
+    const b = await prisma.conversation.create({ data: { workspaceSlug: ws, channel: "wa", contactName: "B" } });
+    const c = await prisma.conversation.create({ data: { workspaceSlug: ws, channel: "wa", contactName: "C" } });
+    await prisma.message.createMany({
+      data: [
+        { conversationId: a.id, direction: "out", text: "campaña", createdAt: new Date(t0 - 3_600_000) },
+        { conversationId: a.id, direction: "in", text: "hola", createdAt: new Date(t0) },
+        { conversationId: a.id, direction: "note", text: "lo veo", createdAt: new Date(t0 + 60_000) },
+        { conversationId: a.id, direction: "out", text: "¡hola!", createdAt: new Date(t0 + 12 * 60_000) },
+        { conversationId: b.id, direction: "in", text: "hola", createdAt: new Date(t0) },
+        { conversationId: c.id, direction: "out", text: "promo", createdAt: new Date(t0) },
+      ],
+    });
+    const page = await inbox.conversations(ws, {});
+    const by = new Map(page.items.map((x) => [x.contactName, x]));
+    expect(by.get("A")?.firstReplyMins).toBe(12);
+    expect(by.get("B")?.firstReplyMins).toBeNull();
+    expect(by.get("C")?.firstReplyMins).toBeUndefined();
   });
 });

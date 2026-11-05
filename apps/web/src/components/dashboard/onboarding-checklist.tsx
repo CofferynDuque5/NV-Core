@@ -7,6 +7,7 @@ import type { OnboardingStepKey } from "@nv/domain";
 import { useWorkspace } from "@/hooks/use-workspace";
 import { useOnboarding } from "@/hooks/use-domain-data";
 import { useDismissOnboarding } from "@/hooks/use-domain-mutations";
+import { useAuthStore } from "@/stores/auth-store";
 import { Panel } from "@/components/common/panel";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -55,9 +56,11 @@ export function OnboardingChecklist() {
   const ws = useWorkspace();
   const { data, isLoading } = useOnboarding();
   const dismiss = useDismissOnboarding();
+  // The public demo can't change anything, so a setup checklist there only reads «0 de 4».
+  const demo = useAuthStore((s) => s.demo);
 
-  // Nothing to show while loading, or once the user has dismissed the card.
-  if (isLoading || !data || data.dismissed) return null;
+  // Nothing to show while loading, once the user has dismissed the card, or in the demo.
+  if (demo || isLoading || !data || data.dismissed) return null;
 
   const firstPending = data.steps.find((s) => !s.done)?.key;
   const pct = data.total > 0 ? Math.round((data.completed / data.total) * 100) : 0;

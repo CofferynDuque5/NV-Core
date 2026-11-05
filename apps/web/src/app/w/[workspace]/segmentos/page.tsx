@@ -103,7 +103,7 @@ export default function SegmentosPage() {
                   <Button variant="ghost" size="sm" onClick={() => openEdit(s)}>
                     <Pencil className="size-3.5" /> Editar
                   </Button>
-                  <Button
+                  <Button aria-label="Eliminar"
                     variant="ghost"
                     size="sm"
                     disabled={del.isPending}

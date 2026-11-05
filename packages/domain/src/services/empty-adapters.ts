@@ -91,6 +91,11 @@ export const emptyAdapters: Services = {
     sync: () => notAvailable(),
     relink: () => notAvailable(),
     diagnose: () => notAvailable(),
+    lines: () => delay([]),
+    addLine: () => notAvailable(),
+    renameLine: () => notAvailable(),
+    lineAction: () => notAvailable(),
+    removeLine: () => notAvailable(),
   },
   pcAgent: {
     status: () =>
@@ -111,6 +116,12 @@ export const emptyAdapters: Services = {
     disconnect: () => notAvailable(),
     sync: () => notAvailable(),
     submitPassword: () => notAvailable(),
+    lines: () => delay([]),
+    addLine: () => notAvailable(),
+    renameLine: () => notAvailable(),
+    lineAction: () => notAvailable(),
+    linePassword: () => notAvailable(),
+    removeLine: () => notAvailable(),
   },
   admin: {
     users: () => delay([]),
@@ -120,6 +131,15 @@ export const emptyAdapters: Services = {
     removeMembership: () => notAvailable(),
     access: () => delay([]),
     activate: () => notAvailable(),
+    mailStatus: () => delay({ provider: "none" as const }),
+    mailTest: () => notAvailable(),
+    planPayments: () => delay([]),
+    planPaymentReceipt: () => notAvailable(),
+    approvePlanPayment: () => notAvailable(),
+    rejectPlanPayment: () => notAvailable(),
+    usdtRate: () => delay({ rate: null }),
+    whatsappAlert: () => notAvailable(),
+    whatsappAlertTest: () => notAvailable(),
   },
   brandLinks: {
     get: () => delay({ socialLinks: [], website: null }),
@@ -136,7 +156,7 @@ export const emptyAdapters: Services = {
     remove: () => notAvailable(),
   },
   access: {
-    overview: () => delay({ state: "unlimited", plan: { price: 0, currency: "USD", days: 30 }, methods: [] }),
+    overview: () => delay({ state: "unlimited", plan: { price: 0, currency: "USD", days: 30 }, plans: [], methods: [] }),
     pay: () => notAvailable(),
   },
   campaigns: {
@@ -146,6 +166,7 @@ export const emptyAdapters: Services = {
     update: () => notAvailable(),
     remove: () => notAvailable(),
     run: () => delay(null),
+    activity: (_id, since) => delay({ since, runs: [], inbox: { received: 0, replied: 0, newChats: 0 } }),
     pause: () => notAvailable(),
     resume: () => notAvailable(),
     logs: () => delay([]),
@@ -153,6 +174,8 @@ export const emptyAdapters: Services = {
     exportCsv: () => delay(""),
     importCsv: () => notAvailable(),
     duplicate: () => notAvailable(),
+    retryFailed: () => notAvailable(),
+    pauseAll: () => notAvailable(),
   },
   posts: {
     list: () => emptyList(),
@@ -176,6 +199,8 @@ export const emptyAdapters: Services = {
     setOptOut: () => notAvailable(),
     exportCsv: () => delay(""),
     importCsv: () => notAvailable(),
+    duplicates: () => delay({ groups: [] }),
+    merge: () => notAvailable(),
   },
   groups: {
     list: () => emptyList(),
@@ -236,6 +261,11 @@ export const emptyAdapters: Services = {
     sendMessage: () => notAvailable(),
     setResolved: () => notAvailable(),
     updateConversation: () => notAvailable(),
+    deleteConversation: () => notAvailable(),
+    addNote: () => notAvailable(),
+    quickReplies: () => delay([]),
+    saveQuickReplies: () => notAvailable(),
+    conversationContact: () => delay({ contact: null }),
   },
   media: {
     folders: () => delay([]),
@@ -302,6 +332,7 @@ export const emptyAdapters: Services = {
     markAllRead: () => delay({ updated: 0 }),
   },
   payments: {
+    vesRate: async () => null,
     methods: () => delay([]),
     createMethod: () => notAvailable(),
     updateMethod: () => notAvailable(),
@@ -309,6 +340,7 @@ export const emptyAdapters: Services = {
     list: () => delay([]),
     create: () => notAvailable(),
     update: () => notAvailable(),
+    receipt: () => notAvailable(),
   },
   reports: {
     weekly: () => delay([]),
@@ -330,6 +362,9 @@ export const emptyAdapters: Services = {
     removeMember: () => notAvailable(),
     invitations: () => delay([]),
     revokeInvitation: () => notAvailable(),
+    inviteLinks: () => delay([]),
+    createInviteLink: () => notAvailable(),
+    revokeInviteLink: () => notAvailable(),
   },
   audit: {
     logs: () => delay([]),

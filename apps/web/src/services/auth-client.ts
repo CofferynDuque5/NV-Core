@@ -1,4 +1,4 @@
-import type { Role, UserProfile } from "@nv/domain";
+import type { InviteLinkPreview, Role, UserProfile } from "@nv/domain";
 
 import { API_URL } from "@/lib/env";
 
@@ -146,6 +146,16 @@ export const authClient = {
       token,
       body: JSON.stringify({ currentPassword, newPassword }),
     }),
+
+  /** The shared team-invite link: who invites and to which brand (no sign-in). */
+  inviteLinkPreview: (linkToken: string) =>
+    request<InviteLinkPreview>(`/auth/invite-links/${encodeURIComponent(linkToken)}`),
+
+  acceptInviteLink: (token: string, linkToken: string) =>
+    request<{ workspaceSlug: string; role: Role; alreadyMember: boolean }>(
+      `/auth/invite-links/${encodeURIComponent(linkToken)}/accept`,
+      { method: "POST", token },
+    ),
 
   verifyEmail: (token: string) =>
     request<null>("/auth/verify-email", { method: "POST", body: JSON.stringify({ token }) }),

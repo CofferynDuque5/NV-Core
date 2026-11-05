@@ -1,4 +1,4 @@
-import type { Task, TaskPriority, TaskStatus } from "@nv/domain";
+import { initialsOf, type Task, type TaskPriority, type TaskStatus } from "@nv/domain";
 
 /**
  * Pure task-board helpers — no React, unit-tested. The page stays declarative;
@@ -86,8 +86,5 @@ export function dueLabel(iso: string, now = new Date()): string {
 
 /** "Ana López" → "AL"; falls back to the email's first letters. */
 export function initials(nameOrEmail: string): string {
-  const base = nameOrEmail.includes("@") ? nameOrEmail.split("@")[0]!.replace(/[._-]+/g, " ") : nameOrEmail;
-  const parts = base.trim().split(/\s+/).filter(Boolean);
-  const letters = parts.length > 1 ? `${parts[0]![0]}${parts[1]![0]}` : (parts[0] ?? "?").slice(0, 2);
-  return letters.toUpperCase();
+  return initialsOf(nameOrEmail, "?");
 }

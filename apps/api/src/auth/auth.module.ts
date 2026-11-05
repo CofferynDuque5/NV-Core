@@ -8,6 +8,8 @@ import { AuthController } from "./auth.controller";
 import { MembersController } from "./members.controller";
 import { AuthService } from "./auth.service";
 import { AuthStore } from "./auth.store";
+import { InviteLinksService } from "./invite-links.service";
+import { InviteLinksController } from "./invite-links.controller";
 import { AdminSeedService } from "./admin-seed.service";
 import { JwtAuthGuard } from "./guards/jwt-auth.guard";
 import { RolesGuard } from "./guards/roles.guard";
@@ -36,10 +38,11 @@ import { RolesGuard } from "./guards/roles.guard";
       },
     }),
   ],
-  controllers: [AuthController, MembersController],
+  controllers: [AuthController, MembersController, InviteLinksController],
   providers: [
     AuthStore,
     AuthService,
+    InviteLinksService,
     AdminSeedService,
     RolesGuard,
     { provide: APP_GUARD, useClass: JwtAuthGuard },

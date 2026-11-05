@@ -51,7 +51,7 @@ export function WorkspaceSwitcher({
       <DialogContent className="max-w-2xl">
         <DialogHeader>
           <p className="text-ink-faint text-[11px] font-semibold uppercase tracking-[0.2em]">
-            Business Operating System
+            Panel de ventas
           </p>
           <DialogTitle className="font-display text-xl">Tus marcas</DialogTitle>
           <DialogDescription>

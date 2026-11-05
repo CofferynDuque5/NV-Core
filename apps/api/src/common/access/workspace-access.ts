@@ -1,4 +1,4 @@
-import type { WorkspaceAccess } from "@nv/domain";
+import { SALES_PLANS, salesPlanId, type SalesPlanId, type SalesPlanLimits, type WorkspaceAccess } from "@nv/domain";
 
 /**
  * Pure rules of the free trial (no DB, unit-tested). A brand without a row is
@@ -8,6 +8,7 @@ import type { WorkspaceAccess } from "@nv/domain";
 export interface AccessRow {
   trialEndsAt: Date;
   paidUntil: Date | null;
+  planId?: string | null;
 }
 
 export function accessState(row: AccessRow | null, now: Date): WorkspaceAccess {
@@ -19,6 +20,23 @@ export function accessState(row: AccessRow | null, now: Date): WorkspaceAccess {
   if (row.paidUntil && row.paidUntil > now) return { state: "active", ...base };
   if (row.trialEndsAt > now) return { state: "trial", ...base };
   return { state: "expired", ...base };
+}
+
+/**
+ * Plan in force: the paid one while paid time lasts (payments made before
+ * plans existed were Pro), and Pro during the trial so it can be tried in
+ * full. Undefined for brands without a row (no limits at all).
+ */
+export function effectivePlan(row: AccessRow | null, now: Date): SalesPlanId | undefined {
+  if (!row) return undefined;
+  if (accessState(row, now).state === "active") return salesPlanId(row.planId) ?? "pro";
+  return "pro";
+}
+
+/** Limits of the plan in force (undefined = unlimited brand). */
+export function planLimits(row: AccessRow | null, now: Date): SalesPlanLimits | undefined {
+  const id = effectivePlan(row, now);
+  return id ? SALES_PLANS[id].limits : undefined;
 }
 
 /** Paid time after confirming `days` more: added to what is left, or from now if it already ran out. */

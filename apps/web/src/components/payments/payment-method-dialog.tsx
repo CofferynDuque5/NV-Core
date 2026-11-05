@@ -64,7 +64,16 @@ export function PaymentMethodDialog({
     const keys = new Set(def.fields.map((f) => f.key));
     const clean = Object.fromEntries(Object.entries(details).filter(([k]) => keys.has(k)));
     save.mutate(
-      { id: method?.id, input: { kind, label: label.trim(), currency, details: clean, instructions: instructions.trim() } },
+      {
+        id: method?.id,
+        input: {
+          kind,
+          label: label.trim(),
+          currency,
+          details: clean,
+          instructions: instructions.trim(),
+        },
+      },
       { onSuccess: () => onOpenChange(false), onError: (err) => setError(errorMessage(err)) },
     );
   }
@@ -119,7 +128,13 @@ export function PaymentMethodDialog({
       </div>
       <div className="space-y-1.5">
         <Label htmlFor="pm-label">Nombre que verá el cliente</Label>
-        <Input id="pm-label" required maxLength={80} value={label} onChange={(e) => setLabel(e.target.value)} />
+        <Input
+          id="pm-label"
+          required
+          maxLength={80}
+          value={label}
+          onChange={(e) => setLabel(e.target.value)}
+        />
       </div>
       {def.fields.length > 0 ? (
         <div className="grid grid-cols-2 gap-3">
@@ -129,7 +144,13 @@ export function PaymentMethodDialog({
                 {f.label}
                 {f.required ? <span className="text-state-danger"> *</span> : null}
               </Label>
-              {f.options ? (
+              {f.type === "image" ? (
+                <QrPicker
+                  id={`pm-field-${f.key}`}
+                  value={details[f.key] ?? ""}
+                  onChange={(v) => setDetails({ ...details, [f.key]: v })}
+                />
+              ) : f.options ? (
                 <select
                   id={`pm-field-${f.key}`}
                   className={selectCls}
@@ -159,7 +180,9 @@ export function PaymentMethodDialog({
         </div>
       ) : null}
       <div className="space-y-1.5">
-        <Label htmlFor="pm-instructions">{def.fields.length === 0 ? "Cómo pagar" : "Nota para el cliente (opcional)"}</Label>
+        <Label htmlFor="pm-instructions">
+          {def.fields.length === 0 ? "Cómo pagar" : "Nota para el cliente (opcional)"}
+        </Label>
         <Textarea
           id="pm-instructions"
           rows={2}
@@ -167,9 +190,66 @@ export function PaymentMethodDialog({
           required={def.fields.length === 0}
           value={instructions}
           onChange={(e) => setInstructions(e.target.value)}
-          placeholder={kind === "usdt" ? "Envía solo por la red indicada; otra red puede perder los fondos." : "Ej.: escribe tu nombre en la descripción del pago."}
+          placeholder={
+            kind === "usdt"
+              ? "Envía solo por la red indicada; otra red puede perder los fondos."
+              : "Ej.: escribe tu nombre en la descripción del pago."
+          }
         />
       </div>
     </FormDialog>
+  );
+}
+
+/** Pick the QR picture customers scan to pay (PNG, JPG or WebP up to 600 KB). */
+function QrPicker({
+  id,
+  value,
+  onChange,
+}: {
+  id: string;
+  value: string;
+  onChange: (v: string) => void;
+}) {
+  const [error, setError] = React.useState<string | null>(null);
+  function pick(file: File | undefined) {
+    setError(null);
+    if (!file) return;
+    if (!["image/png", "image/jpeg", "image/webp"].includes(file.type))
+      return setError("Usa una imagen PNG, JPG o WebP.");
+    if (file.size > 600 * 1024) return setError("La imagen pesa más de 600 KB.");
+    const reader = new FileReader();
+    reader.onload = () => onChange(typeof reader.result === "string" ? reader.result : "");
+    reader.readAsDataURL(file);
+  }
+  return (
+    <div className="flex items-center gap-3">
+      {value ? (
+        <img
+          src={value}
+          alt="Código QR"
+          className="border-line-soft size-16 rounded-lg border bg-white object-contain"
+        />
+      ) : null}
+      <div className="min-w-0 flex-1 space-y-1">
+        <input
+          id={id}
+          type="file"
+          accept="image/png,image/jpeg,image/webp"
+          onChange={(e) => pick(e.target.files?.[0])}
+          className="text-ink-muted file:bg-panel-raised file:text-ink block w-full text-xs file:mr-2 file:rounded-md file:border-0 file:px-2.5 file:py-1.5"
+        />
+        {value ? (
+          <button
+            type="button"
+            className="text-state-danger text-xs hover:underline"
+            onClick={() => onChange("")}
+          >
+            Quitar QR
+          </button>
+        ) : null}
+        {error ? <p className="text-state-danger text-xs">{error}</p> : null}
+      </div>
+    </div>
   );
 }

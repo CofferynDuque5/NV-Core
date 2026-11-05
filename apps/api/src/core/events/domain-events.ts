@@ -30,6 +30,10 @@ export interface DomainEventMap {
     externalId?: string | null;
     /** History replayed after linking: stored, never treated as a new message. */
     history?: boolean;
+    /** WhatsApp number (line) of the brand that got the message. */
+    waLine?: number;
+    /** Telegram account (line) of the brand that got the message. */
+    tgLine?: number;
   };
   /** Names learnt from a live session's contact list (phone → name). */
   "session.contact-names": {

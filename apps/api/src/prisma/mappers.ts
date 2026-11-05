@@ -24,6 +24,7 @@ import type {
   AffiliateEvent as PAffiliateEvent,
   Template as PTemplate,
 } from "@prisma/client";
+import { isDeadGroup } from "../modules/groups/group-activity";
 import type {
   Automation,
   AutomationRun,
@@ -106,8 +107,12 @@ export const mapGroup = (g: PGroup): Group => ({
   admins: g.admins,
   description: g.description ?? undefined,
   tags: g.tags,
-  lastActivityAt: iso(g.createdAt),
+  // Last message seen in the group (only the time is stored).
+  lastActivityAt: iso(g.lastMessageAt),
+  ...(g.channel === "wa" || g.channel === "tg" ? { inactive: isDeadGroup(g) } : {}),
   remoteJid: g.remoteJid ?? undefined,
+  // The brand's number/account that is in the group and sends to it.
+  line: g.channel === "tg" ? g.tgLine : g.waLine,
   synced: g.synced,
   excluded: g.excluded,
   category: g.category,
@@ -221,8 +226,12 @@ export const mapCampaign = (
   rotateAttachments: c.rotateAttachments ?? false,
   lastRunAt: iso(c.lastRunAt) ?? null,
   targetGroups: c.targets?.map((t) => t.groupId) ?? [],
+  waLines: c.waLines ?? [],
+  tgLines: c.tgLines ?? [],
+  items: Array.isArray(c.items) ? (c.items as unknown as Campaign["items"]) : [],
   prices: (c.prices as Record<string, string> | null) ?? {},
   addFooter: c.addFooter ?? true,
+  category: c.category ?? null,
 });
 
 export const mapPost = (p: PPost & { campaign?: { name: string } | null }): Post => ({
@@ -322,20 +331,23 @@ export const mapConversation = (c: PConversation, last?: PMessage | null): Conve
   contactInitials: initials(c.contactName),
   contactHandle: c.contactHandle ?? undefined,
   preview: last?.text.slice(0, 140) ?? "",
-  // A thread whose newest message is incoming is awaiting our reply.
-  unread: last?.direction === "in" && !c.resolved ? 1 : 0,
+  // Incoming messages not opened yet (or marked «no leído» by hand).
+  unread: c.unreadCount ?? 0,
   lastMessageAt: (last?.createdAt ?? c.createdAt).toISOString(),
   assignee: c.assignee ?? undefined,
   labels: c.labels ?? [],
   resolved: c.resolved,
+  // Open chat whose last message came from the contact: someone has to answer.
+  ...(!c.resolved && last?.direction === "in" ? { waitingSince: last.createdAt.toISOString() } : {}),
 });
 
 export const mapMessage = (m: PMessage): Message => ({
   id: m.id,
   conversationId: m.conversationId,
-  direction: m.direction === "in" ? "in" : "out",
+  direction: m.direction === "in" ? "in" : m.direction === "note" ? "note" : "out",
   text: m.text,
   at: m.createdAt.toISOString(),
+  ...(m.direction === "note" && m.author ? { author: m.author } : {}),
 });
 
 export const mapNotification = (n: PNotification): Notification => ({

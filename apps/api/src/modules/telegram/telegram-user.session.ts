@@ -244,7 +244,12 @@ export class TelegramUserSession {
     try {
       const msg = event?.message;
       if (!msg || msg.out) return;
-      if (!event.isPrivate) return; // 1:1 only
+      if (!event.isPrivate) {
+        const chatId = String(msg.chatId ?? event.chatId ?? "");
+        const ts = Number(msg.date ?? 0);
+        if (chatId) this.events.onGroupActivity?.(this.workspaceSlug, chatId, ts > 0 ? new Date(ts * 1000) : new Date());
+        return; // only the time; group texts never reach the Inbox
+      }
       const text: string = msg.message ?? "";
       if (!text.trim()) return;
       const sender = await msg.getSender().catch(() => null);

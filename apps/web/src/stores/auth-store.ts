@@ -62,7 +62,17 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     if (get().status === "authenticated" && get().token) return;
     set({ status: "loading" });
     try {
-      const res = await authClient.refresh();
+      // Only a 401 means "signed out". A server waking up (cPanel after idle)
+      // or a network blip gets two more tries before giving up.
+      let res: Awaited<ReturnType<typeof authClient.refresh>> | undefined;
+      for (let attempt = 0; !res; attempt++) {
+        try {
+          res = await authClient.refresh();
+        } catch (err) {
+          if ((err instanceof AuthError && err.status === 401) || attempt >= 2) throw err;
+          await new Promise((r) => setTimeout(r, 1500 * (attempt + 1)));
+        }
+      }
       set({
         status: "authenticated",
         token: res.accessToken,

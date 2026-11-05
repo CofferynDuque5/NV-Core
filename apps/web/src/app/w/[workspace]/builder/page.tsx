@@ -17,7 +17,12 @@ import { DesignEditor, LayerVisual } from "@/components/builder/design-editor";
 function DesignThumb({ design }: { design: Design }) {
   const spec = formatSpec(design.format);
   return (
-    <svg viewBox={`0 0 ${spec.w} ${spec.h}`} className="h-full w-full" style={{ background: "#0B0D10" }} preserveAspectRatio="xMidYMid meet">
+    <svg
+      viewBox={`0 0 ${spec.w} ${spec.h}`}
+      className="h-full w-full"
+      style={{ background: "#0B0D10" }}
+      preserveAspectRatio="xMidYMid meet"
+    >
       {design.layers.map((l) => (
         <LayerVisual key={l.id} l={l} />
       ))}
@@ -64,11 +69,15 @@ export default function BuilderPage() {
     <div className="space-y-6">
       <PageHeader
         eyebrow="Sin código"
-        title="Campaign Builder"
+        title="Editor de contenido"
         description="Diseña creatividades visuales por capas y reutilízalas en tus campañas."
         actions={
           <Button size="sm" onClick={createAndOpen} disabled={create.isPending}>
-            {create.isPending ? <Loader2 className="size-4 animate-spin" /> : <Plus className="size-4" />}
+            {create.isPending ? (
+              <Loader2 className="size-4 animate-spin" />
+            ) : (
+              <Plus className="size-4" />
+            )}
             Nuevo diseño
           </Button>
         }
@@ -96,19 +105,19 @@ export default function BuilderPage() {
               <Panel key={d.id} className="group overflow-hidden">
                 <button
                   onClick={() => setEditingId(d.id)}
-                  className="block aspect-square w-full overflow-hidden bg-panel-sunken"
+                  className="bg-panel-sunken block aspect-square w-full overflow-hidden"
                   title="Editar"
                 >
                   <DesignThumb design={d} />
                 </button>
                 <div className="flex items-center gap-2 p-3">
                   <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-medium text-ink">{d.name}</p>
-                    <p className="text-[11px] text-ink-faint">{formatSpec(d.format).label}</p>
+                    <p className="text-ink truncate text-sm font-medium">{d.name}</p>
+                    <p className="text-ink-faint text-[11px]">{formatSpec(d.format).label}</p>
                   </div>
                   <button
                     onClick={() => setEditingId(d.id)}
-                    className="rounded-md p-1.5 text-ink-faint transition-colors hover:bg-panel-high hover:text-ink"
+                    className="text-ink-faint hover:bg-panel-high hover:text-ink rounded-md p-1.5 transition-colors"
                     title="Editar"
                   >
                     <Pencil className="size-4" />
@@ -116,10 +125,14 @@ export default function BuilderPage() {
                   <button
                     onClick={() => remove(d)}
                     disabled={deletingId === d.id}
-                    className="rounded-md p-1.5 text-ink-faint transition-colors hover:bg-state-danger/10 hover:text-state-danger"
+                    className="text-ink-faint hover:bg-state-danger/10 hover:text-state-danger rounded-md p-1.5 transition-colors"
                     title="Eliminar"
                   >
-                    {deletingId === d.id ? <Loader2 className="size-4 animate-spin" /> : <Trash2 className="size-4" />}
+                    {deletingId === d.id ? (
+                      <Loader2 className="size-4 animate-spin" />
+                    ) : (
+                      <Trash2 className="size-4" />
+                    )}
                   </button>
                 </div>
               </Panel>
