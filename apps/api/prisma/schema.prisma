@@ -199,6 +199,10 @@ model Group {
   ownerJid       String?
   /// Last time the rules were read and checked.
   rulesCheckedAt DateTime?
+  /// Last message anyone else wrote in the group/channel (seen by the connected session).
+  lastMessageAt  DateTime?
+  /// Since when messages are watched (a group is «sin actividad» after 30 days of silence from here).
+  watchedSince   DateTime  @default(now())
   createdAt      DateTime  @default(now())
 
   variables       GroupVariable[]
@@ -459,6 +463,7 @@ model SendLog {
   @@index([workspaceSlug])
   @@index([campaignId])
   @@index([workspaceSlug, createdAt])
+  @@index([groupId, createdAt])
 }
 
 model Post {

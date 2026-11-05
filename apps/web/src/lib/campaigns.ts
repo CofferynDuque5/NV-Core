@@ -146,3 +146,33 @@ export function scheduleClashes(
     .filter(({ o, shared }) => shared > 0 && slotsOf(o).some((s) => mine.some((m) => slotsMeet(m, s, windowMin))))
     .map(({ o, shared }) => ({ name: o.name, groups: shared }));
 }
+
+/** One «Ver como» option of the campaign preview: a country of the chosen groups. */
+export interface PreviewCountry {
+  /** ISO code; "" = groups without a country. */
+  code: string;
+  name: string;
+  currency: string | null;
+  count: number;
+}
+
+/** Countries of the chosen groups (most groups first), for the per-country preview. */
+export function previewCountries(
+  groups: { country?: string | null; detectedCountry?: string | null }[],
+  countries: Record<string, { name: string; currency: string }>,
+): PreviewCountry[] {
+  const by = new Map<string, number>();
+  for (const g of groups) {
+    const code = g.detectedCountry ?? g.country ?? "";
+    const key = code && countries[code] ? code : "";
+    by.set(key, (by.get(key) ?? 0) + 1);
+  }
+  return [...by.entries()]
+    .map(([code, count]) => ({
+      code,
+      name: code ? countries[code]!.name : "Sin país",
+      currency: code ? countries[code]!.currency : null,
+      count,
+    }))
+    .sort((a, b) => (a.code === "" ? 1 : b.code === "" ? -1 : b.count - a.count || a.name.localeCompare(b.name)));
+}

@@ -24,6 +24,7 @@ import type {
   AffiliateEvent as PAffiliateEvent,
   Template as PTemplate,
 } from "@prisma/client";
+import { isDeadGroup } from "../modules/groups/group-activity";
 import type {
   Automation,
   AutomationRun,
@@ -106,7 +107,9 @@ export const mapGroup = (g: PGroup): Group => ({
   admins: g.admins,
   description: g.description ?? undefined,
   tags: g.tags,
-  lastActivityAt: iso(g.createdAt),
+  // Last message seen in the group (only the time is stored).
+  lastActivityAt: iso(g.lastMessageAt),
+  ...(g.channel === "wa" || g.channel === "tg" ? { inactive: isDeadGroup(g) } : {}),
   remoteJid: g.remoteJid ?? undefined,
   // The brand's number/account that is in the group and sends to it.
   line: g.channel === "tg" ? g.tgLine : g.waLine,

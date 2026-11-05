@@ -38,6 +38,7 @@ import {
   CAMPAIGN_STATUS_LABEL,
   campaignCategories,
   campaignReadyProblems,
+  previewCountries,
   scheduleClashes,
 } from "@/lib/campaigns";
 import { FormDialog, errorMessage } from "./form-dialog";
@@ -144,6 +145,8 @@ export function CampaignFormDialog({
   const [attachments, setAttachments] = React.useState<CampaignAttachment[]>([]);
   const [prices, setPrices] = React.useState<Record<string, string>>({});
   const [addFooter, setAddFooter] = React.useState(true);
+  // «Ver como»: preview the message as a group of this country sees it ("" = auto).
+  const [previewCountry, setPreviewCountry] = React.useState<string | null>(null);
   const [waLines, setWaLines] = React.useState<number[]>([]);
   const [tgLines, setTgLines] = React.useState<number[]>([]);
   const [items, setItems] = React.useState<CampaignItem[]>([]);
@@ -331,7 +334,11 @@ export function CampaignFormDialog({
       addFooter,
       waLines,
       tgLines,
-      items: items.map((it) => ({ ...it, name: it.name.trim() || "Producto", text: it.text.trim() })),
+      items: items.map((it) => ({
+        ...it,
+        name: it.name.trim() || "Producto",
+        text: it.text.trim(),
+      })),
       ...(campaign?.accent ? { accent: campaign.accent } : {}),
     };
 
@@ -413,8 +420,16 @@ export function CampaignFormDialog({
   const blocked = selectedGroups.filter((g) => groupProblems(g).length > 0);
   const footer = campaignFooter(brandLinks.data ?? {});
   // The preview shows the first chosen group: its price, and the footer if on.
-  const previewGroup =
-    selectedGroups.find((g) => groupProblems(g).length === 0) ?? selectedGroups[0];
+  const countryOptions = previewCountries(selectedGroups, GROUP_COUNTRIES);
+  const countryOf = (g: (typeof selectedGroups)[number]) => {
+    const c = g.detectedCountry ?? g.country ?? "";
+    return c && GROUP_COUNTRIES[c] ? c : "";
+  };
+  const inCountry =
+    previewCountry !== null && countryOptions.some((o) => o.code === previewCountry)
+      ? selectedGroups.filter((g) => countryOf(g) === previewCountry)
+      : selectedGroups;
+  const previewGroup = inCountry.find((g) => groupProblems(g).length === 0) ?? inCountry[0];
   const previewPrice = previewGroup ? priceForGroup(previewGroup, prices) : "";
   const previewText = previewPrice
     ? message.replace(/\{\{\s*precio\s*\}\}/g, previewPrice)
@@ -430,7 +445,8 @@ export function CampaignFormDialog({
       id: campaign?.id,
       scheduleType,
       scheduleAt: scheduleType === "once" && dateTime ? new Date(dateTime).toISOString() : null,
-      scheduleTimes: scheduleType === "once" ? [] : scheduleTimes.length ? scheduleTimes : time ? [time] : [],
+      scheduleTimes:
+        scheduleType === "once" ? [] : scheduleTimes.length ? scheduleTimes : time ? [time] : [],
       scheduleDays,
       targetGroups,
     },
@@ -447,7 +463,10 @@ export function CampaignFormDialog({
   function setAllVisible(selected: boolean) {
     // «Seleccionar» skips groups kept out or whose rules forbid posting.
     const visibleIds = visibleGroups
-      .filter((g) => !selected || (groupStatus(g).status === "apto" && groupLineAllowed(g, waLines, tgLines)))
+      .filter(
+        (g) =>
+          !selected || (groupStatus(g).status === "apto" && groupLineAllowed(g, waLines, tgLines)),
+      )
       .map((g) => g.id);
     setTargetGroups((prev) =>
       selected
@@ -587,8 +606,9 @@ export function CampaignFormDialog({
                 <code className="text-ink-muted">{"{{precio}}"}</code> (en la moneda de cada grupo){" "}
                 <code className="text-ink-muted">{"{{dia}}"}</code>{" "}
                 <code className="text-ink-muted">{"{{saludo}}"}</code> (buenos días/tardes/noches){" "}
-                <code className="text-ink-muted">{"{{nombre_marca}}"}</code>. Para variar el texto en cada grupo escribe
-                opciones entre llaves: <code className="text-ink-muted">{"{Hola|Buenas|Qué tal}"}</code>.
+                <code className="text-ink-muted">{"{{nombre_marca}}"}</code>. Para variar el texto
+                en cada grupo escribe opciones entre llaves:{" "}
+                <code className="text-ink-muted">{"{Hola|Buenas|Qué tal}"}</code>.
               </p>
             </div>
 
@@ -656,7 +676,10 @@ export function CampaignFormDialog({
                 A esa hora (±15 min) ya sale{clashes.length > 1 ? "n" : ""}{" "}
                 {clashes
                   .slice(0, 3)
-                  .map((c) => `«${c.name}» en ${c.groups} ${c.groups === 1 ? "grupo" : "grupos"} de los mismos`)
+                  .map(
+                    (c) =>
+                      `«${c.name}» en ${c.groups} ${c.groups === 1 ? "grupo" : "grupos"} de los mismos`,
+                  )
                   .join(", ")}
                 . Esos grupos recibirían dos mensajes casi juntos: cambia la hora o los grupos.
               </p>
@@ -810,8 +833,10 @@ export function CampaignFormDialog({
             <CampaignSenders wa={waLines} tg={tgLines} onChange={onSendersChange} />
             {offLine.length > 0 ? (
               <p className="text-state-warning text-[11px]">
-                {offLine.length === 1 ? "1 grupo elegido es" : `${offLine.length} grupos elegidos son`} de un número que
-                no marcaste: no recibirán esta campaña.
+                {offLine.length === 1
+                  ? "1 grupo elegido es"
+                  : `${offLine.length} grupos elegidos son`}{" "}
+                de un número que no marcaste: no recibirán esta campaña.
               </p>
             ) : null}
             <div className="space-y-1.5">
@@ -859,7 +884,9 @@ export function CampaignFormDialog({
                       Seleccionar aptos (
                       {
                         visibleGroups.filter(
-                          (g) => groupStatus(g).status === "apto" && groupLineAllowed(g, waLines, tgLines),
+                          (g) =>
+                            groupStatus(g).status === "apto" &&
+                            groupLineAllowed(g, waLines, tgLines),
                         ).length
                       }
                       )
@@ -1135,6 +1162,47 @@ export function CampaignFormDialog({
         <div className="min-w-0">
           <div className="space-y-1.5 lg:sticky lg:top-0">
             <Label>Vista previa</Label>
+            {countryOptions.length > 1 || (countryOptions.length === 1 && usesPriceVar(message)) ? (
+              <div className="space-y-1" data-testid="preview-countries">
+                <div className="flex flex-wrap items-center gap-1">
+                  <span className="text-ink-faint text-[11px]">Ver como un grupo de:</span>
+                  {countryOptions.map((o) => {
+                    const on =
+                      (previewCountry ?? countryOf(previewGroup ?? selectedGroups[0]!)) === o.code;
+                    return (
+                      <button
+                        key={o.code || "none"}
+                        type="button"
+                        aria-pressed={on}
+                        onClick={() => setPreviewCountry(o.code)}
+                        className={cn(
+                          "rounded-full border px-2 py-0.5 text-[11px] transition-colors",
+                          on
+                            ? "border-brand/60 bg-brand/10 text-ink"
+                            : "border-line-soft text-ink-muted hover:text-ink",
+                        )}
+                      >
+                        {o.name}
+                        {o.currency ? ` · ${o.currency}` : ""} ({o.count})
+                      </button>
+                    );
+                  })}
+                </div>
+                {previewGroup && usesPriceVar(message) ? (
+                  previewPrice ? (
+                    <p className="text-ink-muted text-[11px]" data-testid="preview-price">
+                      {"{{precio}}"} en este grupo: <b className="text-ink">{previewPrice}</b>
+                    </p>
+                  ) : (
+                    <p className="text-state-warning text-[11px]" data-testid="preview-price">
+                      {countryOf(previewGroup)
+                        ? `Falta el precio en ${GROUP_COUNTRIES[countryOf(previewGroup)]!.currency}: estos grupos verían {{precio}} vacío.`
+                        : "Estos grupos no tienen país: no sabemos en qué moneda mostrar {{precio}}."}
+                    </p>
+                  )
+                ) : null}
+              </div>
+            ) : null}
             <ContentPreview
               message={previewMessage}
               attachments={attachments}
@@ -1149,18 +1217,29 @@ export function CampaignFormDialog({
             {items.length > 0 ? (
               <div className="space-y-1.5" data-testid="items-preview">
                 <p className="text-ink-muted text-[11px]">
-                  Luego, {items.length === 1 ? "1 mensaje más" : `${items.length} mensajes más`} (uno por producto):
+                  Luego, {items.length === 1 ? "1 mensaje más" : `${items.length} mensajes más`}{" "}
+                  (uno por producto):
                 </p>
                 {items.map((it, i) => {
                   const img = it.attachments?.[0];
                   const price = previewGroup
-                    ? priceForGroup(previewGroup, it.prices && Object.keys(it.prices).length ? it.prices : prices)
+                    ? priceForGroup(
+                        previewGroup,
+                        it.prices && Object.keys(it.prices).length ? it.prices : prices,
+                      )
                     : "";
                   const text = price ? it.text.replace(/\{\{\s*precio\s*\}\}/g, price) : it.text;
                   return (
-                    <div key={i} className="border-line-soft bg-panel-raised flex gap-2 rounded-lg border p-1.5">
+                    <div
+                      key={i}
+                      className="border-line-soft bg-panel-raised flex gap-2 rounded-lg border p-1.5"
+                    >
                       {img && (img.kind === "image" || img.mime?.startsWith("image/")) ? (
-                        <img src={img.url} alt="" className="size-12 shrink-0 rounded object-cover" />
+                        <img
+                          src={img.url}
+                          alt=""
+                          className="size-12 shrink-0 rounded object-cover"
+                        />
                       ) : null}
                       <p className="text-ink line-clamp-3 min-w-0 whitespace-pre-line text-[11px]">
                         {text || it.name}

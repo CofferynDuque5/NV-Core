@@ -14,6 +14,7 @@ import { WorkspaceAccessService } from "../../common/access/workspace-access.ser
 import { BaileysSession } from "./baileys.session";
 import { SessionManager } from "./session-manager";
 import { WhatsappGateway } from "./whatsapp.gateway";
+import { recordGroupActivity } from "../groups/group-activity";
 import {
   loadBaileys,
   type SessionAlert,
@@ -247,6 +248,11 @@ export class WhatsappService implements SessionEvents, OnModuleInit, OnModuleDes
   onInbound(key: string, msg: SessionChatMessage): void {
     const { workspaceSlug, line } = parseWaLineKey(key);
     this.events.emit("session.inbound", { workspaceSlug, channel: "wa", ...msg, waLine: line });
+  }
+
+  /** Someone wrote in a group → remember when (for «grupos sin actividad»). */
+  onGroupActivity(key: string, groupJid: string, at: Date): void {
+    void recordGroupActivity(this.prisma, parseWaLineKey(key).workspaceSlug, "wa", groupJid, at).catch(() => undefined);
   }
 
   /** Contact names from WhatsApp → the Inbox replaces bare numbers with them. */

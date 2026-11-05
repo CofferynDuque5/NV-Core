@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  previewCountries,
   CAMPAIGN_STATUS_LABEL,
   CAMPAIGN_STATUS_SHORT,
   CAMPAIGN_TABS,
@@ -65,5 +66,21 @@ describe("scheduleClashes", () => {
     expect(
       scheduleClashes({ ...d, scheduleType: "weekly", scheduleDays: [1] }, [other({ scheduleType: "weekly", scheduleDays: [3] })]),
     ).toEqual([]);
+  });
+});
+
+describe("previewCountries", () => {
+  const C = { VE: { name: "Venezuela", currency: "VES" }, CO: { name: "Colombia", currency: "COP" } };
+  it("groups by country, most groups first, «Sin país» last", () => {
+    expect(
+      previewCountries(
+        [{ detectedCountry: "CO" }, { country: "VE" }, { detectedCountry: "VE" }, {}, { country: "XX" }],
+        C,
+      ),
+    ).toEqual([
+      { code: "VE", name: "Venezuela", currency: "VES", count: 2 },
+      { code: "CO", name: "Colombia", currency: "COP", count: 1 },
+      { code: "", name: "Sin país", currency: null, count: 2 },
+    ]);
   });
 });

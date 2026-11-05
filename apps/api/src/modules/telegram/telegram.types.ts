@@ -49,6 +49,8 @@ export interface TelegramSessionEvents {
     meta: { username?: string | null; phone?: string | null; groupsCount?: number; connectedAt?: Date },
   ): void;
   onDialogs(workspaceSlug: string, dialogs: TelegramDialog[]): void;
+  /** Someone wrote in a group/channel: only the time is used, for «grupos sin actividad». */
+  onGroupActivity?(workspaceSlug: string, chatId: string, at: Date): void;
   /** A direct (private) inbound message, for the Inbox. */
   onInbound(
     workspaceSlug: string,

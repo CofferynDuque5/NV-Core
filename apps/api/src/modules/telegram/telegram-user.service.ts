@@ -20,6 +20,7 @@ import { WorkspaceAccessService } from "../../common/access/workspace-access.ser
 import { TelegramGateway } from "./telegram.gateway";
 import { TelegramSessionStore } from "./telegram-session.store";
 import { TelegramUserSession } from "./telegram-user.session";
+import { recordGroupActivity } from "../groups/group-activity";
 import type {
   TelegramAttachment,
   TelegramDialog,
@@ -202,6 +203,10 @@ export class TelegramUserService implements TelegramSessionEvents, OnModuleInit,
       groupsCount: meta.groupsCount,
       lastConnectionAt: meta.connectedAt,
     }).then(() => this.emit(key));
+  }
+
+  onGroupActivity(key: string, chatId: string, at: Date): void {
+    void recordGroupActivity(this.prisma, parseTgLineKey(key).workspaceSlug, "tg", chatId, at).catch(() => undefined);
   }
 
   onDialogs(key: string, dialogs: TelegramDialog[]): void {

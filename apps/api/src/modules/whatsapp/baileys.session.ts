@@ -403,6 +403,14 @@ export class BaileysSession {
     for (const m of u.messages) {
       try {
         if (u.type === "append" && !m?.key?.fromMe) continue;
+        const rj: string = m?.key?.remoteJid ?? "";
+        if (rj.endsWith("@g.us")) {
+          if (u.type === "notify" && !m?.key?.fromMe) {
+            const ts = Number(m?.messageTimestamp ?? 0);
+            this.events.onGroupActivity?.(this.workspaceSlug, rj, ts > 0 ? new Date(ts * 1000) : new Date());
+          }
+          continue;
+        }
         await this.resolveLid(m?.key);
         const msg = toChatMessage(m, this.lidToPn);
         if (!msg) continue;

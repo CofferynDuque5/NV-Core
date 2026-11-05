@@ -309,6 +309,11 @@ export interface Group {
   /** Creator's WhatsApp id (read on sync). */
   ownerJid?: string | null;
   rulesCheckedAt?: string | null;
+  /** Last campaign send to this group (any result) and whether it went out. */
+  lastSentAt?: string | null;
+  lastSendOk?: boolean | null;
+  /** Nobody wrote in it for 30 days (WhatsApp/Telegram groups seen by the connected session). */
+  inactive?: boolean;
 }
 
 /** Group fields the user edits to decide where campaigns go. */

@@ -34,6 +34,7 @@ import { WorkspaceGuard } from "../../common/tenant/workspace.guard";
 import { AuditLogger } from "../../common/audit-logger.service";
 import { PrismaService } from "../../prisma/prisma.service";
 import { mapGroup } from "../../prisma/mappers";
+import { Prisma } from "@prisma/client";
 import { RolesGuard } from "../../auth/guards/roles.guard";
 import { Roles } from "../../auth/decorators/roles.decorator";
 import { CurrentUser } from "../../auth/decorators/current-user.decorator";
@@ -124,7 +125,25 @@ export class GroupsService {
       this.prisma.group.findMany({ where, orderBy: { createdAt: "desc" }, take: GROUP_LIST_CAP }),
       this.prisma.group.count({ where }),
     ]);
-    return new ListResultDto(rows.map(mapGroup), total);
+    const last = await this.lastSends(workspaceId);
+    return new ListResultDto(
+      rows.map((r) => {
+        const s = last.get(r.id);
+        return { ...mapGroup(r), lastSentAt: s ? s.at.toISOString() : null, lastSendOk: s ? s.ok : null };
+      }),
+      total,
+    );
+  }
+
+  /** Latest campaign send per group (one row per group, from the send log). */
+  private async lastSends(workspaceId: string): Promise<Map<string, { at: Date; ok: boolean }>> {
+    const rows = await this.prisma.$queryRaw<{ groupId: string; at: Date; ok: boolean }[]>(Prisma.sql`
+      SELECT DISTINCT ON ("groupId") "groupId", "createdAt" AS at, ok
+      FROM "SendLog"
+      WHERE "workspaceSlug" = ${workspaceId} AND "groupId" IS NOT NULL
+      ORDER BY "groupId", "createdAt" DESC
+    `);
+    return new Map(rows.map((r) => [r.groupId, { at: new Date(r.at), ok: r.ok }]));
   }
 
   async create(workspaceId: string, actor: string, dto: CreateGroupDto): Promise<Group> {
