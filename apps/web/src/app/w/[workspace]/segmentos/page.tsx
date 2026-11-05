@@ -1,10 +1,13 @@
 
 import * as React from "react";
-import { Filter, Pencil, Plus, Trash2 } from "lucide-react";
+import { Download, Filter, Pencil, Plus, Tags, Trash2, Users } from "lucide-react";
+import { Link } from "react-router-dom";
 import type { Segment } from "@nv/domain";
 
-import { useSegments } from "@/hooks/use-domain-data";
-import { useDeleteSegment } from "@/hooks/use-domain-mutations";
+import { useContactFields, useSegments } from "@/hooks/use-domain-data";
+import { useWorkspace } from "@/hooks/use-workspace";
+import { useDeleteSegment, useExportSegment } from "@/hooks/use-domain-mutations";
+import { SegmentTagDialog } from "@/components/segments/segment-tag-dialog";
 import { ruleLabel } from "@/lib/segments";
 import { PageHeader } from "@/components/common/page-header";
 import { QueryBoundary } from "@/components/common/query-boundary";
@@ -14,9 +17,14 @@ import { SegmentFormDialog } from "@/components/entities/segment-form-dialog";
 
 export default function SegmentosPage() {
   const segments = useSegments();
+  const ws = useWorkspace();
   const del = useDeleteSegment();
   const [open, setOpen] = React.useState(false);
   const [editing, setEditing] = React.useState<Segment | undefined>(undefined);
+  const [tagging, setTagging] = React.useState<Segment | null>(null);
+  const exportSeg = useExportSegment();
+  const fields = useContactFields().data ?? [];
+  const labels = Object.fromEntries(fields.map((f) => [f.key, f.label]));
 
   function openCreate() {
     setEditing(undefined);
@@ -87,7 +95,7 @@ export default function SegmentosPage() {
                           key={i}
                           className="rounded-md bg-panel-raised px-2 py-0.5 text-[11px] text-ink-muted"
                         >
-                          {ruleLabel(r)}
+                          {ruleLabel(r, labels)}
                         </span>
                       ))}
                       {s.rules.length > 1 ? (
@@ -97,6 +105,25 @@ export default function SegmentosPage() {
                       ) : null}
                     </>
                   )}
+                </div>
+
+                <div className="flex flex-wrap items-center gap-1" data-testid="segment-actions">
+                  <Button variant="secondary" size="sm" asChild>
+                    <Link to={`/w/${ws.slug}/contactos?segmento=${s.id}`}>
+                      <Users className="size-3.5" /> Ver contactos
+                    </Link>
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    disabled={exportSeg.isPending || s.count === 0}
+                    onClick={() => exportSeg.mutate({ id: s.id, name: s.name })}
+                  >
+                    <Download className="size-3.5" /> Exportar
+                  </Button>
+                  <Button variant="ghost" size="sm" disabled={s.count === 0} onClick={() => setTagging(s)}>
+                    <Tags className="size-3.5" /> Etiquetar
+                  </Button>
                 </div>
 
                 <div className="mt-auto flex items-center justify-end gap-1 pt-1 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100">
@@ -121,6 +148,7 @@ export default function SegmentosPage() {
       </QueryBoundary>
 
       <SegmentFormDialog open={open} onOpenChange={setOpen} segment={editing} />
+      <SegmentTagDialog segment={tagging} onClose={() => setTagging(null)} />
     </div>
   );
 }

@@ -3,6 +3,7 @@ import { toast } from "sonner";
 import type {
   ChangelogStatus,
   QuickReply,
+  ContactFieldDef,
   CreateProductInput,
   UpdateWorkspaceInput,
   AccessPaymentInput,
@@ -1225,6 +1226,59 @@ export function useSaveQuickReplies() {
     onSuccess: (items) => {
       qc.setQueryData([ws.id, "inbox", "quick-replies"], items);
       toast.success("Respuestas guardadas");
+    },
+    onError: (err) => toast.error(errText(err)),
+  });
+}
+
+export function useSaveContactFields() {
+  const svc = useServices();
+  const ws = useWorkspace();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (fields: ContactFieldDef[]) => svc.contacts.saveFields(ws.id, fields),
+    onSuccess: (fields) => {
+      qc.setQueryData([ws.id, "contact-fields"], fields);
+      toast.success("Campos guardados");
+    },
+    onError: (err) => toast.error(errText(err)),
+  });
+}
+
+export function useExportSegment() {
+  const svc = useServices();
+  const ws = useWorkspace();
+  return useMutation({
+    mutationFn: async ({ id, name }: { id: string; name: string }) => {
+      const csv = await svc.segments.exportCsv(ws.id, id);
+      const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      const slug = name.normalize("NFD").replace(/[^\w]+/g, "-").replace(/^-|-$/g, "").toLowerCase() || "segmento";
+      a.download = `segmento-${slug}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+      return csv;
+    },
+    onSuccess: () => toast.success("Segmento exportado"),
+    onError: (err) => toast.error(errText(err)),
+  });
+}
+
+export function useTagSegment() {
+  const svc = useServices();
+  const ws = useWorkspace();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, add, remove }: { id: string; add?: string[]; remove?: string[] }) =>
+      svc.segments.tagAll(ws.id, id, { add, remove }),
+    onSuccess: ({ updated }) => {
+      void qc.invalidateQueries({ queryKey: [ws.id, "contacts"] });
+      void qc.invalidateQueries({ queryKey: [ws.id, "segments"] });
+      toast.success(`${updated} ${updated === 1 ? "contacto actualizado" : "contactos actualizados"}`);
     },
     onError: (err) => toast.error(errText(err)),
   });

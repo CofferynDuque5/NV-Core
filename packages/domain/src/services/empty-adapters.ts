@@ -201,6 +201,8 @@ export const emptyAdapters: Services = {
     importCsv: () => notAvailable(),
     duplicates: () => delay({ groups: [] }),
     merge: () => notAvailable(),
+    fields: () => delay([]),
+    saveFields: () => notAvailable(),
   },
   groups: {
     list: () => emptyList(),
@@ -224,6 +226,8 @@ export const emptyAdapters: Services = {
     update: () => notAvailable(),
     remove: () => notAvailable(),
     preview: () => delay({ count: 0, sample: [] }),
+    exportCsv: () => delay(""),
+    tagAll: () => notAvailable(),
   },
   forms: {
     list: () => emptyList(),

@@ -71,12 +71,15 @@ import type {
 import type { ChannelId, ContactStage, Role, WorkspaceKind } from "../enums";
 import type { PlanId, PlanLimits } from "../config/plans";
 import type { DayActivity } from "../config/activity";
+import type { ContactFieldDef } from "../config/contact-fields";
 
 /** Server-side query for the contacts list (search + stage + pagination). */
 export interface ContactListQuery {
   /** Free-text search across name/company/email/phone/tags. */
   q?: string;
   stage?: ContactStage;
+  /** Only contacts in this saved segment. */
+  segment?: string;
   page?: number;
   pageSize?: number;
 }
@@ -105,6 +108,10 @@ export interface CreateContactInput {
   company?: string;
   tags?: string[];
   stage?: Contact["stage"];
+  /** «15/03/1990», «15/03» or «1990-03-15»; empty clears it. */
+  birthday?: string;
+  /** Custom field values by key; an empty value clears that field. */
+  custom?: Record<string, string>;
 }
 export type UpdateContactInput = Partial<CreateContactInput>;
 
@@ -344,6 +351,9 @@ export interface ContactService {
   duplicates(workspaceId: string): Promise<{ groups: Contact[][] }>;
   /** Merge `mergeIds` into `keepId` (notes, tasks, payments move; the others are deleted). */
   merge(workspaceId: string, keepId: string, mergeIds: string[]): Promise<Contact>;
+  /** The brand's custom contact fields. */
+  fields(workspaceId: string): Promise<ContactFieldDef[]>;
+  saveFields(workspaceId: string, fields: ContactFieldDef[]): Promise<ContactFieldDef[]>;
 }
 
 export interface GroupService {
@@ -403,6 +413,10 @@ export interface SegmentService {
     workspaceId: string,
     input: { match?: Segment["match"]; rules: Segment["rules"] },
   ): Promise<SegmentPreview>;
+  /** CSV of every contact in the segment (same columns as Contactos → Exportar). */
+  exportCsv(workspaceId: string, id: string): Promise<string>;
+  /** Add and/or remove tags on every contact in the segment. */
+  tagAll(workspaceId: string, id: string, input: { add?: string[]; remove?: string[] }): Promise<{ updated: number }>;
 }
 
 export interface CreateFormInput {

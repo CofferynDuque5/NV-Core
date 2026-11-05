@@ -229,6 +229,10 @@ export interface Contact {
   consentSource?: string;
   /** Where the contact first came from (forms and funnels only). */
   attribution?: LeadAttribution;
+  /** «YYYY-MM-DD» or «MM-DD» when the year is unknown. */
+  birthday?: string;
+  /** Values of the brand's custom fields, by field key. */
+  custom?: Record<string, string>;
 }
 
 /**
@@ -646,8 +650,8 @@ export interface AutomationTestResult {
 export interface AutomationRun {
   id: string;
   /** "message" = incoming message; "resume" = continued after a wait step. */
-  /** "inactive" = the contact went N days without writing. */
-  trigger: "message" | "resume" | "inactive";
+  /** "inactive" = the contact went N days without writing; "birthday" = it is their birthday. */
+  trigger: "message" | "resume" | "inactive" | "birthday";
   contactHandle: string;
   contactName?: string;
   /** ok: did something · skipped: nothing to do · waiting: paused on a wait · error: failed. */

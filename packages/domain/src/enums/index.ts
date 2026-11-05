@@ -38,8 +38,10 @@ export const SEGMENT_FIELDS = [
   "stage",
   "createdAt",
   "lastContactAt",
+  "birthday",
 ] as const;
-export type SegmentField = (typeof SEGMENT_FIELDS)[number];
+/** Built-in fields, plus «custom.<key>» for the brand's custom fields. */
+export type SegmentField = (typeof SEGMENT_FIELDS)[number] | `custom.${string}`;
 
 /** Comparison operators available to segment rules. */
 export const SEGMENT_OPERATORS = [
@@ -56,6 +58,7 @@ export const SEGMENT_OPERATORS = [
   "after",
   "in_last_days",
   "not_in_last_days",
+  "birthday_in_days",
 ] as const;
 export type SegmentOperator = (typeof SEGMENT_OPERATORS)[number];
 

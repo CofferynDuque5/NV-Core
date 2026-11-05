@@ -62,6 +62,12 @@ export const NODE_KINDS: NodeKind[] = [
         fields: [{ key: "days", label: "Días sin escribir (1 a 365)", placeholder: "30" }],
         hint: "Se revisa cada hora. Corre una vez por contacto cada vez que cumple esos días en silencio; solo cuenta a quien los cumplió en la última semana, así no le escribe de golpe a tu lista antigua. Nunca a contactos dados de baja.",
       },
+      {
+        value: "contact.birthday",
+        label: "Es el cumpleaños de un contacto",
+        fields: [{ key: "hour", label: "Desde qué hora (0 a 23, hora de tu marca)", placeholder: "9" }],
+        hint: "Se revisa cada hora con la zona horaria de la marca (Informes). Una vez al año por contacto que tenga cumpleaños en su ficha; quien nació el 29 de febrero recibe el mensaje el 28 en años no bisiestos. Nunca a contactos dados de baja.",
+      },
       { value: "contact.created", label: "Se crea un contacto", hint: N8N_ONLY },
       { value: "campaign.completed", label: "Termina una campaña", hint: N8N_ONLY },
       { value: "post.published", label: "Se publica un post", hint: N8N_ONLY },
@@ -346,6 +352,13 @@ export function validateGraph(graph: Graph): ValidationResult {
     const days = Number(String(inactive.config?.days ?? "").trim());
     if (!Number.isInteger(days) || days < 1 || days > 365)
       errors.push("Indica cuántos días sin escribir (un número entero de 1 a 365).");
+  }
+  const bday = triggers.find((t) => t.config?.event === "contact.birthday");
+  if (bday) {
+    const raw = String(bday.config?.hour ?? "").trim();
+    const h = Number(raw);
+    if (raw !== "" && !(Number.isInteger(h) && h >= 0 && h <= 23))
+      errors.push("La hora del cumpleaños debe ser un número entero de 0 a 23.");
   }
   return { ok: errors.length === 0, errors };
 }

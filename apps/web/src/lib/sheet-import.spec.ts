@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { guessField, guessMapping, parseDelimited, toImportCsv } from "./sheet-import";
+import { excelDate, guessField, guessMapping, parseDelimited, toImportCsv } from "./sheet-import";
 
 describe("sheet import", () => {
   it("guesses Spanish and English headers", () => {
@@ -29,6 +29,13 @@ describe("sheet import", () => {
       ],
       ["name", "phone", ""],
     );
-    expect(csv).toBe('name,phone,email,company,tags,stage\n"Ana, la de Caracas",584121110000,,,,');
+    expect(csv).toBe('name,phone,email,company,tags,stage,birthday\n"Ana, la de Caracas",584121110000,,,,,');
+  });
+  it("reads birthdays, also Excel date numbers", () => {
+    expect(guessField("Fecha de nacimiento")).toBe("birthday");
+    expect(excelDate("32947")).toBe("15/03/1990");
+    expect(excelDate("15/03")).toBe("15/03");
+    const csv = toImportCsv([["Ana", "32947"]], ["name", "birthday"]);
+    expect(csv.split("\n")[1]).toBe("Ana,,,,,,15/03/1990");
   });
 });

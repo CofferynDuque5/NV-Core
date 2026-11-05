@@ -88,7 +88,7 @@ export function useCalendarEvents(month: string) {
 }
 
 export function useContacts(
-  query: { q?: string; stage?: string; page?: number; pageSize?: number } = {},
+  query: { q?: string; stage?: string; segment?: string; page?: number; pageSize?: number } = {},
   opts: { enabled?: boolean } = {},
 ) {
   const svc = useServices();
@@ -101,11 +101,13 @@ export function useContacts(
       query.stage ?? "",
       query.page ?? 1,
       query.pageSize ?? 100,
+      query.segment ?? "",
     ],
     queryFn: () =>
       svc.contacts.list(ws.id, {
         q: query.q,
         stage: query.stage as never,
+        segment: query.segment || undefined,
         page: query.page,
         pageSize: query.pageSize,
       }),
@@ -169,6 +171,17 @@ export function useSegments() {
   const svc = useServices();
   const ws = useWorkspace();
   return useQuery({ queryKey: [ws.id, "segments"], queryFn: () => svc.segments.list(ws.id) });
+}
+
+/** The brand's custom contact fields. */
+export function useContactFields() {
+  const svc = useServices();
+  const ws = useWorkspace();
+  return useQuery({
+    queryKey: [ws.id, "contact-fields"],
+    queryFn: () => svc.contacts.fields(ws.id),
+    staleTime: 60_000,
+  });
 }
 
 export function useForms() {

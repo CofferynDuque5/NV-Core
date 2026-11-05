@@ -8,7 +8,7 @@ import type { SegmentField, SegmentOperator } from "../enums";
  */
 
 /** The value shape a field expects, which drives the UI input + validation. */
-export type SegmentFieldType = "text" | "tags" | "enum" | "date";
+export type SegmentFieldType = "text" | "tags" | "enum" | "date" | "birthday";
 
 export interface SegmentFieldSpec {
   field: SegmentField;
@@ -27,6 +27,7 @@ export const SEGMENT_FIELD_CATALOG: readonly SegmentFieldSpec[] = [
   { field: "stage", label: "Etapa", type: "enum", options: CONTACT_STAGES },
   { field: "createdAt", label: "Fecha de alta", type: "date" },
   { field: "lastContactAt", label: "Último contacto", type: "date" },
+  { field: "birthday", label: "Cumpleaños", type: "birthday" },
 ] as const;
 
 export interface SegmentOperatorSpec {
@@ -45,8 +46,8 @@ export const SEGMENT_OPERATOR_CATALOG: readonly SegmentOperatorSpec[] = [
   { op: "not_equals", label: "no es igual a", types: ["text", "enum"], valueHint: "text" },
   { op: "contains", label: "contiene", types: ["text"], valueHint: "text" },
   { op: "not_contains", label: "no contiene", types: ["text"], valueHint: "text" },
-  { op: "is_set", label: "tiene valor", types: ["text", "tags", "date"], valueless: true },
-  { op: "is_empty", label: "está vacío", types: ["text", "tags", "date"], valueless: true },
+  { op: "is_set", label: "tiene valor", types: ["text", "tags", "date", "birthday"], valueless: true },
+  { op: "is_empty", label: "está vacío", types: ["text", "tags", "date", "birthday"], valueless: true },
   { op: "in", label: "es uno de", types: ["enum"], valueHint: "csv" },
   { op: "has_tag", label: "incluye la etiqueta", types: ["tags"], valueHint: "text" },
   { op: "not_has_tag", label: "no incluye la etiqueta", types: ["tags"], valueHint: "text" },
@@ -64,12 +65,29 @@ export const SEGMENT_OPERATOR_CATALOG: readonly SegmentOperatorSpec[] = [
     types: ["date"],
     valueHint: "number",
   },
+  {
+    op: "birthday_in_days",
+    label: "cumple en los próximos (días, 0 = hoy)",
+    types: ["birthday"],
+    valueHint: "number",
+  },
 ] as const;
 
 /** The spec for a field, or undefined if the field id is unknown. */
 export function segmentFieldSpec(field: string): SegmentFieldSpec | undefined {
+  const key = customFieldKey(field);
+  if (key) return { field: field as SegmentField, label: key, type: "text" };
   return SEGMENT_FIELD_CATALOG.find((f) => f.field === field);
 }
+
+/** Key of a custom-field rule («custom.talla» → «talla»), or null. */
+export function customFieldKey(field: string): string | null {
+  const m = /^custom\.([a-z0-9_]{1,30})$/.exec(field);
+  return m ? m[1]! : null;
+}
+
+/** Operators a custom-field rule supports (stored in JSON, so text matching only). */
+export const CUSTOM_FIELD_OPERATORS: readonly SegmentOperator[] = ["equals", "contains"];
 
 /** The spec for an operator, or undefined if the operator id is unknown. */
 export function segmentOperatorSpec(op: string): SegmentOperatorSpec | undefined {
@@ -80,5 +98,6 @@ export function segmentOperatorSpec(op: string): SegmentOperatorSpec | undefined
 export function operatorsForField(field: string): SegmentOperatorSpec[] {
   const spec = segmentFieldSpec(field);
   if (!spec) return [];
+  if (customFieldKey(field)) return SEGMENT_OPERATOR_CATALOG.filter((o) => CUSTOM_FIELD_OPERATORS.includes(o.op));
   return SEGMENT_OPERATOR_CATALOG.filter((o) => o.types.includes(spec.type));
 }

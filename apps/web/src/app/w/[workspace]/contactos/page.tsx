@@ -1,11 +1,11 @@
 import * as React from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { CONTACT_STAGES, type Contact as ContactEntity, type ContactStage } from "@nv/domain";
-import { Columns3, Contact, Download, Loader2, Pencil, Plug, Plus, Search, Send, Merge, Table2, Trash2, Upload } from "lucide-react";
+import { Columns3, Contact, Download, ListPlus, Loader2, Pencil, Plug, Plus, Search, Send, Merge, Table2, Trash2, Upload } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { STAGE_ACCENTS } from "@/lib/crm";
-import { useContacts } from "@/hooks/use-domain-data";
+import { useContacts, useSegments } from "@/hooks/use-domain-data";
 import {
   useDeleteContact,
   useExportContacts,
@@ -23,6 +23,7 @@ import { Badge } from "@/components/ui/badge";
 import { ContactFormDialog } from "@/components/entities/contact-form-dialog";
 import { ContactImportDialog } from "@/components/contacts/contact-import-dialog";
 import { DuplicatesDialog } from "@/components/contacts/duplicates-dialog";
+import { ContactFieldsDialog } from "@/components/contacts/contact-fields-dialog";
 import { CrmBoard } from "@/components/crm/crm-board";
 import { ContactDetailDrawer } from "@/components/crm/contact-detail-drawer";
 import { SampleDataBanner } from "@/components/dashboard/sample-data-banner";
@@ -53,6 +54,8 @@ export default function ContactosPage() {
 
   const [importOpen, setImportOpen] = React.useState(false);
   const [dupesOpen, setDupesOpen] = React.useState(false);
+  const [fieldsOpen, setFieldsOpen] = React.useState(false);
+  const segments = useSegments();
 
   const PAGE_SIZE = 100;
   const [view, setView] = React.useState<"table" | "board">("board");
@@ -66,6 +69,8 @@ export default function ContactosPage() {
     if (next !== null) setQ(next);
   }, [searchParams]);
   const [stage, setStage] = React.useState<ContactStage | "">("");
+  // `?segmento=` (from Segmentos → «Ver contactos») pre-selects a segment.
+  const [segment, setSegment] = React.useState(searchParams.get("segmento") ?? "");
   const [page, setPage] = React.useState(1);
   const [dialogOpen, setDialogOpen] = React.useState(false);
   const [editing, setEditing] = React.useState<ContactEntity | null>(null);
@@ -78,16 +83,22 @@ export default function ContactosPage() {
     return () => clearTimeout(t);
   }, [q]);
   // Any filter change returns to the first page.
-  React.useEffect(() => setPage(1), [debouncedQ, stage]);
+  React.useEffect(() => setPage(1), [debouncedQ, stage, segment]);
 
   // Search + stage filtering run on the SERVER — authoritative across the whole
   // workspace, not just the loaded page (the old client filter over 100 rows
   // silently missed matches beyond it).
-  const contacts = useContacts({ q: debouncedQ, stage: stage || undefined, page, pageSize: PAGE_SIZE });
+  const contacts = useContacts({
+    q: debouncedQ,
+    stage: stage || undefined,
+    segment: segment || undefined,
+    page,
+    pageSize: PAGE_SIZE,
+  });
   const items = React.useMemo(() => contacts.data?.items ?? [], [contacts.data]);
   const total = contacts.data?.total ?? 0;
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
-  const hasFilters = Boolean(debouncedQ || stage);
+  const hasFilters = Boolean(debouncedQ || stage || segment);
 
   // Keep the drawer's contact in sync with fresh data after mutations.
   // `?contacto=` (from the global search) opens that contact's card.
@@ -141,6 +152,9 @@ export default function ContactosPage() {
             <Button variant="secondary" size="sm" onClick={() => setImportOpen(true)}>
               <Upload className="size-4" /> Importar
             </Button>
+            <Button variant="secondary" size="sm" onClick={() => setFieldsOpen(true)} data-testid="contacts-fields">
+              <ListPlus className="size-4" /> Campos
+            </Button>
             <Button variant="secondary" size="sm" onClick={() => setDupesOpen(true)} data-testid="contacts-duplicates">
               <Merge className="size-4" /> Duplicados
             </Button>
@@ -172,6 +186,21 @@ export default function ContactosPage() {
             <option key={s} value={s}>{s}</option>
           ))}
         </select>
+        {(segments.data?.items.length ?? 0) > 0 || segment ? (
+          <select
+            value={segment}
+            onChange={(e) => setSegment(e.target.value)}
+            className="h-9 rounded-lg border border-line-soft bg-panel px-2 text-sm text-ink"
+            aria-label="Filtrar por segmento"
+          >
+            <option value="">Todos los segmentos</option>
+            {(segments.data?.items ?? []).map((sg) => (
+              <option key={sg.id} value={sg.id}>
+                {sg.name} ({sg.count})
+              </option>
+            ))}
+          </select>
+        ) : null}
         <div className="ml-auto inline-flex rounded-lg border border-line-soft bg-panel p-0.5" role="tablist" aria-label="Vista">
           <button
             role="tab"
@@ -305,6 +334,7 @@ export default function ContactosPage() {
 
       <ContactImportDialog open={importOpen} onOpenChange={setImportOpen} />
       <DuplicatesDialog open={dupesOpen} onOpenChange={setDupesOpen} />
+      <ContactFieldsDialog open={fieldsOpen} onOpenChange={setFieldsOpen} />
 
       <ContactFormDialog open={dialogOpen} onOpenChange={setDialogOpen} contact={editing} />
       <ContactDetailDrawer

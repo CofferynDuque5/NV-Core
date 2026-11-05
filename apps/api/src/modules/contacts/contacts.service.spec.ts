@@ -201,7 +201,7 @@ describe("ContactsService import/export CSV", () => {
     const { service } = makeIO([{ name: "Ana", email: "ana@x.com" }, { name: "Bob" }]);
     const csv = await service.exportCsv("w1");
     const lines = csv.split("\r\n");
-    expect(lines[0]).toBe("name,phone,email,company,tags,stage,createdAt,optOutAt,consentAt");
+    expect(lines[0]).toBe("name,phone,email,company,tags,stage,birthday,createdAt,optOutAt,consentAt");
     expect(csv).toContain("Ana");
     expect(csv).toContain("Bob");
     expect(lines).toHaveLength(3); // header + 2

@@ -4,7 +4,7 @@
  * with the browser's own DecompressionStream and DOMParser.
  */
 
-export type ContactField = "name" | "phone" | "email" | "company" | "tags" | "stage" | "";
+export type ContactField = "name" | "phone" | "email" | "company" | "tags" | "stage" | "birthday" | "";
 
 export const CONTACT_FIELDS: { id: Exclude<ContactField, "">; label: string }[] = [
   { id: "name", label: "Nombre" },
@@ -13,6 +13,7 @@ export const CONTACT_FIELDS: { id: Exclude<ContactField, "">; label: string }[] 
   { id: "company", label: "Empresa" },
   { id: "tags", label: "Etiquetas" },
   { id: "stage", label: "Etapa" },
+  { id: "birthday", label: "Cumpleaños" },
 ];
 
 const fold = (s: string) =>
@@ -29,6 +30,7 @@ const GUESS: [Exclude<ContactField, "">, string[]][] = [
   ["company", ["company", "empresa", "negocio", "compania"]],
   ["tags", ["tags", "etiquetas", "etiqueta", "grupo", "categoria"]],
   ["stage", ["stage", "etapa", "estado"]],
+  ["birthday", ["birthday", "cumpleanos", "cumple", "nacimiento", "fechadenacimiento", "fechanacimiento"]],
 ];
 
 /** Best guess of which field a column header is («Teléfono» → phone). */
@@ -96,12 +98,23 @@ export function toImportCsv(rows: string[][], mapping: ContactField[]): string {
   for (const r of rows) {
     const out = fields.map((f) => {
       const i = mapping.indexOf(f);
-      return i >= 0 ? (r[i] ?? "").trim() : "";
+      const v = i >= 0 ? (r[i] ?? "").trim() : "";
+      return f === "birthday" ? excelDate(v) : v;
     });
     if (out.every((v) => !v)) continue;
     lines.push(out.map(q).join(","));
   }
   return lines.join("\n");
+}
+
+/** An Excel date serial (32947) as «15/03/1990»; anything else unchanged. */
+export function excelDate(v: string): string {
+  if (!/^\d{4,5}(\.0+)?$/.test(v)) return v;
+  const n = Math.floor(Number(v));
+  if (n < 1 || n > 80_000) return v;
+  const d = new Date(Date.UTC(1899, 11, 30) + n * 86_400_000);
+  const p = (x: number) => String(x).padStart(2, "0");
+  return `${p(d.getUTCDate())}/${p(d.getUTCMonth() + 1)}/${d.getUTCFullYear()}`;
 }
 
 /** A cell number like 5.84121110000E+11 (Excel phone) back to plain digits. */

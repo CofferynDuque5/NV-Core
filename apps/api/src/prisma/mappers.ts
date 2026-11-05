@@ -88,6 +88,11 @@ export const mapContact = (c: PContact): Contact => ({
   consentAt: iso(c.consentAt),
   consentSource: c.consentSource ?? undefined,
   attribution: (c.attribution as unknown as Contact["attribution"]) ?? undefined,
+  birthday: c.birthday ?? undefined,
+  custom:
+    c.custom && typeof c.custom === "object" && !Array.isArray(c.custom) && Object.keys(c.custom).length > 0
+      ? (c.custom as Record<string, string>)
+      : undefined,
 });
 
 export const mapContactNote = (n: PContactNote): ContactNote => ({
@@ -297,7 +302,7 @@ const RUN_STATUSES = ["ok", "skipped", "waiting", "error"] as const;
 
 export const mapAutomationRun = (r: PAutomationRun): AutomationRun => ({
   id: r.id,
-  trigger: r.trigger === "resume" || r.trigger === "inactive" ? r.trigger : "message",
+  trigger: r.trigger === "resume" || r.trigger === "inactive" || r.trigger === "birthday" ? r.trigger : "message",
   contactHandle: r.contactHandle,
   contactName: r.contactName ?? undefined,
   status: (RUN_STATUSES as readonly string[]).includes(r.status) ? (r.status as AutomationRun["status"]) : "error",

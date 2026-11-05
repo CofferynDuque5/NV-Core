@@ -15,3 +15,4 @@ export * from "./initials";
 export * from "./sales-plans";
 export * from "./plan-payment";
 export * from "./activity";
+export * from "./contact-fields";

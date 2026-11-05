@@ -156,6 +156,10 @@ model Contact {
   consentSource String?
   /// First-touch origin (LeadAttribution) set by public forms and funnels.
   attribution   Json?
+  /// Birthday as "MM-DD" or "YYYY-MM-DD" (year optional).
+  birthday      String?
+  /// Values of the brand's custom fields: { fieldKey: "value" }.
+  custom        Json      @default("{}")
   createdAt     DateTime  @default(now())
 
   @@index([workspaceSlug])
@@ -792,6 +796,8 @@ model WorkspaceSettings {
   goals         String[] @default([])
   /// Inbox saved replies: [{ id, title, text }] with {{nombre}}-style variables.
   quickReplies  Json     @default("[]")
+  /// Contact custom fields: [{ key, label, type: text|number|date|select, options? }].
+  contactFields Json     @default("[]")
   updatedBy     String?
   updatedAt     DateTime @updatedAt
 }

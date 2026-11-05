@@ -15,6 +15,8 @@ export interface MergeableContact {
   consentAt: Date | null;
   consentSource: string | null;
   attribution: unknown;
+  birthday?: string | null;
+  custom?: unknown;
   createdAt: Date;
 }
 
@@ -93,5 +95,11 @@ export function mergeContactFields(keep: MergeableContact, others: MergeableCont
     consentAt: consented?.consentAt ?? null,
     consentSource: consented?.consentSource ?? null,
     attribution: first("attribution"),
+    birthday: (first("birthday") as string | null) ?? null,
+    // Custom fields: the kept contact's values win, the others fill the gaps.
+    custom: Object.assign(
+      {},
+      ...[...all].reverse().map((c) => (c.custom && typeof c.custom === "object" && !Array.isArray(c.custom) ? c.custom : {})),
+    ) as Record<string, string>,
   };
 }

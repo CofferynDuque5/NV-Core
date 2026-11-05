@@ -1,4 +1,5 @@
 import type {
+  ContactFieldDef,
   Product,
   AccessOverview,
   SampleDataSummary,
@@ -329,6 +330,7 @@ export function createHttpAdapters(opts: HttpAdapterOptions): Services {
         if (query?.page) p.set("page", String(query.page));
         if (query?.q) p.set("q", query.q);
         if (query?.stage) p.set("stage", query.stage);
+        if (query?.segment) p.set("segment", query.segment);
         return get<ListResult<Contact>>(`${ws(id)}/contacts?${p.toString()}`);
       },
       create: (id, input) => post<Contact>(`${ws(id)}/contacts`, input),
@@ -344,6 +346,8 @@ export function createHttpAdapters(opts: HttpAdapterOptions): Services {
         post<ContactImportResult>(`${ws(id)}/contacts/import`, { csv, ...(opts?.dryRun ? { dryRun: true } : {}) }),
       duplicates: (id) => get<{ groups: Contact[][] }>(`${ws(id)}/contacts/duplicates`),
       merge: (id, keepId, mergeIds) => post<Contact>(`${ws(id)}/contacts/merge`, { keepId, mergeIds }),
+      fields: (id) => get<ContactFieldDef[]>(`${ws(id)}/contacts/fields`),
+      saveFields: (id, fields) => put<ContactFieldDef[]>(`${ws(id)}/contacts/fields`, { fields }),
     },
     groups: {
       list: (id) => get<ListResult<Group>>(`${ws(id)}/groups`),
@@ -408,6 +412,8 @@ export function createHttpAdapters(opts: HttpAdapterOptions): Services {
       update: (id, sid, input) => patch<Segment>(`${ws(id)}/segments/${sid}`, input),
       remove: (id, sid) => del<void>(`${ws(id)}/segments/${sid}`),
       preview: (id, input) => post<SegmentPreview>(`${ws(id)}/segments/preview`, input),
+      exportCsv: (id, sid) => get<{ csv: string }>(`${ws(id)}/segments/${sid}/export`).then((r) => r.csv),
+      tagAll: (id, sid, input) => post<{ updated: number }>(`${ws(id)}/segments/${sid}/tags`, input),
     },
     inbox: {
       conversations: (id, query) => {
