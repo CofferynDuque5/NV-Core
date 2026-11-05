@@ -51,7 +51,7 @@ describe("schedulingProblems", () => {
   it("asks for message, destinations and a future date", async () => {
     const { schedulingProblems } = await import("./date-range");
     expect(schedulingProblems({ message: " ", targets: 0, scheduleType: "once", scheduleAt: "2020-01-01T08:00:00Z" }, now)).toEqual([
-      "Escribe el mensaje o añade una imagen.",
+      "Escribe el mensaje, añade una imagen o un producto.",
       "Elige al menos un grupo o canal.",
       "La fecha de envío ya pasó: elige una fecha futura.",
     ]);

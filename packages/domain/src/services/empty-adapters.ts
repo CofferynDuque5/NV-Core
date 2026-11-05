@@ -116,6 +116,12 @@ export const emptyAdapters: Services = {
     disconnect: () => notAvailable(),
     sync: () => notAvailable(),
     submitPassword: () => notAvailable(),
+    lines: () => delay([]),
+    addLine: () => notAvailable(),
+    renameLine: () => notAvailable(),
+    lineAction: () => notAvailable(),
+    linePassword: () => notAvailable(),
+    removeLine: () => notAvailable(),
   },
   admin: {
     users: () => delay([]),

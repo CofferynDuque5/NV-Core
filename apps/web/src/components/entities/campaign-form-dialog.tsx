@@ -12,6 +12,7 @@ import {
   withFooter,
   type Campaign,
   type CampaignAttachment,
+  type CampaignItem,
   type CampaignStatus,
   type ChannelId,
 } from "@nv/domain";
@@ -38,6 +39,8 @@ import { FormDialog, errorMessage } from "./form-dialog";
 import { ContentPreview } from "./content-preview";
 import { AiFlyerButton } from "./ai-flyer-button";
 import { AttachmentRows, LibraryPickerButton } from "./attachment-tools";
+import { CampaignSenders, groupLineAllowed, useLineNames } from "./campaign-senders";
+import { CampaignItemsEditor } from "./campaign-items-editor";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { BrandTimeZone } from "@/components/common/brand-time-zone";
@@ -136,6 +139,9 @@ export function CampaignFormDialog({
   const [attachments, setAttachments] = React.useState<CampaignAttachment[]>([]);
   const [prices, setPrices] = React.useState<Record<string, string>>({});
   const [addFooter, setAddFooter] = React.useState(true);
+  const [waLines, setWaLines] = React.useState<number[]>([]);
+  const [tgLines, setTgLines] = React.useState<number[]>([]);
+  const [items, setItems] = React.useState<CampaignItem[]>([]);
   const [error, setError] = React.useState<string | null>(null);
 
   React.useEffect(() => {
@@ -171,6 +177,9 @@ export function CampaignFormDialog({
     setAttachments(campaign?.attachments ?? draft?.attachments ?? []);
     setPrices(campaign?.prices ?? draft?.prices ?? {});
     setAddFooter(campaign?.addFooter ?? true);
+    setWaLines(campaign?.waLines ?? []);
+    setTgLines(campaign?.tgLines ?? []);
+    setItems(campaign?.items ?? []);
     setError(null);
     // Reset only when the dialog opens or switches campaign: the list refreshes
     // in the background, and a new copy of the same campaign must not wipe
@@ -259,8 +268,18 @@ export function CampaignFormDialog({
       return;
     }
 
+    const emptyItem = items.find((it) => !it.text.trim() && !(it.attachments ?? []).length);
+    if (emptyItem) {
+      setError(`«${emptyItem.name}» no tiene texto ni imagen: complétalo o quítalo.`);
+      return;
+    }
+
     const channels: ChannelId[] = [];
     const selected = (groups.data?.items ?? []).filter((g) => targetGroups.includes(g.id));
+    if (selected.length > 0 && !selected.some((g) => groupLineAllowed(g, waLines, tgLines))) {
+      setError("Ninguno de los grupos elegidos es de los números que elegiste en «Enviar desde».");
+      return;
+    }
     if (selected.some((g) => g.channel === "wa")) channels.push("wa");
     if (selected.some((g) => g.channel === "tg")) channels.push("tg");
     if (fb) channels.push("fb");
@@ -305,6 +324,9 @@ export function CampaignFormDialog({
       rotateAttachments,
       prices: Object.fromEntries(Object.entries(prices).filter(([, v]) => v.trim())),
       addFooter,
+      waLines,
+      tgLines,
+      items: items.map((it) => ({ ...it, name: it.name.trim() || "Producto", text: it.text.trim() })),
       ...(campaign?.accent ? { accent: campaign.accent } : {}),
     };
 
@@ -317,7 +339,7 @@ export function CampaignFormDialog({
     if (finalStatus === "programada" || finalStatus === "activa") {
       const problems = campaignReadyProblems({
         message,
-        attachments: attachments.length,
+        attachments: attachments.length + items.length,
         targets: targetGroups.length,
         social: fb || ig,
         postToWaStatus,
@@ -345,6 +367,27 @@ export function CampaignFormDialog({
     (a, b) => Number(groupStatus(a).status !== "apto") - Number(groupStatus(b).status !== "apto"),
   );
   const selectedGroups = groupItems.filter((g) => targetGroups.includes(g.id));
+  const lineNames = useLineNames();
+  /** Badge with the number/account a group belongs to, when the brand has several. */
+  const lineBadge = (g: (typeof groupItems)[number]) => {
+    const many = g.channel === "tg" ? lineNames.tgCount > 1 : lineNames.waCount > 1;
+    if (!many) return null;
+    const l = (g.channel === "tg" ? lineNames.tg : lineNames.wa).get(g.line ?? 1);
+    return l?.name ?? `${g.channel === "tg" ? "Cuenta" : "Número"} ${g.line ?? 1}`;
+  };
+  const offLine = selectedGroups.filter((g) => !groupLineAllowed(g, waLines, tgLines));
+
+  /** Choose senders; ticked groups of numbers no longer chosen are unticked. */
+  function onSendersChange(next: { wa: number[]; tg: number[] }) {
+    setWaLines(next.wa);
+    setTgLines(next.tg);
+    setTargetGroups((prev) =>
+      prev.filter((id) => {
+        const g = groupItems.find((x) => x.id === id);
+        return !g || groupLineAllowed(g, next.wa, next.tg);
+      }),
+    );
+  }
   const hasWaGroup = selectedGroups.some((g) => g.channel === "wa");
   const hasTgGroup = selectedGroups.some((g) => g.channel === "tg");
 
@@ -386,7 +429,7 @@ export function CampaignFormDialog({
   function setAllVisible(selected: boolean) {
     // «Seleccionar» skips groups kept out or whose rules forbid posting.
     const visibleIds = visibleGroups
-      .filter((g) => !selected || groupStatus(g).status === "apto")
+      .filter((g) => !selected || (groupStatus(g).status === "apto" && groupLineAllowed(g, waLines, tgLines)))
       .map((g) => g.id);
     setTargetGroups((prev) =>
       selected
@@ -577,6 +620,7 @@ export function CampaignFormDialog({
                 </label>
               ) : null}
             </div>
+            <CampaignItemsEditor items={items} onChange={setItems} />
           </section>
 
           {/* Sección: Programación */}
@@ -728,6 +772,13 @@ export function CampaignFormDialog({
           {/* Sección: Destinos */}
           <section className="border-line-soft space-y-4 border-t pt-5">
             <SectionHeader>Destinos</SectionHeader>
+            <CampaignSenders wa={waLines} tg={tgLines} onChange={onSendersChange} />
+            {offLine.length > 0 ? (
+              <p className="text-state-warning text-[11px]">
+                {offLine.length === 1 ? "1 grupo elegido es" : `${offLine.length} grupos elegidos son`} de un número que
+                no marcaste: no recibirán esta campaña.
+              </p>
+            ) : null}
             <div className="space-y-1.5">
               <div className="flex items-center justify-between gap-2">
                 <Label>Grupos (WhatsApp / Telegram)</Label>
@@ -771,7 +822,12 @@ export function CampaignFormDialog({
                       className="border-line-soft text-ink-muted hover:border-brand/60 hover:text-ink rounded-md border px-2 py-0.5 transition-colors"
                     >
                       Seleccionar aptos (
-                      {visibleGroups.filter((g) => groupStatus(g).status === "apto").length})
+                      {
+                        visibleGroups.filter(
+                          (g) => groupStatus(g).status === "apto" && groupLineAllowed(g, waLines, tgLines),
+                        ).length
+                      }
+                      )
                     </button>
                     <button
                       type="button"
@@ -806,8 +862,14 @@ export function CampaignFormDialog({
                         const st = groupStatus(g);
                         const chosen = targetGroups.includes(g.id);
                         // A kept-out or rule-blocked group can still be unticked, never ticked.
-                        const locked = st.status !== "apto" && !chosen;
-                        const issue = chosen ? groupProblems(g)[0] : st.reasons[0];
+                        const lineOk = groupLineAllowed(g, waLines, tgLines);
+                        const badge = lineBadge(g);
+                        const locked = (st.status !== "apto" || !lineOk) && !chosen;
+                        const issue = !lineOk
+                          ? `Es de «${badge ?? "otro número"}», que no elegiste en «Enviar desde».`
+                          : chosen
+                            ? groupProblems(g)[0]
+                            : st.reasons[0];
                         return (
                           <label
                             key={g.id}
@@ -850,6 +912,15 @@ export function CampaignFormDialog({
                                   : "TG"
                                 : "WA"}
                             </span>
+                            {badge ? (
+                              <span
+                                data-testid="group-line-badge"
+                                className="border-line-soft text-ink-muted shrink-0 rounded border px-1.5 py-0.5 text-[10px]"
+                                title={`Sale desde ${badge}`}
+                              >
+                                {badge}
+                              </span>
+                            ) : null}
                             {(g.tags ?? []).slice(0, 2).map((t) => (
                               <span
                                 key={t}
@@ -1040,6 +1111,30 @@ export function CampaignFormDialog({
               ig={ig}
               igFormat={socialFormat}
             />
+            {items.length > 0 ? (
+              <div className="space-y-1.5" data-testid="items-preview">
+                <p className="text-ink-muted text-[11px]">
+                  Luego, {items.length === 1 ? "1 mensaje más" : `${items.length} mensajes más`} (uno por producto):
+                </p>
+                {items.map((it, i) => {
+                  const img = it.attachments?.[0];
+                  const price = previewGroup
+                    ? priceForGroup(previewGroup, it.prices && Object.keys(it.prices).length ? it.prices : prices)
+                    : "";
+                  const text = price ? it.text.replace(/\{\{\s*precio\s*\}\}/g, price) : it.text;
+                  return (
+                    <div key={i} className="border-line-soft bg-panel-raised flex gap-2 rounded-lg border p-1.5">
+                      {img && (img.kind === "image" || img.mime?.startsWith("image/")) ? (
+                        <img src={img.url} alt="" className="size-12 shrink-0 rounded object-cover" />
+                      ) : null}
+                      <p className="text-ink line-clamp-3 min-w-0 whitespace-pre-line text-[11px]">
+                        {text || it.name}
+                      </p>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : null}
             <p className="text-ink-faint text-[11px]">
               Así se verá tu contenido en cada canal antes de programar o publicar.
             </p>

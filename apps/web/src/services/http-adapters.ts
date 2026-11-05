@@ -234,6 +234,13 @@ export function createHttpAdapters(opts: HttpAdapterOptions): Services {
       sync: (id) => post<TelegramStatus>(`${ws(id)}/telegram/sync`, {}),
       submitPassword: (id, password) =>
         post<TelegramStatus>(`${ws(id)}/telegram/password`, { password }),
+      lines: (id) => get<TelegramStatus[]>(`${ws(id)}/telegram/lines`),
+      addLine: (id, label) => post<TelegramStatus>(`${ws(id)}/telegram/lines`, { label }),
+      renameLine: (id, line, label) => patch<TelegramStatus>(`${ws(id)}/telegram/lines/${line}`, { label }),
+      lineAction: (id, line, action) => post<TelegramStatus>(`${ws(id)}/telegram/lines/${line}/${action}`, {}),
+      linePassword: (id, line, password) =>
+        post<TelegramStatus>(`${ws(id)}/telegram/lines/${line}/password`, { password }),
+      removeLine: (id, line) => del<void>(`${ws(id)}/telegram/lines/${line}`),
     },
     admin: {
       users: () => get<AdminUser[]>(`/admin/users`),

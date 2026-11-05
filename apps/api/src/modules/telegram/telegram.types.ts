@@ -14,6 +14,9 @@ export type TelegramStatusValue =
 export interface TelegramStatus {
   status: TelegramStatusValue;
   provider: "mtproto";
+  line?: number;
+  label?: string | null;
+  qr?: string | null;
   username: string | null;
   phone: string | null;
   lastConnectionAt: string | null;

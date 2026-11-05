@@ -13,6 +13,7 @@ import type {
   AddMemberInput,
   CreateInviteLinkInput,
   WhatsappLineAction,
+  TelegramLineAction,
   CampaignAttachment,
   ChannelId,
   Contact,
@@ -1315,6 +1316,72 @@ export function useTelegramSubmitPassword() {
     onSuccess: (status) => {
       qc.setQueryData([ws.id, "telegram", "status"], status);
       void qc.invalidateQueries({ queryKey: [ws.id, "telegram", "status"] });
+    },
+    onError: (err) => toast.error(errText(err)),
+  });
+}
+
+function invalidateTgLines(qc: ReturnType<typeof useQueryClient>, wsId: string) {
+  void qc.invalidateQueries({ queryKey: [wsId, "telegram"] });
+  void qc.invalidateQueries({ queryKey: [wsId, "groups"] });
+}
+
+/** Link one more Telegram account to the brand. */
+export function useAddTelegramLine() {
+  const svc = useServices();
+  const ws = useWorkspace();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (label?: string) => svc.telegram.addLine(ws.id, label),
+    onSuccess: () => invalidateTgLines(qc, ws.id),
+    onError: (err) => toast.error(errText(err)),
+  });
+}
+
+export function useTelegramLineAction() {
+  const svc = useServices();
+  const ws = useWorkspace();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ line, action }: { line: number; action: TelegramLineAction }) =>
+      svc.telegram.lineAction(ws.id, line, action),
+    onSuccess: () => invalidateTgLines(qc, ws.id),
+    onError: (err) => toast.error(errText(err)),
+  });
+}
+
+export function useRenameTelegramLine() {
+  const svc = useServices();
+  const ws = useWorkspace();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ line, label }: { line: number; label: string }) => svc.telegram.renameLine(ws.id, line, label),
+    onSuccess: () => invalidateTgLines(qc, ws.id),
+    onError: (err) => toast.error(errText(err)),
+  });
+}
+
+export function useTelegramLinePassword() {
+  const svc = useServices();
+  const ws = useWorkspace();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ line, password }: { line: number; password: string }) =>
+      svc.telegram.linePassword(ws.id, line, password),
+    onSuccess: () => invalidateTgLines(qc, ws.id),
+    onError: (err) => toast.error(errText(err)),
+  });
+}
+
+export function useRemoveTelegramLine() {
+  const svc = useServices();
+  const ws = useWorkspace();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (line: number) => svc.telegram.removeLine(ws.id, line),
+    onSuccess: () => {
+      invalidateTgLines(qc, ws.id);
+      toast.success("Cuenta de Telegram quitada de esta marca");
     },
     onError: (err) => toast.error(errText(err)),
   });

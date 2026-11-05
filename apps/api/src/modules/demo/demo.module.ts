@@ -92,31 +92,38 @@ export class DemoService implements OnApplicationBootstrap {
 
   /** Rebuild the demo's example people, chats, campaigns, payments and products. */
   private async showcase(slug: string): Promise<void> {
-    await this.prisma.$transaction(async (tx) => {
-      const convs = await tx.conversation.findMany({
-        where: { workspaceSlug: slug },
-        select: { id: true },
-      });
-      await tx.message.deleteMany({ where: { conversationId: { in: convs.map((c) => c.id) } } });
-      const camps = await tx.campaign.findMany({
-        where: { workspaceSlug: slug },
-        select: { id: true },
-      });
-      await tx.campaignTarget.deleteMany({ where: { campaignId: { in: camps.map((c) => c.id) } } });
-      const where = { workspaceSlug: slug };
-      await tx.notification.deleteMany({ where });
-      await tx.post.deleteMany({ where });
-      await tx.task.deleteMany({ where });
-      await tx.paymentRequest.deleteMany({ where });
-      await tx.paymentMethod.deleteMany({ where });
-      await tx.product.deleteMany({ where });
-      await tx.sendLog.deleteMany({ where });
-      await tx.campaign.deleteMany({ where });
-      await tx.group.deleteMany({ where });
-      await tx.conversation.deleteMany({ where });
-      await tx.contact.deleteMany({ where });
-      for (const sql of DEMO_SHOWCASE_SQL) await tx.$executeRawUnsafe(sql, slug);
-    });
+    await this.prisma.$transaction(
+      async (tx) => {
+        const convs = await tx.conversation.findMany({
+          where: { workspaceSlug: slug },
+          select: { id: true },
+        });
+        await tx.message.deleteMany({ where: { conversationId: { in: convs.map((c) => c.id) } } });
+        const camps = await tx.campaign.findMany({
+          where: { workspaceSlug: slug },
+          select: { id: true },
+        });
+        await tx.campaignTarget.deleteMany({
+          where: { campaignId: { in: camps.map((c) => c.id) } },
+        });
+        const where = { workspaceSlug: slug };
+        await tx.notification.deleteMany({ where });
+        await tx.post.deleteMany({ where });
+        await tx.task.deleteMany({ where });
+        await tx.paymentRequest.deleteMany({ where });
+        await tx.paymentMethod.deleteMany({ where });
+        await tx.product.deleteMany({ where });
+        await tx.sendLog.deleteMany({ where });
+        await tx.campaign.deleteMany({ where });
+        await tx.group.deleteMany({ where });
+        await tx.conversation.deleteMany({ where });
+        await tx.contact.deleteMany({ where });
+        for (const sql of DEMO_SHOWCASE_SQL) await tx.$executeRawUnsafe(sql, slug);
+        // A remote database (Neon) can take longer than Prisma's default 5 s:
+        // without room the transaction rolls back and the demo stays empty.
+      },
+      { maxWait: 20000, timeout: 120000 },
+    );
   }
 
   /** Example forms, funnels, segments and automations (made once). */

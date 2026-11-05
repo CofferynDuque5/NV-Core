@@ -32,6 +32,8 @@ export interface DomainEventMap {
     history?: boolean;
     /** WhatsApp number (line) of the brand that got the message. */
     waLine?: number;
+    /** Telegram account (line) of the brand that got the message. */
+    tgLine?: number;
   };
   /** Names learnt from a live session's contact list (phone → name). */
   "session.contact-names": {

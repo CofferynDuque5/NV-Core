@@ -53,6 +53,7 @@ import { Type } from "class-transformer";
 
 import { MediaAttachmentDto } from "../../common/dto/media-attachment.dto";
 import { DAY_RE, assertReadyToSchedule, checkDateRange } from "./date-range";
+import { campaignItems, cleanItems } from "./campaign-items";
 import { parseCsv, toCsv } from "../../common/csv";
 import { ListResultDto } from "../../common/dto/list-result.dto";
 import { WorkspaceId } from "../../common/tenant/workspace.decorator";
@@ -189,6 +190,27 @@ export class CreateCampaignDto {
   @IsString()
   @MaxLength(40)
   category?: string | null;
+
+  @ApiPropertyOptional({ isArray: true, type: Number, description: "Números de WhatsApp que envían (vacío = todos)" })
+  @IsOptional()
+  @IsArray()
+  @IsInt({ each: true })
+  @Min(1, { each: true })
+  @Max(5, { each: true })
+  waLines?: number[];
+
+  @ApiPropertyOptional({ isArray: true, type: Number, description: "Cuentas de Telegram que envían (vacío = todas)" })
+  @IsOptional()
+  @IsArray()
+  @IsInt({ each: true })
+  @Min(1, { each: true })
+  @Max(5, { each: true })
+  tgLines?: number[];
+
+  @ApiPropertyOptional({ description: "Productos: un mensaje por producto con su texto e imagen" })
+  @IsOptional()
+  @IsArray()
+  items?: unknown[];
 }
 
 export class ImportCampaignsDto {
@@ -226,6 +248,15 @@ export class UpdateCampaignDto {
   @IsOptional() @IsObject() prices?: Record<string, string>;
   @IsOptional() @IsBoolean() addFooter?: boolean;
   @IsOptional() @IsString() @MaxLength(40) category?: string | null;
+  @IsOptional() @IsArray() @IsInt({ each: true }) @Min(1, { each: true }) @Max(5, { each: true }) waLines?: number[];
+  @IsOptional() @IsArray() @IsInt({ each: true }) @Min(1, { each: true }) @Max(5, { each: true }) tgLines?: number[];
+  @IsOptional() @IsArray() items?: unknown[];
+}
+
+/** Line numbers 1–5, unique and sorted; undefined stays undefined (no change). */
+export function cleanLines(raw: number[] | undefined): number[] | undefined {
+  if (!raw) return undefined;
+  return [...new Set(raw.filter((n) => Number.isInteger(n) && n >= 1 && n <= 5))].sort((a, b) => a - b);
 }
 
 /** Known currencies only, trimmed, without empty amounts. */
@@ -323,6 +354,9 @@ export class CampaignsService {
       prices: cleanPrices(dto.prices),
       addFooter: dto.addFooter,
       category: dto.category === undefined ? undefined : dto.category?.trim() || null,
+      waLines: cleanLines(dto.waLines),
+      tgLines: cleanLines(dto.tgLines),
+      items: cleanItems(dto.items) as object[] | undefined,
     };
   }
 
@@ -351,9 +385,11 @@ export class CampaignsService {
     checkDateRange(dto.startDate, dto.endDate);
     const initialStatus =
       CampaignsService.scheduledStatus(dto.status, dto.scheduleType, dto.scheduleAt, dto.scheduleTimes) ?? "borrador";
+    const items = cleanItems(dto.items) ?? [];
     assertReadyToSchedule(initialStatus, {
       message: dto.message,
       attachments: dto.attachments,
+      items: items.length,
       targets: dto.targetGroups?.length ?? 0,
       channels: dto.channels,
       postToWaStatus: dto.postToWaStatus,
@@ -383,6 +419,9 @@ export class CampaignsService {
         prices: cleanPrices(dto.prices) ?? {},
         addFooter: dto.addFooter ?? true,
         category: dto.category?.trim() || null,
+        waLines: cleanLines(dto.waLines) ?? [],
+        tgLines: cleanLines(dto.tgLines) ?? [],
+        items: items as object[],
       },
     });
     if (dto.targetGroups) await this.setTargets(workspaceId, created.id, dto.targetGroups);
@@ -417,11 +456,16 @@ export class CampaignsService {
       ) ?? (existing.status as CampaignStatus);
     // Check again when it is being (re)scheduled: status, date or content changed.
     const reschedules =
-      status !== existing.status || dto.scheduleAt !== undefined || dto.message !== undefined || dto.targetGroups !== undefined;
+      status !== existing.status ||
+      dto.scheduleAt !== undefined ||
+      dto.message !== undefined ||
+      dto.items !== undefined ||
+      dto.targetGroups !== undefined;
     if (reschedules) {
       assertReadyToSchedule(status, {
         message: dto.message ?? existing.message,
         attachments: dto.attachments ?? existing.attachments,
+        items: (cleanItems(dto.items) ?? campaignItems(existing.items)).length,
         targets:
           dto.targetGroups?.length ?? (await this.prisma.campaignTarget.count({ where: { campaignId: id } })),
         channels: dto.channels ?? (existing.channels as string[]),
@@ -478,6 +522,9 @@ export class CampaignsService {
         prices: src.prices ?? {},
         addFooter: src.addFooter,
         category: src.category,
+        waLines: src.waLines,
+        tgLines: src.tgLines,
+        items: src.items ?? [],
         targets: { create: src.targets.map((t) => ({ groupId: t.groupId })) },
       },
     });

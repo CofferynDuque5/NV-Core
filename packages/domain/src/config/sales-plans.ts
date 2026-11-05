@@ -94,10 +94,10 @@ export const SALES_PLANS: Record<SalesPlanId, SalesPlan> = {
     id: "pro",
     name: "Pro",
     tagline: "Para vender con varios números y marcas",
-    limits: { whatsappNumbers: 5, telegramAccounts: 1, brands: null },
+    limits: { whatsappNumbers: 5, telegramAccounts: 5, brands: null },
     features: [
       "Hasta 5 números de WhatsApp",
-      "1 cuenta de Telegram",
+      "Hasta 5 cuentas de Telegram",
       "Varias marcas (cada marca adicional paga su propio plan)",
       ...SHARED_FEATURES,
       ...PRO_EXTRAS,

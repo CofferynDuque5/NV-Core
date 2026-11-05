@@ -177,6 +177,8 @@ model Group {
   tags           String[]
   /// WhatsApp number (line) that is in this group and sends to it.
   waLine         Int       @default(1)
+  /// Telegram account (line) that is in this group/channel and sends to it.
+  tgLine         Int       @default(1)
   /// WhatsApp group JID (e.g. "12345-678@g.us") when synced from Baileys.
   remoteJid      String?
   /// True when the row was populated from a WhatsApp sync (vs. manual CRUD).
@@ -371,6 +373,14 @@ model Campaign {
   /// (one image per run) instead of always using the first. Great for daily
   /// campaigns that should vary the creative.
   rotateAttachments  Boolean        @default(false)
+  /// WhatsApp numbers (lines) this campaign sends from; empty = all of the brand's.
+  waLines            Int[]          @default([])
+  /// Telegram accounts (lines) this campaign sends from; empty = all of the brand's.
+  tgLines            Int[]          @default([])
+  /// Extra messages, one per product, each with its own text and image:
+  /// [{ productId?, text, attachments: [{ url, kind, mime, filename, path }] }].
+  /// Sent to every target group after the main message (or alone without one).
+  items              Json           @default("[]")
   /// Cursor for attachment rotation — which image the next run should use.
   attachmentRotation Int            @default(0)
   /// IG publish format: "feed" | "reel" | "story" | "carousel".
@@ -657,6 +667,8 @@ model Conversation {
   unreadCount   Int       @default(0)
   /// WhatsApp number (line) the chat belongs to; replies go out from it.
   waLine        Int?
+  /// Telegram account (line) the chat belongs to; replies go out from it.
+  tgLine        Int?
   createdAt     DateTime  @default(now())
   messages      Message[]
 
@@ -815,13 +827,19 @@ model WhatsappSession {
 /// itself lives on disk (TELEGRAM_SESSION_DIR), not here.
 model TelegramSession {
   id               String    @id @default(cuid())
-  workspaceSlug    String    @unique
+  workspaceSlug    String
+  /// 1 = main account; 2… = extra accounts of the same brand.
+  line             Int       @default(1)
+  /// Name the user gives the account («Ventas», «Soporte»).
+  label            String?
   status           String    @default("disconnected")
   username         String?
   phone            String?
   lastConnectionAt DateTime?
   groupsCount      Int       @default(0)
   updatedAt        DateTime  @updatedAt
+
+  @@unique([workspaceSlug, line])
 }
 
 /**

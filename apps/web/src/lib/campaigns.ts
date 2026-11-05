@@ -72,7 +72,8 @@ export function campaignReadyProblems(c: {
   dateTime: string;
 }, now = new Date()): string[] {
   const problems: string[] = [];
-  if (!c.message.trim() && c.attachments === 0) problems.push("Escribe el mensaje o añade una imagen.");
+  if (!c.message.trim() && c.attachments === 0)
+    problems.push("Escribe el mensaje, añade una imagen o un producto.");
   if (c.targets === 0 && !c.social && !c.postToWaStatus) problems.push("Elige al menos un grupo o canal.");
   if (c.scheduleType === "once") {
     if (!c.dateTime) problems.push("Elige la fecha y hora de envío.");

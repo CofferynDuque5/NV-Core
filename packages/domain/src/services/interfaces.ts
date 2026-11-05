@@ -24,6 +24,7 @@ import type {
   AutomationTestResult,
   Campaign,
   CampaignImportResult,
+  CampaignItem,
   CalendarEvent,
   Connection,
   Contact,
@@ -136,6 +137,12 @@ export interface CreateCampaignInput {
   prices?: Record<string, string>;
   category?: string | null;
   addFooter?: boolean;
+  /** WhatsApp numbers that send (empty = all the brand's numbers). */
+  waLines?: number[];
+  /** Telegram accounts that send (empty = all). */
+  tgLines?: number[];
+  /** One extra message per product, each with its own text and image. */
+  items?: CampaignItem[];
 }
 export type UpdateCampaignInput = Partial<CreateCampaignInput>;
 
@@ -1040,6 +1047,12 @@ export interface TelegramStatus {
   // "password" = the account has 2FA; it's waiting for the user's password.
   status: "disconnected" | "connecting" | "qr" | "password" | "connected";
   provider: "mtproto";
+  /** 1 = the brand's main account; 2, 3… = extra accounts. */
+  line?: number;
+  /** Name the user gave the account («Ventas»). */
+  label?: string | null;
+  /** QR (data URL) while status is "qr", for extra accounts (polled over HTTP). */
+  qr?: string | null;
   username: string | null;
   phone: string | null;
   lastConnectionAt: string | null;
@@ -1056,7 +1069,19 @@ export interface TelegramService {
   sync(workspaceId: string): Promise<TelegramStatus>;
   /** Submit the 2FA password when status is "password". */
   submitPassword(workspaceId: string, password: string): Promise<TelegramStatus>;
+  /** Every Telegram account of the brand (main first). */
+  lines(workspaceId: string): Promise<TelegramStatus[]>;
+  /** Link one more account; it shows its own QR. */
+  addLine(workspaceId: string, label?: string): Promise<TelegramStatus>;
+  renameLine(workspaceId: string, line: number, label: string): Promise<TelegramStatus>;
+  lineAction(workspaceId: string, line: number, action: TelegramLineAction): Promise<TelegramStatus>;
+  /** 2FA password of an extra account. */
+  linePassword(workspaceId: string, line: number, password: string): Promise<TelegramStatus>;
+  /** Unlink an extra account (its groups go; its chats stay). */
+  removeLine(workspaceId: string, line: number): Promise<void>;
 }
+
+export type TelegramLineAction = "connect" | "disconnect" | "sync";
 
 /** A user as seen by the platform super-admin, with all their memberships. */
 export interface AdminUser {

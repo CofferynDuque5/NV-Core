@@ -1,6 +1,19 @@
-import { Body, Controller, Get, HttpCode, Module, Post, UseGuards } from "@nestjs/common";
+import {
+  BadRequestException,
+  Body,
+  Controller,
+  Delete,
+  Get,
+  HttpCode,
+  Module,
+  Param,
+  ParseIntPipe,
+  Patch,
+  Post,
+  UseGuards,
+} from "@nestjs/common";
 import { ApiBearerAuth, ApiTags } from "@nestjs/swagger";
-import { IsString, MinLength } from "class-validator";
+import { IsOptional, IsString, MaxLength, MinLength } from "class-validator";
 
 import { WorkspaceId } from "../../common/tenant/workspace.decorator";
 import { WorkspaceGuard } from "../../common/tenant/workspace.guard";
@@ -13,6 +26,10 @@ import { TelegramUserService } from "./telegram-user.service";
 
 class TelegramPasswordDto {
   @IsString() @MinLength(1) password!: string;
+}
+
+class TelegramLineDto {
+  @IsOptional() @IsString() @MaxLength(40) label?: string;
 }
 
 @ApiTags("telegram")
@@ -62,6 +79,70 @@ export class TelegramUserController {
   @HttpCode(200)
   password(@WorkspaceId() workspaceId: string, @Body() dto: TelegramPasswordDto) {
     return this.service.submitPassword(workspaceId, dto.password);
+  }
+
+  // ── Extra accounts (lines). Line 1 is the main account above. ────────────
+  @Get("lines")
+  lines(@WorkspaceId() workspaceId: string) {
+    return this.service.lines(workspaceId);
+  }
+
+  @Post("lines")
+  @Roles("Owner", "Admin")
+  @UseGuards(RolesGuard)
+  addLine(@WorkspaceId() workspaceId: string, @Body() dto: TelegramLineDto) {
+    return this.service.addLine(workspaceId, dto.label);
+  }
+
+  @Get("lines/:line/status")
+  lineStatus(@WorkspaceId() workspaceId: string, @Param("line", ParseIntPipe) line: number) {
+    return this.service.status(workspaceId, line);
+  }
+
+  @Patch("lines/:line")
+  @Roles("Owner", "Admin")
+  @UseGuards(RolesGuard)
+  renameLine(
+    @WorkspaceId() workspaceId: string,
+    @Param("line", ParseIntPipe) line: number,
+    @Body() dto: TelegramLineDto,
+  ) {
+    return this.service.renameLine(workspaceId, line, dto.label ?? null);
+  }
+
+  @Post("lines/:line/password")
+  @Roles("Owner", "Admin")
+  @UseGuards(RolesGuard)
+  @HttpCode(200)
+  linePassword(
+    @WorkspaceId() workspaceId: string,
+    @Param("line", ParseIntPipe) line: number,
+    @Body() dto: TelegramPasswordDto,
+  ) {
+    return this.service.submitPassword(workspaceId, dto.password, line);
+  }
+
+  @Post("lines/:line/:action")
+  @Roles("Owner", "Admin")
+  @UseGuards(RolesGuard)
+  @HttpCode(200)
+  lineAction(
+    @WorkspaceId() workspaceId: string,
+    @Param("line", ParseIntPipe) line: number,
+    @Param("action") action: string,
+  ) {
+    if (action === "connect") return this.service.connect(workspaceId, line);
+    if (action === "disconnect") return this.service.disconnect(workspaceId, line);
+    if (action === "sync") return this.service.sync(workspaceId, line);
+    throw new BadRequestException("Acción no válida.");
+  }
+
+  @Delete("lines/:line")
+  @Roles("Owner", "Admin")
+  @UseGuards(RolesGuard)
+  @HttpCode(204)
+  removeLine(@WorkspaceId() workspaceId: string, @Param("line", ParseIntPipe) line: number) {
+    return this.service.removeLine(workspaceId, line);
   }
 }
 

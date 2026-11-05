@@ -18,6 +18,7 @@ import { MetaConnectCard, MetaConnectDialog, useMetaReturn } from "@/components/
 import { WhatsAppPanel } from "@/components/entities/whatsapp-panel";
 import { WhatsappLinesPanel } from "@/components/entities/whatsapp-lines-panel";
 import { TelegramPanel } from "@/components/entities/telegram-panel";
+import { TelegramLinesPanel } from "@/components/entities/telegram-lines-panel";
 import { PcAgentCard } from "@/components/entities/pc-agent-card";
 import { ProvidersAdapters } from "@/components/entities/providers-adapters";
 import { CHANNEL_ICON } from "@/components/common/channel-icons";
@@ -137,6 +138,7 @@ function ConexionTab() {
       <MetaConnectCard onConnect={() => setMetaOpen(true)} />
 
       <TelegramPanel />
+      <TelegramLinesPanel />
 
       <ProvidersAdapters />
 

@@ -26,6 +26,7 @@ import type {
   PublishResult,
 } from "../../providers/provider.types";
 import { builtinVars, renderTemplate } from "./render";
+import { campaignItems, itemsHaveImage } from "./campaign-items";
 import {
   campaignFooter,
   explainError,
@@ -87,6 +88,27 @@ export type CampaignRunOutcome =
 /** Idempotency key of a scheduled slot: once → "once:<scheduleAt>", recurring → the slot itself. */
 export function slotRunKey(slot: string, scheduleAt: string | null | undefined): string {
   return slot === "once" ? `once:${scheduleAt ?? ""}` : slot;
+}
+
+/** Pause between the products sent to the same group (3–6 s). */
+const itemGapMs = () => {
+  const env = process.env.CAMPAIGN_ITEM_GAP_MS;
+  if (env !== undefined && env !== "") return Math.max(0, Number(env) || 0);
+  return 3000 + Math.floor(Math.random() * 3000);
+};
+
+/**
+ * Whether the group's number/account is one the campaign sends from (an empty
+ * list means every number of the brand).
+ */
+export function lineAllowed(
+  campaign: { waLines?: number[] | null; tgLines?: number[] | null },
+  group: { channel: string; waLine?: number | null; tgLine?: number | null },
+): boolean {
+  const tg = group.channel === "tg";
+  const allowed = (tg ? campaign.tgLines : campaign.waLines) ?? [];
+  if (allowed.length === 0) return true;
+  return allowed.includes((tg ? group.tgLine : group.waLine) ?? 1);
 }
 
 const isUniqueViolation = (err: unknown) => (err as { code?: string })?.code === "P2002";
@@ -456,16 +478,21 @@ export class CampaignRunner implements OnModuleInit, OnModuleDestroy {
     if (!campaign) return ["Campaña no encontrada."];
     const out: string[] = [];
     const attachments = ((campaign.attachments as Attachment[]) ?? []).filter((a) => a.url);
-    if (!campaign.message.trim() && attachments.length === 0)
-      out.push("La campaña no tiene mensaje ni imagen.");
-    const own = campaign.targets
+    const items = campaignItems(campaign.items);
+    if (!campaign.message.trim() && attachments.length === 0 && items.length === 0)
+      out.push("La campaña no tiene mensaje, imagen ni productos.");
+    const brandGroups = campaign.targets
       .map((t) => t.group)
       .filter((g) => g && g.workspaceSlug === workspaceSlug);
+    const own = brandGroups.filter((g) => lineAllowed(campaign, g!));
+    if (brandGroups.length > 0 && own.length === 0) {
+      out.push("Ninguno de los grupos elegidos es de los números que elegiste para esta campaña.");
+    }
     const prices = (campaign.prices as Record<string, string> | null) ?? {};
     const groups = own.filter(
       (g) =>
         groupPostingProblems(g!, {
-          hasImage: attachments.length > 0,
+          hasImage: attachments.length > 0 || itemsHaveImage(items),
           prices,
           usesPrice: usesPriceVar(campaign.message),
         }).length === 0,
@@ -473,7 +500,7 @@ export class CampaignRunner implements OnModuleInit, OnModuleDestroy {
     if (own.length > 0 && groups.length === 0) {
       const first = own[0]!;
       const why = groupPostingProblems(first, {
-        hasImage: attachments.length > 0,
+        hasImage: attachments.length > 0 || itemsHaveImage(items),
         prices,
         usesPrice: usesPriceVar(campaign.message),
       })[0];
@@ -603,6 +630,8 @@ export class CampaignRunner implements OnModuleInit, OnModuleDestroy {
     const channels = campaign.channels as string[];
     const results: { ok: boolean }[] = [];
     const prices = (campaign.prices as Record<string, string> | null) ?? {};
+    // One extra message per product, each with its own text and image.
+    const items = campaignItems(campaign.items);
     // Group messages end with the brand's links and the NV Marketing credit.
     const footer = campaign.addFooter ? campaignFooter(await this.brandLinks(workspaceSlug)) : null;
     // Groups this campaign must not go to (kept out, rules, missing price or
@@ -634,8 +663,14 @@ export class CampaignRunner implements OnModuleInit, OnModuleDestroy {
       // validated on write, but this guarantees the historial never shows sends
       // to groups that don't belong to this workspace's WhatsApp/Telegram.
       if (!group || group.workspaceSlug !== workspaceSlug) continue;
+      // Only the numbers/accounts chosen for this campaign send.
+      if (!lineAllowed(campaign, group)) {
+        omitted.push({ name: group.name, reason: "es de un número que no elegiste para esta campaña" });
+        sent += 1;
+        continue;
+      }
       const blocked = groupPostingProblems(group, {
-        hasImage: !!waAttachment,
+        hasImage: !!waAttachment || itemsHaveImage(items),
         prices,
         usesPrice: usesPriceVar(campaign.message),
       });
@@ -689,7 +724,17 @@ export class CampaignRunner implements OnModuleInit, OnModuleDestroy {
         ...(await this.groupVars(group.id)),
       };
       const rendered = renderTemplate(campaign.message, vars);
-      const text = footer ? withFooter(rendered, footer) : rendered;
+      const hasMain = rendered.trim().length > 0 || !!waAttachment;
+      // The footer goes once, on the last message the group gets.
+      const mainText = footer && items.length === 0 ? withFooter(rendered, footer) : rendered;
+      const itemTexts = items.map((it, i) => {
+        const t = renderTemplate(it.text, {
+          ...vars,
+          precio: priceForGroup(group, it.prices && Object.keys(it.prices).length ? it.prices : prices),
+        });
+        return footer && i === items.length - 1 ? withFooter(t, footer) : t;
+      });
+      const text = hasMain ? mainText : (itemTexts[0] ?? mainText);
       const to = group.remoteJid ?? group.id;
       // SEGURO 3 — reserva del chat ANTES de enviar: la fila «en curso» es única
       // por (campaña, chat, ejecución) en la base de datos. Si ya existe (otro
@@ -706,7 +751,7 @@ export class CampaignRunner implements OnModuleInit, OnModuleDestroy {
             groupName: group.name,
             target: ch,
             format: campaign.socialFormat ?? null,
-            preview: text.slice(0, 140),
+            preview: (items.length ? `${text.slice(0, 100)} (+${items.length} productos)` : text).slice(0, 140),
             ok: false,
             error: IN_FLIGHT,
             runKey,
@@ -724,28 +769,51 @@ export class CampaignRunner implements OnModuleInit, OnModuleDestroy {
         });
         return { ok };
       };
-      try {
-        let mediaNote: string | null = null;
+      /** One message (text, or image with caption) to this group. */
+      const deliver = async (body: string, attachment: MediaAttachment | null) => {
+        let note: string | null = null;
         const res = await this.withRetry(async () => {
-          if (!waAttachment)
-            return this.providers.sendMessage(workspaceSlug, provider, { to, body: text });
+          if (!attachment) return this.providers.sendMessage(workspaceSlug, provider, { to, body });
           try {
-            return await this.providers.sendMedia(workspaceSlug, provider, {
-              to,
-              body: text,
-              attachment: waAttachment,
-            });
+            return await this.providers.sendMedia(workspaceSlug, provider, { to, body, attachment });
           } catch (err) {
             // Only the MEDIA failed (download / file rejected): deliver the text
             // anyway and leave the reason in the Historial, instead of silently
             // dropping the whole message or the image without a trace.
             if (!(err as { mediaFailed?: boolean })?.mediaFailed) throw err;
-            mediaNote = `Imagen NO enviada, se envió solo el texto: ${(err as Error).message}`;
-            this.logger.warn(`[${workspaceSlug}] ${group.name}: ${mediaNote}`);
-            return this.providers.sendMessage(workspaceSlug, provider, { to, body: text });
+            note = `Imagen NO enviada, se envió solo el texto: ${(err as Error).message}`;
+            this.logger.warn(`[${workspaceSlug}] ${group.name}: ${note}`);
+            return this.providers.sendMessage(workspaceSlug, provider, { to, body });
           }
         });
-        results.push(await finish(true, mediaNote, res.id));
+        return { id: res.id, note };
+      };
+      const notes: string[] = [];
+      let firstId: string | undefined;
+      let failed: string | null = null;
+      try {
+        if (hasMain) {
+          const r = await deliver(mainText, waAttachment);
+          firstId = r.id;
+          if (r.note) notes.push(r.note);
+        }
+        for (let i = 0; i < items.length; i++) {
+          // A short, human-like gap between the products of the same group.
+          if (hasMain || i > 0) await sleep(itemGapMs());
+          const it = items[i]!;
+          const img = (it.attachments ?? []).find((a) => a.url);
+          try {
+            const r = await deliver(itemTexts[i]!, img ? (img as MediaAttachment) : null);
+            firstId ??= r.id;
+            if (r.note) notes.push(`${it.name}: ${r.note}`);
+          } catch (err) {
+            failed = `${it.name}: ${(err as Error).message}`;
+            break; // the account is likely in trouble: don't keep hammering this group
+          }
+        }
+        if (failed && firstId === undefined) results.push(await finish(false, failed));
+        else if (failed) results.push(await finish(false, [failed, ...notes].join(" · "), firstId));
+        else results.push(await finish(true, notes.length ? notes.join(" · ") : null, firstId));
       } catch (err) {
         results.push(await finish(false, (err as Error).message));
       }

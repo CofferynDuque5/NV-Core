@@ -356,6 +356,20 @@ export function usePcAgentStatus() {
   });
 }
 
+/** All the brand's Telegram accounts; polls fast while one waits for its QR. */
+export function useTelegramLines() {
+  const svc = useServices();
+  const ws = useWorkspace();
+  return useQuery({
+    queryKey: [ws.id, "telegram", "lines"],
+    queryFn: () => svc.telegram.lines(ws.id),
+    refetchInterval: (q) =>
+      q.state.data?.some((l) => l.status === "qr" || l.status === "connecting" || l.status === "password")
+        ? 3000
+        : 15000,
+  });
+}
+
 export function useTelegramStatus() {
   const svc = useServices();
   const ws = useWorkspace();

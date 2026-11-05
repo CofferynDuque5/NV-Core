@@ -518,6 +518,59 @@ describe("CampaignRunner.run", () => {
     expect(sendLogs[0]!.groupName).toBe("Propio");
   });
 
+  it("sends each product as its own message with its text, image and price", async () => {
+    process.env.CAMPAIGN_ITEM_GAP_MS = "0";
+    try {
+      const c = campaign({
+        message: "Catálogo de hoy",
+        prices: { USD: "9" },
+        items: [
+          { name: "Plan A", text: "*Plan A* {{precio}}", attachments: [{ url: "a.png", kind: "image" }], prices: { USD: "5" } },
+          { name: "Plan B", text: "*Plan B* {{precio}}", attachments: [], prices: {} },
+        ],
+        targets: [{ group: { id: "g1", name: "A", remoteJid: "1@g.us", country: "US" } }],
+      });
+      const { runner, providers, sendLogs } = makeRunner({ campaign: c });
+
+      await runner.run("w1", "c1");
+
+      // Main message, then Plan A (image + caption), then Plan B (text only).
+      expect(providers.sendMessage).toHaveBeenCalledTimes(2);
+      expect(providers.sendMedia).toHaveBeenCalledTimes(1);
+      const media = (providers.sendMedia.mock.calls[0] as unknown as unknown[])[2] as {
+        attachment?: { url?: string };
+        caption?: string;
+      };
+      expect(media.attachment?.url).toBe("a.png");
+      const texts = providers.sendMessage.mock.calls.map((c) => JSON.stringify(c));
+      expect(texts[0]).toContain("Catálogo de hoy");
+      expect(texts[1]).toContain("Plan B");
+      // One Historial row per group, not one per message.
+      expect(sendLogs).toHaveLength(1);
+      expect(sendLogs[0]!.ok).toBe(true);
+    } finally {
+      delete process.env.CAMPAIGN_ITEM_GAP_MS;
+    }
+  });
+
+  it("only sends to groups of the WhatsApp numbers chosen for the campaign", async () => {
+    const c = campaign({
+      waLines: [2],
+      targets: [
+        { group: { id: "g1", name: "Del 1", remoteJid: "1@g.us", channel: "wa", waLine: 1 } },
+        { group: { id: "g2", name: "Del 2", remoteJid: "2@g.us", channel: "wa", waLine: 2 } },
+      ],
+    });
+    const { runner, providers, sendLogs } = makeRunner({ campaign: c });
+
+    await runner.run("w1", "c1");
+
+    expect(providers.sendMessage).toHaveBeenCalledTimes(1);
+    expect(sendLogs.find((l) => l.groupName === "Del 2")?.ok).toBe(true);
+    const skipped = sendLogs.find((l) => l.groupName === "Del 1");
+    expect(skipped?.ok ?? false).toBe(false);
+  });
+
   it("logs a failed send and marks a 'once' campaign 'completada' (anti-spam, no re-send)", async () => {
     const c = campaign({ targets: [{ group: { id: "g1", name: "A", remoteJid: "1@g.us" } }] });
     const send = vi.fn(async () => {
@@ -888,7 +941,7 @@ describe("CampaignRunner.problems (antes de «Enviar ahora»)", () => {
     });
     (providers as AnyRec).status = vi.fn();
     expect(await runner.problems("w1", "c1")).toEqual([
-      "La campaña no tiene mensaje ni imagen.",
+      "La campaña no tiene mensaje, imagen ni productos.",
       "Elige al menos un grupo o una red social de destino.",
     ]);
   });

@@ -52,6 +52,8 @@ export function checkDateRange(start?: string | null, end?: string | null): void
 export interface ReadyCheck {
   message?: string | null;
   attachments?: unknown;
+  /** Product messages the campaign carries. */
+  items?: number;
   targets: number;
   channels?: string[] | null;
   postToWaStatus?: boolean | null;
@@ -63,7 +65,8 @@ export interface ReadyCheck {
 export function schedulingProblems(c: ReadyCheck, now = new Date()): string[] {
   const problems: string[] = [];
   const hasMedia = Array.isArray(c.attachments) && c.attachments.length > 0;
-  if (!c.message?.trim() && !hasMedia) problems.push("Escribe el mensaje o añade una imagen.");
+  if (!c.message?.trim() && !hasMedia && !c.items)
+    problems.push("Escribe el mensaje, añade una imagen o un producto.");
   const social = (c.channels ?? []).some((ch) => ch === "fb" || ch === "ig");
   if (c.targets === 0 && !social && !c.postToWaStatus)
     problems.push("Elige al menos un grupo o canal.");

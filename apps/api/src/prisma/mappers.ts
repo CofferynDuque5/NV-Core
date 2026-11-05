@@ -108,6 +108,8 @@ export const mapGroup = (g: PGroup): Group => ({
   tags: g.tags,
   lastActivityAt: iso(g.createdAt),
   remoteJid: g.remoteJid ?? undefined,
+  // The brand's number/account that is in the group and sends to it.
+  line: g.channel === "tg" ? g.tgLine : g.waLine,
   synced: g.synced,
   excluded: g.excluded,
   category: g.category,
@@ -221,6 +223,9 @@ export const mapCampaign = (
   rotateAttachments: c.rotateAttachments ?? false,
   lastRunAt: iso(c.lastRunAt) ?? null,
   targetGroups: c.targets?.map((t) => t.groupId) ?? [],
+  waLines: c.waLines ?? [],
+  tgLines: c.tgLines ?? [],
+  items: Array.isArray(c.items) ? (c.items as unknown as Campaign["items"]) : [],
   prices: (c.prices as Record<string, string> | null) ?? {},
   addFooter: c.addFooter ?? true,
   category: c.category ?? null,

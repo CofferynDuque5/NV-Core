@@ -91,7 +91,7 @@ export function TelegramPanel() {
   return (
     <Panel>
       <PanelHeader
-        title="Telegram (cuenta)"
+        title="Telegram (cuenta principal)"
         description="Conecta tu cuenta con un QR (MTProto). Importa todos tus grupos y canales."
       />
       <div className="grid grid-cols-1 gap-4 p-4 md:grid-cols-[1fr_auto]">

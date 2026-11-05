@@ -40,6 +40,8 @@ export interface InboundMessage {
   history?: boolean;
   /** WhatsApp number (line) of the brand that got it; replies go out from it. */
   waLine?: number;
+  /** Telegram account (line) of the brand that got it; replies go out from it. */
+  tgLine?: number;
 }
 
 /** A reply sent from the panel comes back from WhatsApp; within this window it's the same message. */

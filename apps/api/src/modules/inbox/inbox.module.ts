@@ -229,6 +229,7 @@ export class InboxService implements OnModuleInit {
         externalId: p.externalId,
         history: p.history,
         waLine: p.waLine,
+        tgLine: p.tgLine,
       }).catch((err: unknown) => this.logger.warn(`Mensaje no guardado: ${(err as Error).message}`));
     });
     this.events.on("session.contact-names", (p) => {
@@ -288,7 +289,14 @@ export class InboxService implements OnModuleInit {
           contactName: bestName ?? msg.contactName ?? msg.contactHandle,
           contactHandle: msg.contactHandle,
           waLine: msg.waLine ?? null,
+          tgLine: msg.tgLine ?? null,
         },
+      });
+    } else if (msg.tgLine && conversation.tgLine !== msg.tgLine && !msg.history) {
+      // The contact now writes to another of the brand's Telegram accounts: reply from that one.
+      conversation = await this.prisma.conversation.update({
+        where: { id: conversation.id },
+        data: { tgLine: msg.tgLine },
       });
     } else if (msg.waLine && conversation.waLine !== msg.waLine && !msg.history) {
       // The contact now writes to another of the brand's numbers: reply from that one.

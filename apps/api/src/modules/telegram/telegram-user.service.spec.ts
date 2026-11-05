@@ -3,7 +3,7 @@ import { rmSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 
-import { TelegramUserService } from "./telegram-user.service";
+import { TelegramUserService, parseTgLineKey, tgLineKey } from "./telegram-user.service";
 
 const DIR = join(tmpdir(), `nvcore-tg-test-${Date.now()}`);
 
@@ -54,5 +54,47 @@ describe("TelegramUserService", () => {
 
   it("submitPassword() rejects when there is no live connection in progress", async () => {
     await expect(makeService(1, "h").submitPassword("w1", "secret")).rejects.toThrow(/conexión/i);
+  });
+
+  it("keys extra accounts as slug__tN and parses them back", () => {
+    expect(tgLineKey("marca")).toBe("marca");
+    expect(tgLineKey("marca", 3)).toBe("marca__t3");
+    expect(parseTgLineKey("marca__t3")).toEqual({ workspaceSlug: "marca", line: 3 });
+    expect(parseTgLineKey("mi__marca")).toEqual({ workspaceSlug: "mi__marca", line: 1 });
+  });
+
+  it("sends to a group from the account that is in it", async () => {
+    const svc = makeService(1, "h");
+    const sent: string[] = [];
+    const fake = (name: string) => ({
+      isConnected: true,
+      sendText: async (to: string) => {
+        sent.push(`${name}:${to}`);
+        return { id: "1" };
+      },
+    });
+    const live = (svc as unknown as { live: Map<string, unknown> }).live;
+    live.set("w1", fake("main"));
+    live.set("w1__t2", fake("ventas"));
+    (svc as unknown as { prisma: unknown }).prisma = {
+      enabled: true,
+      group: { findFirst: async ({ where }: { where: { remoteJid: string } }) => (where.remoteJid === "-100" ? { tgLine: 2 } : null) },
+      conversation: { findFirst: async () => null },
+    };
+    await svc.sendText("w1", "-100", "hola");
+    await svc.sendText("w1", "-200", "hola");
+    expect(sent).toEqual(["ventas:-100", "main:-200"]);
+  });
+
+  it("says clearly which account is offline instead of sending from another", async () => {
+    const svc = makeService(1, "h");
+    const live = (svc as unknown as { live: Map<string, unknown> }).live;
+    live.set("w1", { isConnected: true, sendText: async () => ({ id: "1" }) });
+    (svc as unknown as { prisma: unknown }).prisma = {
+      enabled: true,
+      group: { findFirst: async () => ({ tgLine: 2 }) },
+      conversation: { findFirst: async () => null },
+    };
+    await expect(svc.sendText("w1", "-100", "hola")).rejects.toThrow(/cuenta 2 de Telegram no está conectada/);
   });
 });

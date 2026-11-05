@@ -112,6 +112,22 @@ export interface CampaignAttachment {
   path?: string;
 }
 
+/**
+ * One extra message of a campaign, usually one product: its own text (with
+ * {{precio}} from its own prices) and its own image. Sent to every target
+ * group after the main message, a few seconds apart.
+ */
+export interface CampaignItem {
+  /** Tienda product it came from (null = written by hand). */
+  productId?: string | null;
+  /** Short name shown in the panel and in the Historial. */
+  name: string;
+  text: string;
+  attachments?: CampaignAttachment[];
+  /** Price per currency for {{precio}} in this message. */
+  prices?: Record<string, string>;
+}
+
 export interface Campaign {
   id: string;
   name: string;
@@ -147,6 +163,12 @@ export interface Campaign {
   rotateAttachments?: boolean;
   /** Ids of the WhatsApp groups this campaign targets. */
   targetGroups?: string[];
+  /** WhatsApp numbers (lines) it sends from; empty = every number of the brand. */
+  waLines?: number[];
+  /** Telegram accounts (lines) it sends from; empty = every account of the brand. */
+  tgLines?: number[];
+  /** Extra messages, one per product, each with its own text and image. */
+  items?: CampaignItem[];
   /** Price per currency for {{precio}}: { VES: "350", COP: "40.000" }. */
   prices?: Record<string, string>;
   /** Add the brand links + NV Marketing credit to group messages. */
@@ -265,6 +287,8 @@ export interface Group {
   avatarHue?: number;
   /** WhatsApp group JID (present when synced from Baileys). */
   remoteJid?: string;
+  /** The brand's WhatsApp number / Telegram account (line) that is in it and sends to it. */
+  line?: number;
   /** True when populated from a WhatsApp sync. */
   synced?: boolean;
   /** «Apartado»: campaigns never post here. */
