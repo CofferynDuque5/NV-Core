@@ -83,3 +83,66 @@ export function campaignReadyProblems(c: {
   }
   return problems;
 }
+
+/** When a campaign goes out, as comparable slots: minute of day plus the day it applies to. */
+type Slot = { minutes: number; date?: string; weekdays?: number[] };
+
+function toMinutes(hhmm: string): number | null {
+  const m = /^(\d{1,2}):(\d{2})/.exec(hhmm);
+  return m ? Number(m[1]) * 60 + Number(m[2]) : null;
+}
+
+function slotsOf(c: {
+  scheduleType?: string | null;
+  scheduleAt?: string | null;
+  scheduleTimes?: string[] | null;
+  scheduleDays?: number[] | null;
+}): Slot[] {
+  if (c.scheduleType === "once") {
+    if (!c.scheduleAt) return [];
+    const d = new Date(c.scheduleAt);
+    if (Number.isNaN(d.getTime())) return [];
+    const date = `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`;
+    return [{ minutes: d.getHours() * 60 + d.getMinutes(), date, weekdays: [d.getDay()] }];
+  }
+  const times = c.scheduleTimes?.length ? c.scheduleTimes : c.scheduleAt ? [c.scheduleAt] : [];
+  const weekdays = c.scheduleType === "weekly" && c.scheduleDays?.length ? c.scheduleDays : undefined;
+  return times.flatMap((t) => {
+    const minutes = toMinutes(t);
+    return minutes === null ? [] : [{ minutes, weekdays }];
+  });
+}
+
+function slotsMeet(a: Slot, b: Slot, windowMin: number): boolean {
+  if (Math.abs(a.minutes - b.minutes) > windowMin) return false;
+  if (a.date && b.date) return a.date === b.date;
+  if (a.weekdays && b.weekdays) return a.weekdays.some((d) => b.weekdays!.includes(d));
+  return true;
+}
+
+/**
+ * Other scheduled campaigns that go to the same groups within `windowMin`
+ * minutes of this one: the groups would get two messages almost together.
+ */
+type ClashSchedule = {
+  scheduleType?: string | null;
+  scheduleAt?: string | null;
+  scheduleTimes?: string[] | null;
+  scheduleDays?: number[] | null;
+  targetGroups?: string[] | null;
+};
+
+export function scheduleClashes(
+  draft: ClashSchedule & { id?: string },
+  others: (ClashSchedule & { id: string; name: string; status: string })[],
+  windowMin = 15,
+): { name: string; groups: number }[] {
+  const mine = slotsOf(draft);
+  const groups = new Set(draft.targetGroups ?? []);
+  if (mine.length === 0 || groups.size === 0) return [];
+  return others
+    .filter((o) => o.id !== draft.id && (o.status === "programada" || o.status === "activa"))
+    .map((o) => ({ o, shared: (o.targetGroups ?? []).filter((g) => groups.has(g)).length }))
+    .filter(({ o, shared }) => shared > 0 && slotsOf(o).some((s) => mine.some((m) => slotsMeet(m, s, windowMin))))
+    .map(({ o, shared }) => ({ name: o.name, groups: shared }));
+}

@@ -40,3 +40,30 @@ describe("campañas: pestañas y categorías", () => {
     expect(filterCampaigns(items, { tab: "terminadas", query: "nada" })).toEqual([]);
   });
 });
+
+import { scheduleClashes } from "./campaigns";
+
+describe("scheduleClashes", () => {
+  const other = (over: Record<string, unknown>) => ({
+    id: "o1",
+    name: "Recordatorio",
+    status: "programada",
+    scheduleType: "daily",
+    scheduleTimes: ["19:00"],
+    targetGroups: ["g1", "g2"],
+    ...over,
+  });
+  it("warns when another campaign goes to the same groups within 15 minutes", () => {
+    const r = scheduleClashes({ scheduleType: "daily", scheduleTimes: ["19:10"], targetGroups: ["g2", "g3"] }, [other({})]);
+    expect(r).toEqual([{ name: "Recordatorio", groups: 1 }]);
+  });
+  it("ignores other hours, other groups, other weekdays and paused campaigns", () => {
+    const d = { scheduleType: "daily", scheduleTimes: ["19:00"], targetGroups: ["g1"] };
+    expect(scheduleClashes({ ...d, scheduleTimes: ["21:00"] }, [other({})])).toEqual([]);
+    expect(scheduleClashes({ ...d, targetGroups: ["g9"] }, [other({})])).toEqual([]);
+    expect(scheduleClashes(d, [other({ status: "pausada" })])).toEqual([]);
+    expect(
+      scheduleClashes({ ...d, scheduleType: "weekly", scheduleDays: [1] }, [other({ scheduleType: "weekly", scheduleDays: [3] })]),
+    ).toEqual([]);
+  });
+});

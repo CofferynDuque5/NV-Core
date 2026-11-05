@@ -174,6 +174,8 @@ export const emptyAdapters: Services = {
     exportCsv: () => delay(""),
     importCsv: () => notAvailable(),
     duplicate: () => notAvailable(),
+    retryFailed: () => notAvailable(),
+    pauseAll: () => notAvailable(),
   },
   posts: {
     list: () => emptyList(),
@@ -324,6 +326,7 @@ export const emptyAdapters: Services = {
     markAllRead: () => delay({ updated: 0 }),
   },
   payments: {
+    vesRate: async () => null,
     methods: () => delay([]),
     createMethod: () => notAvailable(),
     updateMethod: () => notAvailable(),

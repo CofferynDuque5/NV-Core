@@ -307,6 +307,8 @@ export function createHttpAdapters(opts: HttpAdapterOptions): Services {
       exportCsv: (id) => get<{ csv: string }>(`${ws(id)}/campaigns/export`).then((r) => r.csv),
       importCsv: (id, csv) => post<CampaignImportResult>(`${ws(id)}/campaigns/import`, { csv }),
       duplicate: (id, cid) => post<Campaign>(`${ws(id)}/campaigns/${cid}/duplicate`, {}),
+      retryFailed: (id, cid) => post<{ retried: number }>(`${ws(id)}/campaigns/${cid}/retry-failed`, {}),
+      pauseAll: (id) => post<{ paused: number }>(`${ws(id)}/campaigns/pause-all`, {}),
     },
     posts: {
       list: (id) => get<ListResult<Post>>(`${ws(id)}/posts`),
@@ -513,6 +515,7 @@ export function createHttpAdapters(opts: HttpAdapterOptions): Services {
       markAllRead: (id) => post<{ updated: number }>(`${ws(id)}/notifications/read-all`, {}),
     },
     payments: {
+      vesRate: (id) => get<UsdtRate | null>(`${ws(id)}/payments/ves-rate`),
       methods: (id) => get<PaymentMethod[]>(`${ws(id)}/payments/methods`),
       createMethod: (id, input) => post<PaymentMethod>(`${ws(id)}/payments/methods`, input),
       updateMethod: (id, mid, input) => patch<PaymentMethod>(`${ws(id)}/payments/methods/${mid}`, input),

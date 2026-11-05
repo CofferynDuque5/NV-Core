@@ -34,7 +34,12 @@ import {
   useTemplates,
 } from "@/hooks/use-domain-data";
 import { productMessage } from "@/lib/products";
-import { CAMPAIGN_STATUS_LABEL, campaignCategories, campaignReadyProblems } from "@/lib/campaigns";
+import {
+  CAMPAIGN_STATUS_LABEL,
+  campaignCategories,
+  campaignReadyProblems,
+  scheduleClashes,
+} from "@/lib/campaigns";
 import { FormDialog, errorMessage } from "./form-dialog";
 import { ContentPreview } from "./content-preview";
 import { AiFlyerButton } from "./ai-flyer-button";
@@ -419,6 +424,19 @@ export function CampaignFormDialog({
     (c) => c.id !== campaign?.id && (c.targetGroups?.length ?? 0) > 0,
   );
 
+  // Another scheduled campaign hitting the same groups within 15 minutes.
+  const clashes = scheduleClashes(
+    {
+      id: campaign?.id,
+      scheduleType,
+      scheduleAt: scheduleType === "once" && dateTime ? new Date(dateTime).toISOString() : null,
+      scheduleTimes: scheduleType === "once" ? [] : scheduleTimes.length ? scheduleTimes : time ? [time] : [],
+      scheduleDays,
+      targetGroups,
+    },
+    campaigns.data?.items ?? [],
+  );
+
   function takeGroupsFrom(id: string) {
     const src = otherCampaigns.find((c) => c.id === id);
     if (!src) return;
@@ -566,7 +584,11 @@ export function CampaignFormDialog({
                 Variables disponibles: <code className="text-ink-muted">{"{{grupo}}"}</code>{" "}
                 <code className="text-ink-muted">{"{{fecha}}"}</code>{" "}
                 <code className="text-ink-muted">{"{{hora}}"}</code>{" "}
-                <code className="text-ink-muted">{"{{precio}}"}</code> (en la moneda de cada grupo)
+                <code className="text-ink-muted">{"{{precio}}"}</code> (en la moneda de cada grupo){" "}
+                <code className="text-ink-muted">{"{{dia}}"}</code>{" "}
+                <code className="text-ink-muted">{"{{saludo}}"}</code> (buenos días/tardes/noches){" "}
+                <code className="text-ink-muted">{"{{nombre_marca}}"}</code>. Para variar el texto en cada grupo escribe
+                opciones entre llaves: <code className="text-ink-muted">{"{Hola|Buenas|Qué tal}"}</code>.
               </p>
             </div>
 
@@ -626,6 +648,19 @@ export function CampaignFormDialog({
           {/* Sección: Programación */}
           <section className="border-line-soft space-y-4 border-t pt-5">
             <SectionHeader>Programación</SectionHeader>
+            {clashes.length > 0 ? (
+              <p
+                data-testid="schedule-clash"
+                className="border-state-warning/40 bg-state-warning/10 text-ink rounded-lg border px-3 py-2 text-xs"
+              >
+                A esa hora (±15 min) ya sale{clashes.length > 1 ? "n" : ""}{" "}
+                {clashes
+                  .slice(0, 3)
+                  .map((c) => `«${c.name}» en ${c.groups} ${c.groups === 1 ? "grupo" : "grupos"} de los mismos`)
+                  .join(", ")}
+                . Esos grupos recibirían dos mensajes casi juntos: cambia la hora o los grupos.
+              </p>
+            ) : null}
             <div className="space-y-1.5">
               <div className="flex flex-wrap gap-1.5">
                 {SCHEDULE_OPTIONS.map((opt) => (

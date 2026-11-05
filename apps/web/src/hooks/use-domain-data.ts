@@ -370,6 +370,18 @@ export function useTelegramLines() {
   });
 }
 
+/** Today's USDT → Bs rate (refreshes every 30 min); null when unknown. */
+export function useVesRate(enabled = true) {
+  const svc = useServices();
+  const ws = useWorkspace();
+  return useQuery({
+    queryKey: [ws.id, "payments", "ves-rate"],
+    queryFn: () => svc.payments.vesRate(ws.id),
+    enabled,
+    staleTime: 30 * 60 * 1000,
+  });
+}
+
 export function useTelegramStatus() {
   const svc = useServices();
   const ws = useWorkspace();

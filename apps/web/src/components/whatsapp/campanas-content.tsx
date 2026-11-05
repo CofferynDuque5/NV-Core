@@ -2,7 +2,7 @@
 import * as React from "react";
 import { useSearchParams } from "react-router-dom";
 import type { Campaign } from "@nv/domain";
-import { Download, Loader2, Megaphone, Plus, Upload } from "lucide-react";
+import { Download, Loader2, Megaphone, OctagonPause, Plus, Upload } from "lucide-react";
 
 import type { CampaignTab } from "@/lib/campaigns";
 import { useCampaigns } from "@/hooks/use-domain-data";
@@ -11,7 +11,9 @@ import {
   useDuplicateCampaign,
   useExportCampaigns,
   useImportCampaigns,
+  usePauseAllCampaigns,
   usePauseCampaign,
+  useRetryFailedCampaign,
   useResumeCampaign,
   useRunCampaign,
 } from "@/hooks/use-domain-mutations";
@@ -39,6 +41,8 @@ export function CampanasContent({ showHeader = true }: { showHeader?: boolean })
   const duplicate = useDuplicateCampaign();
   const pause = usePauseCampaign();
   const resume = useResumeCampaign();
+  const retryFailed = useRetryFailedCampaign();
+  const pauseAll = usePauseAllCampaigns();
   const exportCampaigns = useExportCampaigns();
   const importCampaigns = useImportCampaigns();
   const confirm = useConfirm();
@@ -76,8 +80,30 @@ export function CampanasContent({ showHeader = true }: { showHeader?: boolean })
     del.mutate(c.id, { onSettled: () => setDeletingId(null) });
   }
 
+  const live = (campaigns.data?.items ?? []).filter((c) => c.status === "programada" || c.status === "activa").length;
+  async function stopAll() {
+    const ok = await confirm({
+      title: "Pausar todas las campañas",
+      description: `Se pausan ${live === 1 ? "la campaña programada o en curso" : `las ${live} campañas programadas o en curso`}. Un envío que esté saliendo se detiene antes del siguiente grupo. Puedes reanudarlas una por una.`,
+      confirmLabel: "Pausar todo",
+      destructive: true,
+    });
+    if (ok) pauseAll.mutate();
+  }
+
   const actions = (
     <>
+      <Button
+        variant="secondary"
+        size="sm"
+        onClick={stopAll}
+        disabled={live === 0 || pauseAll.isPending}
+        data-testid="campaigns-pause-all"
+        title="Detiene de inmediato todas las campañas programadas o enviándose"
+      >
+        {pauseAll.isPending ? <Loader2 className="size-4 animate-spin" /> : <OctagonPause className="size-4" />}
+        Pausar todo
+      </Button>
       <Button
         variant="secondary"
         size="sm"
@@ -151,6 +177,8 @@ export function CampanasContent({ showHeader = true }: { showHeader?: boolean })
                 onEdit={() => openEdit(c)}
                 onDuplicate={() => duplicate.mutate(c.id)}
                 onDelete={() => remove(c)}
+                onRetryFailed={() => retryFailed.mutate(c.id)}
+                retrying={retryFailed.isPending && retryFailed.variables === c.id}
               />
             )}
           />

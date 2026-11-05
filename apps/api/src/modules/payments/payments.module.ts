@@ -687,7 +687,16 @@ export class PaymentsService {
 @UseGuards(WorkspaceGuard)
 @Controller("workspaces/:workspace/payments")
 export class PaymentsController {
-  constructor(private readonly service: PaymentsService) {}
+  constructor(
+    private readonly service: PaymentsService,
+    @Optional() private readonly rates?: UsdtRateService,
+  ) {}
+
+  /** Today's USDT → bolívares rate (Binance P2P median or USDT_VES_RATE), or null. */
+  @Get("ves-rate")
+  async vesRate() {
+    return (await this.rates?.current().catch(() => null)) ?? null;
+  }
 
   @Get("methods")
   methods(@WorkspaceId() workspaceId: string) {

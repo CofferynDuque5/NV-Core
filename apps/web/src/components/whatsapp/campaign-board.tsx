@@ -2,6 +2,7 @@ import * as React from "react";
 import type { Campaign, CampaignStatus } from "@nv/domain";
 import {
   Copy,
+  RotateCcw,
   FolderPlus,
   Loader2,
   Pause,
@@ -258,6 +259,8 @@ export function CampaignRow({
   onEdit,
   onDuplicate,
   onDelete,
+  onRetryFailed,
+  retrying,
 }: {
   campaign: Campaign;
   running: boolean;
@@ -269,6 +272,9 @@ export function CampaignRow({
   onEdit: () => void;
   onDuplicate: () => void;
   onDelete: () => void;
+  /** «Reintentar fallidos»: only after it has run once. */
+  onRetryFailed?: () => void;
+  retrying?: boolean;
 }) {
   const sending = c.status === "activa" && c.progress > 0 && c.progress < 100;
   return (
@@ -343,6 +349,19 @@ export function CampaignRow({
           >
             <Pencil className="size-4" />
           </button>
+          {onRetryFailed && c.lastRunAt ? (
+            <button
+              type="button"
+              onClick={onRetryFailed}
+              disabled={retrying}
+              className={iconButton}
+              title="Reintentar solo los grupos que fallaron"
+              aria-label={`Reintentar los grupos que fallaron en ${c.name}`}
+              data-testid="campaign-retry-failed"
+            >
+              {retrying ? <Loader2 className="size-4 animate-spin" /> : <RotateCcw className="size-4" />}
+            </button>
+          ) : null}
           <button
             type="button"
             onClick={onDuplicate}

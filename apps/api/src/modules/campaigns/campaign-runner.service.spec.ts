@@ -1062,3 +1062,27 @@ describe("CampaignRunner.warmingUp", () => {
     ).toBe(false);
   });
 });
+
+describe("CampaignRunner — reintentar fallidos", () => {
+  beforeEach(() => {
+    process.env.WHATSAPP_GROUP_DELAY_MS = "0";
+  });
+  afterEach(() => {
+    delete process.env.WHATSAPP_GROUP_DELAY_MS;
+  });
+
+  it("only sends to the groups given and skips social posts", async () => {
+    const c = campaign({
+      channels: ["wa", "fb"],
+      targets: [
+        { groupId: "g1", group: { id: "g1", name: "A", remoteJid: "1@g.us" } },
+        { groupId: "g2", group: { id: "g2", name: "B", remoteJid: "2@g.us" } },
+      ],
+    });
+    const { runner, providers, sendLogs } = makeRunner({ campaign: c });
+    await runner.run("w1", "c1", { onlyGroups: ["g2"] });
+    expect(providers.sendMessage).toHaveBeenCalledTimes(1);
+    expect(sendLogs.map((l) => l.groupName)).toEqual(["B"]);
+    expect(providers.publish).not.toHaveBeenCalled();
+  });
+});

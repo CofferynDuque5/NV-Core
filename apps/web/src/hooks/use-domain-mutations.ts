@@ -467,6 +467,44 @@ export function usePauseCampaign() {
   });
 }
 
+/** Send again only to the groups that failed last time. */
+export function useRetryFailedCampaign() {
+  const svc = useServices();
+  const ws = useWorkspace();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => svc.campaigns.retryFailed(ws.id, id),
+    onSuccess: ({ retried }) => {
+      invalidateCampaigns(qc, ws.id);
+      toast.success(
+        retried === 1 ? "Reintentando 1 grupo que falló" : `Reintentando ${retried} grupos que fallaron`,
+      );
+    },
+    onError: (err) => toast.error(errText(err)),
+  });
+}
+
+/** Emergency stop: pause every scheduled or running campaign of the brand. */
+export function usePauseAllCampaigns() {
+  const svc = useServices();
+  const ws = useWorkspace();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () => svc.campaigns.pauseAll(ws.id),
+    onSuccess: ({ paused }) => {
+      invalidateCampaigns(qc, ws.id);
+      toast.success(
+        paused === 0
+          ? "No había campañas programadas ni enviándose"
+          : paused === 1
+            ? "1 campaña pausada"
+            : `${paused} campañas pausadas`,
+      );
+    },
+    onError: (err) => toast.error(errText(err)),
+  });
+}
+
 export function useResumeCampaign() {
   const svc = useServices();
   const ws = useWorkspace();

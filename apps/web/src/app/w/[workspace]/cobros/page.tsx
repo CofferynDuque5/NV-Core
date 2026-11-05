@@ -10,7 +10,7 @@ import {
 } from "@nv/domain";
 import { BadgeDollarSign, Clock, Pencil, Plus, ShieldCheck, Trash2, Wallet } from "lucide-react";
 
-import { usePaymentMethods, usePayments } from "@/hooks/use-domain-data";
+import { usePaymentMethods, usePayments, useVesRate } from "@/hooks/use-domain-data";
 import { useDeletePaymentMethod, useTogglePaymentMethod } from "@/hooks/use-domain-mutations";
 import { useConfirm } from "@/providers/confirm-provider";
 import { PageHeader } from "@/components/common/page-header";
@@ -47,6 +47,9 @@ export default function CobrosPage() {
   const shown = filter === "todos" ? list : list.filter((p) => p.status === filter);
   const open = list.find((p) => p.id === openId) ?? null;
   const allMethods = methods.data ?? [];
+  // Today's rate, only when the brand charges in bolívares.
+  const usesVes = allMethods.some((m) => m.currency === "VES") || list.some((p) => p.currency === "VES");
+  const vesRate = useVesRate(usesVes);
 
   return (
     <div className="space-y-6">
@@ -72,6 +75,14 @@ export default function CobrosPage() {
           </div>
         }
       />
+
+      {usesVes && vesRate.data ? (
+        <p data-testid="ves-rate" className="text-ink-muted -mt-3 text-xs">
+          Tasa del día: <b className="text-ink">1 USDT = Bs {vesRate.data.rate.toLocaleString("es-VE", { maximumFractionDigits: 2 })}</b>{" "}
+          ({vesRate.data.source === "binance" ? "mediana de Binance P2P" : "tasa que fijaste"},{" "}
+          {new Date(vesRate.data.at).toLocaleTimeString("es", { hour: "numeric", minute: "2-digit" })})
+        </p>
+      ) : null}
 
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
         <KpiCard

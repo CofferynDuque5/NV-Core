@@ -552,6 +552,19 @@ export class CampaignsService {
     return mapCampaign(row!);
   }
 
+  /**
+   * Emergency stop: pause every scheduled or running campaign of the brand. A
+   * run in progress stops before its next group (it re-reads the status).
+   */
+  async pauseAll(workspaceId: string, actor: string): Promise<{ paused: number }> {
+    const { count } = await this.db().campaign.updateMany({
+      where: { workspaceSlug: workspaceId, status: { in: ["programada", "activa"] } },
+      data: { status: "pausada" },
+    });
+    await this.audit.record(workspaceId, actor, "campaign.pause_all", String(count));
+    return { paused: count };
+  }
+
   /** Send history for a workspace (most recent first), optionally by campaign. */
   async logs(workspaceId: string, campaignId?: string) {
     if (!this.prisma.enabled) return [];
@@ -852,6 +865,14 @@ export class CampaignsController {
     return this.service.logs(workspaceId, id);
   }
 
+  @Post("pause-all")
+  @Roles("Owner", "Admin", "Editor")
+  @UseGuards(RolesGuard)
+  @HttpCode(200)
+  pauseAll(@WorkspaceId() workspaceId: string, @CurrentUser() user: AuthenticatedUser) {
+    return this.service.pauseAll(workspaceId, user.email);
+  }
+
   @Post()
   @Roles("Owner", "Admin", "Editor")
   @UseGuards(RolesGuard)
@@ -923,6 +944,19 @@ export class CampaignsController {
     if (problems.length > 0) throw new BadRequestException(`No se puede enviar todavía: ${problems.join(" ")}`);
     await this.runner.enqueue(workspaceId, id);
     return this.service.get(workspaceId, id);
+  }
+
+  /** Send again only to the groups that failed last time (no social posts). */
+  @Post(":id/retry-failed")
+  @Roles("Owner", "Admin", "Editor")
+  @UseGuards(RolesGuard)
+  @HttpCode(200)
+  async retryFailed(@WorkspaceId() workspaceId: string, @Param("id") id: string) {
+    await this.service.get(workspaceId, id);
+    const groups = await this.runner.failedGroups(workspaceId, id);
+    if (groups.length === 0) throw new BadRequestException("No hay grupos fallidos que reintentar en esta campaña.");
+    await this.runner.enqueue(workspaceId, id, groups);
+    return { retried: groups.length };
   }
 
   @Post(":id/pause")

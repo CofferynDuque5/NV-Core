@@ -7,7 +7,7 @@ import type { Campaign, Product } from "@nv/domain";
 import { useProducts } from "@/hooks/use-domain-data";
 import { useDeleteProduct } from "@/hooks/use-domain-mutations";
 import { useConfirm } from "@/providers/confirm-provider";
-import { filterProducts, priceLine, productCategories, productMessage } from "@/lib/products";
+import { filterProducts, priceLine, productCategories, productMessage, stockLevel } from "@/lib/products";
 import { cn } from "@/lib/utils";
 import { PageHeader } from "@/components/common/page-header";
 import { Panel } from "@/components/common/panel";
@@ -65,6 +65,14 @@ function ProductCard({
         {!p.active ? (
           <Badge variant="neutral" className="absolute left-2 top-2">
             No disponible
+          </Badge>
+        ) : stockLevel(p) === "agotado" ? (
+          <Badge variant="danger" className="absolute left-2 top-2" data-testid="stock-badge">
+            Agotado
+          </Badge>
+        ) : stockLevel(p) === "bajo" ? (
+          <Badge variant="warning" className="absolute left-2 top-2" data-testid="stock-badge">
+            Quedan {p.stock}
           </Badge>
         ) : null}
       </div>
@@ -143,7 +151,9 @@ export default function TiendaPage() {
 
   const items = products.data ?? [];
   const cats = productCategories(items);
-  const visible = filterProducts(items, { q, category, status });
+  const [lowOnly, setLowOnly] = React.useState(false);
+  const visible = filterProducts(items, { q, category, status }).filter((p) => !lowOnly || stockLevel(p));
+  const low = items.filter((p) => p.active && stockLevel(p));
 
   const openNew = () => {
     setEditing(null);
@@ -190,6 +200,19 @@ export default function TiendaPage() {
         </Panel>
       ) : (
         <div className="space-y-3">
+          {low.length > 0 ? (
+            <p
+              data-testid="low-stock-notice"
+              className="border-state-warning/40 bg-state-warning/10 text-ink rounded-lg border px-3 py-2 text-xs"
+            >
+              {low.length === 1 ? "1 producto se está acabando" : `${low.length} productos se están acabando`}:{" "}
+              {low
+                .slice(0, 4)
+                .map((p) => `${p.name} (${p.stock === 0 ? "agotado" : `quedan ${p.stock}`})`)
+                .join(", ")}
+              {low.length > 4 ? "…" : "."} Repón el stock o márcalos como no disponibles para no ofrecerlos en campañas.
+            </p>
+          ) : null}
           <div className="flex flex-wrap items-center gap-2">
             <Input
               value={q}
@@ -207,6 +230,11 @@ export default function TiendaPage() {
                 {s === "" ? "Todos" : s === "activos" ? "Disponibles" : "No disponibles"}
               </button>
             ))}
+            {low.length > 0 ? (
+              <button type="button" onClick={() => setLowOnly((v) => !v)} className={chip(lowOnly)}>
+                Poco stock ({low.length})
+              </button>
+            ) : null}
             <span className="text-ink-faint ml-auto text-xs">
               {visible.length} de {items.length}
             </span>

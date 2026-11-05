@@ -77,6 +77,8 @@ export interface CampaignRunPayload {
   runKey?: string;
   /** Set by the recovery sweep: continue an interrupted run instead of starting one. */
   resume?: boolean;
+  /** «Reintentar fallidos»: only these groups; no social posts or Status. */
+  onlyGroups?: string[];
 }
 
 /** What a run actually did — a skipped run is reported as such, never as a success. */
@@ -209,6 +211,7 @@ export class CampaignRunner implements OnModuleInit, OnModuleDestroy {
         runKey: p.runKey,
         resume: p.resume,
         attempt: ctx?.attempt,
+        onlyGroups: p.onlyGroups,
       });
     });
 
@@ -540,21 +543,44 @@ export class CampaignRunner implements OnModuleInit, OnModuleDestroy {
     return out;
   }
 
-  async enqueue(workspaceSlug: string, campaignId: string): Promise<void> {
+  async enqueue(workspaceSlug: string, campaignId: string, onlyGroups?: string[]): Promise<void> {
     // The key is fixed BEFORE dispatch so a job retry continues this same run.
     const payload: CampaignRunPayload = {
       workspaceSlug,
       campaignId,
       runKey: `manual:${randomUUID()}`,
+      ...(onlyGroups ? { onlyGroups } : {}),
     };
     await this.jobs.dispatch("campaign.run", workspaceSlug, payload);
+  }
+
+  /**
+   * Groups whose latest send of this campaign (last 7 days) failed and that are
+   * still targets: what «Reintentar fallidos» sends to.
+   */
+  async failedGroups(workspaceSlug: string, campaignId: string): Promise<string[]> {
+    const logs = await this.prisma.sendLog.findMany({
+      where: {
+        workspaceSlug,
+        campaignId,
+        groupId: { not: null },
+        createdAt: { gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) },
+      },
+      orderBy: { createdAt: "desc" },
+      select: { groupId: true, ok: true },
+    });
+    const latest = new Map<string, boolean>();
+    for (const l of logs) if (l.groupId && !latest.has(l.groupId)) latest.set(l.groupId, Boolean(l.ok));
+    const targets = await this.prisma.campaignTarget.findMany({ where: { campaignId }, select: { groupId: true } });
+    const isTarget = new Set(targets.map((t) => t.groupId));
+    return [...latest].filter(([g, ok]) => !ok && isTarget.has(g)).map(([g]) => g);
   }
 
   /** Execute a campaign now: deliver to each target and log every result. */
   async run(
     workspaceSlug: string,
     campaignId: string,
-    opts: { runKey?: string; resume?: boolean; attempt?: number } = {},
+    opts: { runKey?: string; resume?: boolean; attempt?: number; onlyGroups?: string[] } = {},
   ): Promise<CampaignRunOutcome> {
     if (!this.prisma.enabled) throw new Error("Base de datos no configurada.");
     const campaign = await this.prisma.campaign.findFirst({
@@ -562,6 +588,11 @@ export class CampaignRunner implements OnModuleInit, OnModuleDestroy {
       include: { targets: { include: { group: true } } },
     });
     if (!campaign) throw new Error("Campaña no encontrada.");
+    // «Reintentar fallidos» sends only to the groups that failed last time.
+    if (opts.onlyGroups) {
+      const only = new Set(opts.onlyGroups);
+      campaign.targets = campaign.targets.filter((t) => only.has(t.groupId));
+    }
 
     const runKey = opts.runKey ?? `manual:${randomUUID()}`;
     const manual = runKey.startsWith("manual:");
@@ -634,6 +665,8 @@ export class CampaignRunner implements OnModuleInit, OnModuleDestroy {
     const items = campaignItems(campaign.items);
     // Group messages end with the brand's links and the NV Marketing credit.
     const footer = campaign.addFooter ? campaignFooter(await this.brandLinks(workspaceSlug)) : null;
+    // {{dia}}, {{saludo}}, {{hora}} in the brand's zone; {{nombre_marca}}.
+    const varOpts = await this.varOptions(workspaceSlug);
     // Groups this campaign must not go to (kept out, rules, missing price or
     // photo), with the reason, for the end-of-run notice.
     const omitted: { name: string; reason: string }[] = [];
@@ -719,7 +752,7 @@ export class CampaignRunner implements OnModuleInit, OnModuleDestroy {
       const ch = group.channel === "tg" ? "tg" : "wa";
       const provider = ch === "tg" ? "telegram" : "whatsapp";
       const vars = {
-        ...builtinVars(group.name),
+        ...builtinVars(group.name, varOpts),
         precio: priceForGroup(group, prices),
         ...(await this.groupVars(group.id)),
       };
@@ -834,8 +867,8 @@ export class CampaignRunner implements OnModuleInit, OnModuleDestroy {
       return { status: "paused" }; // nada de redes ni Estado, y no se marca completada
     }
 
-    await this.publishSocial(workspaceSlug, campaign, channels, attachments, results, runKey);
-    if (campaign.postToWaStatus) {
+    if (!opts.onlyGroups) await this.publishSocial(workspaceSlug, campaign, channels, attachments, results, runKey);
+    if (campaign.postToWaStatus && !opts.onlyGroups) {
       await this.publishWaStatus(workspaceSlug, campaign, statusMedia, results, runKey);
     }
 
@@ -969,7 +1002,7 @@ export class CampaignRunner implements OnModuleInit, OnModuleDestroy {
       channels.includes(t === "facebook" ? "fb" : "ig"),
     );
     if (!targets.length) return;
-    const text = renderTemplate(campaign.message, builtinVars(""));
+    const text = renderTemplate(campaign.message, builtinVars("", await this.varOptions(workspaceSlug)));
     for (const target of targets) {
       if (await this.alreadyPublished(campaign.id, runKey, target)) continue;
       const r = await this.publishWithRetry(workspaceSlug, target, {
@@ -1031,7 +1064,7 @@ export class CampaignRunner implements OnModuleInit, OnModuleDestroy {
     runKey: string,
   ): Promise<void> {
     if (await this.alreadyPublished(campaign.id, runKey, "wa_status")) return;
-    const text = renderTemplate(campaign.message, builtinVars(""));
+    const text = renderTemplate(campaign.message, builtinVars("", await this.varOptions(workspaceSlug)));
     const input: PublishInput = {
       message: text,
       attachments: media.filter((a) => a.url) as MediaAttachment[],
@@ -1071,6 +1104,14 @@ export class CampaignRunner implements OnModuleInit, OnModuleDestroy {
       socialLinks: (row?.socialLinks as SocialLink[] | null) ?? [],
       website: row?.website ?? null,
     };
+  }
+
+  private async varOptions(workspaceSlug: string): Promise<{ timeZone: string; brandName?: string }> {
+    const [zones, ws] = await Promise.all([
+      this.timeZones([workspaceSlug]).catch(() => new Map<string, string>()),
+      this.prisma.workspace?.findUnique({ where: { slug: workspaceSlug }, select: { name: true } }).catch(() => null),
+    ]);
+    return { timeZone: zones.get(workspaceSlug) ?? "America/Caracas", brandName: ws?.name };
   }
 
   private async groupVars(groupId: string): Promise<Record<string, string>> {

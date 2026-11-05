@@ -278,6 +278,10 @@ export interface CampaignService {
   importCsv(workspaceId: string, csv: string): Promise<CampaignImportResult>;
   /** Copy as a new draft (message, images, channels, schedule, prices, groups). */
   duplicate(workspaceId: string, id: string): Promise<Campaign>;
+  /** Send again only to the groups that failed last time. */
+  retryFailed(workspaceId: string, id: string): Promise<{ retried: number }>;
+  /** Emergency stop: pause every scheduled or running campaign. */
+  pauseAll(workspaceId: string): Promise<{ paused: number }>;
 }
 
 export interface CreatePostInput {
@@ -648,6 +652,8 @@ export interface UpdatePaymentRequestInput {
 }
 
 export interface PaymentService {
+  /** Today's USDT → bolívares rate, or null when unknown. */
+  vesRate(workspaceId: string): Promise<UsdtRate | null>;
   methods(workspaceId: string): Promise<PaymentMethod[]>;
   createMethod(workspaceId: string, input: PaymentMethodInput): Promise<PaymentMethod>;
   updateMethod(workspaceId: string, id: string, input: Partial<PaymentMethodInput>): Promise<PaymentMethod>;
