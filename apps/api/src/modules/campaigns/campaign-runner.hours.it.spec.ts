@@ -23,6 +23,7 @@ describe.skipIf(!url)("CampaignRunner: horario de envío, máximo por día y lot
         return { id: `wamid-${m.to}` };
       }),
       sendMedia: vi.fn(),
+      status: vi.fn(async () => ({ state: "connected" })),
       publish: vi.fn(async () => ({ ok: true, id: "p" })),
     };
     const runner = new CampaignRunner(
@@ -109,9 +110,9 @@ describe.skipIf(!url)("CampaignRunner: horario de envío, máximo por día y lot
     const { c, groups } = await seed(ws);
     await prisma.workspaceSettings.create({ data: { workspaceSlug: ws, groupMaxPerDay: 1 } });
     // G1 already got a campaign message today; G2 has its own, higher limit.
-    for (const g of [groups[0]!, groups[1]!]) {
-      await prisma.sendLog.create({ data: { workspaceSlug: ws, campaignId: c.id, groupId: g.id, runKey: "old", ok: true } });
-    }
+    // An older send without runKey counts too.
+    await prisma.sendLog.create({ data: { workspaceSlug: ws, campaignId: c.id, groupId: groups[0]!.id, runKey: null, ok: true } });
+    await prisma.sendLog.create({ data: { workspaceSlug: ws, campaignId: c.id, groupId: groups[1]!.id, runKey: "old", ok: true } });
     await prisma.group.update({ where: { id: groups[1]!.id }, data: { maxPerDay: 2 } });
     const a = mk();
     await a.runner.run(ws, c.id, { runKey: "slot:max" });
@@ -143,5 +144,23 @@ describe.skipIf(!url)("CampaignRunner: horario de envío, máximo por día y lot
     } finally {
       delete process.env.CAMPAIGN_BATCH_MINUTE_MS;
     }
+  });
+
+  it("una campaña diaria que nunca se envió sale a su hora (antes nunca salía)", async () => {
+    process.env.WHATSAPP_GROUP_DELAY_MS = "0";
+    const ws = `it-daily-${Date.now()}`;
+    const a = mk();
+    const tz = (await a.runner.timeZones([ws])).get(ws)!;
+    const now = wallClock(new Date(), tz).minutes;
+    const { c } = await seed(ws, { scheduleType: "daily", scheduleAt: null, scheduleTimes: [hhmm(now - 1)] });
+    expect(c.lastRunSlot).toBeNull();
+    const mine = () => a.dispatched.filter((p) => (p as { campaignId: string }).campaignId === c.id);
+    await (a.runner as unknown as { tick(): Promise<void> }).tick();
+    expect(mine()).toHaveLength(1);
+    const after = await prisma.campaign.findUniqueOrThrow({ where: { id: c.id } });
+    expect(after.lastRunSlot).toMatch(/T\d{2}:\d{2}$/);
+    // The same slot never fires twice.
+    await (a.runner as unknown as { tick(): Promise<void> }).tick();
+    expect(mine()).toHaveLength(1);
   });
 });

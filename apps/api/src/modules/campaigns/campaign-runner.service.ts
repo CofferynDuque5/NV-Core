@@ -344,7 +344,9 @@ export class CampaignRunner implements OnModuleInit, OnModuleDestroy {
               data: { status: "activa", lastRunDay: todayKey() },
             })
           : await this.prisma.campaign.updateMany({
-              where: { id: c.id, NOT: { lastRunSlot: slot } },
+              // «NOT lastRunSlot = slot» never matches a NULL lastRunSlot in SQL:
+              // a daily/weekly campaign that never ran was skipped for ever.
+              where: { id: c.id, OR: [{ lastRunSlot: null }, { lastRunSlot: { not: slot } }] },
               data: { lastRunSlot: slot },
             });
       if (claim.count !== 1) continue; // otro proceso ya la reservó
@@ -838,7 +840,8 @@ export class CampaignRunner implements OnModuleInit, OnModuleDestroy {
             ok: true,
             campaignId: { not: null },
             createdAt: { gte: zonedMidnight(wallClock(new Date(), tz).day, tz) },
-            NOT: { runKey },
+            // Rows without a runKey (older sends) count too.
+            OR: [{ runKey: null }, { runKey: { not: runKey } }],
           },
         });
         if (today >= maxPerDay) {
