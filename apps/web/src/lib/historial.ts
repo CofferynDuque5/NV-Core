@@ -1,4 +1,4 @@
-import type { SendLogEntry } from "@nv/domain";
+import { isSendInFlight, type SendLogEntry } from "@nv/domain";
 
 /** Channels shown in the Historial filter. */
 export type HistorialChannel = "whatsapp" | "telegram" | "facebook" | "instagram" | "otro";
@@ -53,8 +53,12 @@ export function searchHistorial(
 /** Counts of ok / error / total for a set of rows. */
 export function summarize(rows: SendLogEntry[]): { total: number; ok: number; error: number } {
   let ok = 0;
-  for (const r of rows) if (r.ok) ok++;
-  return { total: rows.length, ok, error: rows.length - ok };
+  let sending = 0;
+  for (const r of rows) {
+    if (r.ok) ok++;
+    else if (isSendInFlight(r.error)) sending++; // still going out: not a failure
+  }
+  return { total: rows.length, ok, error: rows.length - ok - sending };
 }
 
 /** How many rows fall in each channel (for the tab counters). */

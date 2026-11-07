@@ -163,4 +163,35 @@ describe.skipIf(!url)("CampaignRunner: horario de envío, máximo por día y lot
     await (a.runner as unknown as { tick(): Promise<void> }).tick();
     expect(mine()).toHaveLength(1);
   });
+
+  it("un canal que no responde no frena la campaña: falla con motivo y sigue con los demás", async () => {
+    process.env.WHATSAPP_GROUP_DELAY_MS = "0";
+    process.env.CAMPAIGN_SEND_TIMEOUT_MS = "1000";
+    try {
+      const ws = `it-hang-${Date.now()}`;
+      const { c, groups: g1 } = await seed(ws);
+      await prisma.group.update({ where: { id: g1[0]!.id }, data: { channel: "tg" } });
+      // The first group (Telegram) never answers (a half-dead Telegram/WhatsApp session).
+      const a = mk((to) => (to.endsWith("-1@g.us") ? new Promise<void>(() => undefined) : Promise.resolve()));
+      const out = await a.runner.run(ws, c.id, { runKey: "manual:hang" });
+      expect(out).toMatchObject({ status: "completed", sent: 2, failed: 1 });
+      const failed = await prisma.sendLog.findFirstOrThrow({ where: { campaignId: c.id, ok: false } });
+      expect(failed.error).toMatch(/no respondió en 1 s/);
+
+      // A whole Telegram account that stops answering: its other groups fail at
+      // once (no 1-timeout-per-group), WhatsApp groups still go out.
+      const ws2 = `it-hang2-${Date.now()}`;
+      const { c: c2, groups } = await seed(ws2);
+      await prisma.group.updateMany({ where: { id: { in: [groups[0]!.id, groups[1]!.id] } }, data: { channel: "tg" } });
+      const b = mk((to) => (to.endsWith("-1@g.us") || to.endsWith("-2@g.us") ? new Promise<void>(() => undefined) : Promise.resolve()));
+      const t0 = Date.now();
+      const out2 = await b.runner.run(ws2, c2.id, { runKey: "manual:hang2" });
+      expect(Date.now() - t0).toBeLessThan(1900);
+      expect(out2).toMatchObject({ sent: 1, failed: 2 });
+      const errs = (await prisma.sendLog.findMany({ where: { campaignId: c2.id, ok: false } })).map((l) => l.error);
+      expect(errs.some((e) => /se saltó este grupo/.test(e ?? ""))).toBe(true);
+    } finally {
+      delete process.env.CAMPAIGN_SEND_TIMEOUT_MS;
+    }
+  });
 });

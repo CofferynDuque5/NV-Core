@@ -10,7 +10,36 @@ export interface FriendlyError {
   hint: string;
 }
 
+/** The marker a send carries while it is going out («en curso…»). */
+export const SEND_IN_FLIGHT = "en curso…";
+
+/** True while the send is still going out (not a failure yet). */
+export function isSendInFlight(raw: string | null | undefined): boolean {
+  return String(raw ?? "").trim() === SEND_IN_FLIGHT;
+}
+
 const RULES: [RegExp, FriendlyError][] = [
+  [
+    /^en curso…$/i,
+    {
+      title: "Enviándose ahora…",
+      hint: "Si sigue así más de 5 minutos, la cuenta no está respondiendo: revisa Conexiones y pulsa Reconectar.",
+    },
+  ],
+  [
+    /no respondió en este envío; se saltó/i,
+    {
+      title: "Se saltó porque esa cuenta dejó de responder en este envío.",
+      hint: "Pulsa Reconectar en Conexiones y reintenta los grupos que fallaron.",
+    },
+  ],
+  [
+    /no respondió en \d+ s/i,
+    {
+      title: "La cuenta no respondió a tiempo y se pasó al siguiente grupo.",
+      hint: "Revisa en el grupo si el mensaje llegó antes de reintentar. Si se repite, pulsa Reconectar en Conexiones.",
+    },
+  ],
   // Telegram
   [
     /could not find the input entity|peer_id_invalid|channel_invalid|chat_id_invalid/i,

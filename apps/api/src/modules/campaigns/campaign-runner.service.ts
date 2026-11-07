@@ -121,6 +121,21 @@ export function lineAllowed(
   return allowed.includes((tg ? group.tgLine : group.waLine) ?? 1);
 }
 
+/**
+ * Last-resort limit for one send through any channel: a provider that never
+ * answers must not hold the whole campaign on one group.
+ */
+function sendWithLimit<T>(p: Promise<T>, channel: string): Promise<T> {
+  const SEND_LIMIT_MS = Math.max(1_000, Number(process.env.CAMPAIGN_SEND_TIMEOUT_MS ?? 4 * 60_000));
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const limit = new Promise<never>((_, reject) => {
+    timer = setTimeout(
+      () => reject(new Error(`${channel} no respondió en ${Math.round(SEND_LIMIT_MS / 1000)} s.`)),
+      SEND_LIMIT_MS,
+    );
+  });
+  return Promise.race([p, limit]).finally(() => clearTimeout(timer));
+}
 const isUniqueViolation = (err: unknown) => (err as { code?: string })?.code === "P2002";
 
 /**
@@ -780,6 +795,10 @@ export class CampaignRunner implements OnModuleInit, OnModuleDestroy {
     const batchSize = campaign.batchSize && campaign.batchSize > 0 ? campaign.batchSize : 0;
     const pacing = batchSize ? { ...this.pacing, batchSize: 0 } : this.pacing;
     let delivered = 0;
+    // Accounts (channel + number) that stopped answering in this run: their
+    // remaining groups fail at once instead of waiting a full timeout each.
+    const stalled = new Set<string>();
+    const NO_ANSWER = /no respondió en \d+ s/;
 
     // Deliver to every target group via the provider matching its channel:
     // WhatsApp (Baileys/Cloud) or Telegram (bot). Social (fb/ig) is separate.
@@ -946,10 +965,15 @@ export class CampaignRunner implements OnModuleInit, OnModuleDestroy {
       /** One message (text, or image with caption) to this group. */
       const deliver = async (body: string, attachment: MediaAttachment | null) => {
         let note: string | null = null;
+        const label = provider === "telegram" ? "Telegram" : "WhatsApp";
         const res = await this.withRetry(async () => {
-          if (!attachment) return this.providers.sendMessage(workspaceSlug, provider, { to, body });
+          if (!attachment)
+            return sendWithLimit(this.providers.sendMessage(workspaceSlug, provider, { to, body }), label);
           try {
-            return await this.providers.sendMedia(workspaceSlug, provider, { to, body, attachment });
+            return await sendWithLimit(
+              this.providers.sendMedia(workspaceSlug, provider, { to, body, attachment }),
+              label,
+            );
           } catch (err) {
             // Only the MEDIA failed (download / file rejected): deliver the text
             // anyway and leave the reason in the Historial, instead of silently
@@ -957,11 +981,20 @@ export class CampaignRunner implements OnModuleInit, OnModuleDestroy {
             if (!(err as { mediaFailed?: boolean })?.mediaFailed) throw err;
             note = `Imagen NO enviada, se envió solo el texto: ${(err as Error).message}`;
             this.logger.warn(`[${workspaceSlug}] ${group.name}: ${note}`);
-            return this.providers.sendMessage(workspaceSlug, provider, { to, body });
+            return sendWithLimit(this.providers.sendMessage(workspaceSlug, provider, { to, body }), label);
           }
         });
         return { id: res.id, note };
       };
+      const lineKey = ch === "tg" ? `tg:${group.tgLine ?? 1}` : `wa:${group.waLine ?? 1}`;
+      if (stalled.has(lineKey)) {
+        const who = ch === "tg" ? "La cuenta de Telegram" : "El número de WhatsApp";
+        results.push(
+          await finish(false, `${who} no respondió en este envío; se saltó este grupo. Pulsa Reconectar en Conexiones.`),
+        );
+        sent += 1;
+        continue;
+      }
       const notes: string[] = [];
       let firstId: string | undefined;
       let failed: string | null = null;
@@ -985,10 +1018,12 @@ export class CampaignRunner implements OnModuleInit, OnModuleDestroy {
             break; // the account is likely in trouble: don't keep hammering this group
           }
         }
+        if (failed && NO_ANSWER.test(failed)) stalled.add(lineKey);
         if (failed && firstId === undefined) results.push(await finish(false, failed));
         else if (failed) results.push(await finish(false, [failed, ...notes].join(" · "), firstId));
         else results.push(await finish(true, notes.length ? notes.join(" · ") : null, firstId));
       } catch (err) {
+        if (NO_ANSWER.test((err as Error).message)) stalled.add(lineKey);
         results.push(await finish(false, (err as Error).message));
       }
       sent += 1;
