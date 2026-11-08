@@ -8,6 +8,8 @@ import type {
   AccessPaymentInput,
   AdminAccessRow,
   AdminLogins,
+  AdminActivity,
+  PanelPing,
   PlanPaymentReview,
   WhatsappAlertStatus,
   UsdtRate,
@@ -1159,6 +1161,10 @@ export interface AdminService {
   activate(workspaceSlug: string, days: number): Promise<WorkspaceAccess>;
   /** Every user with their last access, and the latest sign-ins. */
   logins(): Promise<AdminLogins>;
+  /** Panel visits of the last `days` days (1–90). */
+  activity(days: number): Promise<AdminActivity>;
+  /** «I am using the panel»: page change or once a minute while visible. */
+  ping(input: PanelPing): Promise<void>;
   /** How outgoing email is set up. */
   mailStatus(): Promise<{ provider: MailProvider }>;
   /** Plan payments customers sent (waiting ones first). */

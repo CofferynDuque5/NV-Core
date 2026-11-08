@@ -9,6 +9,7 @@ import {
   NotFoundException,
   Param,
   Post,
+  Query,
   Res,
   UseGuards,
 } from "@nestjs/common";
@@ -31,6 +32,8 @@ import type { AppConfig } from "../../config/configuration";
 import { UsdtRateService } from "../../common/fx/usdt-rate.service";
 import { PaymentsModule, PaymentsService, receiptHeaders } from "../payments/payments.module";
 import { PlanPaymentAlerts } from "../payments/plan-payment-alerts";
+import { PanelActivityModule } from "../panel-activity/panel-activity.module";
+import { PanelActivityService } from "../panel-activity/panel-activity.service";
 
 export class SetMembershipDto {
   @IsString() @MinLength(3) email!: string;
@@ -53,33 +56,9 @@ export interface AdminUserView {
   memberships: { workspaceSlug: string; role: Role }[];
 }
 
-/** "Chrome · Windows" from a browser's user agent (enough to recognise a device). */
-export function describeDevice(ua: string | null | undefined): string {
-  if (!ua) return "—";
-  const browser = /Edg\//.test(ua)
-    ? "Edge"
-    : /OPR\/|Opera/.test(ua)
-      ? "Opera"
-      : /Chrome\//.test(ua)
-        ? "Chrome"
-        : /Firefox\//.test(ua)
-          ? "Firefox"
-          : /Safari\//.test(ua)
-            ? "Safari"
-            : "Navegador";
-  const os = /Android/.test(ua)
-    ? "Android"
-    : /iPhone|iPad|iOS/.test(ua)
-      ? "iPhone/iPad"
-      : /Windows/.test(ua)
-        ? "Windows"
-        : /Mac OS X|Macintosh/.test(ua)
-          ? "Mac"
-          : /Linux/.test(ua)
-            ? "Linux"
-            : "otro sistema";
-  return `${browser} · ${os}`;
-}
+import { describeDevice } from "../../common/device";
+
+export { describeDevice };
 
 @Injectable()
 export class AdminService {
@@ -179,6 +158,7 @@ export class AdminController {
     private readonly alerts: PlanPaymentAlerts,
     private readonly rates: UsdtRateService,
     private readonly config: ConfigService<AppConfig, true>,
+    private readonly panelActivity: PanelActivityService,
   ) {}
 
   private get billingWorkspace(): string {
@@ -268,6 +248,13 @@ export class AdminController {
     return this.service.logins();
   }
 
+  /** Panel visits (who, device, sections, time) of the last 1–90 days. */
+  @Get("activity")
+  activity(@Query("days") days?: string) {
+    const n = Math.round(Number(days ?? 7));
+    return this.panelActivity.overview(Number.isFinite(n) ? Math.min(90, Math.max(1, n)) : 7);
+  }
+
   @Post("memberships")
   @HttpCode(200)
   setMembership(@Body() dto: SetMembershipDto) {
@@ -300,7 +287,7 @@ export class AdminController {
 }
 
 @Module({
-  imports: [AuthModule, PaymentsModule],
+  imports: [AuthModule, PaymentsModule, PanelActivityModule],
   controllers: [AdminController],
   providers: [AdminService, SuperAdminGuard],
 })

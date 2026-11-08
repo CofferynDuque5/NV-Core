@@ -182,6 +182,7 @@ export class AuthService {
       // Count the failure and lock the account once the threshold is reached.
       if (user) {
         const attempts = await this.store.incrementFailedLogins(user.id);
+        await this.store.recordFailedLogin(user.id, meta);
         if (attempts >= AuthService.MAX_FAILED_LOGINS) {
           await this.store.lockUser(user.id, new Date(Date.now() + AuthService.LOCK_DURATION_MS));
         }

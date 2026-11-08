@@ -77,6 +77,7 @@ model User {
   refreshTokens       RefreshToken[]
   authTokens          AuthToken[]
   loginEvents         LoginEvent[]
+  panelSessions       PanelSession[]
 }
 
 /// One row per successful sign-in, for the super-admin «Usuarios» panel. Kept 90 days.
@@ -92,6 +93,36 @@ model LoginEvent {
 
   @@index([at])
   @@index([userId, at])
+}
+
+/**
+ * One visit to the panel (a browser tab, renewed after 30 min idle): who,
+ * from which device and IP, which sections and for how long. The panel pings
+ * on every page change and once a minute while visible. Kept 90 days.
+ */
+model PanelSession {
+  /// Random id made by the browser tab.
+  id            String   @id
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId        String
+  /// The shared «Ver demo» account (visitors tell apart by device and IP).
+  demo          Boolean  @default(false)
+  ip            String?
+  userAgent     String?
+  /// "Chrome · Windows".
+  device        String   @default("—")
+  /// "movil", "tablet" or "computadora".
+  deviceKind    String   @default("computadora")
+  workspaceSlug String?
+  lastPath      String?
+  pageViews     Int      @default(0)
+  /// Pages seen per section: { "campanas": 3, "inbox": 5 }.
+  sections      Json     @default("{}")
+  startedAt     DateTime @default(now())
+  lastAt        DateTime @default(now())
+
+  @@index([lastAt])
+  @@index([userId, lastAt])
 }
 
 /**

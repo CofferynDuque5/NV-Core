@@ -1379,3 +1379,40 @@ export interface AdminLogins {
   users: AdminLoginUser[];
   events: AdminLoginEvent[];
 }
+
+/** One visit to the panel (a browser tab), newest first. */
+export interface AdminPanelSession {
+  id: string;
+  userId: string;
+  email: string;
+  name: string;
+  /** The shared «Ver demo» account. */
+  demo: boolean;
+  /** "Chrome · Windows". */
+  device: string;
+  deviceKind: "movil" | "tablet" | "computadora";
+  ip: string | null;
+  workspaceSlug: string | null;
+  lastPath: string | null;
+  pageViews: number;
+  /** Pages seen per section key ("campanas", "inbox", …). */
+  sections: Record<string, number>;
+  startedAt: string;
+  lastAt: string;
+}
+
+/** What the panel tab reports about itself. */
+export interface PanelPing {
+  /** Random id of this browser tab's visit (8–40 letters, digits, - or _). */
+  sessionId: string;
+  /** Current route, e.g. "/w/mi-marca/campanas". */
+  path: string;
+}
+
+/** Panel usage over the chosen period (super-admin «Usuarios y actividad»). */
+export interface AdminActivity {
+  since: string;
+  sessions: AdminPanelSession[];
+  /** Wrong password tries on real accounts in the period. */
+  failedLogins: number;
+}

@@ -91,6 +91,24 @@ export class AuthStore {
     }
   }
 
+  /**
+   * A wrong password on a real account: logged (method "failed") so the
+   * super-admin sees tries, without counting it as a sign-in. Best effort.
+   */
+  async recordFailedLogin(userId: string, meta: LoginMeta = {}, now = new Date()): Promise<void> {
+    await this.prisma.loginEvent
+      .create({
+        data: {
+          userId,
+          method: "failed",
+          ip: meta.ip?.slice(0, 64) ?? null,
+          userAgent: meta.userAgent?.slice(0, 300) ?? null,
+          at: now,
+        },
+      })
+      .catch(() => undefined);
+  }
+
   /** The session was renewed (the panel is open): last time we saw the user. */
   async touchSeen(userId: string, now = new Date()): Promise<void> {
     await this.prisma.user

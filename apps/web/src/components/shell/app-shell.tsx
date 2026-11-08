@@ -23,6 +23,7 @@ import { PlanLock, PlanUpgrade, TrialBanner } from "@/components/access/plan-acc
 import { usePlanLocks } from "@/hooks/use-plan-locks";
 import { DemoBanner } from "@/components/access/demo-banner";
 import { SendConfirmAlerts } from "./send-confirm-alerts";
+import { useActivityPing } from "@/hooks/use-activity-ping";
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const [switcherOpen, setSwitcherOpen] = React.useState(false);
@@ -33,6 +34,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const authStatus = useAuthStore((s) => s.status);
   const memberships = useAuthStore((s) => s.memberships);
   const { pathname } = useLocation();
+
+  // Who uses the panel, from where and for how long (super-admin view).
+  useActivityPing(isBackendConfigured() && authStatus === "authenticated");
 
   // A new page starts at the top, not where the previous one was scrolled.
   React.useEffect(() => {

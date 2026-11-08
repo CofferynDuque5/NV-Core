@@ -10,6 +10,7 @@ import { JwtService } from "@nestjs/jwt";
 import type { Request } from "express";
 
 import { IS_PUBLIC_KEY } from "../decorators/public.decorator";
+import { ALLOW_DEMO_KEY } from "../decorators/allow-demo.decorator";
 import type { AuthenticatedUser, JwtPayload } from "../auth.types";
 
 const READ_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
@@ -48,7 +49,11 @@ export class JwtAuthGuard implements CanActivate {
     }
     request.user = { userId: payload.sub, email: payload.email, name: payload.name, demo: payload.demo === true };
     // The «Ver demo» account looks at everything and changes nothing.
-    if (payload.demo === true && !READ_METHODS.has(request.method.toUpperCase())) {
+    if (
+      payload.demo === true &&
+      !READ_METHODS.has(request.method.toUpperCase()) &&
+      !this.reflector.getAllAndOverride<boolean>(ALLOW_DEMO_KEY, [context.getHandler(), context.getClass()])
+    ) {
       throw new ForbiddenException(DEMO_READ_ONLY);
     }
     return true;
