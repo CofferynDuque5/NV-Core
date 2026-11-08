@@ -2,8 +2,10 @@ import { randomUUID } from "node:crypto";
 import { DEMO_SLUG } from "../demo/demo-slug";
 
 import {
+  ConflictException,
   Injectable,
   Logger,
+  NotFoundException,
   Optional,
   type OnModuleDestroy,
   type OnModuleInit,
@@ -37,17 +39,20 @@ import {
   withFooter,
   type SocialLink,
 } from "@nv/domain";
-import { resolvePacing, pacingDelay, type PacingOptions } from "./pacing";
+import { reserveAccountTurn, resolvePacing, pacingDelay, type PacingOptions } from "./pacing";
 import { inDateRange, wallClock } from "./date-range";
 import {
   effectiveHours,
   inSendWindow,
   minutesUntilOpen,
+  SEND_CONFIRM_MODES,
   scheduleTimeZone,
   sendHoursLabel,
+  type SendConfirmMode,
   type SendSettings,
 } from "@nv/domain";
 import { zonedMidnight } from "../reports/weekly-report";
+import { describeSendPace } from "./pacing";
 
 const TICK_MS = 30_000;
 /** First tick soon after boot: a cPanel app that slept wakes up and catches up. */
@@ -136,6 +141,20 @@ function sendWithLimit<T>(p: Promise<T>, channel: string): Promise<T> {
   });
   return Promise.race([p, limit]).finally(() => clearTimeout(timer));
 }
+/** Notice key of a send: dueSlot's slot, or «once:<datetime>» for a one-time send. */
+export function confirmKey(c: Pick<PCampaign, "scheduleAt">, slot: string): string {
+  return slot === "once" ? `once:${c.scheduleAt ?? ""}` : slot;
+}
+const TARGET_LABEL: Record<string, string> = {
+  fb: "Facebook",
+  ig: "Instagram",
+  facebook: "Facebook",
+  instagram: "Instagram",
+  status: "Estado de WhatsApp",
+  wa_status: "Estado de WhatsApp",
+};
+/** Successful places named one by one in the end-of-run notice. */
+const MAX_SUCCESS_NAMES = 60;
 const isUniqueViolation = (err: unknown) => (err as { code?: string })?.code === "P2002";
 
 /**
@@ -338,9 +357,25 @@ export class CampaignRunner implements OnModuleInit, OnModuleDestroy {
       where: { status: { in: ["programada", "activa"] }, workspaceSlug: { not: DEMO_SLUG } },
     });
     const zones = await this.timeZones(candidates.map((c) => c.workspaceSlug));
+    const confirm = await this.confirmSettings(candidates.map((c) => c.workspaceSlug));
+    await this.sendPreNotices(now, candidates, zones, confirm).catch((err: unknown) =>
+      this.logger.warn(`Avisos previos fallaron: ${(err as Error).message}`),
+    );
     for (const c of candidates) {
       const slot = this.dueSlot(c, now, zones.get(c.workspaceSlug));
       if (!slot) continue;
+      // «No enviar» / «Solo con confirmación»: re-read, the notice may have just been answered.
+      const key = confirmKey(c, slot);
+      const mode = confirm.get(c.workspaceSlug)?.mode ?? "notify";
+      if (mode !== "off") {
+        const fresh = await this.prisma.campaign.findUnique({
+          where: { id: c.id },
+          select: { confirmSlot: true, confirmState: true },
+        });
+        const answered = fresh?.confirmSlot === key ? fresh.confirmState : null;
+        if (answered === "skipped") continue;
+        if (mode === "require" && answered !== "confirmed") continue;
+      }
       if (await this.warmingUp(c)) {
         this.logger.log(
           `Campaña "${c.name}": su canal aún se está conectando; se envía en el próximo turno.`,
@@ -456,6 +491,169 @@ export class CampaignRunner implements OnModuleInit, OnModuleDestroy {
       if (alive.count !== 1) return "lost";
     }
     return "ok";
+  }
+
+  /** Each brand's «aviso antes de enviar» mode and how many minutes before. */
+  async confirmSettings(slugs: string[]): Promise<Map<string, { mode: SendConfirmMode; leadMin: number }>> {
+    const unique = [...new Set(slugs)];
+    const rows = unique.length
+      ? await this.prisma.workspaceSettings.findMany({
+          where: { workspaceSlug: { in: unique } },
+          select: { workspaceSlug: true, sendConfirm: true, sendConfirmLeadMin: true },
+        })
+      : [];
+    const saved = new Map(rows.map((r) => [r.workspaceSlug, r]));
+    return new Map(
+      unique.map((s) => {
+        const r = saved.get(s);
+        const mode = (SEND_CONFIRM_MODES as readonly string[]).includes(r?.sendConfirm ?? "")
+          ? (r!.sendConfirm as SendConfirmMode)
+          : "notify";
+        return [s, { mode, leadMin: r?.sendConfirmLeadMin ?? 15 }];
+      }),
+    );
+  }
+
+  /**
+   * The next scheduled send of a campaign that falls within `leadMs` from now
+   * (or is due and not yet sent): its slot (as dueSlot names it), its notice
+   * key and when it fires.
+   */
+  upcomingSend(c: PCampaign, now: Date, tz: string, leadMs: number): { slot: string; key: string; at: Date } | null {
+    if (c.status !== "programada" && c.status !== "activa") return null;
+    if (c.scheduleType === "once") {
+      if (c.status !== "programada" || !c.scheduleAt) return null;
+      const at = new Date(c.scheduleAt);
+      if (Number.isNaN(at.getTime()) || at.getTime() - now.getTime() > leadMs) return null;
+      return { slot: "once", key: confirmKey(c, "once"), at };
+    }
+    if (c.scheduleType !== "daily" && c.scheduleType !== "weekly") return null;
+    const times = c.scheduleTimes?.length ? c.scheduleTimes : c.scheduleAt ? [c.scheduleAt] : [];
+    const today = wallClock(now, tz).day;
+    const tomorrow = new Date(Date.parse(`${today}T00:00:00Z`) + 86_400_000).toISOString().slice(0, 10);
+    let best: { slot: string; key: string; at: Date } | null = null;
+    for (const day of [today, tomorrow]) {
+      if (!inDateRange(day, c.startDate, c.endDate)) continue;
+      const weekday = new Date(`${day}T00:00:00Z`).getUTCDay();
+      if (c.scheduleType === "weekly" && !(c.scheduleDays ?? []).includes(weekday)) continue;
+      const midnight = zonedMidnight(day, tz).getTime();
+      for (const t of times) {
+        const [h, m] = String(t).split(":").map(Number);
+        if (Number.isNaN(h) || Number.isNaN(m)) continue;
+        const at = midnight + (h! * 60 + m!) * 60_000;
+        const d = at - now.getTime();
+        if (d > leadMs || d < -CampaignRunner.CATCHUP_MS) continue;
+        const slot = `${day}T${t}`;
+        if (c.lastRunSlot === slot) continue;
+        if (!best || at < best.at.getTime()) best = { slot, key: slot, at: new Date(at) };
+      }
+    }
+    return best;
+  }
+
+  /**
+   * AVISO ANTES DE ENVIAR: some minutes before each scheduled send, the team
+   * gets a notice with what is about to go out (groups, channels, anti-ban
+   * pace) and the buttons «Confirmar» / «No enviar». One notice per send,
+   * claimed atomically so two processes never post it twice.
+   */
+  async sendPreNotices(
+    now: Date,
+    candidates: PCampaign[],
+    zones: Map<string, string>,
+    confirm: Map<string, { mode: SendConfirmMode; leadMin: number }>,
+  ): Promise<number> {
+    let n = 0;
+    for (const c of candidates) {
+      const cfg = confirm.get(c.workspaceSlug);
+      if (!cfg || cfg.mode === "off") continue;
+      const tz = zones.get(c.workspaceSlug) ?? "America/Caracas";
+      const up = this.upcomingSend(c, now, tz, cfg.leadMin * 60_000);
+      if (!up || c.confirmSlot === up.key) continue;
+      const claim = await this.prisma.campaign.updateMany({
+        where: { id: c.id, OR: [{ confirmSlot: null }, { confirmSlot: { not: up.key } }] },
+        data: { confirmSlot: up.key, confirmState: "pending", confirmFor: up.at },
+      });
+      if (claim.count !== 1) continue;
+      const targets = await this.prisma.campaignTarget.findMany({
+        where: { campaignId: c.id },
+        select: { group: { select: { channel: true, excluded: true, workspaceSlug: true } } },
+      });
+      const groups = targets.map((t) => t.group).filter((g) => g && g.workspaceSlug === c.workspaceSlug && !g.excluded);
+      const tg = groups.filter((g) => g!.channel === "tg").length;
+      const wa = groups.length - tg;
+      const hhmm = new Intl.DateTimeFormat("es", { timeZone: tz, hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).format(up.at);
+      const where = [wa ? `${wa} de WhatsApp` : "", tg ? `${tg} de Telegram` : ""].filter(Boolean).join(" y ");
+      const social = (c.channels as string[] | null)?.filter((x) => x === "fb" || x === "ig") ?? [];
+      const pace = describeSendPace(groups.length, this.pacing, c.batchSize, c.batchPauseMin);
+      const meta = [
+        groups.length ? `Va a ${groups.length} ${groups.length === 1 ? "grupo" : "grupos"} (${where}).` : "No tiene grupos.",
+        social.length ? `También se publica en ${social.map((x) => (x === "fb" ? "Facebook" : "Instagram")).join(" e ")}.` : "",
+        groups.length ? `Envío anti-ban: ${pace}` : "",
+        cfg.mode === "require"
+          ? "Solo sale si pulsas «Confirmar envío»."
+          : "Si no respondes, sale a su hora. Pulsa «No enviar» para saltar este envío.",
+      ]
+        .filter(Boolean)
+        .join(" ");
+      await this.notifications
+        .create(c.workspaceSlug, {
+          type: "warning",
+          title: `Campaña «${c.name}» sale a las ${hhmm}`,
+          meta,
+          actions: { type: "campaign-confirm", campaignId: c.id, slot: up.key, state: "pending" },
+        })
+        .catch(() => undefined);
+      n++;
+    }
+    return n;
+  }
+
+  /**
+   * «Confirmar envío» / «No enviar» on the notice. «No enviar» skips only that
+   * send: a daily/weekly campaign keeps its next times, a one-time campaign
+   * is paused. A send that already started can only be paused.
+   */
+  async decideSend(
+    workspaceSlug: string,
+    campaignId: string,
+    slot: string,
+    decision: "confirm" | "skip",
+    by: string,
+  ): Promise<{ state: "confirmed" | "skipped" }> {
+    const c = await this.prisma.campaign.findFirst({ where: { id: campaignId, workspaceSlug } });
+    if (!c) throw new NotFoundException("Campaña no encontrada.");
+    if (c.confirmSlot !== slot) {
+      throw new ConflictException("Ese envío ya pasó o la campaña cambió de horario.");
+    }
+    const started = slot.startsWith("once:") ? c.status !== "programada" : c.lastRunSlot === slot;
+    if (started) {
+      throw new ConflictException(
+        decision === "skip"
+          ? "Ese envío ya empezó. Usa «Pausar» en Campañas para detenerlo."
+          : "Ese envío ya empezó.",
+      );
+    }
+    const state = decision === "confirm" ? "confirmed" : "skipped";
+    const data: Prisma.CampaignUpdateManyMutationInput = { confirmState: state };
+    if (decision === "skip") {
+      if (slot.startsWith("once:")) data.status = "pausada";
+      else data.lastRunSlot = slot; // this time is taken: the runner skips it
+    }
+    const { count } = await this.prisma.campaign.updateMany({
+      where: {
+        id: campaignId,
+        confirmSlot: slot,
+        ...(slot.startsWith("once:")
+          ? { status: "programada" }
+          : { OR: [{ lastRunSlot: null }, { lastRunSlot: { not: slot } }] }),
+      },
+      data,
+    });
+    if (count !== 1) throw new ConflictException("Ese envío ya empezó.");
+    await this.notifications.answerCampaignNotice(workspaceSlug, campaignId, slot, state, by);
+    await this.audit.record(workspaceSlug, by, decision === "confirm" ? "campaign.send_confirmed" : "campaign.send_skipped", campaignId);
+    return { state };
   }
 
   /** Each brand's schedule zone (its saved zone, else the default for schedules). */
@@ -962,9 +1160,13 @@ export class CampaignRunner implements OnModuleInit, OnModuleDestroy {
         });
         return { ok };
       };
+      const lineKey = ch === "tg" ? `tg:${group.tgLine ?? 1}` : `wa:${group.waLine ?? 1}`;
       /** One message (text, or image with caption) to this group. */
       const deliver = async (body: string, attachment: MediaAttachment | null) => {
         let note: string | null = null;
+        // Anti-ban across campaigns: one message at a time per number/account.
+        const wait = reserveAccountTurn(`${workspaceSlug}:${lineKey}`, this.pacing.minMs);
+        if (wait > 0) await sleep(wait);
         const label = provider === "telegram" ? "Telegram" : "WhatsApp";
         const res = await this.withRetry(async () => {
           if (!attachment)
@@ -986,7 +1188,6 @@ export class CampaignRunner implements OnModuleInit, OnModuleDestroy {
         });
         return { id: res.id, note };
       };
-      const lineKey = ch === "tg" ? `tg:${group.tgLine ?? 1}` : `wa:${group.waLine ?? 1}`;
       if (stalled.has(lineKey)) {
         const who = ch === "tg" ? "La cuenta de Telegram" : "El número de WhatsApp";
         results.push(
@@ -1164,13 +1365,32 @@ export class CampaignRunner implements OnModuleInit, OnModuleDestroy {
         const f = explainError(first?.error);
         reason = ` ${first?.groupName ? `En «${first.groupName}»: ` : ""}${f.title} ${f.hint}`;
       }
+      // Every place it went out, so the team sees each success.
+      // A failed lookup must not cost the notice itself.
+      let okRows: { groupName: string | null; target: string | null }[] = [];
+      if (ok) {
+        try {
+          okRows = await this.prisma.sendLog.findMany({
+            where: { workspaceSlug, runKey, ok: true },
+            select: { groupName: true, target: true },
+            orderBy: { createdAt: "asc" },
+          });
+        } catch {
+          okRows = [];
+        }
+      }
+      const okNames = okRows.map((r) => r.groupName ?? TARGET_LABEL[r.target ?? ""] ?? r.target ?? "—");
+      const shown = okNames.slice(0, MAX_SUCCESS_NAMES);
+      const successNote = okNames.length
+        ? ` Salió en: ${shown.join(", ")}${okNames.length > shown.length ? ` y ${okNames.length - shown.length} más` : ""}.`
+        : "";
       await this.notifications.create(workspaceSlug, {
         type: failed === 0 ? "success" : ok === 0 ? "error" : "warning",
         title:
           failed === 0
-            ? `Campaña «${name}» enviada`
+            ? `Campaña «${name}» enviada: ${ok} de ${total} con éxito`
             : `Campaña «${name}»: ${ok} de ${total} enviados`,
-        meta: `${failed > 0 ? `${failed} no salieron.` : `${ok} de ${total} enviados.`}${reason}${skippedNote ? ` ${skippedNote}` : ""}`,
+        meta: `${failed > 0 ? `${failed} no salieron.` : `Todos salieron bien.`}${successNote}${reason}${skippedNote ? ` ${skippedNote}` : ""}`,
       });
     } catch (err) {
       this.logger.warn(`No se pudo avisar del resultado de la campaña: ${(err as Error).message}`);

@@ -12,7 +12,8 @@ import {
   UseGuards,
 } from "@nestjs/common";
 import { ApiBearerAuth, ApiTags } from "@nestjs/swagger";
-import type { Notification } from "@nv/domain";
+import type { Notification, NotificationAction } from "@nv/domain";
+import type { Prisma } from "@prisma/client";
 
 import { WorkspaceId } from "../../common/tenant/workspace.decorator";
 import { WorkspaceGuard } from "../../common/tenant/workspace.guard";
@@ -45,7 +46,13 @@ export class NotificationsService {
    */
   async create(
     workspaceId: string,
-    input: { type: Notification["type"]; title: string; meta?: string | null; recipient?: string | null },
+    input: {
+      type: Notification["type"];
+      title: string;
+      meta?: string | null;
+      recipient?: string | null;
+      actions?: NotificationAction | null;
+    },
   ): Promise<void> {
     if (!this.prisma.enabled) return;
     await this.prisma.notification.create({
@@ -55,8 +62,35 @@ export class NotificationsService {
         title: input.title,
         meta: input.meta ?? null,
         recipient: input.recipient ? input.recipient.toLowerCase() : null,
+        ...(input.actions ? { actions: input.actions as unknown as Prisma.InputJsonValue } : {}),
       },
     });
+  }
+
+  /**
+   * Mark the «Confirmar / No enviar» notice of a campaign send as answered,
+   * so its buttons turn into «Confirmado por …» / «Cancelado por …».
+   */
+  async answerCampaignNotice(
+    workspaceId: string,
+    campaignId: string,
+    slot: string,
+    state: NotificationAction["state"],
+    by?: string,
+  ): Promise<void> {
+    if (!this.prisma.enabled) return;
+    const rows = await this.prisma.notification.findMany({
+      where: { workspaceSlug: workspaceId, actions: { path: ["campaignId"], equals: campaignId } },
+      select: { id: true, actions: true },
+    });
+    for (const r of rows) {
+      const a = r.actions as unknown as NotificationAction | null;
+      if (!a || a.slot !== slot) continue;
+      await this.prisma.notification.update({
+        where: { id: r.id },
+        data: { actions: { ...a, state, ...(by ? { by } : {}) } as unknown as Prisma.InputJsonValue, read: true },
+      });
+    }
   }
 
   async list(workspaceId: string, viewer?: string): Promise<Notification[]> {

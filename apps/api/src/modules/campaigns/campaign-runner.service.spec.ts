@@ -442,8 +442,8 @@ describe("CampaignRunner.run", () => {
       "w1",
       expect.objectContaining({
         type: "success",
-        title: "Campaña «Promo» enviada",
-        meta: expect.stringContaining("2 de 2"),
+        title: "Campaña «Promo» enviada: 2 de 2 con éxito",
+        meta: expect.stringContaining("Todos salieron bien"),
       }),
     );
     expect(providers.sendMessage).toHaveBeenCalledTimes(2);

@@ -182,6 +182,11 @@ export interface Campaign {
   /** Groups waiting for their sending hours, and when they go. */
   pendingGroups?: number;
   pendingAt?: string | null;
+  /** The next scheduled send waiting on «Confirmar» / «No enviar». */
+  confirmSlot?: string | null;
+  confirmState?: "pending" | "confirmed" | "skipped" | null;
+  /** When that send happens. */
+  confirmFor?: string | null;
 }
 
 export interface Post {
@@ -764,6 +769,16 @@ export interface QuickReply {
   text: string;
 }
 
+/** «Confirmar» / «No enviar» on the notice before a scheduled send. */
+export interface NotificationAction {
+  type: "campaign-confirm";
+  campaignId: string;
+  slot: string;
+  state: "pending" | "confirmed" | "skipped";
+  /** Who answered, when answered. */
+  by?: string;
+}
+
 export interface Notification {
   id: string;
   type: "info" | "success" | "warning" | "error";
@@ -771,6 +786,8 @@ export interface Notification {
   meta?: string;
   /** True when addressed to the current member only (e.g. a task assignment). */
   personal?: boolean;
+  /** Buttons the notice offers (a campaign about to be sent). */
+  actions?: NotificationAction | null;
   read: boolean;
   createdAt: string;
 }

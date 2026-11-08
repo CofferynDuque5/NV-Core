@@ -168,6 +168,7 @@ export const emptyAdapters: Services = {
     run: () => delay(null),
     activity: (_id, since) => delay({ since, runs: [], inbox: { received: 0, replied: 0, newChats: 0 } }),
     pause: () => notAvailable(),
+    decideSend: () => notAvailable(),
     resume: () => notAvailable(),
     logs: () => delay([]),
     clearLogs: () => delay({ deleted: 0 }),

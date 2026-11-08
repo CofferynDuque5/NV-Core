@@ -483,6 +483,8 @@ export function useNotifications() {
   return useQuery({
     queryKey: [ws.id, "notifications"],
     queryFn: () => svc.notifications.list(ws.id),
+    // The notice before a scheduled send must show up without reloading.
+    refetchInterval: 30_000,
   });
 }
 

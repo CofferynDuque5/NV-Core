@@ -304,6 +304,8 @@ export function createHttpAdapters(opts: HttpAdapterOptions): Services {
       activity: (id, since) =>
         get<DayActivity>(`${ws(id)}/campaigns/activity?since=${encodeURIComponent(since)}`),
       pause: (id, cid) => post<Campaign>(`${ws(id)}/campaigns/${cid}/pause`, {}),
+      decideSend: (id, cid, slot, decision) =>
+        post<{ state: "confirmed" | "skipped" }>(`${ws(id)}/campaigns/${cid}/confirm-send`, { slot, decision }),
       resume: (id, cid) => post<Campaign>(`${ws(id)}/campaigns/${cid}/resume`, {}),
       logs: (id) => get<SendLogEntry[]>(`${ws(id)}/campaigns/logs`),
       clearLogs: (id) => del<{ deleted: number }>(`${ws(id)}/campaigns/logs`),

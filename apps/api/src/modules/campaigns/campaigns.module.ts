@@ -560,7 +560,13 @@ export class CampaignsService {
       where: { id, workspaceSlug: workspaceId },
     });
     if (!existing) throw new NotFoundException("Campaña no encontrada.");
-    await this.prisma.campaign.update({ where: { id }, data: { status } });
+    // Resuming after «No enviar» on a one-time send: it gets a fresh notice
+    // (and with «Solo con confirmación», a fresh confirmation).
+    const resumed = status !== "pausada" && existing.status === "pausada";
+    await this.prisma.campaign.update({
+      where: { id },
+      data: { status, ...(resumed ? { confirmSlot: null, confirmState: null, confirmFor: null } : {}) },
+    });
     const row = await this.prisma.campaign.findUnique({ where: { id }, ...WITH_COUNT });
     return mapCampaign(row!);
   }
@@ -812,6 +818,12 @@ export class CampaignsService {
   }
 }
 
+/** «Confirmar envío» / «No enviar» on the notice before a scheduled send. */
+export class DecideSendDto {
+  @IsString() @MinLength(1) slot!: string;
+  @IsIn(["confirm", "skip"]) decision!: "confirm" | "skip";
+}
+
 @ApiTags("campaigns")
 @ApiBearerAuth()
 @UseGuards(WorkspaceGuard)
@@ -970,6 +982,19 @@ export class CampaignsController {
     if (groups.length === 0) throw new BadRequestException("No hay grupos fallidos que reintentar en esta campaña.");
     await this.runner.enqueue(workspaceId, id, groups);
     return { retried: groups.length };
+  }
+
+  @Post(":id/confirm-send")
+  @Roles("Owner", "Admin", "Editor")
+  @UseGuards(RolesGuard)
+  @HttpCode(200)
+  confirmSend(
+    @WorkspaceId() workspaceId: string,
+    @Param("id") id: string,
+    @Body() dto: DecideSendDto,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.runner.decideSend(workspaceId, id, dto.slot, dto.decision, user.email);
   }
 
   @Post(":id/pause")

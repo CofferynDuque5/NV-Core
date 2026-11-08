@@ -1795,6 +1795,26 @@ export function useGenerateVariants() {
 }
 
 // ── Notifications ────────────────────────────────────────────────────────────
+/** «Confirmar envío» / «No enviar» on the notice before a scheduled send. */
+export function useDecideSend() {
+  const svc = useServices();
+  const ws = useWorkspace();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (v: { campaignId: string; slot: string; decision: "confirm" | "skip" }) =>
+      svc.campaigns.decideSend(ws.id, v.campaignId, v.slot, v.decision),
+    onSuccess: (r) => {
+      void qc.invalidateQueries({ queryKey: [ws.id, "notifications"] });
+      void qc.invalidateQueries({ queryKey: [ws.id, "campaigns"] });
+      toast.success(r.state === "confirmed" ? "Envío confirmado" : "Este envío no saldrá");
+    },
+    onError: (err) => {
+      void qc.invalidateQueries({ queryKey: [ws.id, "notifications"] });
+      toast.error(errText(err));
+    },
+  });
+}
+
 export function useMarkNotificationsRead() {
   const svc = useServices();
   const ws = useWorkspace();

@@ -9,9 +9,20 @@ export interface SendHours {
   sendUntil?: string | null;
 }
 
+/**
+ * Notice before each scheduled send: «off» none; «notify» a notice with
+ * «Confirmar» / «No enviar» that sends anyway if nobody answers; «require»
+ * only sends once someone presses «Confirmar».
+ */
+export const SEND_CONFIRM_MODES = ["off", "notify", "require"] as const;
+export type SendConfirmMode = (typeof SEND_CONFIRM_MODES)[number];
+
 export interface SendSettings extends SendHours {
   /** Default most campaign messages per group per day; null = no limit. */
   groupMaxPerDay?: number | null;
+  sendConfirm?: SendConfirmMode;
+  /** Minutes before the send the notice arrives (5–120). */
+  sendConfirmLeadMin?: number;
 }
 
 const HHMM = /^([01]\d|2[0-3]):([0-5]\d)$/;

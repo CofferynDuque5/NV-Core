@@ -7,6 +7,7 @@ import { useNotifications } from "@/hooks/use-domain-data";
 import { useMarkNotificationsRead } from "@/hooks/use-domain-mutations";
 import { EmptyState } from "@/components/common/empty-state";
 import { ListSkeleton } from "@/components/common/skeletons";
+import { SendConfirmButtons } from "./send-confirm-buttons";
 import { Sheet, SheetBody, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 
 const TYPE_ICON: Record<Notification["type"], { icon: typeof Info; cls: string }> = {
@@ -92,6 +93,11 @@ export function NotificationsPanel() {
                         {n.personal ? <span className="ml-1.5 text-[10px] uppercase text-brand">para ti</span> : null}
                       </div>
                       {n.meta ? <div className="break-words text-xs text-ink-muted">{simplifyNotice(n.meta)}</div> : null}
+                      {n.actions?.type === "campaign-confirm" ? (
+                        <div className="mt-2">
+                          <SendConfirmButtons action={n.actions} />
+                        </div>
+                      ) : null}
                       <div className="mt-1 text-[11px] text-ink-faint">{ago(n.createdAt)}</div>
                     </div>
                     {!n.read ? <span className="mt-1.5 size-2 shrink-0 rounded-full bg-brand" aria-label="Sin leer" /> : null}

@@ -27,6 +27,7 @@ import {
 } from "@/lib/campaigns";
 import { useUpdateCampaign } from "@/hooks/use-domain-mutations";
 import { Badge } from "@/components/ui/badge";
+import { SendConfirmButtons } from "@/components/shell/send-confirm-buttons";
 import { Input } from "@/components/ui/input";
 import {
   DropdownMenu,
@@ -305,6 +306,25 @@ export function CampaignRow({
             </span>
           ) : null}
         </div>
+        {c.confirmState && c.confirmSlot && c.confirmFor && new Date(c.confirmFor).getTime() > Date.now() - 30 * 60_000 ? (
+          <div className="mt-2 flex flex-wrap items-center gap-2" data-testid="campaign-confirm">
+            <span className={c.confirmState === "pending" ? "text-state-warning text-xs" : "text-ink-muted text-xs"}>
+              {/* Daily/weekly slots carry the brand's own clock («2026-11-08T15:54»). */}
+              Sale a las{" "}
+              {/T(\d{2}:\d{2})$/.exec(c.confirmSlot)?.[1] ??
+                new Date(c.confirmFor).toLocaleTimeString("es", { hour: "2-digit", minute: "2-digit" })}
+              {c.confirmState === "pending" ? " · esperando tu respuesta" : ""}
+            </span>
+            <SendConfirmButtons
+              action={{
+                type: "campaign-confirm",
+                campaignId: c.id,
+                slot: c.confirmSlot,
+                state: c.confirmState as "pending" | "confirmed" | "skipped",
+              }}
+            />
+          </div>
+        ) : null}
         {sending ? (
           <div className="bg-line mt-2 h-1 w-full max-w-xs overflow-hidden rounded-full">
             <div

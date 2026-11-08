@@ -21,11 +21,13 @@ import {
   CHANNEL_IDS,
   GROUP_CATEGORY_IDS,
   GROUP_COUNTRY_IDS,
+  SEND_CONFIRM_MODES,
   analyzeGroupRules,
   groupPostingProblems,
   type ChannelId,
   type Group,
   type GroupRulesCheck,
+  type SendConfirmMode,
   type SendSettings,
 } from "@nv/domain";
 import { IsArray, IsBoolean, IsIn, IsInt, IsOptional, IsString, Matches, Max, Min, MinLength, ValidateIf } from "class-validator";
@@ -108,6 +110,8 @@ export class SendSettingsDto {
   @IsOptional() @ValidateIf((_o, v) => v !== null) @Matches(HHMM, { message: "La hora debe ser HH:MM." }) sendFrom?: string | null;
   @IsOptional() @ValidateIf((_o, v) => v !== null) @Matches(HHMM, { message: "La hora debe ser HH:MM." }) sendUntil?: string | null;
   @IsOptional() @ValidateIf((_o, v) => v !== null) @IsInt() @Min(1) @Max(50) groupMaxPerDay?: number | null;
+  @IsOptional() @IsIn([...SEND_CONFIRM_MODES]) sendConfirm?: SendConfirmMode;
+  @IsOptional() @IsInt() @Min(5) @Max(120) sendConfirmLeadMin?: number;
 }
 
 /** Both ends of a window, or neither. */
@@ -198,12 +202,19 @@ export class GroupsService {
 
   /** Brand sending hours for campaigns and default daily limit per group. */
   async sendSettings(workspaceId: string): Promise<SendSettings> {
-    if (!this.prisma.enabled) return { sendFrom: null, sendUntil: null, groupMaxPerDay: null };
+    if (!this.prisma.enabled)
+      return { sendFrom: null, sendUntil: null, groupMaxPerDay: null, sendConfirm: "notify", sendConfirmLeadMin: 15 };
     const row = await this.prisma.workspaceSettings.findUnique({
       where: { workspaceSlug: workspaceId },
-      select: { sendFrom: true, sendUntil: true, groupMaxPerDay: true },
+      select: { sendFrom: true, sendUntil: true, groupMaxPerDay: true, sendConfirm: true, sendConfirmLeadMin: true },
     });
-    return { sendFrom: row?.sendFrom ?? null, sendUntil: row?.sendUntil ?? null, groupMaxPerDay: row?.groupMaxPerDay ?? null };
+    return {
+      sendFrom: row?.sendFrom ?? null,
+      sendUntil: row?.sendUntil ?? null,
+      groupMaxPerDay: row?.groupMaxPerDay ?? null,
+      sendConfirm: (row?.sendConfirm as SendConfirmMode | undefined) ?? "notify",
+      sendConfirmLeadMin: row?.sendConfirmLeadMin ?? 15,
+    };
   }
 
   async saveSendSettings(workspaceId: string, actor: string, dto: SendSettingsDto): Promise<SendSettings> {
@@ -211,6 +222,8 @@ export class GroupsService {
       sendFrom: dto.sendFrom || null,
       sendUntil: dto.sendUntil || null,
       groupMaxPerDay: dto.groupMaxPerDay ?? null,
+      ...(dto.sendConfirm ? { sendConfirm: dto.sendConfirm } : {}),
+      ...(dto.sendConfirmLeadMin ? { sendConfirmLeadMin: dto.sendConfirmLeadMin } : {}),
     };
     pairHours(data.sendFrom, data.sendUntil);
     await this.db().workspaceSettings.upsert({
@@ -219,7 +232,7 @@ export class GroupsService {
       update: data,
     });
     await this.audit.record(workspaceId, actor, "groups.send_settings", `${data.sendFrom ?? "-"}-${data.sendUntil ?? "-"} max ${data.groupMaxPerDay ?? "-"}`);
-    return data;
+    return this.sendSettings(workspaceId);
   }
 
   async remove(workspaceId: string, actor: string, id: string): Promise<void> {

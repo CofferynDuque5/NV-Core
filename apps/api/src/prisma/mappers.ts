@@ -244,6 +244,9 @@ export const mapCampaign = (
   batchPauseMin: c.batchPauseMin ?? null,
   pendingGroups: c.pendingGroups?.length ?? 0,
   pendingAt: iso(c.pendingAt) ?? null,
+  confirmSlot: c.confirmSlot ?? null,
+  confirmState: (c.confirmState as Campaign["confirmState"]) ?? null,
+  confirmFor: iso(c.confirmFor) ?? null,
 });
 
 export const mapPost = (p: PPost & { campaign?: { name: string } | null }): Post => ({
@@ -368,6 +371,7 @@ export const mapNotification = (n: PNotification): Notification => ({
   title: n.title,
   meta: n.meta ?? undefined,
   ...(n.recipient ? { personal: true } : {}),
+  ...(n.actions ? { actions: n.actions as unknown as Notification["actions"] } : {}),
   read: n.read,
   createdAt: n.createdAt.toISOString(),
 });

@@ -284,6 +284,13 @@ export interface CampaignService {
   remove(workspaceId: string, id: string): Promise<void>;
   run(workspaceId: string, id: string): Promise<Campaign | null>;
   pause(workspaceId: string, id: string): Promise<Campaign>;
+  /** «Confirmar envío» / «No enviar» on the notice before a scheduled send. */
+  decideSend(
+    workspaceId: string,
+    id: string,
+    slot: string,
+    decision: "confirm" | "skip",
+  ): Promise<{ state: "confirmed" | "skipped" }>;
   resume(workspaceId: string, id: string): Promise<Campaign>;
   logs(workspaceId: string): Promise<SendLogEntry[]>;
   /** What happened since `since` (start of the user's day). */

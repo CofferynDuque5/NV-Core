@@ -48,7 +48,7 @@ test("horario de envío de la marca, horario y máximo por grupo, y envío por l
   await page.getByRole("button", { name: "Guardar" }).click();
   await expect(page.getByRole("dialog")).toHaveCount(0);
   const settings = await page.request.get(`${API}/workspaces/${WS}/groups/send-settings`, { headers: auth });
-  expect(await settings.json()).toEqual({ sendFrom: "08:00", sendUntil: "21:00", groupMaxPerDay: 2 });
+  expect(await settings.json()).toMatchObject({ sendFrom: "08:00", sendUntil: "21:00", groupMaxPerDay: 2 });
 
   // 2. One group with its own hours (late night) and its own daily maximum.
   const row = page.getByTestId("group-row").filter({ hasText: "Clientes VIP" });

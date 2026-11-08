@@ -22,6 +22,7 @@ import { useAccess } from "@/hooks/use-domain-data";
 import { PlanLock, PlanUpgrade, TrialBanner } from "@/components/access/plan-access";
 import { usePlanLocks } from "@/hooks/use-plan-locks";
 import { DemoBanner } from "@/components/access/demo-banner";
+import { SendConfirmAlerts } from "./send-confirm-alerts";
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const [switcherOpen, setSwitcherOpen] = React.useState(false);
@@ -146,6 +147,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         {/* Global overlays */}
         <WorkspaceSwitcher open={switcherOpen} onOpenChange={setSwitcherOpen} />
         <NotificationsPanel />
+        <SendConfirmAlerts />
         <ComposeWizard />
         <EntityDrawer />
         <FeedbackDialog />
