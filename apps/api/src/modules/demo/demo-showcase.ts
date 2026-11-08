@@ -42,21 +42,21 @@ SELECT 'demo_sg'||g,$1,
 FROM generate_series(1,12) g`,
   `INSERT INTO "Campaign"(id,"workspaceSlug",name,status,channels,progress,"nextRunAt",accent,message,"scheduleType","scheduleTimes","scheduleDays",prices,category,"lastRunAt","createdAt")
 VALUES
-('demo_scp1',$1,'Promo pantallas de noviembre','activa',ARRAY['wa','ig']::"ChannelId"[],68,now()+interval '3 hours','#5F86F2','🔥 *Pantalla de streaming* desde {{precio}} al mes. Activación inmediata. ¡Escríbeme!','daily',ARRAY['09:00','15:00','20:00'],ARRAY[]::int[],'{"USD":4,"VES":160,"COP":16000}','streaming',now()-interval '5 hours',now()-interval '12 days'),
-('demo_scp2',$1,'Combo series y películas','programada',ARRAY['wa']::"ChannelId"[],0,now()+interval '1 day','#8C7BEF','🎬 *Combo series + películas* por {{precio}}. Solo esta semana.','weekly',ARRAY['10:00'],ARRAY[1,3,5],'{"USD":7}','streaming',NULL,now()-interval '3 days'),
-('demo_scp3',$1,'Música sin anuncios','completada',ARRAY['wa','tg']::"ChannelId"[],100,NULL,'#22C55E','🎧 *Música sin anuncios* por {{precio}} al mes.','once',ARRAY[]::text[],ARRAY[]::int[],'{"USD":3}','streaming',now()-interval '6 days',now()-interval '20 days'),
-('demo_scp4',$1,'Black Friday streaming','pausada',ARRAY['wa','fb','ig']::"ChannelId"[],35,NULL,'#F59E0B','🖤 Black Friday: 3 meses al precio de 2.','daily',ARRAY['12:00'],ARRAY[]::int[],'{"USD":10}','promociones',now()-interval '2 days',now()-interval '8 days')`,
+('demo_scp1',$1,'Promo pantallas de noviembre','activa',ARRAY['wa','ig']::"ChannelId"[],68,now()+interval '3 hours','#5F86F2','🔥 *Pantalla de streaming* desde {{precio}} al mes. Activación inmediata. ¡Escríbeme!','daily',ARRAY['09:00','15:00','20:00'],ARRAY[]::int[],'{"USD":"4","VES":"160","COP":"16000"}','streaming',now()-interval '5 hours',now()-interval '12 days'),
+('demo_scp2',$1,'Combo series y películas','programada',ARRAY['wa']::"ChannelId"[],0,now()+interval '1 day','#8C7BEF','🎬 *Combo series + películas* por {{precio}}. Solo esta semana.','weekly',ARRAY['10:00'],ARRAY[1,3,5],'{"USD":"7"}','streaming',NULL,now()-interval '3 days'),
+('demo_scp3',$1,'Música sin anuncios','completada',ARRAY['wa','tg']::"ChannelId"[],100,NULL,'#22C55E','🎧 *Música sin anuncios* por {{precio}} al mes.','once',ARRAY[]::text[],ARRAY[]::int[],'{"USD":"3"}','streaming',now()-interval '6 days',now()-interval '20 days'),
+('demo_scp4',$1,'Black Friday streaming','pausada',ARRAY['wa','fb','ig']::"ChannelId"[],35,NULL,'#F59E0B','🖤 Black Friday: 3 meses al precio de 2.','daily',ARRAY['12:00'],ARRAY[]::int[],'{"USD":"10"}','promociones',now()-interval '2 days',now()-interval '8 days')`,
   `INSERT INTO "CampaignTarget"(id,"campaignId","groupId") SELECT 'demo_sct'||c||'_'||g,'demo_scp'||c,'demo_sg'||g FROM generate_series(1,4) c, generate_series(1,12) g WHERE (g+c)%3<>0`,
   `INSERT INTO "SendLog"(id,"workspaceSlug","campaignId","campaignName","groupId","groupName",target,format,preview,ok,error,"runKey","createdAt")
 SELECT 'demo_ssl'||d||'_'||g,$1,'demo_scp1','Promo pantallas de noviembre','demo_sg'||g,(SELECT name FROM "Group" WHERE id='demo_sg'||g),'wa','text','🔥 Pantalla de streaming…', NOT (g=4 AND d%3=0), CASE WHEN g=4 AND d%3=0 THEN 'El grupo solo permite mensajes de administradores' END,'demo_run'||d, now()-(d||' days')::interval-(g*3||' minutes')::interval
 FROM generate_series(0,6) d, generate_series(1,12) g WHERE (g+1)%3<>0`,
   `INSERT INTO "Product"(id,"workspaceSlug",name,description,category,prices,sku,stock,active,"updatedAt")
-VALUES ('demo_sp1',$1,'Pantalla de streaming · 1 mes','Perfil propio por 30 días, con garantía.','Streaming','{"USD":4,"VES":160,"COP":16000}','PAN-1',25,true,now()),
-('demo_sp2',$1,'Plan series premium','Series y estrenos por 30 días.','Streaming','{"USD":3.5,"VES":140}','SER-1',18,true,now()),
-('demo_sp3',$1,'Plan películas · 1 mes','Películas y clásicos por 30 días.','Streaming','{"USD":3,"VES":120}','PEL-1',12,true,now()),
-('demo_sp4',$1,'Música sin anuncios','Cuenta individual por 30 días.','Música','{"USD":3,"VES":120,"PEN":11}','MUS-1',30,true,now()),
-('demo_sp5',$1,'Videos sin anuncios','Videos y música sin anuncios por 30 días.','Streaming','{"USD":3.5}','VID-1',9,true,now()),
-('demo_sp6',$1,'Combo familia','Tres pantallas con un solo pago.','Combos','{"USD":9.5,"VES":380}','CMB-F',6,true,now())`,
+VALUES ('demo_sp1',$1,'Pantalla de streaming · 1 mes','Perfil propio por 30 días, con garantía.','Streaming','{"USD":"4","VES":"160","COP":"16000"}','PAN-1',25,true,now()),
+('demo_sp2',$1,'Plan series premium','Series y estrenos por 30 días.','Streaming','{"USD":"3.5","VES":"140"}','SER-1',18,true,now()),
+('demo_sp3',$1,'Plan películas · 1 mes','Películas y clásicos por 30 días.','Streaming','{"USD":"3","VES":"120"}','PEL-1',12,true,now()),
+('demo_sp4',$1,'Música sin anuncios','Cuenta individual por 30 días.','Música','{"USD":"3","VES":"120","PEN":"11"}','MUS-1',30,true,now()),
+('demo_sp5',$1,'Videos sin anuncios','Videos y música sin anuncios por 30 días.','Streaming','{"USD":"3.5"}','VID-1',9,true,now()),
+('demo_sp6',$1,'Combo familia','Tres pantallas con un solo pago.','Combos','{"USD":"9.5","VES":"380"}','CMB-F',6,true,now())`,
   `INSERT INTO "PaymentMethod"(id,"workspaceSlug",kind,label,currency,details,instructions)
 VALUES ('demo_spm1',$1,'pago_movil','Pago Móvil Banco de Venezuela','VES','{"bank":"Banco de Venezuela","phone":"0412-0000000","doc":"V-00000000"}','Envía la captura con la referencia.'),
 ('demo_spm2',$1,'binance_pay','Binance Pay','USDT','{"payId":"000000000"}',NULL),

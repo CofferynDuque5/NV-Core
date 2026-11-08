@@ -120,6 +120,7 @@ export default function InboxPage() {
   const [assignee, setAssignee] = React.useState("");
   const [waiting, setWaiting] = React.useState(false);
   const me = useAuthStore((s) => s.user?.email) ?? "";
+  const demo = useAuthStore((s) => s.demo);
   // Composer mode: reply to the contact, or an internal note only the team sees.
   const [noteMode, setNoteMode] = React.useState(false);
   const [repliesOpen, setRepliesOpen] = React.useState(false);
@@ -196,10 +197,10 @@ export default function InboxPage() {
     if (el && atBottom.current) el.scrollTop = el.scrollHeight;
   }, [lastId, selected]);
 
-  // Opening a chat marks it as read.
+  // Opening a chat marks it as read (not in the read-only demo: it would only show an error).
   const openChat = (c: Conversation) => {
     setSelected(c.id);
-    if (c.unread > 0) updateConv.mutate({ id: c.id, input: { unread: false } });
+    if (c.unread > 0 && !demo) updateConv.mutate({ id: c.id, input: { unread: false } });
   };
 
   async function removeChat(c: Conversation) {

@@ -153,7 +153,7 @@ const WHOLE_CURRENCIES = new Set(["COP", "CLP", "PYG"]);
  * "1,250.00". null when it isn't a number (or is negative).
  */
 export function parseAmount(raw: string): number | null {
-  const a = raw.replace(/\s+/g, "");
+  const a = String(raw ?? "").replace(/\s+/g, "");
   if (!a || a.startsWith("-")) return null;
   let n: number;
   if (/^\d+$/.test(a)) n = Number(a);
@@ -167,13 +167,16 @@ export function parseAmount(raw: string): number | null {
 
 /** A price field is valid when empty or a number ≥ 0. */
 export function isValidPrice(raw: string | null | undefined): boolean {
-  return !raw?.trim() || parseAmount(raw) !== null;
+  // Old rows can hold numbers instead of text: treat them the same.
+  const text = raw == null ? "" : String(raw);
+  return !text.trim() || parseAmount(text) !== null;
 }
 
 /** "6.50", "12.000": the amount written the same way every time (text that isn't a number stays as typed). */
 export function formatAmount(raw: string, currency: string): string {
-  const n = parseAmount(raw);
-  if (n === null) return raw.trim();
+  const text = String(raw ?? "");
+  const n = parseAmount(text);
+  if (n === null) return text.trim();
   if (WHOLE_CURRENCIES.has(currency)) return Math.round(n).toLocaleString("de-DE");
   const cents = !Number.isInteger(n);
   return n.toLocaleString("en-US", { minimumFractionDigits: cents ? 2 : 0, maximumFractionDigits: 2 });
@@ -297,7 +300,7 @@ export function groupPostingProblems(g: GroupPostingInfo, c: CampaignPostingInfo
     const { country } = detectGroupCountry(g);
     const currency = currencyForCountry(country);
     if (!currency) out.push(`${why} y no sabemos de qué país es: indica el país del grupo.`);
-    else if (!c.prices?.[currency]?.trim()) out.push(`${why} y la campaña no tiene precio en ${CURRENCY_LABEL[currency] ?? currency}.`);
+    else if (!String(c.prices?.[currency] ?? "").trim()) out.push(`${why} y la campaña no tiene precio en ${CURRENCY_LABEL[currency] ?? currency}.`);
   }
   return out;
 }
@@ -305,7 +308,7 @@ export function groupPostingProblems(g: GroupPostingInfo, c: CampaignPostingInfo
 /** {{precio}} for a group: the campaign price in the group's currency, or "". */
 export function priceForGroup(g: GroupPostingInfo, prices: Record<string, string> | null | undefined): string {
   const currency = currencyForCountry(detectGroupCountry(g).country);
-  const amount = currency ? prices?.[currency]?.trim() : "";
+  const amount = currency ? String(prices?.[currency] ?? "").trim() : "";
   return currency && amount ? formatPrice(amount, currency) : "";
 }
 

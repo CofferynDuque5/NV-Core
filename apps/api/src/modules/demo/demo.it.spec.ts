@@ -39,6 +39,14 @@ describe.skipIf(!url)("Demo pública contra PostgreSQL real", () => {
     ].join(" ");
     expect(names).not.toMatch(/netflix|spotify|disney|youtube|hbo/i);
 
+    // Prices are text, as the panel saves them (numbers broke the Tienda page).
+    for (const row of [
+      ...(await prisma.product.findMany({ where, select: { prices: true } })),
+      ...(await prisma.campaign.findMany({ where, select: { prices: true } })),
+    ]) {
+      for (const v of Object.values((row.prices as Record<string, unknown> | null) ?? {})) expect(typeof v).toBe("string");
+    }
+
     // Only the read-only visitor belongs to it.
     const members = await prisma.membership.findMany({
       where: { workspaceSlug: DEMO_SLUG },
