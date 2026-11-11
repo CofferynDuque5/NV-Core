@@ -85,6 +85,15 @@ export class WhatsappController {
     return this.service.sync(workspaceId);
   }
 
+  /** Ask WhatsApp for the contact list again, so chats show the names saved in the phone. */
+  @Post("refresh-names")
+  @Roles("Owner", "Admin", "Editor")
+  @UseGuards(RolesGuard)
+  @HttpCode(200)
+  refreshNames(@WorkspaceId() workspaceId: string) {
+    return this.service.refreshContactNames(workspaceId);
+  }
+
   // ── Extra numbers (lines). Line 1 is the main number above. ──────────────
   @Get("lines")
   lines(@WorkspaceId() workspaceId: string) {

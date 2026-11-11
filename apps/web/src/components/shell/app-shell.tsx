@@ -23,6 +23,7 @@ import { PlanLock, PlanUpgrade, TrialBanner } from "@/components/access/plan-acc
 import { usePlanLocks } from "@/hooks/use-plan-locks";
 import { DemoBanner } from "@/components/access/demo-banner";
 import { SendConfirmAlerts } from "./send-confirm-alerts";
+import { InboxAlerts } from "./inbox-alerts";
 import { useActivityPing } from "@/hooks/use-activity-ping";
 
 export function AppShell({ children }: { children: React.ReactNode }) {
@@ -152,6 +153,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         <WorkspaceSwitcher open={switcherOpen} onOpenChange={setSwitcherOpen} />
         <NotificationsPanel />
         <SendConfirmAlerts />
+        {isBackendConfigured() && authStatus === "authenticated" ? <InboxAlerts /> : null}
         <ComposeWizard />
         <EntityDrawer />
         <FeedbackDialog />

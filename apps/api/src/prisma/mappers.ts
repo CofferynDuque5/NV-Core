@@ -352,6 +352,7 @@ export const mapConversation = (c: PConversation, last?: PMessage | null): Conve
   assignee: c.assignee ?? undefined,
   labels: c.labels ?? [],
   resolved: c.resolved,
+  ...(c.savedName ? { savedName: true } : {}),
   // Open chat whose last message came from the contact: someone has to answer.
   ...(!c.resolved && last?.direction === "in" ? { waitingSince: last.createdAt.toISOString() } : {}),
 });

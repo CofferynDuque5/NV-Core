@@ -726,6 +726,8 @@ model Conversation {
   waLine        Int?
   /// Telegram account (line) the chat belongs to; replies go out from it.
   tgLine        Int?
+  /// Name the brand saved for this number in its own WhatsApp (phone address book); shown first.
+  savedName     String?
   createdAt     DateTime  @default(now())
   messages      Message[]
 
@@ -744,6 +746,9 @@ model Message {
   author         String?
   /// Platform message id (WhatsApp), so a message replayed by the session is stored once.
   externalId     String?
+  /// Photo, video, audio, voice note, sticker or document: {kind, mime, size, name?, seconds?, file?}.
+  /// `file` is the private stored name (served only to signed-in members of the brand).
+  media          Json?
   createdAt      DateTime     @default(now())
 
   @@unique([conversationId, externalId])
@@ -1214,4 +1219,27 @@ model Product {
   updatedAt     DateTime @updatedAt
 
   @@index([workspaceSlug])
+}
+
+/// Browser push subscription of a member: new chat messages reach the phone or
+/// computer even with the panel closed (Web Push, VAPID).
+model PushSubscription {
+  id            String   @id @default(cuid())
+  userId        String
+  /// Unique push-service URL the browser gave us.
+  endpoint      String   @unique
+  p256dh        String
+  auth          String
+  device        String?
+  createdAt     DateTime @default(now())
+  lastOkAt      DateTime?
+
+  @@index([userId])
+}
+
+/// Server-generated keys kept in the database (value encrypted at rest).
+model AppKey {
+  name      String   @id
+  value     String
+  createdAt DateTime @default(now())
 }

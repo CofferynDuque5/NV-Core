@@ -7,7 +7,7 @@ import { InboxService } from "./inbox.module";
 const url = process.env.IT_DATABASE_URL;
 describe.skipIf(!url)("Inbox: búsqueda y páginas contra PostgreSQL real", () => {
   const prisma = Object.assign(new PrismaClient({ datasourceUrl: url }), { enabled: true });
-  const inbox = new InboxService(prisma as never, {} as never, {} as never, {} as never, {} as never);
+  const inbox = new InboxService(prisma as never, {} as never, {} as never, {} as never, {} as never, {} as never, {} as never);
 
   async function seed(ws: string) {
     const t0 = Date.UTC(2026, 0, 1);

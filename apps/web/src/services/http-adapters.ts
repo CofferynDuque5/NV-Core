@@ -52,6 +52,7 @@ import type {
   MediaFolder,
   MediaUploadSignature,
   Message,
+  InboxPulse,
   Notification,
   OnboardingStatus,
   Post,
@@ -221,6 +222,7 @@ export function createHttpAdapters(opts: HttpAdapterOptions): Services {
       sync: (id) => post<WhatsappStatus>(`${ws(id)}/whatsapp/sync`, {}),
       relink: (id) => post<WhatsappStatus>(`${ws(id)}/whatsapp/relink`, {}),
       diagnose: (id) => post<{ lines: string[] }>(`${ws(id)}/whatsapp/diagnose`, {}),
+      refreshNames: (id) => post<{ lines: number }>(`${ws(id)}/whatsapp/refresh-names`, {}),
       lines: (id) => get<WhatsappStatus[]>(`${ws(id)}/whatsapp/lines`),
       addLine: (id, label) => post<WhatsappStatus>(`${ws(id)}/whatsapp/lines`, { label }),
       renameLine: (id, line, label) => patch<WhatsappStatus>(`${ws(id)}/whatsapp/lines/${line}`, { label }),
@@ -274,6 +276,13 @@ export function createHttpAdapters(opts: HttpAdapterOptions): Services {
     brandLinks: {
       get: (id) => get<BrandLinks>(`${ws(id)}/brand-links`),
       set: (id, input) => put<BrandLinks>(`${ws(id)}/brand-links`, input),
+    },
+    push: {
+      key: () => get<{ publicKey: string }>(`/push/key`),
+      subscribe: (input) => post<{ ok: true }>(`/push/subscribe`, input),
+      unsubscribe: (endpoint) => del<{ ok: true }>(`/push/subscribe`, { endpoint }),
+      devices: () => get<{ devices: { device: string | null; createdAt: string }[] }>(`/push/devices`),
+      test: () => post<{ sent: number }>(`/push/test`, {}),
     },
     products: {
       list: (id) => get<Product[]>(`${ws(id)}/products`),
@@ -449,6 +458,14 @@ export function createHttpAdapters(opts: HttpAdapterOptions): Services {
       quickReplies: (id) => get<QuickReply[]>(`${ws(id)}/inbox/quick-replies`),
       saveQuickReplies: (id, items) => put<QuickReply[]>(`${ws(id)}/inbox/quick-replies`, { items }),
       conversationContact: (id, cid) => get<{ contact: Contact | null }>(`${ws(id)}/inbox/conversations/${cid}/contact`),
+      sendMedia: (id, cid, input) => {
+        const form = new FormData();
+        if (input.caption) form.set("caption", input.caption);
+        if (input.voice) form.set("as", "voice");
+        form.set("file", input.file, input.fileName);
+        return post<Message>(`${ws(id)}/inbox/conversations/${cid}/media`, form);
+      },
+      pulse: (id) => get<InboxPulse>(`${ws(id)}/inbox/pulse`),
     },
     media: {
       folders: (id) => get<MediaFolder[]>(`${ws(id)}/media/folders`),

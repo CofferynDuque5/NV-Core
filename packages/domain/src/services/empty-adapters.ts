@@ -91,6 +91,7 @@ export const emptyAdapters: Services = {
     sync: () => notAvailable(),
     relink: () => notAvailable(),
     diagnose: () => notAvailable(),
+    refreshNames: () => notAvailable(),
     lines: () => delay([]),
     addLine: () => notAvailable(),
     renameLine: () => notAvailable(),
@@ -275,6 +276,15 @@ export const emptyAdapters: Services = {
     quickReplies: () => delay([]),
     saveQuickReplies: () => notAvailable(),
     conversationContact: () => delay({ contact: null }),
+    sendMedia: () => notAvailable(),
+    pulse: () => delay({ unread: 0, latest: null }),
+  },
+  push: {
+    key: () => notAvailable(),
+    subscribe: () => notAvailable(),
+    unsubscribe: () => delay({ ok: true as const }),
+    devices: () => delay({ devices: [] }),
+    test: () => notAvailable(),
   },
   media: {
     folders: () => delay([]),

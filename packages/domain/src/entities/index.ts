@@ -749,6 +749,35 @@ export interface Conversation {
   waitingSince?: string;
   /** Minutes from the contact's first message to the team's first answer (null = not answered yet). */
   firstReplyMins?: number | null;
+  /** True when contactName is the name saved in the brand's own WhatsApp. */
+  savedName?: boolean;
+}
+
+/** What the panel polls to ring when a chat message arrives. */
+export interface InboxPulse {
+  /** Unread messages in all chats of the brand. */
+  unread: number;
+  /** Newest message a contact sent. */
+  latest: { id: string; conversationId: string; contactName: string; channel: ChannelId; text: string; at: string } | null;
+}
+
+/** Kind of attachment in a chat message. */
+export type ChatMediaKind = "image" | "video" | "audio" | "voice" | "sticker" | "document";
+
+/** Attachment of a chat message (photo, video, audio, voice note, sticker or document). */
+export interface ChatMedia {
+  kind: ChatMediaKind;
+  mime: string;
+  /** Bytes. */
+  size: number;
+  /** File name (documents). */
+  name?: string;
+  /** Length of audio/video in seconds. */
+  seconds?: number;
+  /** Private link valid for a few hours, only for members of the brand; absent while not downloaded. */
+  url?: string;
+  /** Why the file is not available (too big, expired on WhatsApp…). */
+  unavailable?: string;
 }
 
 export interface Message {
@@ -760,6 +789,8 @@ export interface Message {
   at: string;
   /** Team member who wrote the note (email). */
   author?: string;
+  /** Photo, audio, video or document attached to the message. */
+  media?: ChatMedia;
 }
 
 /** Inbox saved reply. {{nombre}}, {{nombre_completo}}, {{saludo}}, {{fecha}} and {{nombre_marca}} are filled in the chat. */

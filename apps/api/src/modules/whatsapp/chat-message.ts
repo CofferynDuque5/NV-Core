@@ -1,3 +1,5 @@
+import type { ChatMediaKind } from "@nv/domain";
+
 import { numberFromJid } from "./whatsapp.types";
 
 /**
@@ -16,6 +18,48 @@ export interface ChatMessage {
   at: Date;
   /** WhatsApp message id, to store each message once. */
   externalId: string | null;
+  /** Photo, audio, video, sticker or document in the message. */
+  media?: MediaInfo | null;
+}
+
+/** What the Inbox needs to know about an attachment before downloading it. */
+export interface MediaInfo {
+  kind: ChatMediaKind;
+  mime: string;
+  size: number;
+  name?: string;
+  seconds?: number;
+}
+
+/** Long/number/string → number (0 when unknown). */
+function num(v: unknown): number {
+  if (typeof v === "number") return Number.isFinite(v) ? v : 0;
+  if (typeof v === "string") return Number(v) || 0;
+  if (v && typeof (v as { toNumber?: () => number }).toNumber === "function") return (v as { toNumber: () => number }).toNumber();
+  if (v && typeof (v as { low?: number }).low === "number") return (v as { low: number }).low >>> 0;
+  return 0;
+}
+
+/**
+ * The attachment of a message (photo, video, audio, voice note, sticker,
+ * document), or null for text and everything else. Pure.
+ */
+export function mediaInfo(message: any): MediaInfo | null {
+  const m = inner(message);
+  if (!m) return null;
+  const pick = (kind: ChatMediaKind, x: any, fallbackMime: string): MediaInfo => {
+    const info: MediaInfo = { kind, mime: String(x?.mimetype || fallbackMime).split(";")[0]!.trim(), size: num(x?.fileLength) };
+    const seconds = num(x?.seconds);
+    if (seconds > 0) info.seconds = seconds;
+    if (typeof x?.fileName === "string" && x.fileName.trim()) info.name = x.fileName.trim().slice(0, 200);
+    return info;
+  };
+  if (m.imageMessage) return pick("image", m.imageMessage, "image/jpeg");
+  if (m.videoMessage) return pick("video", m.videoMessage, "video/mp4");
+  if (m.audioMessage) return pick(m.audioMessage.ptt ? "voice" : "audio", m.audioMessage, "audio/ogg");
+  if (m.stickerMessage) return pick("sticker", m.stickerMessage, "image/webp");
+  if (m.documentMessage) return pick("document", m.documentMessage, "application/octet-stream");
+  return null;
 }
 
 /** Most recent messages kept per chat when the history arrives after linking. */
@@ -116,6 +160,7 @@ export function toChatMessage(m: any, lidToPn?: Map<string, string>, now = new D
     direction: fromMe ? "out" : "in",
     at: messageDate(m?.messageTimestamp, now),
     externalId: typeof m?.key?.id === "string" ? m.key.id : null,
+    media: mediaInfo(m?.message),
   };
 }
 
@@ -135,6 +180,15 @@ export function historyMessages(rows: any[], lidToPn?: Map<string, string>, perC
     out.push(...list.slice(-perChat));
   }
   return out.sort((a, b) => a.at.getTime() - b.at.getTime());
+}
+
+/**
+ * Name the brand saved for this contact in its own phone (WhatsApp's address
+ * book sync), never the contact's own profile name. Null when not saved.
+ */
+export function savedContactName(c: any): string | null {
+  const v = c?.name;
+  return typeof v === "string" && v.trim() ? v.trim() : null;
 }
 
 /** Best name of a WhatsApp contact: as saved in the phone, else their own profile name. */

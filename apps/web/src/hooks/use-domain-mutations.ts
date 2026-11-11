@@ -79,7 +79,7 @@ import { useAuthStore } from "@/stores/auth-store";
  * create/update surface their error inside the dialog instead.
  */
 
-function errText(err: unknown): string {
+export function errText(err: unknown): string {
   return err instanceof Error ? err.message : "Ocurrió un error.";
 }
 
@@ -1196,6 +1196,22 @@ export function useSendMessage(conversationId: string | null) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (text: string) => svc.inbox.sendMessage(ws.id, conversationId as string, { text }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: [ws.id, "inbox", conversationId, "messages"] });
+      void qc.invalidateQueries({ queryKey: [ws.id, "inbox"] });
+    },
+    onError: (err) => toast.error(errText(err)),
+  });
+}
+
+/** Photo, video, document, audio or voice note to a WhatsApp chat. */
+export function useSendMedia(conversationId: string | null) {
+  const svc = useServices();
+  const ws = useWorkspace();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { file: Blob; fileName: string; caption?: string; voice?: boolean }) =>
+      svc.inbox.sendMedia(ws.id, conversationId as string, input),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: [ws.id, "inbox", conversationId, "messages"] });
       void qc.invalidateQueries({ queryKey: [ws.id, "inbox"] });

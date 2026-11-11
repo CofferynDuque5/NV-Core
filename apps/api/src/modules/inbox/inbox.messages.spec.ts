@@ -11,7 +11,7 @@ import type { PrismaService } from "../../prisma/prisma.service";
  */
 function makeService(findMany: ReturnType<typeof vi.fn>) {
   const prisma = { enabled: true, message: { findMany } };
-  return new InboxService(prisma as unknown as PrismaService, {} as never, {} as never, {} as never, {} as never);
+  return new InboxService(prisma as unknown as PrismaService, {} as never, {} as never, {} as never, {} as never, {} as never, {} as never);
 }
 
 const row = (id: string, createdAt: Date) => ({
@@ -48,7 +48,7 @@ describe("InboxService.messages (scale bound)", () => {
       {} as never,
       {} as never,
       {} as never,
-      {} as never,
+      {} as never, {} as never, {} as never,
     );
     expect(await service.messages("w1", "c1")).toEqual([]);
     expect(prisma.message.findMany).not.toHaveBeenCalled();

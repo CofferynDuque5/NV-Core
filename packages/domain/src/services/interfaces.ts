@@ -69,6 +69,7 @@ import type {
   MetaCheck,
   MetaConnectStatus,
   MetaPage,
+  InboxPulse,
 } from "../entities";
 import type { ChannelId, ContactStage, Role, WorkspaceKind } from "../enums";
 import type { PlanId, PlanLimits } from "../config/plans";
@@ -574,6 +575,10 @@ export interface InboxService {
   saveQuickReplies(workspaceId: string, items: QuickReply[]): Promise<QuickReply[]>;
   /** CRM contact whose phone matches the chat (null when there is none). */
   conversationContact(workspaceId: string, conversationId: string): Promise<{ contact: Contact | null }>;
+  /** Send a photo, video, document, audio or voice note to a WhatsApp chat. */
+  sendMedia(workspaceId: string, conversationId: string, input: { file: Blob; fileName: string; caption?: string; voice?: boolean }): Promise<Message>;
+  /** Unread total and newest incoming message (polled to ring). */
+  pulse(workspaceId: string): Promise<InboxPulse>;
   createConversation(workspaceId: string, input: CreateConversationInput): Promise<Conversation>;
   sendMessage(
     workspaceId: string,
@@ -1082,6 +1087,18 @@ export interface WhatsappService {
   lineAction(workspaceId: string, line: number, action: WhatsappLineAction): Promise<WhatsappStatus>;
   /** Unlink an extra number (its groups go; its chats stay). */
   removeLine(workspaceId: string, line: number): Promise<void>;
+  /** Ask WhatsApp for the contact list again (names as saved in the phone). */
+  refreshNames(workspaceId: string): Promise<{ lines: number }>;
+}
+
+/** Browser push notices (new chat messages with the panel closed). */
+export interface PushService {
+  /** Server key the browser needs to subscribe. */
+  key(): Promise<{ publicKey: string }>;
+  subscribe(input: { endpoint: string; keys: { p256dh: string; auth: string } }): Promise<{ ok: true }>;
+  unsubscribe(endpoint: string): Promise<{ ok: true }>;
+  devices(): Promise<{ devices: { device: string | null; createdAt: string }[] }>;
+  test(): Promise<{ sent: number }>;
 }
 
 export type WhatsappLineAction = "connect" | "relink" | "disconnect" | "sync";
@@ -1286,4 +1303,5 @@ export interface Services {
   sampleData: SampleDataService;
   brandLinks: BrandLinksService;
   products: ProductService;
+  push: PushService;
 }

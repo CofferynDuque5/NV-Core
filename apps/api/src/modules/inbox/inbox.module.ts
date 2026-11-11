@@ -21,10 +21,13 @@ import {
   Res,
   ServiceUnavailableException,
   UseGuards,
+  UseInterceptors,
+  UploadedFile,
 } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { ApiBearerAuth, ApiExcludeEndpoint, ApiPropertyOptional, ApiTags } from "@nestjs/swagger";
-import { SkipThrottle } from "@nestjs/throttler";
+import { SkipThrottle, Throttle } from "@nestjs/throttler";
+import { FileInterceptor } from "@nestjs/platform-express";
 import {
   CHANNEL_IDS,
   INBOX_UNASSIGNED,
@@ -33,6 +36,7 @@ import {
   type ConversationPage,
   type Contact,
   type Message,
+  type InboxPulse,
   type QuickReply,
 } from "@nv/domain";
 import { Transform, Type } from "class-transformer";
@@ -71,6 +75,25 @@ import { ProviderManager } from "../../providers/provider-manager.service";
 import { phoneKey } from "../consent/consent.service";
 import { isBareName, isSampleContact, phoneFromHandle } from "./inbox-contacts";
 import { ProvidersModule } from "../../providers/providers.module";
+import { CryptoService } from "../../common/crypto/crypto.service";
+import { WhatsappModule } from "../whatsapp/whatsapp.module";
+import { WhatsappService } from "../whatsapp/whatsapp.service";
+import {
+  CHAT_FILE_RE,
+  CHAT_MEDIA_MAX_BYTES,
+  CHAT_SEND_MAX_BYTES,
+  chatDir,
+  chatFileHeaders,
+  mediaLabel,
+  mediaToken,
+  publicChatMedia,
+  readMediaToken,
+  readStoredMedia,
+  saveChatFile,
+  sniffSendable,
+  type StoredChatMedia,
+} from "./chat-media";
+import { RemuxError, webmToOggOpus } from "./opus-remux";
 import { EventBus } from "../../core/events/event-bus.service";
 import {
   ECHO_WINDOW_MS,
@@ -182,7 +205,14 @@ export class CreateConversationDto {
 }
 
 export class SendMessageDto {
-  @IsString() @MinLength(1) text!: string;
+  @IsString() @MinLength(1) @MaxLength(4096) text!: string;
+}
+
+/** Fields that come with a file sent from the chat (multipart). */
+export class SendMediaDto {
+  @IsOptional() @IsString() @MaxLength(1024) caption?: string;
+  /** "voice" = a voice note recorded in the panel. */
+  @IsOptional() @IsIn(["file", "voice"]) as?: "file" | "voice";
 }
 
 export const MAX_QUICK_REPLIES = 50;
@@ -262,7 +292,12 @@ export class InboxService implements OnModuleInit {
     private readonly config: ConfigService<AppConfig, true>,
     private readonly registry: WorkspaceRegistry,
     private readonly events: EventBus,
+    private readonly whatsapp: WhatsappService,
+    private readonly crypto: CryptoService,
   ) {}
+
+  /** Downloads in progress, so two viewers of the same photo trigger one download. */
+  private readonly downloading = new Map<string, Promise<StoredChatMedia>>();
 
   private db() {
     if (!this.prisma.enabled) throw new ServiceUnavailableException("Base de datos no configurada.");
@@ -289,6 +324,10 @@ export class InboxService implements OnModuleInit {
         history: p.history,
         waLine: p.waLine,
         tgLine: p.tgLine,
+        savedName: p.savedName,
+        profileName: p.profileName,
+        media: p.media,
+        mediaRef: p.mediaRef,
       }).catch((err: unknown) => this.logger.warn(`Mensaje no guardado: ${(err as Error).message}`));
     });
     this.events.on("session.contact-names", (p) => {
@@ -335,7 +374,8 @@ export class InboxService implements OnModuleInit {
       msg.channel === "wa" && direction === "in"
         ? await this.ensureContact(slug, msg.contactHandle, fromContact ? msg.contactName : null, at)
         : null;
-    const bestName = fromContact ? msg.contactName : (contact?.name ?? null);
+    const saved = msg.channel === "wa" && msg.savedName?.trim() ? msg.savedName.trim() : null;
+    const bestName = saved ?? (fromContact ? msg.contactName : (contact?.name ?? null));
 
     let conversation = await this.prisma.conversation.findFirst({
       where: { workspaceSlug: slug, channel: msg.channel, contactHandle: msg.contactHandle },
@@ -349,6 +389,7 @@ export class InboxService implements OnModuleInit {
           contactHandle: msg.contactHandle,
           waLine: msg.waLine ?? null,
           tgLine: msg.tgLine ?? null,
+          savedName: saved,
         },
       });
     } else if (msg.tgLine && conversation.tgLine !== msg.tgLine && !msg.history) {
@@ -367,25 +408,49 @@ export class InboxService implements OnModuleInit {
       // The chat was created with the number: now the real name is known.
       conversation = await this.prisma.conversation.update({
         where: { id: conversation.id },
-        data: { contactName: bestName },
+        data: { contactName: bestName, ...(saved ? { savedName: saved } : {}) },
+      });
+    }
+    if (saved && conversation.savedName !== saved) {
+      // The name saved in the brand's phone always wins (also over a profile name shown before).
+      conversation = await this.prisma.conversation.update({
+        where: { id: conversation.id },
+        data: { contactName: saved, savedName: saved },
       });
     }
 
     if (await this.alreadyStored(conversation.id, direction, msg.text, at, msg.externalId)) return;
+    let stored: StoredChatMedia | null = null;
+    if (msg.media) {
+      stored = { kind: msg.media.kind, mime: msg.media.mime, size: msg.media.size };
+      if (msg.media.name) stored.name = msg.media.name;
+      if (msg.media.seconds) stored.seconds = msg.media.seconds;
+      if (msg.media.size > CHAT_MEDIA_MAX_BYTES) stored.unavailable = "Archivo muy grande: ábrelo en tu teléfono.";
+      else if (msg.mediaRef) stored.ref = this.crypto.encrypt(msg.mediaRef);
+    }
+    let created: { id: string };
     try {
-      await this.prisma.message.create({
+      created = await this.prisma.message.create({
         data: {
           conversationId: conversation.id,
           direction,
           text: msg.text,
           externalId: msg.externalId ?? null,
           createdAt: at,
+          ...(stored ? { media: stored as unknown as Prisma.InputJsonValue } : {}),
         },
+        select: { id: true },
       });
     } catch (err) {
       // Same message delivered twice at once (history + live): keep one.
       if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") return;
       throw err;
+    }
+    // New photos and audios are saved right away (WhatsApp links expire); history ones on first view.
+    if (stored?.ref && !msg.history) {
+      void this.ensureMediaFile(slug, created.id).catch((err: unknown) =>
+        this.logger.warn(`Adjunto no descargado: ${(err as Error).message}`),
+      );
     }
     // A new incoming message makes the chat unread; replying from the phone reads it.
     if (!msg.history || direction === "out") {
@@ -403,6 +468,7 @@ export class InboxService implements OnModuleInit {
       contactHandle: msg.contactHandle,
       contactName: conversation.contactName,
       text: msg.text,
+      conversationId: conversation.id,
     });
   }
 
@@ -472,19 +538,34 @@ export class InboxService implements OnModuleInit {
   }
 
   /** Names from the WhatsApp contact list → chats and contacts that only showed the number. */
-  async applyContactNames(slug: string, channel: "wa" | "tg", names: { handle: string; name: string }[]): Promise<number> {
+  async applyContactNames(
+    slug: string,
+    channel: "wa" | "tg",
+    names: { handle: string; name: string; saved?: boolean }[],
+  ): Promise<number> {
     if (!this.prisma.enabled || !names.length) return 0;
-    const byHandle = new Map(names.filter((n) => !isBareName(n.name)).map((n) => [n.handle, n.name]));
+    const usable = names.filter((n) => !isBareName(n.name));
+    const byHandle = new Map(usable.map((n) => [n.handle, n.name]));
+    const savedHandles = new Set(usable.filter((n) => n.saved).map((n) => n.handle));
     if (!byHandle.size) return 0;
     const convs = await this.prisma.conversation.findMany({
       where: { workspaceSlug: slug, channel, contactHandle: { in: [...byHandle.keys()] } },
-      select: { id: true, contactName: true, contactHandle: true },
+      select: { id: true, contactName: true, contactHandle: true, savedName: true },
     });
     let updated = 0;
     for (const c of convs) {
       const name = byHandle.get(c.contactHandle ?? "");
-      if (!name || !isBareName(c.contactName, c.contactHandle)) continue;
-      await this.prisma.conversation.update({ where: { id: c.id }, data: { contactName: name } });
+      if (!name) continue;
+      const saved = savedHandles.has(c.contactHandle ?? "");
+      const previous = c.contactName;
+      if (saved) {
+        // The name in the brand's own phone replaces whatever the chat showed.
+        if (c.savedName === name && c.contactName === name) continue;
+        await this.prisma.conversation.update({ where: { id: c.id }, data: { contactName: name, savedName: name } });
+      } else {
+        if (c.savedName || !isBareName(c.contactName, c.contactHandle)) continue;
+        await this.prisma.conversation.update({ where: { id: c.id }, data: { contactName: name } });
+      }
       updated++;
       if (channel !== "wa") continue;
       const key = phoneKey(c.contactHandle);
@@ -494,7 +575,8 @@ export class InboxService implements OnModuleInit {
         select: { id: true, name: true, phone: true },
       });
       for (const ct of contacts) {
-        if (phoneKey(ct.phone) === key && isBareName(ct.name)) {
+        // A CRM contact that only had the number (or the profile name the chat showed) takes the saved name.
+        if (phoneKey(ct.phone) === key && (isBareName(ct.name) || (saved && ct.name === previous))) {
           await this.prisma.contact.update({ where: { id: ct.id }, data: { name } });
         }
       }
@@ -614,7 +696,216 @@ export class InboxService implements OnModuleInit {
       orderBy: { createdAt: "desc" },
       take: THREAD_CAP,
     });
-    return rows.reverse().map(mapMessage);
+    return rows.reverse().map((row) => {
+      const m = mapMessage(row);
+      const stored = readStoredMedia(row.media);
+      return stored ? { ...m, media: publicChatMedia(stored, this.mediaUrl(workspaceId, row.id)) } : m;
+    });
+  }
+
+  /**
+   * Light check the panel polls to ring when a message arrives: unread total
+   * and the newest message a contact sent.
+   */
+  async pulse(workspaceId: string): Promise<InboxPulse> {
+    if (!this.prisma.enabled) return { unread: 0, latest: null };
+    const [sum, last] = await Promise.all([
+      this.prisma.conversation.aggregate({ where: { workspaceSlug: workspaceId }, _sum: { unreadCount: true } }),
+      this.prisma.message.findFirst({
+        where: { direction: "in", conversation: { workspaceSlug: workspaceId } },
+        orderBy: { createdAt: "desc" },
+        select: { id: true, text: true, createdAt: true, conversation: { select: { id: true, contactName: true, channel: true } } },
+      }),
+    ]);
+    return {
+      unread: sum._sum.unreadCount ?? 0,
+      latest: last
+        ? {
+            id: last.id,
+            conversationId: last.conversation.id,
+            contactName: last.conversation.contactName,
+            channel: last.conversation.channel as ChannelId,
+            text: last.text.slice(0, 140),
+            at: last.createdAt.toISOString(),
+          }
+        : null,
+    };
+  }
+
+  /** Signed link to a message's attachment (valid a few hours, only for this brand and message). */
+  private mediaUrl(workspaceId: string, messageId: string): string {
+    const secret = this.config.get("auth", { infer: true }).secret;
+    const base = (this.config.get("apiUrl", { infer: true }) ?? "").replace(/\/$/, "");
+    return `${base}/api/inbox-media/${mediaToken(secret, workspaceId, messageId)}`;
+  }
+
+  /**
+   * Make sure a message's attachment is saved on this server: download it from
+   * WhatsApp the first time (through the number that received it) and keep it
+   * in the brand's private chat folder. Returns the stored media JSON.
+   */
+  async ensureMediaFile(workspaceId: string, messageId: string): Promise<StoredChatMedia> {
+    const pending = this.downloading.get(messageId);
+    if (pending) return pending;
+    const job = (async () => {
+      const row = await this.db().message.findFirst({
+        where: { id: messageId, conversation: { workspaceSlug: workspaceId } },
+        select: { id: true, externalId: true, media: true, conversation: { select: { channel: true, waLine: true } } },
+      });
+      const stored = readStoredMedia(row?.media);
+      if (!row || !stored) throw new NotFoundException("Archivo no encontrado.");
+      if (stored.file || stored.unavailable || !stored.ref) return stored;
+      if (row.conversation.channel !== "wa") return stored;
+      let bytes: Buffer;
+      try {
+        bytes = await this.whatsapp.downloadChatMedia(
+          workspaceId,
+          row.conversation.waLine,
+          this.crypto.decrypt(stored.ref),
+          row.externalId,
+        );
+      } catch (err) {
+        const msg = (err as Error).message ?? "";
+        // Gone for good on WhatsApp's side: say so instead of retrying forever.
+        if (/40[34]|410|gone|not found|expired/i.test(msg)) {
+          const next: StoredChatMedia = { ...stored, unavailable: "WhatsApp ya no tiene este archivo: ábrelo en tu teléfono." };
+          delete next.ref;
+          await this.db().message.update({ where: { id: row.id }, data: { media: next as unknown as Prisma.InputJsonValue } });
+          return next;
+        }
+        throw new ServiceUnavailableException(
+          /conectado|listo/i.test(msg) ? `No se pudo traer el archivo: ${msg}` : "No se pudo traer el archivo de WhatsApp. Intenta de nuevo.",
+        );
+      }
+      if (bytes.length > CHAT_MEDIA_MAX_BYTES) {
+        const next: StoredChatMedia = { ...stored, unavailable: "Archivo muy grande: ábrelo en tu teléfono." };
+        delete next.ref;
+        await this.db().message.update({ where: { id: row.id }, data: { media: next as unknown as Prisma.InputJsonValue } });
+        return next;
+      }
+      const file = await saveChatFile(this.config.get("media", { infer: true }).dir, workspaceId, bytes, stored.mime);
+      // The sealed WhatsApp message isn't needed once the file is ours.
+      const next: StoredChatMedia = { ...stored, file, size: bytes.length };
+      delete next.ref;
+      await this.db().message.update({ where: { id: row.id }, data: { media: next as unknown as Prisma.InputJsonValue } });
+      return next;
+    })();
+    this.downloading.set(messageId, job);
+    try {
+      return await job;
+    } finally {
+      this.downloading.delete(messageId);
+    }
+  }
+
+  /**
+   * Serve a chat attachment from a signed link (img/audio/video tags can't send
+   * the login header). The link names the brand and the message and expires.
+   */
+  async serveMedia(token: string, res: Response): Promise<void> {
+    const secret = this.config.get("auth", { infer: true }).secret;
+    const target = readMediaToken(secret, token);
+    if (!target) throw new NotFoundException("El enlace venció. Vuelve a abrir el chat.");
+    const stored = await this.ensureMediaFile(target.workspace, target.messageId);
+    if (!stored.file || !CHAT_FILE_RE.test(stored.file)) {
+      throw new NotFoundException(stored.unavailable ?? "Archivo no disponible.");
+    }
+    const dir = chatDir(this.config.get("media", { infer: true }).dir, target.workspace);
+    for (const [k, v] of Object.entries(chatFileHeaders(stored.file, stored.name))) res.setHeader(k, v);
+    await new Promise<void>((resolveSend) => {
+      res.sendFile(stored.file!, { root: dir, dotfiles: "deny", cacheControl: false, lastModified: false }, (err) => {
+        if (err && !res.headersSent) res.status(404).json({ message: "Archivo no encontrado." });
+        resolveSend();
+      });
+    });
+  }
+
+  /**
+   * Send a photo, video, document, audio or voice note from the chat. The file
+   * type comes from its content (never from its name). A voice note recorded
+   * in the browser as WebM is rewrapped to Ogg/Opus so it plays as a voice note
+   * on the phone. Sent first, stored after, so a failure leaves no ghost message.
+   */
+  async sendMedia(
+    workspaceId: string,
+    conversationId: string,
+    file: { buffer?: Buffer; path?: string; mimetype: string; originalname?: string; size: number } | undefined,
+    dto: SendMediaDto,
+  ): Promise<Message> {
+    const conv = await this.owned(workspaceId, conversationId);
+    if (conv.channel !== "wa" || !conv.contactHandle) {
+      throw new BadRequestException("Por ahora los archivos y audios se envían solo en chats de WhatsApp.");
+    }
+    if (!file) throw new BadRequestException("Elige un archivo.");
+    if (file.size > CHAT_SEND_MAX_BYTES) throw new BadRequestException("El archivo pasa de 16 MB.");
+    const { readFile } = await import("node:fs/promises");
+    let bytes = file.buffer ?? (file.path ? await readFile(file.path) : Buffer.alloc(0));
+    if (!bytes.length) throw new BadRequestException("El archivo está vacío.");
+    const sniff = sniffSendable(bytes, file.mimetype);
+    if (!sniff) throw new BadRequestException("Ese tipo de archivo no se puede enviar (fotos, videos, audios, PDF, Word, Excel, PowerPoint o texto).");
+    let kind = sniff.kind;
+    let mime = sniff.mime;
+    let seconds: number | undefined;
+    if (dto.as === "voice" || kind === "voice") {
+      if (mime === "audio/webm") {
+        try {
+          const out = webmToOggOpus(bytes);
+          bytes = out.ogg;
+          seconds = out.seconds;
+        } catch (err) {
+          throw new BadRequestException(err instanceof RemuxError ? err.message : "No se pudo preparar la nota de voz.");
+        }
+        mime = "audio/ogg";
+        kind = "voice";
+      } else if (mime === "audio/ogg") {
+        kind = "voice";
+      } else if (mime === "audio/mp4" || mime === "video/mp4") {
+        // Safari records AAC in MP4: WhatsApp plays it as an audio, not as a voice note.
+        kind = "audio";
+        mime = "audio/mp4";
+      } else if (dto.as === "voice") {
+        throw new BadRequestException("La grabación no es un audio válido.");
+      }
+    }
+    const name = (file.originalname ?? "").split(/[\\/]/).pop()?.replace(/\p{Cc}/gu, "").trim().slice(0, 120) || undefined;
+    const caption = kind === "voice" || kind === "audio" ? undefined : dto.caption?.trim() || undefined;
+    let sent: { id: string };
+    try {
+      sent = await this.whatsapp.sendChatFile(workspaceId, conv.contactHandle, {
+        kind,
+        bytes,
+        mime,
+        ...(name ? { name } : {}),
+        ...(caption ? { caption } : {}),
+        ...(seconds ? { seconds } : {}),
+      });
+    } catch (err) {
+      const reason = (err as Error).message ?? "";
+      throw new ServiceUnavailableException(
+        /no est[aá] conectado/i.test(reason)
+          ? "No se pudo enviar: tu WhatsApp no está conectado. Conéctalo en Conexiones y vuelve a intentar."
+          : `No se pudo enviar: ${reason}`,
+      );
+    }
+    const stored: StoredChatMedia = {
+      kind,
+      mime,
+      size: bytes.length,
+      file: await saveChatFile(this.config.get("media", { infer: true }).dir, workspaceId, bytes, mime),
+      ...(kind === "document" && name ? { name } : {}),
+      ...(seconds ? { seconds } : {}),
+    };
+    const row = await this.db().message.create({
+      data: {
+        conversationId,
+        direction: "out",
+        text: mediaLabel(kind, name, caption),
+        externalId: sent.id || null,
+        media: stored as unknown as Prisma.InputJsonValue,
+      },
+    });
+    await this.prisma.conversation.update({ where: { id: conversationId }, data: { unreadCount: 0 } });
+    return { ...mapMessage(row), media: publicChatMedia(stored, this.mediaUrl(workspaceId, row.id)) };
   }
 
   async createConversation(
@@ -738,6 +1029,24 @@ export class InboxService implements OnModuleInit {
   }
 }
 
+/**
+ * Chat attachments by signed link: the browser's img/audio/video tags can't
+ * send the login header, so the link itself proves access (brand + message,
+ * signed with the server secret, expires in hours).
+ */
+@ApiTags("inbox")
+@Public()
+@Controller("inbox-media")
+export class InboxMediaController {
+  constructor(private readonly service: InboxService) {}
+
+  @Get(":token")
+  @Throttle({ default: { limit: 300, ttl: 60_000 } })
+  serve(@Param("token") token: string, @Res() res: Response) {
+    return this.service.serveMedia(token, res);
+  }
+}
+
 @ApiTags("inbox")
 @ApiBearerAuth()
 @UseGuards(WorkspaceGuard)
@@ -748,6 +1057,12 @@ export class InboxController {
   @Get("conversations")
   conversations(@WorkspaceId() workspaceId: string, @Query() query: ConversationsQueryDto) {
     return this.service.conversations(workspaceId, query);
+  }
+
+  @Get("pulse")
+  @SkipThrottle()
+  pulse(@WorkspaceId() workspaceId: string) {
+    return this.service.pulse(workspaceId);
   }
 
   @Get("conversations/:id/messages")
@@ -771,6 +1086,21 @@ export class InboxController {
     @Body() dto: SendMessageDto,
   ) {
     return this.service.sendMessage(workspaceId, id, dto);
+  }
+
+  /** Photo, video, document, audio or voice note to the chat (WhatsApp). */
+  @Post("conversations/:id/media")
+  @Roles("Owner", "Admin", "Editor")
+  @UseGuards(RolesGuard)
+  @Throttle({ default: { limit: 30, ttl: 60_000 } })
+  @UseInterceptors(FileInterceptor("file", { limits: { fileSize: CHAT_SEND_MAX_BYTES, files: 1, fields: 4 } }))
+  sendMedia(
+    @WorkspaceId() workspaceId: string,
+    @Param("id") id: string,
+    @UploadedFile() file: { buffer?: Buffer; mimetype: string; originalname?: string; size: number } | undefined,
+    @Body() dto: SendMediaDto,
+  ) {
+    return this.service.sendMedia(workspaceId, id, file, dto);
   }
 
   @Get("quick-replies")
@@ -919,8 +1249,8 @@ export class TelegramWebhookController {
 }
 
 @Module({
-  imports: [ProvidersModule],
-  controllers: [InboxController, WhatsAppWebhookController, TelegramWebhookController],
-  providers: [InboxService],
+  imports: [ProvidersModule, WhatsappModule],
+  controllers: [InboxController, InboxMediaController, WhatsAppWebhookController, TelegramWebhookController],
+  providers: [InboxService, CryptoService],
 })
 export class InboxModule {}

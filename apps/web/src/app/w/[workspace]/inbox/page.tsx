@@ -9,6 +9,9 @@ import {
   type Conversation,
 } from "@nv/domain";
 import {
+  BookUser,
+  Images,
+  Paperclip,
   CheckCircle2,
   Clock,
   IdCard,
@@ -30,6 +33,8 @@ import {
   X,
 } from "lucide-react";
 
+import { toast } from "sonner";
+
 import { cn } from "@/lib/utils";
 import { UNASSIGNED, fillReply, firstReplyLabel, waitInfo, withLabel, withoutLabel, type InboxStatus } from "@/lib/inbox";
 import { productChatText } from "@/lib/products";
@@ -49,6 +54,7 @@ import {
   useAddNote,
   useDeleteConversation,
   useResolveConversation,
+  useSendMedia,
   useSendMessage,
   useUpdateConversation,
 } from "@/hooks/use-domain-mutations";
@@ -73,6 +79,10 @@ import {
 import { PaymentDialog } from "@/components/payments/payment-dialog";
 import { QuickRepliesDialog, matchReplies } from "@/components/inbox/quick-replies";
 import { ChatContactCard } from "@/components/inbox/chat-contact-card";
+import { ChatMediaGallery, ChatMediaView, ImageViewer, captionOf } from "@/components/inbox/chat-media";
+import { VoiceRecorder } from "@/components/inbox/voice-recorder";
+import { InboxAlertsMenu } from "@/components/inbox/inbox-alerts-menu";
+import { ATTACH_ACCEPT, SEND_MAX_BYTES, fileSizeLabel } from "@/lib/chat-media";
 
 const selectClass =
   "h-9 rounded-lg border border-line-soft bg-panel px-2 text-xs text-ink focus-visible:border-brand/60 focus-visible:outline-none";
@@ -126,6 +136,12 @@ export default function InboxPage() {
   const [repliesOpen, setRepliesOpen] = React.useState(false);
   const [charging, setCharging] = React.useState(false);
   const [showCard, setShowCard] = React.useState(true);
+  // Photos and files: full-size viewer, the chat's gallery, a file waiting to be sent, a voice note being recorded.
+  const [viewerUrl, setViewerUrl] = React.useState<string | null>(null);
+  const [galleryOpen, setGalleryOpen] = React.useState(false);
+  const [pendingFile, setPendingFile] = React.useState<File | null>(null);
+  const [recording, setRecording] = React.useState(false);
+  const fileRef = React.useRef<HTMLInputElement>(null);
   const workspace = useWorkspace();
   const replies = useQuickReplies();
   const products = useProducts();
@@ -155,6 +171,7 @@ export default function InboxPage() {
 
   const messages = useMessages(selected);
   const send = useSendMessage(selected);
+  const sendMedia = useSendMedia(selected);
   const addNote = useAddNote(selected);
   const chatContact = useConversationContact(selected);
   const resolve = useResolveConversation();
@@ -219,9 +236,34 @@ export default function InboxPage() {
     });
   }
 
+  /** Keep a picked or pasted file until «Enviar» (the reply text becomes its caption). */
+  function pickFile(file: File | null | undefined) {
+    if (!file) return;
+    if (file.size > SEND_MAX_BYTES) {
+      toast.error(`«${file.name}» pesa ${fileSizeLabel(file.size)}: el máximo es 16 MB.`);
+      return;
+    }
+    setNoteMode(false);
+    setPendingFile(file);
+  }
+
   function submitMessage(e: React.FormEvent) {
     e.preventDefault();
-    if (!draft.trim() || !selected) return;
+    if (!selected) return;
+    if (pendingFile && !noteMode) {
+      atBottom.current = true;
+      sendMedia.mutate(
+        { file: pendingFile, fileName: pendingFile.name || "archivo", caption: draft.trim() || undefined },
+        {
+          onSuccess: () => {
+            setPendingFile(null);
+            setDraft("");
+          },
+        },
+      );
+      return;
+    }
+    if (!draft.trim()) return;
     atBottom.current = true;
     if (noteMode) addNote.mutate(draft.trim(), { onSuccess: () => setDraft("") });
     else send.mutate(draft.trim(), { onSuccess: () => setDraft("") });
@@ -262,9 +304,12 @@ export default function InboxPage() {
         title="Inbox"
         description="Todas tus conversaciones de WhatsApp, Instagram, Telegram y más, con asignación y etiquetas."
         actions={
-          <Button size="sm" onClick={() => setDialogOpen(true)}>
-            <Plus className="size-4" /> Nueva conversación
-          </Button>
+          <div className="flex flex-wrap items-center gap-2">
+            <InboxAlertsMenu />
+            <Button size="sm" onClick={() => setDialogOpen(true)}>
+              <Plus className="size-4" /> Nueva conversación
+            </Button>
+          </div>
         }
       />
 
@@ -433,6 +478,12 @@ export default function InboxPage() {
                             )}
                           >
                             {c.contactName}
+                            {c.savedName ? (
+                              <BookUser
+                                className="text-ink-faint ml-1 inline size-3 align-[-1px]"
+                                aria-label="Guardado en tu WhatsApp"
+                              />
+                            ) : null}
                           </span>
                           {c.lastMessageAt ? (
                             <span className="text-ink-faint shrink-0 text-[10px] tabular-nums">
@@ -528,12 +579,23 @@ export default function InboxPage() {
                 description={[
                   CHANNELS[active.channel].name,
                   active.contactHandle,
+                  active.savedName ? "nombre guardado en tu WhatsApp" : null,
                   firstReplyLabel(active.firstReplyMins),
                 ]
                   .filter(Boolean)
                   .join(" · ")}
                 action={
                   <div className="flex flex-wrap items-center justify-end gap-2">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      title="Fotos, audios y archivos del chat"
+                      aria-label="Fotos, audios y archivos del chat"
+                      data-testid="inbox-gallery"
+                      onClick={() => setGalleryOpen(true)}
+                    >
+                      <Images className="size-4" />
+                    </Button>
                     <Button
                       variant="ghost"
                       size="icon"
@@ -728,7 +790,16 @@ export default function InboxPage() {
                                 : "border-line-soft bg-panel text-ink rounded-bl-md border",
                             )}
                           >
-                            <span className="whitespace-pre-wrap break-words">{m.text}</span>
+                            {m.media ? (
+                              <div className="-mx-1 mb-1 mt-0.5">
+                                <ChatMediaView media={m.media} out={out} onOpenImage={setViewerUrl} />
+                              </div>
+                            ) : null}
+                            {m.media ? (
+                              captionOf(m) ? <span className="whitespace-pre-wrap break-words">{captionOf(m)}</span> : null
+                            ) : (
+                              <span className="whitespace-pre-wrap break-words">{m.text}</span>
+                            )}
                             <span
                               className={cn(
                                 "ml-2 inline-block translate-y-0.5 text-[10px] tabular-nums",
@@ -859,11 +930,65 @@ export default function InboxPage() {
                     ))}
                   </ul>
                 ) : null}
+                {pendingFile && !noteMode ? (
+                  <div
+                    className="border-line-soft bg-panel-raised flex items-center gap-2 rounded-lg border px-2 py-1.5 text-xs"
+                    data-testid="inbox-pending-file"
+                  >
+                    <Paperclip className="text-ink-faint size-3.5 shrink-0" />
+                    <span className="text-ink min-w-0 flex-1 truncate">{pendingFile.name || "archivo"}</span>
+                    <span className="text-ink-faint shrink-0">{fileSizeLabel(pendingFile.size)} · lo que escribas va como texto</span>
+                    <button
+                      type="button"
+                      className="text-ink-faint hover:text-ink"
+                      onClick={() => setPendingFile(null)}
+                      aria-label="Quitar archivo"
+                    >
+                      <X className="size-3.5" />
+                    </button>
+                  </div>
+                ) : null}
                 <div className="flex items-end gap-2">
+                  {!noteMode && active.channel === "wa" && !recording ? (
+                    <>
+                      <input
+                        ref={fileRef}
+                        type="file"
+                        accept={ATTACH_ACCEPT}
+                        className="hidden"
+                        data-testid="inbox-file-input"
+                        onChange={(e) => {
+                          pickFile(e.target.files?.[0]);
+                          e.target.value = "";
+                        }}
+                      />
+                      <Button
+                        type="button"
+                        size="icon"
+                        variant="ghost"
+                        disabled={demo}
+                        onClick={() => fileRef.current?.click()}
+                        aria-label="Adjuntar foto, video o archivo"
+                        title="Adjuntar foto, video o archivo"
+                        data-testid="inbox-attach"
+                      >
+                        <Paperclip className="size-4" />
+                      </Button>
+                    </>
+                  ) : null}
+                  {recording ? null : (
                   <Textarea
                     ref={draftRef}
                     value={draft}
                     rows={1}
+                    onPaste={(e) => {
+                      if (noteMode || active.channel !== "wa") return;
+                      const file = Array.from(e.clipboardData.files).find((f) => f.type.startsWith("image/"));
+                      if (file) {
+                        e.preventDefault();
+                        pickFile(file);
+                      }
+                    }}
                     onChange={(e) => setDraft(e.target.value)}
                     onKeyDown={(e) => {
                       if (e.key !== "Enter" || e.shiftKey || e.nativeEvent.isComposing) return;
@@ -882,15 +1007,39 @@ export default function InboxPage() {
                     )}
                     aria-label={noteMode ? "Nota interna" : "Respuesta"}
                   />
+                  )}
+                  {!noteMode && active.channel === "wa" && !pendingFile && (!draft.trim() || recording) ? (
+                    <VoiceRecorder
+                      disabled={demo}
+                      sending={sendMedia.isPending}
+                      onActiveChange={setRecording}
+                      onSend={(file, fileName) => {
+                        atBottom.current = true;
+                        sendMedia.mutate({ file, fileName, voice: true });
+                      }}
+                    />
+                  ) : null}
+                  {recording ? null : (
                   <Button
                     type="submit"
                     size="icon"
-                    disabled={(noteMode ? addNote.isPending : send.isPending) || !draft.trim()}
-                    aria-label={noteMode ? "Guardar nota" : "Enviar"}
+                    disabled={
+                      noteMode
+                        ? addNote.isPending || !draft.trim()
+                        : pendingFile
+                          ? sendMedia.isPending
+                          : send.isPending || !draft.trim()
+                    }
+                    aria-label={noteMode ? "Guardar nota" : pendingFile ? "Enviar archivo" : "Enviar"}
+                    data-testid="inbox-send"
                   >
                     {noteMode ? <StickyNote className="size-4" /> : <Send className="size-4" />}
                   </Button>
+                  )}
                 </div>
+                {sendMedia.isPending ? (
+                  <p className="text-ink-faint text-[11px]" aria-live="polite">Enviando por WhatsApp…</p>
+                ) : null}
               </form>
             </>
           )}
@@ -905,6 +1054,8 @@ export default function InboxPage() {
       </div>
 
       <QuickRepliesDialog open={repliesOpen} onOpenChange={setRepliesOpen} />
+      <ImageViewer url={viewerUrl} onClose={() => setViewerUrl(null)} />
+      <ChatMediaGallery open={galleryOpen} onOpenChange={setGalleryOpen} messages={thread} onOpenImage={setViewerUrl} />
       {active ? (
         <PaymentDialog
           open={charging}

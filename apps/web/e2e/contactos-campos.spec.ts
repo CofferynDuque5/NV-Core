@@ -2,6 +2,10 @@ import { expect, test } from "@playwright/test";
 
 import { API, PASSWORD } from "./helpers";
 
+// The browser shows «¡hoy!» by its own clock: keep it in the same zone as the
+// brand (Caracas) so the test also passes between 20:00 and 24:00 Caracas time.
+test.use({ timezoneId: "America/Caracas" });
+
 const stamp = Date.now();
 const email = `e2e_campos_${stamp}@nv.tv`;
 

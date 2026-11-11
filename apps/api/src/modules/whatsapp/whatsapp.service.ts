@@ -256,7 +256,7 @@ export class WhatsappService implements SessionEvents, OnModuleInit, OnModuleDes
   }
 
   /** Contact names from WhatsApp → the Inbox replaces bare numbers with them. */
-  onContactNames(key: string, names: { handle: string; name: string }[]): void {
+  onContactNames(key: string, names: { handle: string; name: string; saved?: boolean }[]): void {
     this.events.emit("session.contact-names", { workspaceSlug: parseWaLineKey(key).workspaceSlug, channel: "wa", names });
   }
 
@@ -536,6 +536,36 @@ export class WhatsappService implements SessionEvents, OnModuleInit, OnModuleDes
   /** True when any of the brand's numbers is connected. */
   isConnected(workspaceSlug: string): boolean {
     return this.connectedLines(workspaceSlug).length > 0;
+  }
+
+  /** The session of a given number, else the brand's first connected one. */
+  private sessionOfLine(workspaceSlug: string, line?: number | null): BaileysSession {
+    if (line && this.lineConnected(workspaceSlug, line)) return this.live.get(waLineKey(workspaceSlug, line))!;
+    const any = this.connectedLines(workspaceSlug)[0];
+    if (!any) throw new Error(NOT_CONNECTED);
+    return any;
+  }
+
+  /** Download a chat attachment through the number that received it (or any connected one). */
+  async downloadChatMedia(workspaceSlug: string, line: number | null, ref: string, externalId?: string | null): Promise<Buffer> {
+    return this.sessionOfLine(workspaceSlug, line).downloadChatMedia(ref, externalId);
+  }
+
+  /** Send a photo, video, document, audio or voice note to a chat, from the number the contact wrote to. */
+  async sendChatFile(
+    workspaceSlug: string,
+    to: string,
+    file: Parameters<BaileysSession["sendChatFile"]>[1],
+  ): Promise<{ id: string }> {
+    return (await this.sessionFor(workspaceSlug, to)).sendChatFile(to, file);
+  }
+
+  /** Ask every connected number of the brand for its contact list again (names as saved in the phone). */
+  async refreshContactNames(workspaceSlug: string): Promise<{ lines: number }> {
+    const sessions = this.connectedLines(workspaceSlug);
+    if (!sessions.length) throw new BadRequestException(NOT_CONNECTED);
+    await Promise.all(sessions.map((s) => s.refreshContactNames()));
+    return { lines: sessions.length };
   }
 
   async sendText(workspaceSlug: string, to: string, text: string): Promise<{ id: string }> {

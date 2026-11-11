@@ -70,7 +70,7 @@ describe.skipIf(!url)("Publicaciones programadas e Inbox contra PostgreSQL real"
     await prisma.conversation.create({ data: { workspaceSlug: ws, channel: "wa", contactName: "Nueva" } });
     await prisma.message.create({ data: { conversationId: old.id, direction: "in", text: "hola de nuevo" } });
 
-    const inbox = new InboxService(prisma as never, {} as never, {} as never, {} as never, {} as never);
+    const inbox = new InboxService(prisma as never, {} as never, {} as never, {} as never, {} as never, {} as never, {} as never);
     const res = await inbox.conversations(ws);
     expect(res.items.map((c) => c.contactName)).toEqual(["Antigua", "Nueva"]);
     expect(res.total).toBe(2);

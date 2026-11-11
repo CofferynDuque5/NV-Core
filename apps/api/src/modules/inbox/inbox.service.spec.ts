@@ -103,7 +103,7 @@ function makeDeps() {
     {} as never,
     config as never,
     registry as never,
-    events as never,
+    events as never, {} as never, {} as never,
   );
   return { service, conversations, messages, contacts, events };
 }
@@ -168,7 +168,7 @@ function makeUpdateService(seed: Conv) {
       }),
     },
   };
-  const service = new InboxService(prisma as unknown as PrismaService, {} as never, { get: vi.fn() } as never, {} as never, { emit: vi.fn() } as never);
+  const service = new InboxService(prisma as unknown as PrismaService, {} as never, { get: vi.fn() } as never, {} as never, { emit: vi.fn() } as never, {} as never, {} as never);
   return { service, row };
 }
 
