@@ -754,6 +754,7 @@ model Message {
   @@unique([conversationId, externalId])
   @@index([conversationId])
   @@index([conversationId, createdAt])
+  @@index([createdAt])
 }
 
 model Notification {

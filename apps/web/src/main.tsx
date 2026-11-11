@@ -4,6 +4,7 @@ import { BrowserRouter } from "react-router-dom";
 
 import { AppProviders } from "@/providers/app-providers";
 import { AppRoutes } from "@/app-routes";
+import "@/styles/fonts.css";
 import "@/app/globals.css";
 import { captureInstallPrompt } from "@/hooks/use-install-prompt";
 

@@ -118,6 +118,24 @@ describe("AnalyticsService.snapshot", () => {
     expect(await service.snapshot("w1")).toBeNull();
   });
 
+  it("reuses a snapshot asked again within seconds (one set of queries)", async () => {
+    let counts = 0;
+    const service = makeService({});
+    const prisma = (service as unknown as { prisma: { contact: { count: (...a: unknown[]) => unknown } } }).prisma;
+    const original = prisma.contact.count.bind(prisma.contact);
+    prisma.contact.count = (...a: unknown[]) => {
+      counts++;
+      return original(...a);
+    };
+    const [a, b] = await Promise.all([service.snapshot("w1", 7), service.snapshot("w1", 7)]);
+    const c = await service.snapshot("w1", 7);
+    expect(a).toBe(b);
+    expect(c).toBe(a);
+    const perSnapshot = counts;
+    await service.snapshot("w1", 30); // another window is its own answer
+    expect(counts).toBe(perSnapshot * 2);
+  });
+
   it("computes period-over-period KPI deltas", async () => {
     const now = Date.now();
     const service = makeService({

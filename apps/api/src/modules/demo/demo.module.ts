@@ -1,4 +1,4 @@
-import { randomBytes } from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
 
 import { Injectable, Logger, Module, type OnApplicationBootstrap } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
@@ -11,6 +11,11 @@ import { DEMO_SHOWCASE_SQL } from "./demo-showcase";
 
 /** Marks the demo brand as ours, so a customer brand with the same slug is never touched. */
 export const DEMO_OWNER = "sistema-demo";
+
+/** Where the last showcase build is noted: content hash, when, which brand. */
+const SHOWCASE_KEY = "demo-showcase";
+const SHOWCASE_HASH = createHash("sha256").update(DEMO_SHOWCASE_SQL.join("\n")).digest("hex").slice(0, 16);
+const SHOWCASE_MAX_AGE_MS = 6 * 60 * 60 * 1000;
 
 /**
  * Prepares the public «Ver demo»: one shared account that can only look
@@ -85,9 +90,22 @@ export class DemoService implements OnApplicationBootstrap {
     if ((await this.prisma.segment.count({ where: { workspaceSlug: demo.slug } })) === 0) {
       await this.fill(demo.slug);
     }
-    await this.showcase(demo.slug);
+    if (await this.showcaseStale(demo.slug)) await this.showcase(demo.slug);
     this.logger.log(`Demo lista en "${demo.slug}".`);
     return true;
+  }
+
+  /**
+   * The showcase is rebuilt only when its content changed or it is more than
+   * a few hours old (its dates are relative to today). Rebuilding on every
+   * start held a database connection for seconds each time the host woke the
+   * app up, right when the first visitor was waiting.
+   */
+  private async showcaseStale(slug: string): Promise<boolean> {
+    const stamp = await this.prisma.appKey.findUnique({ where: { name: SHOWCASE_KEY } }).catch(() => null);
+    const [hash, at, forSlug] = (stamp?.value ?? "").split("|");
+    const age = Date.now() - Date.parse(at ?? "");
+    return !(hash === SHOWCASE_HASH && forSlug === slug && age >= 0 && age < SHOWCASE_MAX_AGE_MS);
   }
 
   /** Rebuild the demo's example people, chats, campaigns, payments and products. */
@@ -124,6 +142,10 @@ export class DemoService implements OnApplicationBootstrap {
       },
       { maxWait: 20000, timeout: 120000 },
     );
+    const value = `${SHOWCASE_HASH}|${new Date().toISOString()}|${slug}`;
+    await this.prisma.appKey
+      .upsert({ where: { name: SHOWCASE_KEY }, create: { name: SHOWCASE_KEY, value }, update: { value } })
+      .catch(() => undefined);
   }
 
   /** Example forms, funnels, segments and automations (made once). */

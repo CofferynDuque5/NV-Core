@@ -1,5 +1,5 @@
 import * as React from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { toast } from "sonner";
 
@@ -27,6 +27,8 @@ export function InboxAlerts() {
     retry: false,
   });
   const lastSeen = React.useRef<{ ws?: string; id?: string | null }>({});
+  const queryClient = useQueryClient();
+  const lastPulse = React.useRef<string | null>(null);
   const onInbox = location.pathname.endsWith("/inbox");
   const onInboxRef = React.useRef(onInbox);
   onInboxRef.current = onInbox;
@@ -46,6 +48,15 @@ export function InboxAlerts() {
     const data = pulse.data;
     if (!data || !workspace) return;
     document.title = titleWithCount(document.title, data.unread);
+    // Something changed (a new message, a chat read or marked unread): refresh
+    // the Inbox list and the open chat now instead of waiting for their poll.
+    const mark = `${workspace}|${data.unread}|${data.latest?.id ?? ""}`;
+    if (lastPulse.current !== null && lastPulse.current !== mark) {
+      void queryClient.invalidateQueries({
+        predicate: (q) => q.queryKey[0] === workspace && q.queryKey[1] === "inbox" && q.queryKey[2] !== "pulse",
+      });
+    }
+    lastPulse.current = mark;
     const latest = data.latest;
     const seen = lastSeen.current;
     // First reading (or another brand): just remember where we are.
@@ -71,7 +82,7 @@ export function InboxAlerts() {
       return;
     }
     void showSystemNotice(latest.contactName, latest.text, open);
-  }, [pulse.data, workspace, navigate]);
+  }, [pulse.data, workspace, navigate, queryClient]);
 
   // Keep the count in the title when the page changes its own title.
   React.useEffect(() => {

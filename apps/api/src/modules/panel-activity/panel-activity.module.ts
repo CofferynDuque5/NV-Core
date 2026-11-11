@@ -27,7 +27,8 @@ export class PanelActivityController {
   @Post("ping")
   async ping(@Body() dto: PanelPingDto, @CurrentUser() user: AuthenticatedUser, @Req() req: Request) {
     const forwarded = String(req.headers["x-forwarded-for"] ?? "").split(",")[0]?.trim();
-    await this.activity.ping(user, dto.sessionId, dto.path, {
+    // Answer at once: recording the visit must never slow down the page.
+    void this.activity.ping(user, dto.sessionId, dto.path, {
       ip: forwarded || req.ip || null,
       userAgent: String(req.headers["user-agent"] ?? "") || null,
     });

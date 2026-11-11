@@ -255,6 +255,9 @@ export class AddNoteDto {
 }
 
 /** Direction of a chat's last real message (internal notes don't count). */
+/** How far back the pulse looks for the newest incoming message. */
+const PULSE_WINDOW_MS = 15 * 60_000;
+
 const lastDirection = Prisma.sql`(SELECT lmd."direction" FROM "Message" lmd
   WHERE lmd."conversationId" = c."id" AND lmd."direction" <> 'note'
   ORDER BY lmd."createdAt" DESC LIMIT 1)`;
@@ -641,15 +644,18 @@ export class InboxService implements OnModuleInit {
     ]);
     const more = page.length > limit;
     const ids = page.slice(0, limit).map((r) => r.id);
-    const rows = ids.length
-      ? await this.prisma.conversation.findMany({
-          where: { workspaceSlug: workspaceId, id: { in: ids } },
-          // Newest message per thread → preview + "last activity".
-          include: { messages: { where: { direction: { not: "note" } }, orderBy: { createdAt: "desc" }, take: 1 } },
-        })
-      : [];
+    // Both need only the ids: ask for them at the same time (one round trip less).
+    const [rows, replies] = await Promise.all([
+      ids.length
+        ? this.prisma.conversation.findMany({
+            where: { workspaceSlug: workspaceId, id: { in: ids } },
+            // Newest message per thread → preview + "last activity".
+            include: { messages: { where: { direction: { not: "note" } }, orderBy: { createdAt: "desc" }, take: 1 } },
+          })
+        : Promise.resolve([]),
+      this.firstReplies(ids),
+    ]);
     const byId = new Map(rows.map((r) => [r.id, r]));
-    const replies = await this.firstReplies(ids);
     const items = ids
       .map((id) => byId.get(id))
       .filter((r): r is NonNullable<typeof r> => !!r)
@@ -711,8 +717,14 @@ export class InboxService implements OnModuleInit {
     if (!this.prisma.enabled) return { unread: 0, latest: null };
     const [sum, last] = await Promise.all([
       this.prisma.conversation.aggregate({ where: { workspaceSlug: workspaceId }, _sum: { unreadCount: true } }),
+      // Only the last minutes matter (older messages never ring), and with the
+      // createdAt index that reads a handful of rows instead of every message.
       this.prisma.message.findFirst({
-        where: { direction: "in", conversation: { workspaceSlug: workspaceId } },
+        where: {
+          direction: "in",
+          createdAt: { gte: new Date(Date.now() - PULSE_WINDOW_MS) },
+          conversation: { workspaceSlug: workspaceId },
+        },
         orderBy: { createdAt: "desc" },
         select: { id: true, text: true, createdAt: true, conversation: { select: { id: true, contactName: true, channel: true } } },
       }),

@@ -238,9 +238,11 @@ export function useConversations(filters: Omit<ConversationQuery, "cursor"> = {}
     queryFn: ({ pageParam }) => svc.inbox.conversations(ws.id, { ...filters, cursor: pageParam }),
     initialPageParam: undefined as string | undefined,
     getNextPageParam: (last) => last.nextCursor ?? undefined,
-    // Inbox en vivo: nuevos chats entrantes aparecen solos (también en segundo plano).
-    refetchInterval: 5_000,
-    refetchIntervalInBackground: true,
+    // Live inbox: the pulse (every 10 s, see InboxAlerts) refreshes it as soon
+    // as a message arrives; this slower poll only catches the rest (replies
+    // sent from the phone, another member's changes). Paused while the tab is
+    // hidden: with every page reloaded each time, that kept the server busy.
+    refetchInterval: 15_000,
     refetchOnWindowFocus: true,
   });
 }
@@ -252,8 +254,8 @@ export function useMessages(conversationId: string | null) {
     queryKey: [ws.id, "inbox", conversationId, "messages"],
     queryFn: () => svc.inbox.messages(ws.id, conversationId as string),
     enabled: Boolean(conversationId),
-    refetchInterval: 4_000,
-    refetchIntervalInBackground: true,
+    // New incoming messages also refresh it through the pulse (InboxAlerts).
+    refetchInterval: 8_000,
     refetchOnWindowFocus: true,
   });
 }
