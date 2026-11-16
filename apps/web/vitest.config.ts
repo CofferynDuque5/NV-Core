@@ -8,7 +8,7 @@ import { defineConfig } from "vitest/config";
  *
  * Coverage gate: scoped to the pure logic under src/lib/** (the code that is
  * actually unit-tested). Side-effect modules that depend on the browser or
- * import.meta.env (cloudinary, env, utils, connection-status) are excluded —
+ * import.meta.env (cloudinary, env, utils, connection-status, device, demo) are excluded —
  * they are exercised by the e2e suite / live smoke instead of unit tests.
  * Thresholds sit just below the achieved numbers so a regression fails CI while
  * leaving normal headroom.
@@ -30,6 +30,9 @@ export default defineConfig({
         "src/lib/env.ts",
         "src/lib/utils.ts",
         "src/lib/connection-status.ts",
+        // Browser-only traits (canvas, WebGL, cookies) and the auth-store redirect.
+        "src/lib/device.ts",
+        "src/lib/demo.ts",
       ],
       thresholds: {
         statements: 90,
