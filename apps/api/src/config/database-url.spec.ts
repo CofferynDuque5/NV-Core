@@ -46,4 +46,25 @@ describe("sanitizeDatabaseUrl", () => {
       migrationDatabaseUrl("postgresql://u:p@ep-a-b-pooler.us-east-2.aws.neon.tech/db?sslmode=require"),
     ).toBe("postgresql://u:p@ep-a-b.us-east-2.aws.neon.tech/db?sslmode=require");
   });
+
+  it("Supabase transaction pooler (6543) gets pgbouncer=true; session pooler (5432) does not", () => {
+    expect(
+      sanitizeDatabaseUrl("postgresql://postgres.abc:p%40ss@aws-0-us-east-1.pooler.supabase.com:6543/postgres"),
+    ).toBe("postgresql://postgres.abc:p%40ss@aws-0-us-east-1.pooler.supabase.com:6543/postgres?sslmode=require&pgbouncer=true");
+    expect(
+      sanitizeDatabaseUrl("postgresql://postgres.abc:pw@aws-0-us-east-1.pooler.supabase.com:6543/postgres?pgbouncer=true"),
+    ).toBe("postgresql://postgres.abc:pw@aws-0-us-east-1.pooler.supabase.com:6543/postgres?pgbouncer=true&sslmode=require");
+    expect(
+      sanitizeDatabaseUrl("postgresql://postgres.abc:pw@aws-0-us-east-1.pooler.supabase.com:5432/postgres"),
+    ).toBe("postgresql://postgres.abc:pw@aws-0-us-east-1.pooler.supabase.com:5432/postgres?sslmode=require");
+  });
+
+  it("migrationDatabaseUrl moves Supabase's transaction pooler to the session pooler", () => {
+    expect(
+      migrationDatabaseUrl("postgresql://postgres.abc:pw@aws-0-us-east-1.pooler.supabase.com:6543/postgres?pgbouncer=true"),
+    ).toBe("postgresql://postgres.abc:pw@aws-0-us-east-1.pooler.supabase.com:5432/postgres?sslmode=require");
+    expect(
+      migrationDatabaseUrl("postgresql://postgres.abc:pw@aws-0-us-east-1.pooler.supabase.com:5432/postgres"),
+    ).toBe("postgresql://postgres.abc:pw@aws-0-us-east-1.pooler.supabase.com:5432/postgres?sslmode=require");
+  });
 });

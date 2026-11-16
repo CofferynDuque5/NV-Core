@@ -49,6 +49,9 @@ cpSync(join(root, "apps/web/dist"), join(out, "web"), { recursive: true });
   console.log("✔ NV Agente PC empaquetado en web/agente/NV-Agente-PC.zip");
 }
 
+// Herramienta para pasar los datos a otra base PostgreSQL (Neon → Supabase).
+cpSync(join(root, "scripts/copiar-base-de-datos.cjs"), join(out, "copiar-base-de-datos.js"));
+
 // Motores de Prisma para las plataformas típicas de hosting (CloudLinux = RHEL,
 // Debian/Ubuntu; OpenSSL 1.1 y 3.0) además del detectado ("native"). Así el
 // "Run NPM Install" de cPanel ya deja el motor correcto y el login no falla con
@@ -108,6 +111,8 @@ const pkg = {
   // en passenger-start.js al arrancar, con ruta ABSOLUTA (siempre funciona).
   scripts: {
     start: "node passenger-start.js",
+    // Copia los datos a otra base (p. ej. de Neon a Supabase): ver PASOS.
+    "copiar-base": "node copiar-base-de-datos.js",
   },
   dependencies: {
     ...deps,
@@ -195,6 +200,9 @@ function resolvePrismaCli() {
   return { file: bin, viaNode: false };
 }
 
+// Pooler de Supabase en modo transacción (puerto 6543).
+const SUPABASE_TX = /@[^/?#]*\\.pooler\\.supabase\\.com:6543(\\/|$)/i;
+
 // Autocorrige DATABASE_URL: tolera errores comunes al pegarla en el panel
 // (sslmode duplicado, un segundo '?', channel_binding, falta de sslmode).
 function sanitizeDbUrl(raw) {
@@ -202,9 +210,9 @@ function sanitizeDbUrl(raw) {
   const s = String(raw).trim();
   const isLocal = s.includes("localhost") || s.includes("127.0.0.1");
   const i = s.indexOf("?");
-  if (i === -1) return isLocal ? s : s + "?sslmode=require";
-  const base = s.slice(0, i);
-  const query = s.slice(i + 1).replace(/\\?/g, "&");
+  if (i === -1 && isLocal) return s;
+  const base = i === -1 ? s : s.slice(0, i);
+  const query = i === -1 ? "" : s.slice(i + 1).replace(/\\?/g, "&");
   const params = [];
   const seen = new Set();
   for (const pair of query.split("&")) {
@@ -218,14 +226,38 @@ function sanitizeDbUrl(raw) {
     params.push([k, v]);
   }
   if (!isLocal && !seen.has("sslmode")) params.push(["sslmode", "require"]);
+  // Supabase «Transaction pooler» (6543): Prisma necesita pgbouncer=true.
+  if (SUPABASE_TX.test(base) && !seen.has("pgbouncer")) params.push(["pgbouncer", "true"]);
   const qs = params.map(([k, v]) => (v === "" ? k : k + "=" + v)).join("&");
   return qs ? base + "?" + qs : base;
 }
 if (process.env.DATABASE_URL) {
   process.env.DATABASE_URL = sanitizeDbUrl(process.env.DATABASE_URL);
 }
-// Para MIGRAR, Neon recomienda la conexión DIRECTA (sin "-pooler").
-const migrateUrl = (process.env.DATABASE_URL || "").replace("-pooler.", ".");
+// Para MIGRAR: Neon usa la conexión DIRECTA (sin "-pooler"); Supabase pasa del
+// pooler de transacción (6543) al de sesión (5432), que admite cambios de estructura.
+function migrationUrl(url) {
+  const s = url || "";
+  if (SUPABASE_TX.test(s.split("?")[0])) {
+    const [base, query = ""] = s.split("?");
+    const q = query.split("&").filter((p) => p && !p.startsWith("pgbouncer=")).join("&");
+    const b = base.replace(/\\.pooler\\.supabase\\.com:6543/i, ".pooler.supabase.com:5432");
+    return q ? b + "?" + q : b;
+  }
+  return s.replace("-pooler.", ".");
+}
+const migrateUrl = migrationUrl(process.env.DATABASE_URL);
+
+// node-postgres trata sslmode=require como «verificar el certificado», y el de
+// Supabase lo firma su propia autoridad: se quita de la URL y se cifra con
+// ssl: { rejectUnauthorized: false }, igual que hace Prisma con sslmode=require.
+function pgConnectionString(url) {
+  const [base, query = ""] = String(url).split("?");
+  const keep = query
+    .split("&")
+    .filter((p) => p && !/^(sslmode|sslaccept|sslcert|sslrootcert|pgbouncer|connection_limit|pool_timeout|schema)=/.test(p));
+  return keep.length ? base + "?" + keep.join("&") : base;
+}
 
 const schema = path.join(__dirname, "prisma", "schema.prisma");
 const q = (s) => JSON.stringify(s);
@@ -354,7 +386,7 @@ function migrateWithPg() {
   const isLocal = /localhost|127\\.0\\.0\\.1/.test(migrateUrl);
   return (async () => {
     const client = new Client({
-      connectionString: migrateUrl,
+      connectionString: pgConnectionString(migrateUrl),
       ssl: isLocal ? false : { rejectUnauthorized: false },
     });
     await client.connect();
@@ -449,6 +481,9 @@ writeFileSync(
   join(out, ".env.example"),
   `# Renómbralo a .env (o define estas variables en el panel "Setup Node.js App").
 # OBLIGATORIAS
+# Supabase: Connect → «Session pooler» (puerto 5432, usuario postgres.<ref>), p. ej.
+#   postgresql://postgres.abcd:TU-CLAVE@aws-0-us-east-1.pooler.supabase.com:5432/postgres
+# (No uses «Direct connection» db.<ref>.supabase.co: solo funciona por IPv6.)
 DATABASE_URL=postgresql://usuario:password@host/db?sslmode=require
 JWT_SECRET=pon-aqui-un-texto-largo-de-mas-de-32-caracteres-xxxxx
 ENCRYPTION_KEY=otro-texto-largo-de-mas-de-32-caracteres-yyyyyyyyy
