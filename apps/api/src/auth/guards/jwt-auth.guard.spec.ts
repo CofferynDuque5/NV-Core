@@ -3,11 +3,11 @@ import { describe, expect, it, vi } from "vitest";
 
 import { JwtAuthGuard } from "./jwt-auth.guard";
 
-function ctx(method: string, demo: boolean) {
+function ctx(method: string, demo: boolean, allowDemo = false) {
   const request: Record<string, any> = { method, headers: { authorization: "Bearer t" } };
   const guard = new JwtAuthGuard(
     { verifyAsync: vi.fn(async () => ({ sub: "u1", email: "e", name: "n", ...(demo ? { demo: true } : {}) })) } as never,
-    { getAllAndOverride: vi.fn(() => false) } as never,
+    { getAllAndOverride: vi.fn((key: string) => (key === "allowDemoWrite" ? allowDemo : false)) } as never,
   );
   const context = { getHandler: () => null, getClass: () => null, switchToHttp: () => ({ getRequest: () => request }) };
   return { guard, context: context as never, request };
@@ -25,6 +25,11 @@ describe("JwtAuthGuard · demo", () => {
       const { guard, context } = ctx(method, true);
       await expect(guard.canActivate(context)).rejects.toBeInstanceOf(ForbiddenException);
     }
+  });
+
+  it("the demo can report it is using the panel (@AllowDemo)", async () => {
+    const { guard, context } = ctx("POST", true, true);
+    await expect(guard.canActivate(context)).resolves.toBe(true);
   });
 
   it("real accounts can still write", async () => {

@@ -1,5 +1,5 @@
 import * as React from "react";
-import { PAYMENT_CURRENCIES, type PaymentCurrency } from "@nv/domain";
+import { PAYMENT_CURRENCIES, type PaymentCurrency, type PaymentRequest } from "@nv/domain";
 
 import { useContacts, usePaymentMethods } from "@/hooks/use-domain-data";
 import { useCreatePayment } from "@/hooks/use-domain-mutations";
@@ -18,12 +18,17 @@ export function PaymentDialog({
   open,
   onOpenChange,
   defaultContactId,
+  defaultContactName,
+  defaultConcept,
   onCreated,
 }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
   defaultContactId?: string;
-  onCreated?: (id: string) => void;
+  /** Shown when the default contact is not among the first loaded contacts. */
+  defaultContactName?: string;
+  defaultConcept?: string;
+  onCreated?: (id: string, payment: PaymentRequest) => void;
 }) {
   const create = useCreatePayment();
   const methods = usePaymentMethods();
@@ -38,7 +43,7 @@ export function PaymentDialog({
 
   React.useEffect(() => {
     if (!open) return;
-    setConcept("");
+    setConcept(defaultConcept ?? "");
     setAmount("");
     // Start in the currency of the first active method, if the brand has one.
     setCurrency(methods.data?.find((m) => m.active)?.currency ?? "COP");
@@ -69,7 +74,7 @@ export function PaymentDialog({
       {
         onSuccess: (p) => {
           onOpenChange(false);
-          onCreated?.(p.id);
+          onCreated?.(p.id, p);
         },
         onError: (err) => setError(errorMessage(err)),
       },
@@ -136,6 +141,9 @@ export function PaymentDialog({
           <Label htmlFor="py-contact">Cliente</Label>
           <select id="py-contact" className={selectCls} value={contactId} onChange={(e) => setContactId(e.target.value)}>
             <option value="">Sin contacto</option>
+            {defaultContactId && !(contacts.data?.items ?? []).some((c) => c.id === defaultContactId) ? (
+              <option value={defaultContactId}>{defaultContactName ?? "Este cliente"}</option>
+            ) : null}
             {(contacts.data?.items ?? []).map((c) => (
               <option key={c.id} value={c.id}>
                 {c.name}

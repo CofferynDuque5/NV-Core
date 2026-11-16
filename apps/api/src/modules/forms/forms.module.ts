@@ -8,12 +8,14 @@ import {
   Injectable,
   Module,
   NotFoundException,
+  Optional,
   Param,
   Patch,
   Post,
   ServiceUnavailableException,
   UseGuards,
 } from "@nestjs/common";
+import { WorkspaceAccessService } from "../../common/access/workspace-access.service";
 import { ApiBearerAuth, ApiPropertyOptional, ApiTags } from "@nestjs/swagger";
 import { Throttle } from "@nestjs/throttler";
 import {
@@ -121,7 +123,15 @@ export class FormsService {
     private readonly prisma: PrismaService,
     private readonly audit: AuditLogger,
     private readonly plans: PlanService,
+    @Optional() private readonly access?: WorkspaceAccessService,
   ) {}
+
+  /** Forms are a Pro extra: a Básico brand's public form says it's not available. */
+  private async assertPlan(workspaceSlug: string): Promise<void> {
+    if (this.access && !(await this.access.allows(workspaceSlug, "formularios"))) {
+      throw new NotFoundException("Este formulario no está disponible.");
+    }
+  }
 
   private db() {
     if (!this.prisma.enabled) throw new ServiceUnavailableException("Base de datos no configurada.");
@@ -186,6 +196,7 @@ export class FormsService {
   async getPublic(id: string): Promise<PublicForm> {
     const row = await this.db().form.findUnique({ where: { id } });
     if (!row) throw new NotFoundException("Formulario no encontrado.");
+    await this.assertPlan(row.workspaceSlug);
     await this.prisma.form.update({ where: { id }, data: { views: { increment: 1 } } });
     const fields = ((row.fields as unknown as FormField[]) ?? []).length
       ? (row.fields as unknown as FormField[])
@@ -220,6 +231,7 @@ export class FormsService {
   async submit(id: string, values: Record<string, string>, attribution?: AttributionInput): Promise<FormSubmitResult> {
     const form = await this.db().form.findUnique({ where: { id } });
     if (!form) throw new NotFoundException("Formulario no encontrado.");
+    await this.assertPlan(form.workspaceSlug);
     const ws = form.workspaceSlug;
     const fields = ((form.fields as unknown as FormField[]) ?? []).length
       ? (form.fields as unknown as FormField[])

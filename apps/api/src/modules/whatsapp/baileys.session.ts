@@ -11,7 +11,16 @@ import {
   type WhatsappGroup,
   type WhatsappStatusValue,
 } from "./whatsapp.types";
-import { chatJid, contactLid, contactName, contactPnJid, historyMessages, toChatMessage } from "./chat-message";
+import {
+  chatJid,
+  contactLid,
+  contactName,
+  contactPnJid,
+  historyMessages,
+  savedContactName,
+  toChatMessage,
+  type ChatMessage,
+} from "./chat-message";
 import { MAX_RECONNECT_ATTEMPTS, backoffDelay, classifyDisconnect } from "./reconnect-policy";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -42,6 +51,11 @@ export class BaileysSession {
   private readonly lidToPn = new Map<string, string>();
   /** Phone (E.164) → contact name, from the contact list. */
   private readonly names = new Map<string, string>();
+  /** Phone (E.164) → name the brand saved for it in its own phone. */
+  private readonly savedNames = new Map<string, string>();
+  /** Raw messages with an attachment, by message id, so the Inbox can download it (last 500). */
+  private readonly mediaMessages = new Map<string, any>();
+  private baileysMod: any = null;
   /** The user pressed "Conectar": if the stored creds turn out dead, go straight to a fresh QR. */
   private userInitiated = false;
   /** Keeps the cross-process owner lock fresh while this process runs the socket. */
@@ -146,6 +160,7 @@ export class BaileysSession {
     );
     try {
       const baileys = await loadBaileys();
+      this.baileysMod = baileys;
       this.note("Baileys cargado.");
       const makeWASocket = (baileys.default ?? (baileys as any).makeWASocket) as any;
       const { useMultiFileAuthState, fetchLatestBaileysVersion } = baileys as any;
@@ -403,17 +418,18 @@ export class BaileysSession {
     for (const m of u.messages) {
       try {
         if (u.type === "append" && !m?.key?.fromMe) continue;
+        const rj: string = m?.key?.remoteJid ?? "";
+        if (rj.endsWith("@g.us")) {
+          if (u.type === "notify" && !m?.key?.fromMe) {
+            const ts = Number(m?.messageTimestamp ?? 0);
+            this.events.onGroupActivity?.(this.workspaceSlug, rj, ts > 0 ? new Date(ts * 1000) : new Date());
+          }
+          continue;
+        }
         await this.resolveLid(m?.key);
         const msg = toChatMessage(m, this.lidToPn);
         if (!msg) continue;
-        this.events.onInbound(this.workspaceSlug, {
-          contactHandle: msg.handle,
-          contactName: msg.name ?? this.names.get(msg.handle) ?? msg.handle,
-          text: msg.text,
-          direction: msg.direction,
-          at: msg.at,
-          externalId: msg.externalId,
-        });
+        this.events.onInbound(this.workspaceSlug, this.forInbox(msg, m));
       } catch (err) {
         this.logger.warn(`Mensaje ignorado: ${(err as Error).message}`);
       }
@@ -444,17 +460,107 @@ export class BaileysSession {
    * message id, and never treated as new (no automations or AI replies).
    */
   private seedInboxFromHistory(messages: any[]): void {
+    const raw = new Map<string, any>();
+    for (const m of Array.isArray(messages) ? messages : []) if (typeof m?.key?.id === "string") raw.set(m.key.id, m);
     for (const msg of historyMessages(messages, this.lidToPn)) {
       this.events.onInbound(this.workspaceSlug, {
-        contactHandle: msg.handle,
-        contactName: msg.name ?? this.names.get(msg.handle) ?? msg.handle,
-        text: msg.text,
-        direction: msg.direction,
-        at: msg.at,
-        externalId: msg.externalId,
+        ...this.forInbox(msg, msg.externalId ? raw.get(msg.externalId) : null),
         history: true,
       });
     }
+  }
+
+  /**
+   * A parsed chat message → what the Inbox stores. The chat is named as the
+   * brand saved the number in its own phone; else the contact's own WhatsApp
+   * name. An attachment carries a sealed copy of the WhatsApp message so the
+   * Inbox can download it later, even after a restart.
+   */
+  private forInbox(msg: ChatMessage, raw: any): import("./whatsapp.types").SessionChatMessage {
+    const saved = this.savedNames.get(msg.handle) ?? null;
+    const out: import("./whatsapp.types").SessionChatMessage = {
+      contactHandle: msg.handle,
+      contactName: saved ?? msg.name ?? this.names.get(msg.handle) ?? msg.handle,
+      savedName: saved,
+      profileName: msg.name,
+      text: msg.text,
+      direction: msg.direction,
+      at: msg.at,
+      externalId: msg.externalId,
+    };
+    if (msg.media) {
+      out.media = msg.media;
+      const ref = this.sealMediaMessage(raw);
+      if (ref) out.mediaRef = ref;
+      if (raw && msg.externalId) {
+        this.mediaMessages.set(msg.externalId, raw);
+        if (this.mediaMessages.size > 500) this.mediaMessages.delete(this.mediaMessages.keys().next().value!);
+      }
+    }
+    return out;
+  }
+
+  /** The WhatsApp message (protobuf bytes, base64) needed to download its attachment later. */
+  private sealMediaMessage(raw: any): string | null {
+    try {
+      const proto = this.baileysMod?.proto;
+      if (!raw || !proto?.WebMessageInfo) return null;
+      return Buffer.from(proto.WebMessageInfo.encode(proto.WebMessageInfo.fromObject(raw)).finish()).toString("base64");
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * Download the attachment of a chat message (photo, audio, video…). `ref` is
+   * what {@link forInbox} sealed. When WhatsApp no longer has the file at its
+   * old address, the phone is asked to upload it again.
+   */
+  async downloadChatMedia(ref: string, externalId?: string | null): Promise<Buffer> {
+    if (!this.isConnected || !this.sock) throw new Error("WhatsApp no está conectado.");
+    const proto = this.baileysMod?.proto;
+    const download = this.baileysMod?.downloadMediaMessage;
+    if (!proto || typeof download !== "function") throw new Error("WhatsApp no está listo.");
+    const raw =
+      (externalId ? this.mediaMessages.get(externalId) : null) ?? proto.WebMessageInfo.decode(Buffer.from(ref, "base64"));
+    const buf = await withTimeout(
+      download(raw, "buffer", {}, { logger: silentLogger(), reuploadRequest: this.sock.updateMediaMessage }),
+      90_000,
+    );
+    if (!Buffer.isBuffer(buf) || buf.length === 0) throw new Error("WhatsApp no devolvió el archivo.");
+    return buf;
+  }
+
+  /**
+   * Send a photo, video, document, audio or voice note to a chat (bytes, not a
+   * URL). A voice note must be Ogg/Opus to play as one on the phone.
+   */
+  async sendChatFile(
+    to: string,
+    file: { kind: "image" | "video" | "document" | "audio" | "voice"; bytes: Buffer; mime: string; name?: string; caption?: string; seconds?: number },
+  ): Promise<{ id: string }> {
+    if (!this.isConnected || !this.sock) throw new Error("WhatsApp no está conectado en este workspace.");
+    const caption = file.caption?.trim() || undefined;
+    let content: any;
+    if (file.kind === "image") content = { image: file.bytes, caption, mimetype: file.mime };
+    else if (file.kind === "video") content = { video: file.bytes, caption, mimetype: file.mime };
+    else if (file.kind === "voice")
+      content = { audio: file.bytes, ptt: true, mimetype: "audio/ogg; codecs=opus", ...(file.seconds ? { seconds: file.seconds } : {}) };
+    else if (file.kind === "audio") content = { audio: file.bytes, ptt: false, mimetype: file.mime };
+    else content = { document: file.bytes, mimetype: file.mime, fileName: file.name || "archivo", caption };
+    const result = await this.sock.sendMessage(toJid(to), content);
+    return { id: result?.key?.id ?? "" };
+  }
+
+  /**
+   * Ask WhatsApp to send the whole contact list again (names as saved in the
+   * phone). The names arrive through the usual contact events.
+   */
+  async refreshContactNames(): Promise<void> {
+    if (!this.isConnected || !this.sock) throw new Error("WhatsApp no está conectado.");
+    const names = this.baileysMod?.ALL_WA_PATCH_NAMES ?? ["critical_block", "critical_unblock_low", "regular_high", "regular_low", "regular"];
+    if (typeof this.sock.resyncAppState !== "function") throw new Error("Esta versión de WhatsApp Web no permite pedir los nombres.");
+    await withTimeout(this.sock.resyncAppState(names, true), 120_000);
   }
 
   /**
@@ -464,15 +570,25 @@ export class BaileysSession {
    */
   private trackContacts(rows: any[]): void {
     if (!Array.isArray(rows)) return;
-    const named: { handle: string; name: string }[] = [];
+    const named: { handle: string; name: string; saved?: boolean }[] = [];
     for (const c of rows) {
       if (c?.id) this.contacts.add(String(c.id));
       const pn = contactPnJid(c);
       const lid = contactLid(c);
       if (pn && lid) this.lidToPn.set(lid, pn);
       const handle = numberFromJid(pn ?? (lid ? this.lidToPn.get(lid) : null));
+      const saved = savedContactName(c);
+      if (handle && saved) {
+        // The name in the brand's own phone wins over the contact's profile name.
+        if (this.savedNames.get(handle) !== saved) {
+          this.savedNames.set(handle, saved);
+          this.names.set(handle, saved);
+          named.push({ handle, name: saved, saved: true });
+        }
+        continue;
+      }
       const name = contactName(c);
-      if (handle && name && this.names.get(handle) !== name) {
+      if (handle && name && !this.savedNames.has(handle) && this.names.get(handle) !== name) {
         this.names.set(handle, name);
         named.push({ handle, name });
       }
@@ -492,23 +608,43 @@ export class BaileysSession {
     return { groupsCount: groups.length, contactsCount };
   }
 
-  /** Read the participating groups with their subject and member count. */
+  /**
+   * Read the participating groups with their subject and member count. Big
+   * accounts can time out on the first try, so it retries once. Community
+   * "parent" entries are skipped (nobody can write in them) and a group with no
+   * subject gets its real name from its metadata instead of showing its id.
+   */
   async fetchGroups(): Promise<WhatsappGroup[]> {
-    try {
-      const groups = await this.sock?.groupFetchAllParticipating?.();
-      if (!groups) return [];
-      return Object.values(groups).map((g: any) => ({
+    let raw: Record<string, any> | undefined;
+    for (let attempt = 1; attempt <= 2 && !raw; attempt++) {
+      try {
+        raw = await this.sock?.groupFetchAllParticipating?.();
+      } catch (err) {
+        this.logger.warn(`No se pudieron leer los grupos (intento ${attempt}): ${(err as Error).message}`);
+        if (attempt < 2) await new Promise((r) => setTimeout(r, 5_000));
+      }
+    }
+    if (!raw) return [];
+    const out: WhatsappGroup[] = [];
+    let lookups = 0;
+    for (const g of Object.values(raw) as any[]) {
+      if (!g?.id || g.isCommunity) continue;
+      let subject: string = typeof g.subject === "string" ? g.subject.trim() : "";
+      if (!subject && lookups < 25) {
+        lookups += 1;
+        const meta = await this.sock?.groupMetadata?.(g.id).catch(() => null);
+        subject = typeof meta?.subject === "string" ? meta.subject.trim() : "";
+      }
+      out.push({
         remoteJid: String(g.id),
-        subject: String(g.subject ?? g.id),
+        subject: subject || "Grupo sin nombre",
         size: Number(g.size ?? g.participants?.length ?? 0),
         description: typeof g.desc === "string" ? g.desc : null,
-        onlyAdmins: g.announce === true,
+        onlyAdmins: g.announce === true || g.isCommunityAnnounce === true,
         ownerJid: g.owner ? String(g.owner) : null,
-      }));
-    } catch (err) {
-      this.logger.warn(`No se pudieron sincronizar grupos: ${(err as Error).message}`);
-      return [];
+      });
     }
+    return out;
   }
 
   /** Send a text message. Throws if not connected. */

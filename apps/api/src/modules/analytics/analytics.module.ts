@@ -97,16 +97,40 @@ function dailyMap(rows: { day: string; n: number }[]): Map<string, number> {
   return map;
 }
 
+/** How long a snapshot is reused for the same brand and window. */
+const SNAPSHOT_REUSE_MS = 15_000;
+
 @Injectable()
 export class AnalyticsService {
   constructor(private readonly prisma: PrismaService) {}
+
+  /**
+   * The same brand and window asked again within a few seconds (Inicio and
+   * Analítica, two tabs, a reload) reuse one answer: each snapshot is ~20
+   * database queries that would otherwise hold the whole connection pool.
+   */
+  private readonly recent = new Map<string, { at: number; value: Promise<AnalyticsSnapshot | null> }>();
+
+  async snapshot(workspaceSlug: string, days = 30): Promise<AnalyticsSnapshot | null> {
+    const key = `${workspaceSlug}:${days}`;
+    const now = Date.now();
+    const hit = this.recent.get(key);
+    if (hit && now - hit.at < SNAPSHOT_REUSE_MS) return hit.value;
+    const value = this.compute(workspaceSlug, days);
+    this.recent.set(key, { at: now, value });
+    value.catch(() => this.recent.delete(key));
+    if (this.recent.size > 500) {
+      for (const [k, v] of this.recent) if (now - v.at >= SNAPSHOT_REUSE_MS) this.recent.delete(k);
+    }
+    return value;
+  }
 
   /**
    * Real aggregates from the workspace's own data over a reporting window
    * (no fabricated metrics). `days` selects the window (7/30/90, default 30);
    * KPIs compare it against the immediately preceding window of equal length.
    */
-  async snapshot(workspaceSlug: string, days = 30): Promise<AnalyticsSnapshot | null> {
+  private async compute(workspaceSlug: string, days: number): Promise<AnalyticsSnapshot | null> {
     if (!this.prisma.enabled) return null;
 
     const window = ALLOWED_DAYS.includes(days) ? days : 30;
@@ -308,7 +332,7 @@ export class AnalyticsService {
       SELECT to_char(date_trunc('day', m."createdAt"), 'YYYY-MM-DD') AS day, COUNT(*)::int AS n
       FROM "Message" m
       JOIN "Conversation" c ON c."id" = m."conversationId"
-      WHERE c."workspaceSlug" = ${workspaceSlug} AND m."createdAt" >= ${from} AND m."createdAt" < ${to}
+      WHERE c."workspaceSlug" = ${workspaceSlug} AND m."direction" <> 'note' AND m."createdAt" >= ${from} AND m."createdAt" < ${to}
       GROUP BY 1
     `);
   }
@@ -339,7 +363,7 @@ export class AnalyticsService {
              COUNT(*)::int AS n
       FROM "Message" m
       JOIN "Conversation" c ON c."id" = m."conversationId"
-      WHERE c."workspaceSlug" = ${workspaceSlug} AND m."createdAt" >= ${from} AND m."createdAt" < ${to}
+      WHERE c."workspaceSlug" = ${workspaceSlug} AND m."direction" <> 'note' AND m."createdAt" >= ${from} AND m."createdAt" < ${to}
       GROUP BY 1, 2
     `);
   }

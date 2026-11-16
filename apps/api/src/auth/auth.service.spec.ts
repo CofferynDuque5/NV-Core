@@ -108,6 +108,7 @@ describe("AuthService login lockout", () => {
     const store = {
       findUserByEmail: vi.fn(async () => user),
       incrementFailedLogins: vi.fn(async () => ++calls.increments + (overrides.failedLoginAttempts ?? 0)),
+      recordFailedLogin: vi.fn(async () => undefined),
       lockUser: vi.fn(async (_id: string, until: Date) => {
         calls.locked = until;
       }),
@@ -151,6 +152,7 @@ describe("AuthService login lockout", () => {
     await expect(svc.login({ email: "u1@x.com", password: "wrong" })).rejects.toBeInstanceOf(
       UnauthorizedException,
     );
+    expect(store.recordFailedLogin).toHaveBeenCalledTimes(1);
     expect(store.incrementFailedLogins).toHaveBeenCalledTimes(1);
     expect(calls.locked).toBeInstanceOf(Date);
   });

@@ -6,7 +6,7 @@ import type { Funnel } from "@nv/domain";
 
 import { useFunnels } from "@/hooks/use-domain-data";
 import { useDeleteFunnel } from "@/hooks/use-domain-mutations";
-import { STEP_TYPE_LABEL, funnelConversion, funnelEntries, publicFunnelUrl } from "@/lib/funnels";
+import { STEP_TYPE_LABEL, funnelConversion, funnelEntries, publicFunnelUrl, stepViews } from "@/lib/funnels";
 import { PageHeader } from "@/components/common/page-header";
 import { QueryBoundary } from "@/components/common/query-boundary";
 import { CardGridSkeleton } from "@/components/common/skeletons";
@@ -85,7 +85,7 @@ export default function EmbudosPage() {
                       <React.Fragment key={s.id}>
                         {i > 0 ? <span className="text-ink-faint">→</span> : null}
                         <span className="rounded-md bg-panel-raised px-1.5 py-0.5 text-ink-muted">
-                          {STEP_TYPE_LABEL[s.type]} · {s.views}
+                          {STEP_TYPE_LABEL[s.type] ?? s.type} · {stepViews(s)}
                         </span>
                       </React.Fragment>
                     ))}
@@ -108,7 +108,7 @@ export default function EmbudosPage() {
                       </a>
                     </Button>
                     <div className="ml-auto flex items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100">
-                      <Button
+                      <Button aria-label="Editar"
                         variant="ghost"
                         size="sm"
                         onClick={() => {
@@ -118,7 +118,7 @@ export default function EmbudosPage() {
                       >
                         <Pencil className="size-3.5" />
                       </Button>
-                      <Button
+                      <Button aria-label="Eliminar"
                         variant="ghost"
                         size="sm"
                         disabled={del.isPending}

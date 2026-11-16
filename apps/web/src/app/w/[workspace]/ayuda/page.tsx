@@ -19,6 +19,7 @@ import {
   HELP_CATEGORIES,
   type HelpArticle,
   type HelpCategoryId,
+  NV_CONTACT_EMAIL,
 } from "@nv/domain";
 
 import { useWorkspace } from "@/hooks/use-workspace";
@@ -178,7 +179,13 @@ export default function AyudaPage() {
           </span>
           <div>
             <div className="text-sm font-medium text-ink">¿No encuentras lo que buscas?</div>
-            <div className="text-xs text-ink-muted">Envíanos tu pregunta y te ayudamos.</div>
+            <div className="text-xs text-ink-muted">
+              Envíanos tu pregunta o escríbenos a{" "}
+              <a href={`mailto:${NV_CONTACT_EMAIL}`} className="text-brand hover:underline">
+                {NV_CONTACT_EMAIL}
+              </a>
+              .
+            </div>
           </div>
         </div>
         <Button variant="secondary" size="sm" onClick={openFeedback}>

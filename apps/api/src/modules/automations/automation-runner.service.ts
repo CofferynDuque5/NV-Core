@@ -1,12 +1,14 @@
-import { Injectable, Logger, type OnModuleDestroy, type OnModuleInit } from "@nestjs/common";
-import type { AutomationEdge, AutomationNode, AutomationTraceStep } from "@nv/domain";
+import { Injectable, Logger, Optional, type OnModuleDestroy, type OnModuleInit } from "@nestjs/common";
+import { birthdayMonthDay, celebratedMonthDays, scheduleTimeZone, type AutomationEdge, type AutomationNode, type AutomationTraceStep } from "@nv/domain";
 
+import { WorkspaceAccessService } from "../../common/access/workspace-access.service";
 import { EventBus } from "../../core/events/event-bus.service";
 import { PrismaService } from "../../prisma/prisma.service";
 import { ProviderManager } from "../../providers/provider-manager.service";
 import { AiService } from "../ai/ai.module";
 import { ConsentService, isOptOutMessage, phoneKey } from "../consent/consent.service";
 import { NotificationsService } from "../notifications/notifications.module";
+import { localDayKey, zonedMidnight, zoneOffsetMs } from "../reports/weekly-report";
 
 /**
  * Ejecuta las automatizaciones DE VERDAD (no solo dry-run): al llegar un mensaje
@@ -48,6 +50,14 @@ const MAX_WAIT_MS = 30 * 86_400_000;
 const RUN_RETENTION_MS = 30 * 86_400_000;
 const DAY_MS = 86_400_000;
 export const INACTIVE_EVENT = "contact.inactive";
+export const BIRTHDAY_EVENT = "contact.birthday";
+
+/** Hora local (0–23) a la que se felicita; 9 por defecto. */
+export function birthdayHour(config: Record<string, unknown>): number {
+  const raw = String(config.hour ?? "").trim();
+  const h = raw === "" ? 9 : Number(raw);
+  return Number.isInteger(h) && h >= 0 && h <= 23 ? h : 9;
+}
 /** Cada cuánto se buscan contactos inactivos. */
 const INACTIVE_SWEEP_MS = 3_600_000;
 /** Solo los que cumplieron los N días hace menos de esto (y tras una caída del servidor). */
@@ -119,6 +129,8 @@ const HELP_WORDS = ["no funciona", "ayuda", "error", "no me deja", "no puedo", "
 
 /** Instrucción para la IA cuando el flujo no nace de un mensaje (contacto inactivo). */
 function reengagePrompt(p: IncomingMessage, ctx: Record<string, string>): string {
+  if (ctx.trigger === "birthday")
+    return `Hoy es el cumpleaños de ${p.contactName || "un cliente"}. Escríbele una felicitación breve y cálida, sin vender nada.`;
   return `${p.contactName || "El contacto"} lleva ${ctx.inactiveDays || "varios"} días sin escribirnos. Escríbele un mensaje breve y amable para retomar la conversación, sin presionar.`;
 }
 
@@ -140,7 +152,13 @@ export class AutomationRunnerService implements OnModuleInit, OnModuleDestroy {
     private readonly ai: AiService,
     private readonly notifications: NotificationsService,
     private readonly consent: ConsentService,
+    @Optional() private readonly access?: WorkspaceAccessService,
   ) {}
+
+  /** Automations are a Pro extra: a Básico brand's flows stay saved but don't run. */
+  private async planAllows(workspaceSlug: string): Promise<boolean> {
+    return this.access ? this.access.allows(workspaceSlug, "automatizaciones") : true;
+  }
 
   onModuleInit(): void {
     this.unsubscribe = this.events.on("message.received", (p) => this.onMessage(p));
@@ -152,9 +170,10 @@ export class AutomationRunnerService implements OnModuleInit, OnModuleDestroy {
       );
       if (Date.now() - this.lastInactiveSweep >= INACTIVE_SWEEP_MS) {
         this.lastInactiveSweep = Date.now();
-        void this.sweepInactive().catch((err: unknown) =>
-          this.logger.warn(`Revisar contactos inactivos falló: ${(err as Error).message}`),
-        );
+        void this.sweepInactive()
+          .catch((err: unknown) => this.logger.warn(`Revisar contactos inactivos falló: ${(err as Error).message}`))
+          .then(() => this.sweepBirthdays())
+          .catch((err: unknown) => this.logger.warn(`Revisar cumpleaños falló: ${(err as Error).message}`));
       }
     }, TICK_MS);
   }
@@ -172,6 +191,7 @@ export class AutomationRunnerService implements OnModuleInit, OnModuleDestroy {
       where: { workspaceSlug: p.workspaceSlug, status: "activo" },
     });
     if (flows.length === 0) return;
+    if (!(await this.planAllows(p.workspaceSlug))) return;
 
     const low = p.text.toLowerCase();
     const context: Record<string, string> = {
@@ -254,7 +274,9 @@ export class AutomationRunnerService implements OnModuleInit, OnModuleDestroy {
           current,
           context.trigger === "inactive"
             ? `Sin escribir desde hace ${context.inactiveDays} días.`
-            : `«${p.text.slice(0, 80)}»`,
+            : context.trigger === "birthday"
+              ? "Hoy es su cumpleaños."
+              : `«${p.text.slice(0, 80)}»`,
         );
       } else if (current.type === "action") {
         let result: ActionResult;
@@ -433,6 +455,7 @@ export class AutomationRunnerService implements OnModuleInit, OnModuleDestroy {
       const edges = (flow.edges as unknown as AutomationEdge[]) ?? [];
       const trigger = nodes.find((n) => n.type === "trigger");
       if (!trigger || str(cfg(trigger).event) !== INACTIVE_EVENT) continue;
+      if (!(await this.planAllows(flow.workspaceSlug))) continue;
       const days = inactiveDays(cfg(trigger));
       if (days == null) continue;
       const threshold = new Date(now.getTime() - days * DAY_MS);
@@ -492,6 +515,89 @@ export class AutomationRunnerService implements OnModuleInit, OnModuleDestroy {
           const reason = (err as Error).message || "Error al ejecutar el flujo.";
           this.logger.warn(`Flujo "${flow.name}" falló con ${c.name}: ${reason}`);
           await this.recordRun(flow.id, "inactive", p, trace, false, reason, startedAt);
+        }
+      }
+    }
+    return processed;
+  }
+
+  /**
+   * Ejecuta los flujos «cumpleaños del contacto» para quien cumple hoy en la
+   * zona de la marca, a partir de la hora elegida. Una vez por contacto y año
+   * (se reclama con la medianoche local de ese día). Devuelve cuántos se procesaron.
+   */
+  async sweepBirthdays(now = new Date()): Promise<number> {
+    if (!this.prisma.enabled) return 0;
+    const flows = await this.prisma.automation.findMany({ where: { status: "activo" } });
+    let processed = 0;
+    for (const flow of flows) {
+      const nodes = (flow.nodes as unknown as AutomationNode[]) ?? [];
+      const edges = (flow.edges as unknown as AutomationEdge[]) ?? [];
+      const trigger = nodes.find((n) => n.type === "trigger");
+      if (!trigger || str(cfg(trigger).event) !== BIRTHDAY_EVENT) continue;
+      if (!(await this.planAllows(flow.workspaceSlug))) continue;
+      const settings = await this.prisma.workspaceSettings
+        .findUnique({ where: { workspaceSlug: flow.workspaceSlug }, select: { timeZone: true } })
+        .catch(() => null);
+      const tz = scheduleTimeZone(settings?.timeZone, process.env.SCHEDULE_TIME_ZONE);
+      const localHour = new Date(now.getTime() + zoneOffsetMs(now, tz)).getUTCHours();
+      if (localHour < birthdayHour(cfg(trigger))) continue;
+      const today = localDayKey(now, tz);
+      const days = celebratedMonthDays(today, 0);
+      const dayStart = zonedMidnight(today, tz);
+      const candidates = await this.prisma.contact.findMany({
+        where: {
+          workspaceSlug: flow.workspaceSlug,
+          optOutAt: null,
+          phone: { not: null },
+          OR: days.map((md) => ({ birthday: { endsWith: md } })),
+        },
+        orderBy: { createdAt: "asc" },
+        take: INACTIVE_BATCH * 4,
+      });
+      const todays = candidates.filter((c) => days.includes(birthdayMonthDay(c.birthday) ?? ""));
+      if (todays.length === 0) continue;
+      const fires = await this.prisma.automationInactiveFire.findMany({
+        where: { automationId: flow.id, contactId: { in: todays.map((c) => c.id) } },
+      });
+      const firedAt = new Map(fires.map((f) => [f.contactId, f.lastContactAt.getTime()]));
+      const due = todays.filter((c) => (firedAt.get(c.id) ?? -1) < dayStart.getTime()).slice(0, INACTIVE_BATCH);
+      for (const c of due) {
+        // Reclamado antes de enviar: un reinicio nunca felicita dos veces.
+        if (!(await this.claimInactive(flow.id, flow.workspaceSlug, c.id, dayStart))) continue;
+        processed++;
+        const route = await this.routeFor(flow.workspaceSlug, c.phone!);
+        const p: IncomingMessage = {
+          workspaceSlug: flow.workspaceSlug,
+          channel: route.channel,
+          contactHandle: route.handle,
+          contactName: c.name,
+          text: "",
+        };
+        const context: Record<string, string> = {
+          text: "",
+          channel: route.channel,
+          contactName: c.name,
+          contactHandle: route.handle,
+          trigger: "birthday",
+          intent: "",
+          resolved: "false",
+          newContact: "false",
+        };
+        const trace: RunTrace = { steps: [], waiting: false };
+        const startedAt = new Date();
+        try {
+          const ran = await this.walk(flow.id, p, nodes, edges, trigger.id, context, false, trace);
+          if (ran) {
+            await this.prisma.automation
+              .update({ where: { id: flow.id }, data: { runs: { increment: 1 } } })
+              .catch(() => undefined);
+          }
+          await this.recordRun(flow.id, "birthday", p, trace, ran, null, startedAt);
+        } catch (err) {
+          const reason = (err as Error).message || "Error al ejecutar el flujo.";
+          this.logger.warn(`Flujo "${flow.name}" falló con ${c.name}: ${reason}`);
+          await this.recordRun(flow.id, "birthday", p, trace, false, reason, startedAt);
         }
       }
     }
@@ -579,6 +685,10 @@ export class AutomationRunnerService implements OnModuleInit, OnModuleDestroy {
       await this.finishWait(w.id, "cancelled", "El flujo ya no está activo.");
       return;
     }
+    if (!(await this.planAllows(w.workspaceSlug))) {
+      await this.finishWait(w.id, "cancelled", "El plan Básico no incluye automatizaciones.");
+      return;
+    }
     const nodes = (flow.nodes as unknown as AutomationNode[]) ?? [];
     const edges = (flow.edges as unknown as AutomationEdge[]) ?? [];
     if (!nodes.some((n) => n.id === w.nextNodeId)) {
@@ -623,7 +733,7 @@ export class AutomationRunnerService implements OnModuleInit, OnModuleDestroy {
   /** Guarda la ejecución en el historial. Nunca hace fallar el flujo. */
   private async recordRun(
     automationId: string,
-    trigger: "message" | "resume" | "inactive",
+    trigger: "message" | "resume" | "inactive" | "birthday",
     p: IncomingMessage,
     trace: RunTrace,
     didSomething: boolean,

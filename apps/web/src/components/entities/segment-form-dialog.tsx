@@ -15,6 +15,7 @@ import {
   ruleValid,
   valueControl,
 } from "@/lib/segments";
+import { useContactFields } from "@/hooks/use-domain-data";
 import { isBackendConfigured } from "@/lib/env";
 import { errorMessage } from "./form-dialog";
 import {
@@ -238,6 +239,9 @@ function RuleRow({
 }) {
   const ops = operatorsForField(rule.field);
   const control = valueControl(rule.operator);
+  const customFields = useContactFields().data ?? [];
+  const customKey = rule.field.startsWith("custom.") ? rule.field.slice(7) : null;
+  const customDef = customKey ? customFields.find((f) => f.key === customKey) : undefined;
 
   return (
     <div className="flex flex-wrap items-center gap-2 rounded-lg border border-line-soft bg-panel p-2">
@@ -252,6 +256,16 @@ function RuleRow({
             {f.label}
           </option>
         ))}
+        {customFields.length > 0 ? (
+          <optgroup label="Tus campos">
+            {customFields.map((f) => (
+              <option key={f.key} value={`custom.${f.key}`}>
+                {f.label}
+              </option>
+            ))}
+          </optgroup>
+        ) : null}
+        {customKey && !customDef ? <option value={rule.field}>{customKey} (borrado)</option> : null}
       </select>
 
       <select
@@ -275,6 +289,20 @@ function RuleRow({
 
       {control === "none" ? (
         <div className="flex-1" />
+      ) : customDef?.type === "select" ? (
+        <select
+          value={rule.value}
+          onChange={(e) => onChange({ ...rule, value: e.target.value })}
+          className={`${selectClass} w-auto min-w-[120px] flex-1`}
+          aria-label="Valor"
+        >
+          <option value="">—</option>
+          {(customDef.options ?? []).map((o) => (
+            <option key={o} value={o}>
+              {o}
+            </option>
+          ))}
+        </select>
       ) : control === "stage" ? (
         <select
           value={rule.value}
@@ -295,7 +323,13 @@ function RuleRow({
           onChange={(e) => onChange({ ...rule, value: e.target.value })}
           type={control === "number" ? "number" : control === "date" ? "date" : "text"}
           placeholder={
-            control === "number" ? "días" : control === "csv" ? "Lead, Cliente" : "valor"
+            rule.operator === "birthday_in_days"
+              ? "0 = hoy, 7 = esta semana"
+              : control === "number"
+                ? "días"
+                : control === "csv"
+                  ? "Lead, Cliente"
+                  : "valor"
           }
           className="min-w-[120px] flex-1"
           aria-label="Valor"

@@ -59,6 +59,8 @@ import { BillingModule } from "./modules/billing/billing.module";
 import { WhatsappModule } from "./modules/whatsapp/whatsapp.module";
 import { SocialModule } from "./modules/social/social.module";
 import { ProvidersModule } from "./providers/providers.module";
+import { PanelActivityModule } from "./modules/panel-activity/panel-activity.module";
+import { PushModule } from "./modules/push/push.module";
 
 @Module({
   imports: [
@@ -77,6 +79,8 @@ import { ProvidersModule } from "./providers/providers.module";
     SchedulerModule,
     ConsentModule,
     AuthModule,
+    PanelActivityModule,
+    PushModule,
     HealthModule,
     MetricsModule,
 

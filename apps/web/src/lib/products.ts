@@ -49,3 +49,22 @@ export function filterProducts(
 export function productMessage(p: Pick<Product, "name" | "description">): string {
   return [`*${p.name}*`, p.description?.trim(), "Precio: {{precio}}"].filter(Boolean).join("\n");
 }
+
+/** At or below this stock a product shows «Quedan N» and appears in the low-stock notice. */
+export const LOW_STOCK = 3;
+
+/** "agotado" (0), "bajo" (1–3) or null (no stock tracked or enough). */
+export function stockLevel(p: { stock: number | null; active?: boolean }): "agotado" | "bajo" | null {
+  if (p.stock == null) return null;
+  if (p.stock <= 0) return "agotado";
+  return p.stock <= LOW_STOCK ? "bajo" : null;
+}
+
+/**
+ * A product as a chat message: name, description and its prices as they are
+ * (no conversion), e.g. «Precio: USD 10 · VES 350».
+ */
+export function productChatText(p: Pick<Product, "name" | "description" | "prices">): string {
+  const prices = priceLine(p);
+  return [`*${p.name}*`, p.description?.trim(), prices ? `Precio: ${prices}` : null].filter(Boolean).join("\n");
+}

@@ -17,8 +17,15 @@ const FILTERS_KEY = "nv-calendar-filters";
 
 function readView(): CalendarView {
   if (typeof window === "undefined") return "week";
-  const v = window.localStorage.getItem(VIEW_KEY);
-  return v === "month" || v === "week" || v === "day" ? v : "week";
+  let v: string | null = null;
+  try {
+    v = window.localStorage.getItem(VIEW_KEY);
+  } catch {
+    /* ignore */
+  }
+  if (v === "month" || v === "week" || v === "day" || v === "timeline" || v === "agenda") return v;
+  // On a phone a 7-column week leaves today off-screen: start on today.
+  return window.matchMedia?.("(max-width: 639px)").matches ? "day" : "week";
 }
 
 function readFilters(): CalendarFilters {

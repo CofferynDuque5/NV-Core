@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Body,
   Controller,
   ForbiddenException,
@@ -12,26 +13,35 @@ import {
   type OnModuleInit,
   Param,
   Patch,
+  Delete,
   Post,
+  Put,
   Query,
   Req,
   Res,
   ServiceUnavailableException,
   UseGuards,
+  UseInterceptors,
+  UploadedFile,
 } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { ApiBearerAuth, ApiExcludeEndpoint, ApiPropertyOptional, ApiTags } from "@nestjs/swagger";
-import { SkipThrottle } from "@nestjs/throttler";
+import { SkipThrottle, Throttle } from "@nestjs/throttler";
+import { FileInterceptor } from "@nestjs/platform-express";
 import {
   CHANNEL_IDS,
   INBOX_UNASSIGNED,
   type ChannelId,
   type Conversation,
   type ConversationPage,
+  type Contact,
   type Message,
+  type InboxPulse,
+  type QuickReply,
 } from "@nv/domain";
-import { Type } from "class-transformer";
+import { Transform, Type } from "class-transformer";
 import {
+  ArrayMaxSize,
   IsArray,
   IsBoolean,
   IsIn,
@@ -42,7 +52,9 @@ import {
   MaxLength,
   Min,
   MinLength,
+  ValidateNested,
 } from "class-validator";
+import { randomUUID } from "node:crypto";
 import { Prisma } from "@prisma/client";
 import type { Response } from "express";
 
@@ -53,14 +65,35 @@ import { WorkspaceGuard } from "../../common/tenant/workspace.guard";
 import { WorkspaceRegistry } from "../../common/workspace-registry.service";
 import { safeEqual } from "../../common/crypto/crypto.util";
 import { PrismaService } from "../../prisma/prisma.service";
-import { mapConversation, mapMessage } from "../../prisma/mappers";
+import { mapContact, mapConversation, mapMessage } from "../../prisma/mappers";
 import { RolesGuard } from "../../auth/guards/roles.guard";
 import { Roles } from "../../auth/decorators/roles.decorator";
 import { Public } from "../../auth/decorators/public.decorator";
+import { CurrentUser } from "../../auth/decorators/current-user.decorator";
+import type { AuthenticatedUser } from "../../auth/auth.types";
 import { ProviderManager } from "../../providers/provider-manager.service";
 import { phoneKey } from "../consent/consent.service";
 import { isBareName, isSampleContact, phoneFromHandle } from "./inbox-contacts";
 import { ProvidersModule } from "../../providers/providers.module";
+import { CryptoService } from "../../common/crypto/crypto.service";
+import { WhatsappModule } from "../whatsapp/whatsapp.module";
+import { WhatsappService } from "../whatsapp/whatsapp.service";
+import {
+  CHAT_FILE_RE,
+  CHAT_MEDIA_MAX_BYTES,
+  CHAT_SEND_MAX_BYTES,
+  chatDir,
+  chatFileHeaders,
+  mediaLabel,
+  mediaToken,
+  publicChatMedia,
+  readMediaToken,
+  readStoredMedia,
+  saveChatFile,
+  sniffSendable,
+  type StoredChatMedia,
+} from "./chat-media";
+import { RemuxError, webmToOggOpus } from "./opus-remux";
 import { EventBus } from "../../core/events/event-bus.service";
 import {
   ECHO_WINDOW_MS,
@@ -95,6 +128,12 @@ export class ConversationsQueryDto {
   @IsString()
   @MaxLength(320)
   assignee?: string;
+
+  @ApiPropertyOptional({ description: "true = solo chats abiertos cuyo último mensaje es del cliente (sin responder)." })
+  @IsOptional()
+  @Transform(({ value }) => value === true || value === "true" || value === "1")
+  @IsBoolean()
+  waiting?: boolean;
 
   @ApiPropertyOptional({ default: INBOX_PAGE_SIZE, minimum: 1, maximum: 100 })
   @IsOptional()
@@ -131,6 +170,30 @@ function likePattern(q: string): string {
   return `%${q.replace(/[\\%_]/g, (c) => `\\${c}`)}%`;
 }
 
+/** Accented letters (both cases) and their plain form, for accent-free search. */
+const ACCENTED_LOWER = "áàäâãéèëêíìïîóòöôõúùüûñç";
+const PLAIN_LOWER = "aaaaaeeeeiiiiooooouuuunc";
+const FOLD_PAIRS: [string, string][] = [...ACCENTED_LOWER + ACCENTED_LOWER.toUpperCase()].map((c, i) => [
+  c,
+  PLAIN_LOWER[i % PLAIN_LOWER.length]!,
+]);
+
+/** Lowercase without accents: «María» → «maria» (matches `folded()` in SQL). */
+export function foldSearch(text: string): string {
+  return text.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+}
+
+/**
+ * SQL expression: the column without accents, lowercased. Nested replace()
+ * (not translate) because it works on whole letters whatever the database
+ * encoding is; accents go first so lower() only meets ASCII letters. The
+ * pairs are constants of this file, never user input.
+ */
+const FOLD_SQL = FOLD_PAIRS.reduce((acc, [a, b]) => `replace(${acc}, '${a}', '${b}')`, "$COL");
+function folded(column: string): Prisma.Sql {
+  return Prisma.raw(`lower(${FOLD_SQL.replace("$COL", column)})`);
+}
+
 export class CreateConversationDto {
   @IsIn(CHANNEL_IDS) channel!: ChannelId;
   @IsString() @MinLength(1) contactName!: string;
@@ -142,14 +205,73 @@ export class CreateConversationDto {
 }
 
 export class SendMessageDto {
-  @IsString() @MinLength(1) text!: string;
+  @IsString() @MinLength(1) @MaxLength(4096) text!: string;
 }
+
+/** Fields that come with a file sent from the chat (multipart). */
+export class SendMediaDto {
+  @IsOptional() @IsString() @MaxLength(1024) caption?: string;
+  /** "voice" = a voice note recorded in the panel. */
+  @IsOptional() @IsIn(["file", "voice"]) as?: "file" | "voice";
+}
+
+export const MAX_QUICK_REPLIES = 50;
+
+export class QuickReplyDto {
+  @IsOptional() @IsString() @MaxLength(40) id?: string;
+  @IsString() @MinLength(1) @MaxLength(60) title!: string;
+  @IsString() @MinLength(1) @MaxLength(2000) text!: string;
+}
+
+export class SaveQuickRepliesDto {
+  @IsArray()
+  @ArrayMaxSize(MAX_QUICK_REPLIES)
+  @ValidateNested({ each: true })
+  @Type(() => QuickReplyDto)
+  items!: QuickReplyDto[];
+}
+
+/** Stored saved replies, cleaned: trimmed, with an id, no empties. */
+export function cleanQuickReplies(raw: unknown): QuickReply[] {
+  if (!Array.isArray(raw)) return [];
+  const out: QuickReply[] = [];
+  const seen = new Set<string>();
+  for (const r of raw.slice(0, MAX_QUICK_REPLIES)) {
+    if (!r || typeof r !== "object") continue;
+    const o = r as Record<string, unknown>;
+    const title = typeof o.title === "string" ? o.title.trim().slice(0, 60) : "";
+    const text = typeof o.text === "string" ? o.text.trim().slice(0, 2000) : "";
+    if (!title || !text) continue;
+    let id = typeof o.id === "string" && o.id.trim() ? o.id.trim().slice(0, 40) : "";
+    if (!id || seen.has(id)) id = `qr_${randomUUID().slice(0, 8)}`;
+    seen.add(id);
+    out.push({ id, title, text });
+  }
+  return out;
+}
+
+export class AddNoteDto {
+  @IsString() @MinLength(1) @MaxLength(4000) text!: string;
+}
+
+/** Direction of a chat's last real message (internal notes don't count). */
+/** How far back the pulse looks for the newest incoming message. */
+const PULSE_WINDOW_MS = 15 * 60_000;
+
+const lastDirection = Prisma.sql`(SELECT lmd."direction" FROM "Message" lmd
+  WHERE lmd."conversationId" = c."id" AND lmd."direction" <> 'note'
+  ORDER BY lmd."createdAt" DESC LIMIT 1)`;
 
 export class UpdateConversationDto {
   @ApiPropertyOptional()
   @IsOptional()
   @IsBoolean()
   resolved?: boolean;
+
+  @ApiPropertyOptional({ description: "true = marcar como no leído; false = marcar como leído" })
+  @IsOptional()
+  @IsBoolean()
+  unread?: boolean;
 
   @ApiPropertyOptional({ description: "Email del responsable; vacío o null para desasignar." })
   @IsOptional()
@@ -173,7 +295,12 @@ export class InboxService implements OnModuleInit {
     private readonly config: ConfigService<AppConfig, true>,
     private readonly registry: WorkspaceRegistry,
     private readonly events: EventBus,
+    private readonly whatsapp: WhatsappService,
+    private readonly crypto: CryptoService,
   ) {}
+
+  /** Downloads in progress, so two viewers of the same photo trigger one download. */
+  private readonly downloading = new Map<string, Promise<StoredChatMedia>>();
 
   private db() {
     if (!this.prisma.enabled) throw new ServiceUnavailableException("Base de datos no configurada.");
@@ -198,6 +325,12 @@ export class InboxService implements OnModuleInit {
         at: p.at,
         externalId: p.externalId,
         history: p.history,
+        waLine: p.waLine,
+        tgLine: p.tgLine,
+        savedName: p.savedName,
+        profileName: p.profileName,
+        media: p.media,
+        mediaRef: p.mediaRef,
       }).catch((err: unknown) => this.logger.warn(`Mensaje no guardado: ${(err as Error).message}`));
     });
     this.events.on("session.contact-names", (p) => {
@@ -244,7 +377,8 @@ export class InboxService implements OnModuleInit {
       msg.channel === "wa" && direction === "in"
         ? await this.ensureContact(slug, msg.contactHandle, fromContact ? msg.contactName : null, at)
         : null;
-    const bestName = fromContact ? msg.contactName : (contact?.name ?? null);
+    const saved = msg.channel === "wa" && msg.savedName?.trim() ? msg.savedName.trim() : null;
+    const bestName = saved ?? (fromContact ? msg.contactName : (contact?.name ?? null));
 
     let conversation = await this.prisma.conversation.findFirst({
       where: { workspaceSlug: slug, channel: msg.channel, contactHandle: msg.contactHandle },
@@ -256,31 +390,77 @@ export class InboxService implements OnModuleInit {
           channel: msg.channel,
           contactName: bestName ?? msg.contactName ?? msg.contactHandle,
           contactHandle: msg.contactHandle,
+          waLine: msg.waLine ?? null,
+          tgLine: msg.tgLine ?? null,
+          savedName: saved,
         },
+      });
+    } else if (msg.tgLine && conversation.tgLine !== msg.tgLine && !msg.history) {
+      // The contact now writes to another of the brand's Telegram accounts: reply from that one.
+      conversation = await this.prisma.conversation.update({
+        where: { id: conversation.id },
+        data: { tgLine: msg.tgLine },
+      });
+    } else if (msg.waLine && conversation.waLine !== msg.waLine && !msg.history) {
+      // The contact now writes to another of the brand's numbers: reply from that one.
+      conversation = await this.prisma.conversation.update({
+        where: { id: conversation.id },
+        data: { waLine: msg.waLine, ...(bestName && isBareName(conversation.contactName, conversation.contactHandle) ? { contactName: bestName } : {}) },
       });
     } else if (bestName && isBareName(conversation.contactName, conversation.contactHandle)) {
       // The chat was created with the number: now the real name is known.
       conversation = await this.prisma.conversation.update({
         where: { id: conversation.id },
-        data: { contactName: bestName },
+        data: { contactName: bestName, ...(saved ? { savedName: saved } : {}) },
+      });
+    }
+    if (saved && conversation.savedName !== saved) {
+      // The name saved in the brand's phone always wins (also over a profile name shown before).
+      conversation = await this.prisma.conversation.update({
+        where: { id: conversation.id },
+        data: { contactName: saved, savedName: saved },
       });
     }
 
     if (await this.alreadyStored(conversation.id, direction, msg.text, at, msg.externalId)) return;
+    let stored: StoredChatMedia | null = null;
+    if (msg.media) {
+      stored = { kind: msg.media.kind, mime: msg.media.mime, size: msg.media.size };
+      if (msg.media.name) stored.name = msg.media.name;
+      if (msg.media.seconds) stored.seconds = msg.media.seconds;
+      if (msg.media.size > CHAT_MEDIA_MAX_BYTES) stored.unavailable = "Archivo muy grande: ábrelo en tu teléfono.";
+      else if (msg.mediaRef) stored.ref = this.crypto.encrypt(msg.mediaRef);
+    }
+    let created: { id: string };
     try {
-      await this.prisma.message.create({
+      created = await this.prisma.message.create({
         data: {
           conversationId: conversation.id,
           direction,
           text: msg.text,
           externalId: msg.externalId ?? null,
           createdAt: at,
+          ...(stored ? { media: stored as unknown as Prisma.InputJsonValue } : {}),
         },
+        select: { id: true },
       });
     } catch (err) {
       // Same message delivered twice at once (history + live): keep one.
       if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") return;
       throw err;
+    }
+    // New photos and audios are saved right away (WhatsApp links expire); history ones on first view.
+    if (stored?.ref && !msg.history) {
+      void this.ensureMediaFile(slug, created.id).catch((err: unknown) =>
+        this.logger.warn(`Adjunto no descargado: ${(err as Error).message}`),
+      );
+    }
+    // A new incoming message makes the chat unread; replying from the phone reads it.
+    if (!msg.history || direction === "out") {
+      await this.prisma.conversation.update({
+        where: { id: conversation.id },
+        data: direction === "in" ? { unreadCount: { increment: 1 } } : { unreadCount: 0 },
+      });
     }
     if (direction !== "in" || msg.history) return;
     this.logger.log(`Mensaje entrante (${msg.channel}) de ${msg.contactHandle} → ${slug}.`);
@@ -291,6 +471,7 @@ export class InboxService implements OnModuleInit {
       contactHandle: msg.contactHandle,
       contactName: conversation.contactName,
       text: msg.text,
+      conversationId: conversation.id,
     });
   }
 
@@ -360,19 +541,34 @@ export class InboxService implements OnModuleInit {
   }
 
   /** Names from the WhatsApp contact list → chats and contacts that only showed the number. */
-  async applyContactNames(slug: string, channel: "wa" | "tg", names: { handle: string; name: string }[]): Promise<number> {
+  async applyContactNames(
+    slug: string,
+    channel: "wa" | "tg",
+    names: { handle: string; name: string; saved?: boolean }[],
+  ): Promise<number> {
     if (!this.prisma.enabled || !names.length) return 0;
-    const byHandle = new Map(names.filter((n) => !isBareName(n.name)).map((n) => [n.handle, n.name]));
+    const usable = names.filter((n) => !isBareName(n.name));
+    const byHandle = new Map(usable.map((n) => [n.handle, n.name]));
+    const savedHandles = new Set(usable.filter((n) => n.saved).map((n) => n.handle));
     if (!byHandle.size) return 0;
     const convs = await this.prisma.conversation.findMany({
       where: { workspaceSlug: slug, channel, contactHandle: { in: [...byHandle.keys()] } },
-      select: { id: true, contactName: true, contactHandle: true },
+      select: { id: true, contactName: true, contactHandle: true, savedName: true },
     });
     let updated = 0;
     for (const c of convs) {
       const name = byHandle.get(c.contactHandle ?? "");
-      if (!name || !isBareName(c.contactName, c.contactHandle)) continue;
-      await this.prisma.conversation.update({ where: { id: c.id }, data: { contactName: name } });
+      if (!name) continue;
+      const saved = savedHandles.has(c.contactHandle ?? "");
+      const previous = c.contactName;
+      if (saved) {
+        // The name in the brand's own phone replaces whatever the chat showed.
+        if (c.savedName === name && c.contactName === name) continue;
+        await this.prisma.conversation.update({ where: { id: c.id }, data: { contactName: name, savedName: name } });
+      } else {
+        if (c.savedName || !isBareName(c.contactName, c.contactHandle)) continue;
+        await this.prisma.conversation.update({ where: { id: c.id }, data: { contactName: name } });
+      }
       updated++;
       if (channel !== "wa") continue;
       const key = phoneKey(c.contactHandle);
@@ -382,7 +578,8 @@ export class InboxService implements OnModuleInit {
         select: { id: true, name: true, phone: true },
       });
       for (const ct of contacts) {
-        if (phoneKey(ct.phone) === key && isBareName(ct.name)) {
+        // A CRM contact that only had the number (or the profile name the chat showed) takes the saved name.
+        if (phoneKey(ct.phone) === key && (isBareName(ct.name) || (saved && ct.name === previous))) {
           await this.prisma.contact.update({ where: { id: ct.id }, data: { name } });
         }
       }
@@ -399,7 +596,7 @@ export class InboxService implements OnModuleInit {
     workspaceId: string,
     query: ConversationsQueryDto = {},
   ): Promise<ConversationPage> {
-    if (!this.prisma.enabled) return { items: [], total: 0, nextCursor: null, openCount: 0 };
+    if (!this.prisma.enabled) return { items: [], total: 0, nextCursor: null, openCount: 0, waitingCount: 0 };
     const limit = query.limit ?? INBOX_PAGE_SIZE;
     const filters: Prisma.Sql[] = [Prisma.sql`c."workspaceSlug" = ${workspaceId}`];
     if (query.channel) filters.push(Prisma.sql`c."channel"::text = ${query.channel}`);
@@ -407,14 +604,16 @@ export class InboxService implements OnModuleInit {
     if (query.status === "resolved") filters.push(Prisma.sql`c."resolved" = true`);
     if (query.assignee === INBOX_UNASSIGNED) filters.push(Prisma.sql`c."assignee" IS NULL`);
     else if (query.assignee) filters.push(Prisma.sql`c."assignee" = ${query.assignee}`);
+    if (query.waiting) filters.push(Prisma.sql`c."resolved" = false AND ${lastDirection} = 'in'`);
     const q = query.q?.trim();
     if (q) {
-      const p = likePattern(q);
+      // Accent-free: «maria» finds «María» and the other way round.
+      const p = likePattern(foldSearch(q));
       filters.push(Prisma.sql`(
-        c."contactName" ILIKE ${p}
+        ${folded('c."contactName"')} LIKE ${p}
         OR c."contactHandle" ILIKE ${p}
-        OR EXISTS (SELECT 1 FROM unnest(c."labels") l WHERE l ILIKE ${p})
-        OR EXISTS (SELECT 1 FROM "Message" mq WHERE mq."conversationId" = c."id" AND mq."text" ILIKE ${p})
+        OR EXISTS (SELECT 1 FROM unnest(c."labels") l WHERE ${folded("l")} LIKE ${p})
+        OR EXISTS (SELECT 1 FROM "Message" mq WHERE mq."conversationId" = c."id" AND ${folded('mq."text"')} LIKE ${p})
       )`);
     }
     const where = Prisma.join(filters, " AND ");
@@ -428,39 +627,70 @@ export class InboxService implements OnModuleInit {
         SELECT c."id", ${activity} AS "activity"
         FROM "Conversation" c
         LEFT JOIN LATERAL (
-          SELECT MAX(m."createdAt") AS "last" FROM "Message" m WHERE m."conversationId" = c."id"
+          SELECT MAX(m."createdAt") AS "last" FROM "Message" m
+          WHERE m."conversationId" = c."id" AND m."direction" <> 'note'
         ) lm ON TRUE
         WHERE ${where} ${after}
         ORDER BY ${activity} DESC, c."id" DESC
         LIMIT ${limit + 1}
       `),
-      this.prisma.$queryRaw<{ total: bigint; open: bigint }[]>(Prisma.sql`
+      this.prisma.$queryRaw<{ total: bigint; open: bigint; waiting: bigint }[]>(Prisma.sql`
         SELECT
           (SELECT COUNT(*) FROM "Conversation" c WHERE ${where}) AS "total",
-          (SELECT COUNT(*) FROM "Conversation" WHERE "workspaceSlug" = ${workspaceId} AND "resolved" = false) AS "open"
+          (SELECT COUNT(*) FROM "Conversation" WHERE "workspaceSlug" = ${workspaceId} AND "resolved" = false) AS "open",
+          (SELECT COUNT(*) FROM "Conversation" c
+            WHERE c."workspaceSlug" = ${workspaceId} AND c."resolved" = false AND ${lastDirection} = 'in') AS "waiting"
       `),
     ]);
     const more = page.length > limit;
     const ids = page.slice(0, limit).map((r) => r.id);
-    const rows = ids.length
-      ? await this.prisma.conversation.findMany({
-          where: { workspaceSlug: workspaceId, id: { in: ids } },
-          // Newest message per thread → preview + "last activity".
-          include: { messages: { orderBy: { createdAt: "desc" }, take: 1 } },
-        })
-      : [];
+    // Both need only the ids: ask for them at the same time (one round trip less).
+    const [rows, replies] = await Promise.all([
+      ids.length
+        ? this.prisma.conversation.findMany({
+            where: { workspaceSlug: workspaceId, id: { in: ids } },
+            // Newest message per thread → preview + "last activity".
+            include: { messages: { where: { direction: { not: "note" } }, orderBy: { createdAt: "desc" }, take: 1 } },
+          })
+        : Promise.resolve([]),
+      this.firstReplies(ids),
+    ]);
     const byId = new Map(rows.map((r) => [r.id, r]));
     const items = ids
       .map((id) => byId.get(id))
       .filter((r): r is NonNullable<typeof r> => !!r)
-      .map((r) => mapConversation(r, r.messages[0]));
+      .map((r) => {
+        const c = mapConversation(r, r.messages[0]);
+        return replies.has(r.id) ? { ...c, firstReplyMins: replies.get(r.id)! } : c;
+      });
     const last = page[limit - 1];
     return {
       items,
       total: Number(counts[0]?.total ?? 0),
       openCount: Number(counts[0]?.open ?? 0),
+      waitingCount: Number(counts[0]?.waiting ?? 0),
       nextCursor: more && last ? encodeInboxCursor(new Date(last.activity), last.id) : null,
     };
+  }
+
+  /**
+   * Minutes from each chat's first inbound message to the first answer after
+   * it (null while unanswered). Chats the contact never wrote to are absent.
+   */
+  private async firstReplies(ids: string[]): Promise<Map<string, number | null>> {
+    if (ids.length === 0) return new Map();
+    const rows = await this.prisma.$queryRaw<{ id: string; mins: number | null }[]>(Prisma.sql`
+      SELECT f."conversationId" AS id,
+        (SELECT EXTRACT(EPOCH FROM (MIN(o."createdAt") - f."firstIn")) / 60
+           FROM "Message" o
+          WHERE o."conversationId" = f."conversationId" AND o."direction" = 'out' AND o."createdAt" >= f."firstIn") AS mins
+      FROM (
+        SELECT "conversationId", MIN("createdAt") AS "firstIn" FROM "Message"
+        WHERE "conversationId" IN (${Prisma.join(ids)}) AND "direction" = 'in'
+        GROUP BY "conversationId"
+      ) f
+    `);
+    return new Map(rows.map((r) => [r.id, r.mins === null ? null : Math.max(0, Math.round(Number(r.mins)))]));
   }
 
   async messages(workspaceId: string, conversationId: string): Promise<Message[]> {
@@ -472,7 +702,222 @@ export class InboxService implements OnModuleInit {
       orderBy: { createdAt: "desc" },
       take: THREAD_CAP,
     });
-    return rows.reverse().map(mapMessage);
+    return rows.reverse().map((row) => {
+      const m = mapMessage(row);
+      const stored = readStoredMedia(row.media);
+      return stored ? { ...m, media: publicChatMedia(stored, this.mediaUrl(workspaceId, row.id)) } : m;
+    });
+  }
+
+  /**
+   * Light check the panel polls to ring when a message arrives: unread total
+   * and the newest message a contact sent.
+   */
+  async pulse(workspaceId: string): Promise<InboxPulse> {
+    if (!this.prisma.enabled) return { unread: 0, latest: null };
+    const [sum, last] = await Promise.all([
+      this.prisma.conversation.aggregate({ where: { workspaceSlug: workspaceId }, _sum: { unreadCount: true } }),
+      // Only the last minutes matter (older messages never ring), and with the
+      // createdAt index that reads a handful of rows instead of every message.
+      this.prisma.message.findFirst({
+        where: {
+          direction: "in",
+          createdAt: { gte: new Date(Date.now() - PULSE_WINDOW_MS) },
+          conversation: { workspaceSlug: workspaceId },
+        },
+        orderBy: { createdAt: "desc" },
+        select: { id: true, text: true, createdAt: true, conversation: { select: { id: true, contactName: true, channel: true } } },
+      }),
+    ]);
+    return {
+      unread: sum._sum.unreadCount ?? 0,
+      latest: last
+        ? {
+            id: last.id,
+            conversationId: last.conversation.id,
+            contactName: last.conversation.contactName,
+            channel: last.conversation.channel as ChannelId,
+            text: last.text.slice(0, 140),
+            at: last.createdAt.toISOString(),
+          }
+        : null,
+    };
+  }
+
+  /** Signed link to a message's attachment (valid a few hours, only for this brand and message). */
+  private mediaUrl(workspaceId: string, messageId: string): string {
+    const secret = this.config.get("auth", { infer: true }).secret;
+    const base = (this.config.get("apiUrl", { infer: true }) ?? "").replace(/\/$/, "");
+    return `${base}/api/inbox-media/${mediaToken(secret, workspaceId, messageId)}`;
+  }
+
+  /**
+   * Make sure a message's attachment is saved on this server: download it from
+   * WhatsApp the first time (through the number that received it) and keep it
+   * in the brand's private chat folder. Returns the stored media JSON.
+   */
+  async ensureMediaFile(workspaceId: string, messageId: string): Promise<StoredChatMedia> {
+    const pending = this.downloading.get(messageId);
+    if (pending) return pending;
+    const job = (async () => {
+      const row = await this.db().message.findFirst({
+        where: { id: messageId, conversation: { workspaceSlug: workspaceId } },
+        select: { id: true, externalId: true, media: true, conversation: { select: { channel: true, waLine: true } } },
+      });
+      const stored = readStoredMedia(row?.media);
+      if (!row || !stored) throw new NotFoundException("Archivo no encontrado.");
+      if (stored.file || stored.unavailable || !stored.ref) return stored;
+      if (row.conversation.channel !== "wa") return stored;
+      let bytes: Buffer;
+      try {
+        bytes = await this.whatsapp.downloadChatMedia(
+          workspaceId,
+          row.conversation.waLine,
+          this.crypto.decrypt(stored.ref),
+          row.externalId,
+        );
+      } catch (err) {
+        const msg = (err as Error).message ?? "";
+        // Gone for good on WhatsApp's side: say so instead of retrying forever.
+        if (/40[34]|410|gone|not found|expired/i.test(msg)) {
+          const next: StoredChatMedia = { ...stored, unavailable: "WhatsApp ya no tiene este archivo: ábrelo en tu teléfono." };
+          delete next.ref;
+          await this.db().message.update({ where: { id: row.id }, data: { media: next as unknown as Prisma.InputJsonValue } });
+          return next;
+        }
+        throw new ServiceUnavailableException(
+          /conectado|listo/i.test(msg) ? `No se pudo traer el archivo: ${msg}` : "No se pudo traer el archivo de WhatsApp. Intenta de nuevo.",
+        );
+      }
+      if (bytes.length > CHAT_MEDIA_MAX_BYTES) {
+        const next: StoredChatMedia = { ...stored, unavailable: "Archivo muy grande: ábrelo en tu teléfono." };
+        delete next.ref;
+        await this.db().message.update({ where: { id: row.id }, data: { media: next as unknown as Prisma.InputJsonValue } });
+        return next;
+      }
+      const file = await saveChatFile(this.config.get("media", { infer: true }).dir, workspaceId, bytes, stored.mime);
+      // The sealed WhatsApp message isn't needed once the file is ours.
+      const next: StoredChatMedia = { ...stored, file, size: bytes.length };
+      delete next.ref;
+      await this.db().message.update({ where: { id: row.id }, data: { media: next as unknown as Prisma.InputJsonValue } });
+      return next;
+    })();
+    this.downloading.set(messageId, job);
+    try {
+      return await job;
+    } finally {
+      this.downloading.delete(messageId);
+    }
+  }
+
+  /**
+   * Serve a chat attachment from a signed link (img/audio/video tags can't send
+   * the login header). The link names the brand and the message and expires.
+   */
+  async serveMedia(token: string, res: Response): Promise<void> {
+    const secret = this.config.get("auth", { infer: true }).secret;
+    const target = readMediaToken(secret, token);
+    if (!target) throw new NotFoundException("El enlace venció. Vuelve a abrir el chat.");
+    const stored = await this.ensureMediaFile(target.workspace, target.messageId);
+    if (!stored.file || !CHAT_FILE_RE.test(stored.file)) {
+      throw new NotFoundException(stored.unavailable ?? "Archivo no disponible.");
+    }
+    const dir = chatDir(this.config.get("media", { infer: true }).dir, target.workspace);
+    for (const [k, v] of Object.entries(chatFileHeaders(stored.file, stored.name))) res.setHeader(k, v);
+    await new Promise<void>((resolveSend) => {
+      res.sendFile(stored.file!, { root: dir, dotfiles: "deny", cacheControl: false, lastModified: false }, (err) => {
+        if (err && !res.headersSent) res.status(404).json({ message: "Archivo no encontrado." });
+        resolveSend();
+      });
+    });
+  }
+
+  /**
+   * Send a photo, video, document, audio or voice note from the chat. The file
+   * type comes from its content (never from its name). A voice note recorded
+   * in the browser as WebM is rewrapped to Ogg/Opus so it plays as a voice note
+   * on the phone. Sent first, stored after, so a failure leaves no ghost message.
+   */
+  async sendMedia(
+    workspaceId: string,
+    conversationId: string,
+    file: { buffer?: Buffer; path?: string; mimetype: string; originalname?: string; size: number } | undefined,
+    dto: SendMediaDto,
+  ): Promise<Message> {
+    const conv = await this.owned(workspaceId, conversationId);
+    if (conv.channel !== "wa" || !conv.contactHandle) {
+      throw new BadRequestException("Por ahora los archivos y audios se envían solo en chats de WhatsApp.");
+    }
+    if (!file) throw new BadRequestException("Elige un archivo.");
+    if (file.size > CHAT_SEND_MAX_BYTES) throw new BadRequestException("El archivo pasa de 16 MB.");
+    const { readFile } = await import("node:fs/promises");
+    let bytes = file.buffer ?? (file.path ? await readFile(file.path) : Buffer.alloc(0));
+    if (!bytes.length) throw new BadRequestException("El archivo está vacío.");
+    const sniff = sniffSendable(bytes, file.mimetype);
+    if (!sniff) throw new BadRequestException("Ese tipo de archivo no se puede enviar (fotos, videos, audios, PDF, Word, Excel, PowerPoint o texto).");
+    let kind = sniff.kind;
+    let mime = sniff.mime;
+    let seconds: number | undefined;
+    if (dto.as === "voice" || kind === "voice") {
+      if (mime === "audio/webm") {
+        try {
+          const out = webmToOggOpus(bytes);
+          bytes = out.ogg;
+          seconds = out.seconds;
+        } catch (err) {
+          throw new BadRequestException(err instanceof RemuxError ? err.message : "No se pudo preparar la nota de voz.");
+        }
+        mime = "audio/ogg";
+        kind = "voice";
+      } else if (mime === "audio/ogg") {
+        kind = "voice";
+      } else if (mime === "audio/mp4" || mime === "video/mp4") {
+        // Safari records AAC in MP4: WhatsApp plays it as an audio, not as a voice note.
+        kind = "audio";
+        mime = "audio/mp4";
+      } else if (dto.as === "voice") {
+        throw new BadRequestException("La grabación no es un audio válido.");
+      }
+    }
+    const name = (file.originalname ?? "").split(/[\\/]/).pop()?.replace(/\p{Cc}/gu, "").trim().slice(0, 120) || undefined;
+    const caption = kind === "voice" || kind === "audio" ? undefined : dto.caption?.trim() || undefined;
+    let sent: { id: string };
+    try {
+      sent = await this.whatsapp.sendChatFile(workspaceId, conv.contactHandle, {
+        kind,
+        bytes,
+        mime,
+        ...(name ? { name } : {}),
+        ...(caption ? { caption } : {}),
+        ...(seconds ? { seconds } : {}),
+      });
+    } catch (err) {
+      const reason = (err as Error).message ?? "";
+      throw new ServiceUnavailableException(
+        /no est[aá] conectado/i.test(reason)
+          ? "No se pudo enviar: tu WhatsApp no está conectado. Conéctalo en Conexiones y vuelve a intentar."
+          : `No se pudo enviar: ${reason}`,
+      );
+    }
+    const stored: StoredChatMedia = {
+      kind,
+      mime,
+      size: bytes.length,
+      file: await saveChatFile(this.config.get("media", { infer: true }).dir, workspaceId, bytes, mime),
+      ...(kind === "document" && name ? { name } : {}),
+      ...(seconds ? { seconds } : {}),
+    };
+    const row = await this.db().message.create({
+      data: {
+        conversationId,
+        direction: "out",
+        text: mediaLabel(kind, name, caption),
+        externalId: sent.id || null,
+        media: stored as unknown as Prisma.InputJsonValue,
+      },
+    });
+    await this.prisma.conversation.update({ where: { id: conversationId }, data: { unreadCount: 0 } });
+    return { ...mapMessage(row), media: publicChatMedia(stored, this.mediaUrl(workspaceId, row.id)) };
   }
 
   async createConversation(
@@ -499,6 +944,7 @@ export class InboxService implements OnModuleInit {
     const row = await this.prisma.message.create({
       data: { conversationId, direction: "out", text: dto.text },
     });
+    await this.prisma.conversation.update({ where: { id: conversationId }, data: { unreadCount: 0 } });
 
     // Best-effort external delivery (Baileys when connected, else Cloud API).
     // Never blocks or fails the persisted reply.
@@ -511,6 +957,56 @@ export class InboxService implements OnModuleInit {
     }
 
     return mapMessage(row);
+  }
+
+  /**
+   * Internal note in the chat (who to call back, what was promised…). Stays in
+   * the panel: never delivered, never counted as a reply or as unread.
+   */
+  async addNote(workspaceId: string, conversationId: string, text: string, author: string): Promise<Message> {
+    const clean = text.trim();
+    if (!clean) throw new BadRequestException("Escribe la nota.");
+    await this.owned(workspaceId, conversationId);
+    const row = await this.db().message.create({
+      data: { conversationId, direction: "note", text: clean, author },
+    });
+    return mapMessage(row);
+  }
+
+  async quickReplies(workspaceId: string): Promise<QuickReply[]> {
+    if (!this.prisma.enabled) return [];
+    const row = await this.prisma.workspaceSettings.findUnique({
+      where: { workspaceSlug: workspaceId },
+      select: { quickReplies: true },
+    });
+    return cleanQuickReplies(row?.quickReplies);
+  }
+
+  async saveQuickReplies(workspaceId: string, items: QuickReply[], actor: string): Promise<QuickReply[]> {
+    const clean = cleanQuickReplies(items);
+    await this.db().workspaceSettings.upsert({
+      where: { workspaceSlug: workspaceId },
+      create: { workspaceSlug: workspaceId, quickReplies: clean as unknown as Prisma.InputJsonValue, updatedBy: actor },
+      update: { quickReplies: clean as unknown as Prisma.InputJsonValue, updatedBy: actor },
+    });
+    return clean;
+  }
+
+  /**
+   * The CRM contact behind a chat, matched by phone (last 9 digits), for the
+   * customer card next to the conversation. Most recent match wins.
+   */
+  async conversationContact(workspaceId: string, conversationId: string): Promise<{ contact: Contact | null }> {
+    const conv = await this.owned(workspaceId, conversationId);
+    const key = phoneKey(conv.contactHandle);
+    if (!key) return { contact: null };
+    const candidates = await this.db().contact.findMany({
+      where: { workspaceSlug: workspaceId, phone: { contains: key.slice(-2) } },
+      orderBy: { createdAt: "desc" },
+      take: 200,
+    });
+    const hit = candidates.find((c) => phoneKey(c.phone) === key);
+    return { contact: hit ? mapContact(hit) : null };
   }
 
   /** Partial triage update: resolve, assign (or unassign with ""/null), labels. */
@@ -526,9 +1022,40 @@ export class InboxService implements OnModuleInit {
         ...(dto.resolved !== undefined ? { resolved: dto.resolved } : {}),
         ...(dto.assignee !== undefined ? { assignee: dto.assignee ? dto.assignee : null } : {}),
         ...(dto.labels !== undefined ? { labels: dto.labels } : {}),
+        ...(dto.unread === false ? { unreadCount: 0 } : {}),
       },
     });
+    if (dto.unread === true && row.unreadCount === 0) {
+      return mapConversation(
+        await this.prisma.conversation.update({ where: { id: conversationId }, data: { unreadCount: 1 } }),
+      );
+    }
     return mapConversation(row);
+  }
+
+  /** Delete a chat and its messages from the panel (WhatsApp itself is not touched). */
+  async deleteConversation(workspaceId: string, conversationId: string): Promise<{ ok: true }> {
+    await this.owned(workspaceId, conversationId);
+    await this.prisma.conversation.delete({ where: { id: conversationId } });
+    return { ok: true };
+  }
+}
+
+/**
+ * Chat attachments by signed link: the browser's img/audio/video tags can't
+ * send the login header, so the link itself proves access (brand + message,
+ * signed with the server secret, expires in hours).
+ */
+@ApiTags("inbox")
+@Public()
+@Controller("inbox-media")
+export class InboxMediaController {
+  constructor(private readonly service: InboxService) {}
+
+  @Get(":token")
+  @Throttle({ default: { limit: 300, ttl: 60_000 } })
+  serve(@Param("token") token: string, @Res() res: Response) {
+    return this.service.serveMedia(token, res);
   }
 }
 
@@ -542,6 +1069,12 @@ export class InboxController {
   @Get("conversations")
   conversations(@WorkspaceId() workspaceId: string, @Query() query: ConversationsQueryDto) {
     return this.service.conversations(workspaceId, query);
+  }
+
+  @Get("pulse")
+  @SkipThrottle()
+  pulse(@WorkspaceId() workspaceId: string) {
+    return this.service.pulse(workspaceId);
   }
 
   @Get("conversations/:id/messages")
@@ -567,6 +1100,54 @@ export class InboxController {
     return this.service.sendMessage(workspaceId, id, dto);
   }
 
+  /** Photo, video, document, audio or voice note to the chat (WhatsApp). */
+  @Post("conversations/:id/media")
+  @Roles("Owner", "Admin", "Editor")
+  @UseGuards(RolesGuard)
+  @Throttle({ default: { limit: 30, ttl: 60_000 } })
+  @UseInterceptors(FileInterceptor("file", { limits: { fileSize: CHAT_SEND_MAX_BYTES, files: 1, fields: 4 } }))
+  sendMedia(
+    @WorkspaceId() workspaceId: string,
+    @Param("id") id: string,
+    @UploadedFile() file: { buffer?: Buffer; mimetype: string; originalname?: string; size: number } | undefined,
+    @Body() dto: SendMediaDto,
+  ) {
+    return this.service.sendMedia(workspaceId, id, file, dto);
+  }
+
+  @Get("quick-replies")
+  quickReplies(@WorkspaceId() workspaceId: string) {
+    return this.service.quickReplies(workspaceId);
+  }
+
+  @Put("quick-replies")
+  @Roles("Owner", "Admin", "Editor")
+  @UseGuards(RolesGuard)
+  saveQuickReplies(
+    @WorkspaceId() workspaceId: string,
+    @CurrentUser() user: AuthenticatedUser,
+    @Body() dto: SaveQuickRepliesDto,
+  ) {
+    return this.service.saveQuickReplies(workspaceId, dto.items as QuickReply[], user.email);
+  }
+
+  @Get("conversations/:id/contact")
+  conversationContact(@WorkspaceId() workspaceId: string, @Param("id") id: string) {
+    return this.service.conversationContact(workspaceId, id);
+  }
+
+  @Post("conversations/:id/notes")
+  @Roles("Owner", "Admin", "Editor")
+  @UseGuards(RolesGuard)
+  addNote(
+    @WorkspaceId() workspaceId: string,
+    @CurrentUser() user: AuthenticatedUser,
+    @Param("id") id: string,
+    @Body() dto: AddNoteDto,
+  ) {
+    return this.service.addNote(workspaceId, id, dto.text, user.email);
+  }
+
   @Patch("conversations/:id")
   @Roles("Owner", "Admin", "Editor")
   @UseGuards(RolesGuard)
@@ -576,6 +1157,13 @@ export class InboxController {
     @Body() dto: UpdateConversationDto,
   ) {
     return this.service.updateConversation(workspaceId, id, dto);
+  }
+
+  @Delete("conversations/:id")
+  @Roles("Owner", "Admin", "Editor")
+  @UseGuards(RolesGuard)
+  deleteConversation(@WorkspaceId() workspaceId: string, @Param("id") id: string) {
+    return this.service.deleteConversation(workspaceId, id);
   }
 }
 
@@ -673,8 +1261,8 @@ export class TelegramWebhookController {
 }
 
 @Module({
-  imports: [ProvidersModule],
-  controllers: [InboxController, WhatsAppWebhookController, TelegramWebhookController],
-  providers: [InboxService],
+  imports: [ProvidersModule, WhatsappModule],
+  controllers: [InboxController, InboxMediaController, WhatsAppWebhookController, TelegramWebhookController],
+  providers: [InboxService, CryptoService],
 })
 export class InboxModule {}

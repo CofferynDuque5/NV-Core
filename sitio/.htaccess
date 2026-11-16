@@ -10,9 +10,33 @@ RewriteEngine On
 RewriteCond %{HTTPS} !=on
 RewriteRule ^ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]
 
-# Cache de estáticos (la página es un único HTML; no lo cacheamos para que los
-# cambios se vean al instante).
+# Las capturas (carpeta img/) son .webp: que el servidor las sirva como imagen.
+AddType image/webp .webp
+
+# Cache: el HTML no se cachea (los cambios se ven al instante); las imágenes sí,
+# 30 días (si cambias una captura, súbela con otro nombre o recarga con Ctrl+F5).
 <IfModule mod_expires.c>
   ExpiresActive On
   ExpiresByType text/html "access plus 0 seconds"
+  ExpiresByType image/webp "access plus 30 days"
+  ExpiresByType font/woff2 "access plus 1 year"
+</IfModule>
+
+# Página propia para direcciones que no existen (en vez de la genérica del servidor).
+ErrorDocument 404 /404.html
+
+# Tipos que algunos servidores no conocen.
+AddType image/x-icon .ico
+AddType application/xml .xml
+AddType font/woff2 .woff2
+
+# Cabeceras de seguridad. El sitio solo carga sus propios archivos y las fuentes de
+# Google; los enlaces al panel son navegación normal y no necesitan permiso aquí.
+<IfModule mod_headers.c>
+  Header always set Strict-Transport-Security "max-age=31536000"
+  Header always set X-Content-Type-Options "nosniff"
+  Header always set Referrer-Policy "strict-origin-when-cross-origin"
+  Header always set X-Frame-Options "SAMEORIGIN"
+  Header always set Permissions-Policy "camera=(), microphone=(), geolocation=()"
+  Header always set Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'self'; upgrade-insecure-requests"
 </IfModule>

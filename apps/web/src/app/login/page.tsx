@@ -1,5 +1,5 @@
 import * as React from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { Loader2 } from "lucide-react";
 
 import { useAuthStore } from "@/stores/auth-store";
@@ -14,6 +14,11 @@ import { demoTarget } from "@/lib/demo";
 
 export default function LoginPage() {
   const navigate = useNavigate();
+  const [params] = useSearchParams();
+  // Only same-app paths (an invite link sends people back to /join/…).
+  const nextParam = params.get("next");
+  const next =
+    nextParam && nextParam.startsWith("/") && !nextParam.startsWith("//") ? nextParam : null;
   const login = useAuthStore((s) => s.login);
   const startDemo = useAuthStore((s) => s.startDemo);
   const [demoPending, setDemoPending] = React.useState(false);
@@ -25,7 +30,11 @@ export default function LoginPage() {
       await startDemo();
       navigate(demoTarget(), { replace: true });
     } catch (err) {
-      setError(err instanceof Error && err.message ? err.message : "La demo no está disponible ahora mismo.");
+      setError(
+        err instanceof Error && err.message
+          ? err.message
+          : "La demo no está disponible ahora mismo.",
+      );
       setDemoPending(false);
     }
   }
@@ -48,7 +57,7 @@ export default function LoginPage() {
       // Take the user to one of their workspaces; if they have none yet, guide
       // them through creating their first one.
       const target = useAuthStore.getState().memberships[0]?.workspaceSlug;
-      navigate(target ? `/w/${target}/dashboard` : "/onboarding", { replace: true });
+      navigate(next ?? (target ? `/w/${target}/dashboard` : "/onboarding"), { replace: true });
     } catch (err) {
       setError(err instanceof Error && err.message ? err.message : "No se pudo iniciar sesión.");
       setSubmitting(false);
@@ -58,11 +67,14 @@ export default function LoginPage() {
   return (
     <AuthShell
       title="Inicia sesión"
-      subtitle="Accede a tu Business OS."
+      subtitle="Entra a tu panel de ventas."
       footer={
         <>
           ¿No tienes cuenta?{" "}
-          <Link to="/register" className="text-brand font-medium hover:underline">
+          <Link
+            to={next ? `/register?next=${encodeURIComponent(next)}` : "/register"}
+            className="text-brand font-medium hover:underline"
+          >
             Crear cuenta
           </Link>
         </>
@@ -95,7 +107,7 @@ export default function LoginPage() {
             required
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            placeholder="••••••••"
+            placeholder="Tu contraseña"
           />
         </div>
 
@@ -111,12 +123,20 @@ export default function LoginPage() {
         </Button>
       </form>
       {isBackendConfigured() ? (
-        <div className="mt-4 border-t border-line-soft pt-4 text-center">
-          <Button variant="secondary" className="w-full" onClick={onDemo} disabled={demoPending} data-testid="demo-button">
+        <div className="border-line-soft mt-4 border-t pt-4 text-center">
+          <Button
+            variant="secondary"
+            className="w-full"
+            onClick={onDemo}
+            disabled={demoPending}
+            data-testid="demo-button"
+          >
             {demoPending ? <Loader2 className="size-4 animate-spin" /> : null}
             Ver demo sin registrarme
           </Button>
-          <p className="mt-2 text-xs text-ink-faint">Una marca de ejemplo, solo para mirar. No se guarda nada.</p>
+          <p className="text-ink-faint mt-2 text-xs">
+            Una marca de ejemplo, solo para mirar. No se guarda nada.
+          </p>
         </div>
       ) : null}
     </AuthShell>

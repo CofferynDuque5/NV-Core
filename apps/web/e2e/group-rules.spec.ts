@@ -53,6 +53,8 @@ test("groups: country and price currency, rules, keep out; brand links footer; d
   await expect(row("Amigos del barrio")).toContainText("España · €");
 
   // Rules pasted for a manual group: «exige precio» is found.
+  // (Let the «guardado» toast go first: it sits over the last rows' buttons.)
+  await expect(page.locator("[data-sonner-toast]")).toHaveCount(0, { timeout: 15000 });
   await row("Ventas Caracas").getByRole("button", { name: "Configurar" }).click();
   await page.fill("#gr-rules", "Reglas: toda publicación debe llevar precio. Prohibido spam.");
   await page.getByRole("button", { name: "Revisar reglas" }).last().click();

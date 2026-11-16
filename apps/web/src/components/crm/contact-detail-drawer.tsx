@@ -1,13 +1,22 @@
 import * as React from "react";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
-import { CONTACT_STAGES, PAYMENT_STATUS_LABEL, formatPaymentAmount, type Contact } from "@nv/domain";
+import {
+  CONTACT_STAGES,
+  PAYMENT_STATUS_LABEL,
+  ageOnNextBirthday,
+  birthdayLabel,
+  daysUntilBirthday,
+  formatPaymentAmount,
+  initialsOf,
+  type Contact,
+} from "@nv/domain";
 import { Link } from "react-router-dom";
-import { BadgeDollarSign, BellOff, BellRing, Building2, KanbanSquare, Loader2, Mail, Navigation, Pencil, Phone, Plus, Tag, Trash2, X } from "lucide-react";
+import { BadgeDollarSign, BellOff, BellRing, Building2, Cake, ListPlus, KanbanSquare, Loader2, Mail, Navigation, Pencil, Phone, Plus, Tag, Trash2, X } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { STAGE_ACCENTS } from "@/lib/crm";
 import { attributionLine } from "@/lib/attribution";
-import { useContactNotes, usePayments, useTasks, useTeam } from "@/hooks/use-domain-data";
+import { useContactFields, useContactNotes, usePayments, useTasks, useTeam } from "@/hooks/use-domain-data";
 import { useWorkspace } from "@/hooks/use-workspace";
 import {
   useAddContactNote,
@@ -23,9 +32,7 @@ import { PaymentDialog } from "@/components/payments/payment-dialog";
 import { STATUS_BADGE } from "@/lib/payments";
 import { PRIORITY_LABEL, TASK_COLUMNS, dueLabel, isOverdue } from "@/lib/tasks";
 
-function initials(name: string): string {
-  return name.split(/\s+/).filter(Boolean).slice(0, 2).map((p) => p[0]!.toUpperCase()).join("");
-}
+const initials = (name: string) => initialsOf(name, "?");
 
 function relative(iso: string): string {
   const then = new Date(iso).getTime();
@@ -60,6 +67,7 @@ export function ContactDetailDrawer({
   const delNote = useDeleteContactNote(contact?.id ?? "");
   const updateContact = useUpdateContact();
   const setOptOut = useSetContactOptOut();
+  const fields = useContactFields().data ?? [];
   const [draft, setDraft] = React.useState("");
   const [taskOpen, setTaskOpen] = React.useState(false);
   const tasks = useTasks();
@@ -173,6 +181,18 @@ export function ContactDetailDrawer({
               <Field icon={Phone} label="Teléfono" value={contact.phone} />
               <Field icon={Mail} label="Email" value={contact.email} />
               <Field icon={Building2} label="Empresa" value={contact.company} />
+              {contact.birthday ? (
+                <div className="flex items-center gap-2" data-testid="contact-birthday">
+                  <Cake className="size-4 shrink-0 text-ink-faint" />
+                  <span className="w-16 shrink-0 text-xs text-ink-faint">Cumpleaños</span>
+                  <span className="min-w-0 flex-1 truncate text-ink">{birthdayText(contact.birthday)}</span>
+                </div>
+              ) : null}
+              {fields
+                .filter((f) => contact.custom?.[f.key])
+                .map((f) => (
+                  <Field key={f.key} icon={ListPlus} label={f.label} value={contact.custom?.[f.key]} />
+                ))}
               {contact.tags.length > 0 ? (
                 <div className="flex items-start gap-2 pt-1">
                   <Tag className="mt-0.5 size-4 shrink-0 text-ink-faint" />
@@ -329,6 +349,16 @@ export function ContactDetailDrawer({
       <PaymentDialog open={paymentOpen} onOpenChange={setPaymentOpen} defaultContactId={contact?.id} />
     </DialogPrimitive.Root>
   );
+}
+
+/** «15 de marzo · en 5 días (cumple 36)», «… · ¡hoy!». */
+function birthdayText(b: string): string {
+  const now = new Date();
+  const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+  const days = daysUntilBirthday(b, today);
+  const age = ageOnNextBirthday(b, today);
+  const when = days === 0 ? "¡hoy!" : days === 1 ? "mañana" : days != null && days <= 30 ? `en ${days} días` : "";
+  return [birthdayLabel(b), when ? `${when}${age ? ` (cumple ${age})` : ""}` : ""].filter(Boolean).join(" · ");
 }
 
 function Field({ icon: Icon, label, value }: { icon: typeof Phone; label: string; value?: string }) {

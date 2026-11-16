@@ -14,6 +14,23 @@ export interface PaymentMethodField {
   placeholder?: string;
   required?: boolean;
   options?: string[];
+  /** "image": a picture (the method's QR) stored as a data URL. */
+  type?: "image";
+}
+
+/** QR image of a method: PNG, JPEG or WebP as a base64 data URL, up to ~600 KB. */
+export const QR_IMAGE_MAX_CHARS = 800_000;
+const QR_DATA_URL = /^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/]+={0,2}$/;
+
+export function isQrImage(value: unknown): value is string {
+  return typeof value === "string" && value.length <= QR_IMAGE_MAX_CHARS && QR_DATA_URL.test(value);
+}
+
+/** The QR picture the brand uploaded for this method, if any. */
+export function paymentMethodQr(method: Pick<PaymentMethod, "kind" | "details">): string | null {
+  const field = paymentMethodDef(method.kind).fields.find((f) => f.type === "image");
+  const v = field ? method.details[field.key] : undefined;
+  return isQrImage(v) ? v : null;
 }
 
 export interface PaymentMethodKindDef {
@@ -30,6 +47,7 @@ const phone: PaymentMethodField = { key: "phone", label: "Número de celular", r
 const docId: PaymentMethodField = { key: "docId", label: "Documento (CC, CI, RIF, DNI…)" };
 const account: PaymentMethodField = { key: "account", label: "Número de cuenta", required: true };
 const bank: PaymentMethodField = { key: "bank", label: "Banco", required: true };
+const qr: PaymentMethodField = { key: "qr", label: "Código QR (imagen)", type: "image" };
 
 export const PAYMENT_METHOD_CATALOG: PaymentMethodKindDef[] = [
   { kind: "nequi", label: "Nequi", country: "CO", currency: "COP", fields: [phone, holder] },
@@ -75,7 +93,12 @@ export const PAYMENT_METHOD_CATALOG: PaymentMethodKindDef[] = [
     label: "Binance Pay",
     country: "global",
     currency: "USDT",
-    fields: [{ key: "payId", label: "Binance Pay ID", required: true }, { key: "holder", label: "Usuario" }],
+    fields: [
+      { key: "payId", label: "Binance Pay ID", required: true },
+      { key: "email", label: "Correo de Binance" },
+      { key: "holder", label: "Usuario" },
+      qr,
+    ],
   },
   {
     kind: "usdt",
@@ -85,6 +108,7 @@ export const PAYMENT_METHOD_CATALOG: PaymentMethodKindDef[] = [
     fields: [
       { key: "network", label: "Red", required: true, options: ["TRC20 (Tron)", "BEP20 (BNB Smart Chain)", "ERC20 (Ethereum)", "Polygon", "Solana"] },
       { key: "address", label: "Dirección", required: true },
+      qr,
     ],
   },
   {
@@ -92,7 +116,7 @@ export const PAYMENT_METHOD_CATALOG: PaymentMethodKindDef[] = [
     label: "Zinli",
     country: "global",
     currency: "USD",
-    fields: [{ key: "email", label: "Correo o celular de Zinli", required: true }, holder],
+    fields: [{ key: "email", label: "Correo o celular de Zinli", required: true }, holder, qr],
   },
   { kind: "otro", label: "Otro método", country: "global", currency: "USD", fields: [] },
 ];
@@ -157,6 +181,7 @@ export function formatPaymentAmount(amount: number, currency: PaymentCurrency): 
 export function paymentMethodLine(method: Pick<PaymentMethod, "kind" | "label" | "details" | "instructions">): string {
   const def = paymentMethodDef(method.kind);
   const parts = def.fields
+    .filter((f) => f.type !== "image")
     .map((f) => [f.label, (method.details[f.key] ?? "").trim()] as const)
     .filter(([, v]) => v)
     .map(([label, v]) => `${label}: ${v}`);

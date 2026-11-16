@@ -122,7 +122,7 @@ export class HealthController {
         connected: false,
         code: err?.code ? String(err.code) : undefined,
         error: String(err?.message ?? e).slice(0, 400),
-        hint: "La app no puede conectar a la base (revisa DATABASE_URL o si Neon está activo).",
+        hint: "La app no puede conectar a la base (revisa DATABASE_URL o si tu proyecto de Supabase o Neon está activo).",
       };
     }
   }

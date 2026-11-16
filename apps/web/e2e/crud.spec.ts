@@ -15,7 +15,7 @@ test.describe.serial("contacts CRUD", () => {
 
     await page.goto(`/w/${WS}/contactos`, { waitUntil: "networkidle" });
     await page.waitForTimeout(800);
-    await expect(page.locator("body")).toContainText("Tu CRM está vacío");
+    await expect(page.locator("body")).toContainText("Aún no tienes contactos");
 
     // The default view is the Kanban board; the per-row Editar/Eliminar actions
     // live in the Tabla (table) view, so switch to it before editing rows.
@@ -48,6 +48,6 @@ test.describe.serial("contacts CRUD", () => {
     // Delete (confirm dialog)
     await page.click('button[title="Eliminar"]');
     await page.getByRole("button", { name: "Eliminar" }).click();
-    await expect(page.locator("body")).toContainText("Tu CRM está vacío", { timeout: 10000 });
+    await expect(page.locator("body")).toContainText("Aún no tienes contactos", { timeout: 10000 });
   });
 });

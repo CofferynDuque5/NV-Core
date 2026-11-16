@@ -1,4 +1,5 @@
 import { Injectable, Logger, type OnModuleDestroy, type OnModuleInit } from "@nestjs/common";
+import { DEMO_SLUG } from "../demo/demo-slug";
 
 import { AuditLogger } from "../../common/audit-logger.service";
 import { PrismaService } from "../../prisma/prisma.service";
@@ -58,6 +59,15 @@ export class PostScheduler implements OnModuleInit, OnModuleDestroy {
       await this.publish((payload as { postId: string }).postId);
     });
     if (!this.prisma.enabled) return;
+    // A cPanel app that slept wakes on the next visit: publish what came due meanwhile.
+    const first = setTimeout(
+      () =>
+        void this.sweep().catch((err: unknown) =>
+          this.logger.warn(`Barrido de publicaciones falló: ${(err as Error).message}`),
+        ),
+      10_000,
+    );
+    first.unref?.();
     this.timer = setInterval(
       () =>
         void this.sweep().catch((err: unknown) =>
@@ -95,7 +105,11 @@ export class PostScheduler implements OnModuleInit, OnModuleDestroy {
     try {
       await this.failStuck(now);
       const due = await this.prisma.post.findMany({
-        where: { status: "scheduled", scheduledAt: { lte: now } },
+        where: {
+          status: "scheduled",
+          scheduledAt: { lte: now },
+          workspaceSlug: { not: DEMO_SLUG },
+        },
         orderBy: { scheduledAt: "asc" },
         take: SWEEP_BATCH,
         select: { id: true },
@@ -197,7 +211,11 @@ export class PostScheduler implements OnModuleInit, OnModuleDestroy {
     });
     for (const p of stuck) {
       const { count } = await this.prisma.post.updateMany({
-        where: { id: p.id, status: "publishing", OR: [{ publishStartedAt: { lte: cutoff } }, { publishStartedAt: null }] },
+        where: {
+          id: p.id,
+          status: "publishing",
+          OR: [{ publishStartedAt: { lte: cutoff } }, { publishStartedAt: null }],
+        },
         data: { status: "error" },
       });
       if (count === 0) continue;

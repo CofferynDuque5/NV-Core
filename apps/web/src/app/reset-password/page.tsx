@@ -1,4 +1,3 @@
-
 import * as React from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Loader2 } from "lucide-react";
@@ -11,17 +10,15 @@ import { Label } from "@/components/ui/label";
 
 export default function ResetPasswordPage() {
   const navigate = useNavigate();
-  const [token, setToken] = React.useState<string | null>(null);
+  // A link without its token can't reset anything: say so instead of a form.
+  const [token] = React.useState<string | null>(() =>
+    typeof window === "undefined" ? null : new URL(window.location.href).searchParams.get("token"),
+  );
   const [password, setPassword] = React.useState("");
   const [confirm, setConfirm] = React.useState("");
   const [submitting, setSubmitting] = React.useState(false);
   const [done, setDone] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
-
-  // Read the token client-side to keep the page statically renderable.
-  React.useEffect(() => {
-    setToken(new URL(window.location.href).searchParams.get("token"));
-  }, []);
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -51,13 +48,22 @@ export default function ResetPasswordPage() {
       title="Nueva contraseña"
       subtitle="Elige una contraseña segura."
       footer={
-        <Link to="/login" className="font-medium text-brand hover:underline">
+        <Link to="/login" className="text-brand font-medium hover:underline">
           Volver a iniciar sesión
         </Link>
       }
     >
-      {done ? (
-        <p className="rounded-lg border border-state-success/30 bg-state-success/10 px-3 py-2 text-sm text-state-success">
+      {!token ? (
+        <div className="space-y-4">
+          <p className="border-state-danger/30 bg-state-danger/10 text-state-danger rounded-lg border px-3 py-2 text-sm">
+            Enlace inválido o vencido. Pide uno nuevo para cambiar tu contraseña.
+          </p>
+          <Button asChild className="w-full">
+            <Link to="/forgot-password">Pedir un enlace nuevo</Link>
+          </Button>
+        </div>
+      ) : done ? (
+        <p className="border-state-success/30 bg-state-success/10 text-state-success rounded-lg border px-3 py-2 text-sm">
           Contraseña actualizada. Redirigiendo al inicio de sesión…
         </p>
       ) : (
@@ -72,7 +78,7 @@ export default function ResetPasswordPage() {
               minLength={8}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              placeholder="••••••••"
+              placeholder="Mínimo 8 caracteres"
             />
           </div>
           <div className="space-y-1.5">
@@ -85,11 +91,11 @@ export default function ResetPasswordPage() {
               minLength={8}
               value={confirm}
               onChange={(e) => setConfirm(e.target.value)}
-              placeholder="••••••••"
+              placeholder="Mínimo 8 caracteres"
             />
           </div>
           {error ? (
-            <p className="rounded-lg border border-state-danger/30 bg-state-danger/10 px-3 py-2 text-xs text-state-danger">
+            <p className="border-state-danger/30 bg-state-danger/10 text-state-danger rounded-lg border px-3 py-2 text-xs">
               {error}
             </p>
           ) : null}

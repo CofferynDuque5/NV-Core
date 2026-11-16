@@ -87,3 +87,40 @@ describe("contactName", () => {
     expect(contactName({})).toBeNull();
   });
 });
+
+describe("attachments and saved names", () => {
+  it("describes photos, voice notes and documents", async () => {
+    const { mediaInfo, savedContactName } = await import("./chat-message");
+    expect(mediaInfo({ imageMessage: { mimetype: "image/jpeg", fileLength: { low: 2048, high: 0 } } })).toEqual({
+      kind: "image",
+      mime: "image/jpeg",
+      size: 2048,
+    });
+    expect(mediaInfo({ ephemeralMessage: { message: { audioMessage: { ptt: true, mimetype: "audio/ogg; codecs=opus", seconds: 7, fileLength: 9000 } } } })).toEqual({
+      kind: "voice",
+      mime: "audio/ogg",
+      size: 9000,
+      seconds: 7,
+    });
+    expect(mediaInfo({ documentMessage: { mimetype: "application/pdf", fileName: "lista.pdf", fileLength: "300" } })).toMatchObject({
+      kind: "document",
+      name: "lista.pdf",
+      size: 300,
+    });
+    expect(mediaInfo({ conversation: "hola" })).toBeNull();
+    // Only the name saved in the brand's phone counts, never the contact's own (notify).
+    expect(savedContactName({ id: pn, name: " Ana Clienta ", notify: "Anita" })).toBe("Ana Clienta");
+    expect(savedContactName({ id: pn, notify: "Anita" })).toBeNull();
+  });
+
+  it("keeps the attachment on the Inbox message", () => {
+    const msg = toChatMessage({
+      key: { remoteJid: pn, id: "ABC", fromMe: false },
+      pushName: "Anita",
+      messageTimestamp: 1_700_000_000,
+      message: { imageMessage: { caption: "precio?", mimetype: "image/png", fileLength: 10 } },
+    });
+    expect(msg?.text).toBe("📷 Foto precio?");
+    expect(msg?.media).toEqual({ kind: "image", mime: "image/png", size: 10 });
+  });
+});

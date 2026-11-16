@@ -86,3 +86,47 @@ self.addEventListener("fetch", (event) => {
     );
   }
 });
+
+// ── Push: new chat messages with the panel closed ──────────────────────────
+self.addEventListener("push", (event) => {
+  let data = {};
+  try {
+    data = event.data ? event.data.json() : {};
+  } catch {
+    data = { title: "NV Marketing", body: event.data ? event.data.text() : "" };
+  }
+  const title = data.title || "NV Marketing";
+  const url = data.url || "/";
+  event.waitUntil(
+    self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((wins) => {
+      // The panel is open and in front: it already rang, no double notice.
+      if (wins.some((w) => w.visibilityState === "visible" && w.focused)) return undefined;
+      return self.registration.showNotification(title, {
+        body: data.body || "",
+        tag: data.tag || undefined,
+        renotify: Boolean(data.tag),
+        icon: "/icon-192.png",
+        badge: "/icon-192.png",
+        data: { url },
+      });
+    }),
+  );
+});
+
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+  const path = (event.notification.data && event.notification.data.url) || "/";
+  const target = new URL(path, self.location.origin);
+  // Only our own pages open from a notice.
+  if (target.origin !== self.location.origin) return;
+  event.waitUntil(
+    self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((wins) => {
+      for (const w of wins) {
+        if (new URL(w.url).origin === self.location.origin && "focus" in w) {
+          return w.focus().then((c) => (c && "navigate" in c ? c.navigate(target.href) : c));
+        }
+      }
+      return self.clients.openWindow(target.href);
+    }),
+  );
+});

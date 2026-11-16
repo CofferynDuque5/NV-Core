@@ -9,6 +9,7 @@ const CHANNEL_TO_PROVIDER: Record<string, string> = { fb: "facebook", ig: "insta
 function matches(row: AnyRec, where: AnyRec): boolean {
   return Object.entries(where).every(([k, v]) => {
     if (k === "OR") return (v as AnyRec[]).some((w) => matches(row, w));
+    if (v && typeof v === "object" && "not" in (v as AnyRec)) return row[k] !== (v as AnyRec).not;
     if (v && typeof v === "object" && !(v instanceof Date) && "lte" in (v as AnyRec)) {
       const at = row[k] as Date | null | undefined;
       return !!at && at.getTime() <= ((v as AnyRec).lte as Date).getTime();

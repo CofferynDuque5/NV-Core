@@ -5,6 +5,18 @@ const password = "password123";
 // Set by the first test: the slug of the workspace created in onboarding.
 let WS = "";
 
+test("the plan picked on the sales site shows on sign-up and is remembered", async ({ page }) => {
+  await page.goto("/register?plan=basico", { waitUntil: "networkidle" });
+  await expect(page.getByTestId("register-plan")).toContainText("Plan elegido: Básico");
+  expect(await page.evaluate(() => window.localStorage.getItem("nv-plan-elegido"))).toBe("basico");
+  // Autofill hints for password managers.
+  await expect(page.locator("#name")).toHaveAttribute("autocomplete", "name");
+  await expect(page.locator("#email")).toHaveAttribute("name", "email");
+  // «Probar 24 horas» sends plan=free: nothing to show, the earlier choice stays.
+  await page.goto("/register?plan=free", { waitUntil: "networkidle" });
+  await expect(page.getByTestId("register-plan")).toContainText("Básico");
+});
+
 test.describe.serial("auth", () => {
   test("register → onboarding → dashboard, memory token, httpOnly cookie", async ({ page }) => {
     await page.goto("/register", { waitUntil: "networkidle" });

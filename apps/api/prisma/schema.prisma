@@ -77,6 +77,7 @@ model User {
   refreshTokens       RefreshToken[]
   authTokens          AuthToken[]
   loginEvents         LoginEvent[]
+  panelSessions       PanelSession[]
 }
 
 /// One row per successful sign-in, for the super-admin «Usuarios» panel. Kept 90 days.
@@ -92,6 +93,36 @@ model LoginEvent {
 
   @@index([at])
   @@index([userId, at])
+}
+
+/**
+ * One visit to the panel (a browser tab, renewed after 30 min idle): who,
+ * from which device and IP, which sections and for how long. The panel pings
+ * on every page change and once a minute while visible. Kept 90 days.
+ */
+model PanelSession {
+  /// Random id made by the browser tab.
+  id            String   @id
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId        String
+  /// The shared «Ver demo» account (visitors tell apart by device and IP).
+  demo          Boolean  @default(false)
+  ip            String?
+  userAgent     String?
+  /// "Chrome · Windows".
+  device        String   @default("—")
+  /// "movil", "tablet" or "computadora".
+  deviceKind    String   @default("computadora")
+  workspaceSlug String?
+  lastPath      String?
+  pageViews     Int      @default(0)
+  /// Pages seen per section: { "campanas": 3, "inbox": 5 }.
+  sections      Json     @default("{}")
+  startedAt     DateTime @default(now())
+  lastAt        DateTime @default(now())
+
+  @@index([lastAt])
+  @@index([userId, lastAt])
 }
 
 /**
@@ -156,6 +187,10 @@ model Contact {
   consentSource String?
   /// First-touch origin (LeadAttribution) set by public forms and funnels.
   attribution   Json?
+  /// Birthday as "MM-DD" or "YYYY-MM-DD" (year optional).
+  birthday      String?
+  /// Values of the brand's custom fields: { fieldKey: "value" }.
+  custom        Json      @default("{}")
   createdAt     DateTime  @default(now())
 
   @@index([workspaceSlug])
@@ -164,38 +199,51 @@ model Contact {
 }
 
 model Group {
-  id            String    @id @default(cuid())
-  workspaceSlug String
-  name          String
-  channel       ChannelId @default(wa)
+  id             String    @id @default(cuid())
+  workspaceSlug  String
+  name           String
+  channel        ChannelId @default(wa)
   /// Destination kind: "group" (chat) or "channel" (broadcast, e.g. a Telegram
   /// channel where the bot is an admin). Delivery is the same; this drives UI.
-  kind          String    @default("group")
-  members       Int       @default(0)
-  admins        Int       @default(0)
-  description   String?
-  tags          String[]
+  kind           String    @default("group")
+  members        Int       @default(0)
+  admins         Int       @default(0)
+  description    String?
+  tags           String[]
+  /// WhatsApp number (line) that is in this group and sends to it.
+  waLine         Int       @default(1)
+  /// Telegram account (line) that is in this group/channel and sends to it.
+  tgLine         Int       @default(1)
   /// WhatsApp group JID (e.g. "12345-678@g.us") when synced from Baileys.
-  remoteJid     String?
+  remoteJid      String?
   /// True when the row was populated from a WhatsApp sync (vs. manual CRUD).
-  synced        Boolean   @default(false)
+  synced         Boolean   @default(false)
   /// «Apartado»: campaigns never post here (team, university, news groups…).
-  excluded      Boolean   @default(false)
+  excluded       Boolean   @default(false)
   /// What the group is about (GROUP_CATEGORIES in @nv/domain).
-  category      String?
+  category       String?
   /// The group's rules ask for a price / a photo in every post.
-  requiresPrice Boolean   @default(false)
-  requiresImage Boolean   @default(false)
+  requiresPrice  Boolean   @default(false)
+  requiresImage  Boolean   @default(false)
   /// The group's rules ban ads; only admins can write (WhatsApp setting).
-  forbidsAds    Boolean   @default(false)
-  onlyAdmins    Boolean   @default(false)
+  forbidsAds     Boolean   @default(false)
+  onlyAdmins     Boolean   @default(false)
   /// ISO country chosen by the user; when null it is detected (name, creator).
-  country       String?
+  country        String?
   /// Creator of the WhatsApp group, read on sync (its prefix hints the country).
-  ownerJid      String?
+  ownerJid       String?
   /// Last time the rules were read and checked.
   rulesCheckedAt DateTime?
-  createdAt     DateTime  @default(now())
+  /// Last message anyone else wrote in the group/channel (seen by the connected session).
+  lastMessageAt  DateTime?
+  /// Since when messages are watched (a group is «sin actividad» after 30 days of silence from here).
+  watchedSince   DateTime  @default(now())
+  /// Own sending hours "HH:MM" (brand zone); null = the brand's hours.
+  sendFrom       String?
+  sendUntil      String?
+  /// Most campaign messages this group may get per day; null = the brand's limit.
+  maxPerDay      Int?
+  createdAt      DateTime  @default(now())
 
   variables       GroupVariable[]
   campaignTargets CampaignTarget[]
@@ -369,6 +417,25 @@ model Campaign {
   /// (one image per run) instead of always using the first. Great for daily
   /// campaigns that should vary the creative.
   rotateAttachments  Boolean        @default(false)
+  /// WhatsApp numbers (lines) this campaign sends from; empty = all of the brand's.
+  waLines            Int[]          @default([])
+  /// Telegram accounts (lines) this campaign sends from; empty = all of the brand's.
+  tgLines            Int[]          @default([])
+  /// Extra messages, one per product, each with its own text and image:
+  /// [{ productId?, text, attachments: [{ url, kind, mime, filename, path }] }].
+  /// Sent to every target group after the main message (or alone without one).
+  items              Json           @default("[]")
+  /// Send in batches: after `batchSize` groups, pause `batchPauseMin` minutes (null = default pacing).
+  batchSize          Int?
+  batchPauseMin      Int?
+  /// Groups left for later because they were outside their sending hours,
+  /// sent by the scheduler at `pendingAt` (when their hours open).
+  pendingGroups      String[]       @default([])
+  pendingAt          DateTime?
+  /// Pre-send notice: the slot it is for, «pending|confirmed|skipped», and when it fires.
+  confirmSlot        String?
+  confirmState       String?
+  confirmFor         DateTime?
   /// Cursor for attachment rotation — which image the next run should use.
   attachmentRotation Int            @default(0)
   /// IG publish format: "feed" | "reel" | "story" | "carousel".
@@ -391,6 +458,8 @@ model Campaign {
   prices             Json           @default("{}")
   /// Append the brand's links and the NV Marketing credit to group messages.
   addFooter          Boolean        @default(true)
+  /// Category the team files the campaign under («Halloween», «Streaming»…).
+  category           String?
   createdAt          DateTime       @default(now())
 
   posts    Post[]
@@ -399,6 +468,7 @@ model Campaign {
 
   @@index([workspaceSlug])
   @@index([workspaceSlug, createdAt])
+  @@index([pendingAt])
 }
 
 /**
@@ -445,6 +515,7 @@ model SendLog {
   @@index([workspaceSlug])
   @@index([campaignId])
   @@index([workspaceSlug, createdAt])
+  @@index([groupId, createdAt])
 }
 
 model Post {
@@ -542,18 +613,18 @@ model Template {
 }
 
 model Automation {
-  id            String           @id @default(cuid())
+  id            String                   @id @default(cuid())
   workspaceSlug String
   name          String
-  status        String           @default("pausado")
-  runs          Int              @default(0)
+  status        String                   @default("pausado")
+  runs          Int                      @default(0)
   description   String?
-  nodes         Json             @default("[]")
+  nodes         Json                     @default("[]")
   // Visual-editor connections between nodes (graph edges).
-  edges         Json             @default("[]")
+  edges         Json                     @default("[]")
   // Optional n8n webhook (absolute URL or path resolved against N8N_BASE_URL).
   webhookUrl    String?
-  createdAt     DateTime         @default(now())
+  createdAt     DateTime                 @default(now())
   waits         AutomationWait[]
   executions    AutomationRun[]
   inactiveFires AutomationInactiveFire[]
@@ -649,6 +720,14 @@ model Conversation {
   assignee      String?
   /// Free-form labels for triage (e.g. "ventas", "urgente").
   labels        String[]
+  /// New incoming messages not seen yet; 0 when read, ≥1 to mark it unread again.
+  unreadCount   Int       @default(0)
+  /// WhatsApp number (line) the chat belongs to; replies go out from it.
+  waLine        Int?
+  /// Telegram account (line) the chat belongs to; replies go out from it.
+  tgLine        Int?
+  /// Name the brand saved for this number in its own WhatsApp (phone address book); shown first.
+  savedName     String?
   createdAt     DateTime  @default(now())
   messages      Message[]
 
@@ -660,15 +739,22 @@ model Message {
   id             String       @id @default(cuid())
   conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
   conversationId String
+  /// "in" (from the contact), "out" (to the contact) or "note" (internal team note, never sent).
   direction      String
   text           String
+  /// Who wrote an internal note (team member email); null for chat messages.
+  author         String?
   /// Platform message id (WhatsApp), so a message replayed by the session is stored once.
   externalId     String?
+  /// Photo, video, audio, voice note, sticker or document: {kind, mime, size, name?, seconds?, file?}.
+  /// `file` is the private stored name (served only to signed-in members of the brand).
+  media          Json?
   createdAt      DateTime     @default(now())
 
   @@unique([conversationId, externalId])
   @@index([conversationId])
   @@index([conversationId, createdAt])
+  @@index([createdAt])
 }
 
 model Notification {
@@ -679,6 +765,8 @@ model Notification {
   meta          String?
   /// Email of the one member it is for; null = whole workspace.
   recipient     String?
+  /// Buttons the notice offers, e.g. {"type":"campaign-confirm","campaignId","slot","state"}.
+  actions       Json?
   read          Boolean  @default(false)
   createdAt     DateTime @default(now())
 
@@ -720,25 +808,63 @@ model WorkspaceAccess {
   trialEndsAt   DateTime
   /// Paid access runs until this moment (extended each time a payment is confirmed).
   paidUntil     DateTime?
+  /// Paid plan («basico» | «pro»); null = still on the trial (or paid before plans existed → pro).
+  planId        String?
   activatedBy   String?
+  /// When the trial's one campaign send was used (null = still free to send).
+  trialSendAt   DateTime?
+  /// No trial was given: the device or account already had one.
+  trialDenied   Boolean   @default(false)
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
+}
+
+/// Who got a free trial, from which device. Kept when the brand is deleted
+/// (no workspaceSlug column on purpose) so deleting and recreating a brand,
+/// or opening another account on the same device, does not give a new trial.
+/// Device id and fingerprint are stored hashed.
+model TrialClaim {
+  id              String   @id @default(cuid())
+  brandSlug       String
+  userId          String
+  deviceHash      String?
+  fingerprintHash String?
+  ip              String?
+  granted         Boolean  @default(true)
+  createdAt       DateTime @default(now())
+
+  @@index([userId])
+  @@index([deviceHash])
+  @@index([fingerprintHash, ip])
 }
 
 /// Per-brand settings that apply to built-in and created workspaces alike
 /// (built-in ones have no Workspace row). One row per workspace, created on first save.
 model WorkspaceSettings {
-  workspaceSlug String   @id
+  workspaceSlug      String   @id
   /// IANA zone the weekly report cuts weeks in (Monday 00:00 local).
-  timeZone      String   @default("UTC")
+  timeZone           String   @default("UTC")
   /// Brand links for the campaign footer: [{ label, url }].
-  socialLinks   Json     @default("[]")
-  website       String?
+  socialLinks        Json     @default("[]")
+  website            String?
   /// What the brand wants to achieve first (onboarding «¿Qué quieres lograr
   /// primero?»); orders the sidebar and the dashboard's next steps.
-  goals         String[] @default([])
-  updatedBy     String?
-  updatedAt     DateTime @updatedAt
+  goals              String[] @default([])
+  /// Inbox saved replies: [{ id, title, text }] with {{nombre}}-style variables.
+  quickReplies       Json     @default("[]")
+  /// Contact custom fields: [{ key, label, type: text|number|date|select, options? }].
+  contactFields      Json     @default("[]")
+  /// Brand sending hours for campaigns "HH:MM" (its zone); null = any time.
+  sendFrom           String?
+  sendUntil          String?
+  /// Default most campaign messages per group per day; null = no limit.
+  groupMaxPerDay     Int?
+  /// Notice before each scheduled send: «off», «notify» (sends unless cancelled) or «require».
+  sendConfirm        String   @default("notify")
+  /// Minutes before the send the notice arrives.
+  sendConfirmLeadMin Int      @default(15)
+  updatedBy          String?
+  updatedAt          DateTime @updatedAt
 }
 
 /**
@@ -760,28 +886,41 @@ model GoogleConnection {
 /**
  * WhatsApp (Baileys) connection metadata per workspace; creds live on disk.
  */
+/// One linked WhatsApp number of a brand. Line 1 is the main number; a brand
+/// can link more (line 2, 3…), each with its own QR and session files.
 model WhatsappSession {
   id               String    @id @default(cuid())
-  workspaceSlug    String    @unique
+  workspaceSlug    String
+  line             Int       @default(1)
+  /// Name the user gives the number («Ventas», «Soporte»).
+  label            String?
   status           String    @default("disconnected")
   number           String?
   lastConnectionAt DateTime?
   groupsCount      Int       @default(0)
   contactsCount    Int       @default(0)
   updatedAt        DateTime  @updatedAt
+
+  @@unique([workspaceSlug, line])
 }
 
 /// Telegram user (MTProto/GramJS) session state per workspace. The auth string
 /// itself lives on disk (TELEGRAM_SESSION_DIR), not here.
 model TelegramSession {
   id               String    @id @default(cuid())
-  workspaceSlug    String    @unique
+  workspaceSlug    String
+  /// 1 = main account; 2… = extra accounts of the same brand.
+  line             Int       @default(1)
+  /// Name the user gives the account («Ventas», «Soporte»).
+  label            String?
   status           String    @default("disconnected")
   username         String?
   phone            String?
   lastConnectionAt DateTime?
   groupsCount      Int       @default(0)
   updatedAt        DateTime  @updatedAt
+
+  @@unique([workspaceSlug, line])
 }
 
 /**
@@ -948,6 +1087,23 @@ model Invitation {
   @@index([email])
 }
 
+/// A shareable link that lets anyone with it join a workspace with a fixed role
+/// (never Owner). Only the hash of the token is stored; the link is shown once.
+model InviteLink {
+  id            String    @id @default(cuid())
+  workspaceSlug String
+  tokenHash     String    @unique
+  role          String    @default("Visor")
+  createdByName String?
+  maxUses       Int?
+  uses          Int       @default(0)
+  expiresAt     DateTime
+  revokedAt     DateTime?
+  createdAt     DateTime  @default(now())
+
+  @@index([workspaceSlug])
+}
+
 /// A team to-do on the workspace task board. status: todo | doing | done;
 /// priority: low | normal | high. `position` orders cards within a column.
 model Task {
@@ -1025,6 +1181,17 @@ model PaymentRequest {
   /// Plan payment of a customer brand (set only in the operator's billing
   /// brand); confirming it as "pagado" adds paid days to that brand.
   forWorkspace  String?
+  /// Plan the brand pays for (plan payments only).
+  planId        String?
+  /// Payer details the customer typed (name, bank, phone, date…), plan payments only.
+  payer         Json?
+  /// Receipt file name in the private receipts folder (never served publicly).
+  receiptFile   String?
+  receiptType   String?
+  /// Amount in the method's own money (e.g. VES) and the USDT rate used.
+  localAmount   Decimal?  @db.Decimal(18, 2)
+  localCurrency String?
+  rate          Decimal?  @db.Decimal(18, 4)
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
@@ -1053,4 +1220,27 @@ model Product {
   updatedAt     DateTime @updatedAt
 
   @@index([workspaceSlug])
+}
+
+/// Browser push subscription of a member: new chat messages reach the phone or
+/// computer even with the panel closed (Web Push, VAPID).
+model PushSubscription {
+  id            String   @id @default(cuid())
+  userId        String
+  /// Unique push-service URL the browser gave us.
+  endpoint      String   @unique
+  p256dh        String
+  auth          String
+  device        String?
+  createdAt     DateTime @default(now())
+  lastOkAt      DateTime?
+
+  @@index([userId])
+}
+
+/// Server-generated keys kept in the database (value encrypted at rest).
+model AppKey {
+  name      String   @id
+  value     String
+  createdAt DateTime @default(now())
 }

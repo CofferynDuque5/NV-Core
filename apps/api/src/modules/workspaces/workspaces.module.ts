@@ -7,6 +7,8 @@ import {
   Delete,
   Get,
   HttpCode,
+  HttpException,
+  HttpStatus,
   Injectable,
   Logger,
   Module,
@@ -14,13 +16,28 @@ import {
   Param,
   Patch,
   Post,
+  Req,
   UseGuards,
 } from "@nestjs/common";
 import { Prisma } from "@prisma/client";
+import type { Request } from "express";
 import { ApiBearerAuth, ApiTags } from "@nestjs/swagger";
-import { WORKSPACE_GOAL_IDS, WORKSPACE_KINDS, type Workspace, type WorkspaceKind } from "@nv/domain";
+import {
+  WORKSPACE_GOAL_IDS,
+  WORKSPACE_KINDS,
+  type Workspace,
+  type WorkspaceKind,
+} from "@nv/domain";
 import { ConfigService } from "@nestjs/config";
-import { IsArray, IsIn, IsOptional, IsString, Matches, MaxLength, MinLength } from "class-validator";
+import {
+  IsArray,
+  IsIn,
+  IsOptional,
+  IsString,
+  Matches,
+  MaxLength,
+  MinLength,
+} from "class-validator";
 import { Throttle } from "@nestjs/throttler";
 
 import { CurrentUser } from "../../auth/decorators/current-user.decorator";
@@ -32,7 +49,10 @@ import { RolesGuard } from "../../auth/guards/roles.guard";
 import { Roles } from "../../auth/decorators/roles.decorator";
 import { resolveMediaDir, WORKSPACE_DIR_RE } from "../media/local-storage";
 import { WorkspaceGuard } from "../../common/tenant/workspace.guard";
-import { WorkspaceAccessService } from "../../common/access/workspace-access.service";
+import {
+  WorkspaceAccessService,
+  type TrialOrigin,
+} from "../../common/access/workspace-access.service";
 import type { AppConfig } from "../../config/configuration";
 
 export class CreateWorkspaceDto {
@@ -56,6 +76,23 @@ export class DeleteWorkspaceDto {
 }
 
 /**
+ * The browser's device id and traits hash (sent by the panel as headers) and
+ * its IP behind cPanel's proxy, to give one free trial per device.
+ */
+export function trialOrigin(req: Request): Omit<TrialOrigin, "userId"> {
+  const header = (name: string) => {
+    const v = req.headers[name];
+    return (Array.isArray(v) ? v[0] : v)?.trim() || undefined;
+  };
+  const forwarded = header("x-forwarded-for")?.split(",")[0]?.trim();
+  return {
+    deviceId: header("x-nv-device"),
+    fingerprint: header("x-nv-fp"),
+    ip: forwarded || req.ip || null,
+  };
+}
+
+/**
  * Every table that holds a brand's rows, from Prisma's own model list: models
  * with a `workspaceSlug` (or `workspaceId`) column. Rows that hang off those
  * (targets, variables…) go with them through their foreign keys.
@@ -63,8 +100,11 @@ export class DeleteWorkspaceDto {
 export function workspaceTables(): { table: string; column: string }[] {
   const out: { table: string; column: string }[] = [];
   for (const m of Prisma.dmmf.datamodel.models) {
-    const f = m.fields.find((x) => x.kind === "scalar" && (x.name === "workspaceSlug" || x.name === "workspaceId"));
-    if (f && m.name !== "Workspace") out.push({ table: m.dbName ?? m.name, column: f.dbName ?? f.name });
+    const f = m.fields.find(
+      (x) => x.kind === "scalar" && (x.name === "workspaceSlug" || x.name === "workspaceId"),
+    );
+    if (f && m.name !== "Workspace")
+      out.push({ table: m.dbName ?? m.name, column: f.dbName ?? f.name });
   }
   return out;
 }
@@ -105,9 +145,14 @@ export class WorkspacesService {
    */
   async update(slug: string, dto: UpdateWorkspaceDto, actor: string): Promise<Workspace> {
     const ws = await this.get(slug);
-    const identity = dto.name !== undefined || dto.kind !== undefined || dto.accent !== undefined || dto.tagline !== undefined;
+    const identity =
+      dto.name !== undefined ||
+      dto.kind !== undefined ||
+      dto.accent !== undefined ||
+      dto.tagline !== undefined;
     if (identity) {
-      if (ws.builtin) throw new BadRequestException("Esta marca de demostración no se puede renombrar.");
+      if (ws.builtin)
+        throw new BadRequestException("Esta marca de demostración no se puede renombrar.");
       await this.prisma.workspace.update({
         where: { slug },
         data: {
@@ -136,8 +181,10 @@ export class WorkspacesService {
    */
   async remove(slug: string, confirmName: string, actor: string): Promise<void> {
     const ws = await this.get(slug);
-    if (ws.builtin) throw new BadRequestException("Las marcas de demostración no se pueden eliminar.");
-    if (confirmName.trim() !== ws.name) throw new BadRequestException("Escribe el nombre exacto de la marca para confirmar.");
+    if (ws.builtin)
+      throw new BadRequestException("Las marcas de demostración no se pueden eliminar.");
+    if (confirmName.trim() !== ws.name)
+      throw new BadRequestException("Escribe el nombre exacto de la marca para confirmar.");
     // Several passes: a row another table still points to is retried once
     // the rows pointing to it are gone.
     let pending = workspaceTables();
@@ -145,7 +192,10 @@ export class WorkspacesService {
       const failed: typeof pending = [];
       for (const t of pending) {
         try {
-          await this.prisma.$executeRawUnsafe(`DELETE FROM "${t.table}" WHERE "${t.column}" = $1`, slug);
+          await this.prisma.$executeRawUnsafe(
+            `DELETE FROM "${t.table}" WHERE "${t.column}" = $1`,
+            slug,
+          );
         } catch {
           failed.push(t);
         }
@@ -153,19 +203,32 @@ export class WorkspacesService {
       pending = failed;
     }
     if (pending.length > 0) {
-      this.logger.error(`No se pudo borrar todo de ${slug}: ${pending.map((t) => t.table).join(", ")}`);
+      this.logger.error(
+        `No se pudo borrar todo de ${slug}: ${pending.map((t) => t.table).join(", ")}`,
+      );
       throw new BadRequestException("No se pudo eliminar la marca por completo. Intenta de nuevo.");
     }
     await this.prisma.workspace.delete({ where: { slug } });
+    this.registry.forget(slug);
     const media = this.config.get("media", { infer: true });
     if (media?.dir && WORKSPACE_DIR_RE.test(slug)) {
-      await rm(join(resolveMediaDir(media.dir), slug), { recursive: true, force: true }).catch(() => undefined);
+      await rm(join(resolveMediaDir(media.dir), slug), { recursive: true, force: true }).catch(
+        () => undefined,
+      );
     }
     this.logger.log(`Marca ${slug} eliminada por ${actor}`);
   }
 
   /** A brand a customer creates starts its free trial; the operator's own brands don't. */
-  async create(dto: CreateWorkspaceDto, user: AuthenticatedUser): Promise<Workspace> {
+  async create(
+    dto: CreateWorkspaceDto,
+    user: AuthenticatedUser,
+    origin?: Omit<TrialOrigin, "userId">,
+  ): Promise<Workspace> {
+    const operator = this.config
+      .get("superAdmins", { infer: true })
+      .includes(user.email.toLowerCase());
+    if (!operator) await this.assertMayAddBrand(user.userId);
     const ws = await this.registry.create(dto, { userId: user.userId, email: user.email });
     if (dto.goals?.length) {
       const goals = cleanGoals(dto.goals);
@@ -176,9 +239,27 @@ export class WorkspacesService {
       });
       ws.goals = goals;
     }
-    const operator = this.config.get("superAdmins", { infer: true }).includes(user.email.toLowerCase());
-    if (!operator) await this.access.startTrial(ws.slug);
+    if (!operator) await this.access.startTrial(ws.slug, { userId: user.userId, ...origin });
     return ws;
+  }
+
+  /** A brand on the Básico plan is its owner's only brand. */
+  private async assertMayAddBrand(userId: string): Promise<void> {
+    if (!this.prisma.enabled) return;
+    const owned = await this.prisma.membership.findMany({
+      where: { userId, role: "Owner" },
+      select: { workspaceSlug: true },
+    });
+    for (const { workspaceSlug } of owned) {
+      const limits = await this.access.limits(workspaceSlug);
+      if (limits?.brands != null && owned.length >= limits.brands) {
+        const name = (await this.registry.resolve(workspaceSlug))?.name ?? workspaceSlug;
+        throw new HttpException(
+          `Tu plan Básico incluye ${limits.brands} marca («${name}»). Mejora a Pro para crear otra.`,
+          HttpStatus.PAYMENT_REQUIRED,
+        );
+      }
+    }
   }
 }
 
@@ -196,8 +277,12 @@ export class WorkspacesController {
 
   @Throttle({ default: { limit: 20, ttl: 60_000 } })
   @Post()
-  create(@Body() dto: CreateWorkspaceDto, @CurrentUser() user: AuthenticatedUser) {
-    return this.service.create(dto, user);
+  create(
+    @Body() dto: CreateWorkspaceDto,
+    @CurrentUser() user: AuthenticatedUser,
+    @Req() req: Request,
+  ) {
+    return this.service.create(dto, user, trialOrigin(req));
   }
 
   /** Membership-gated: only members can resolve a workspace by slug. */
@@ -210,7 +295,11 @@ export class WorkspacesController {
   @UseGuards(WorkspaceGuard, RolesGuard)
   @Roles("Owner", "Admin")
   @Patch(":workspace")
-  update(@Param("workspace") slug: string, @Body() dto: UpdateWorkspaceDto, @CurrentUser() user: AuthenticatedUser) {
+  update(
+    @Param("workspace") slug: string,
+    @Body() dto: UpdateWorkspaceDto,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
     return this.service.update(slug, dto, user.email);
   }
 
@@ -219,7 +308,11 @@ export class WorkspacesController {
   @Throttle({ default: { limit: 5, ttl: 60_000 } })
   @Delete(":workspace")
   @HttpCode(204)
-  remove(@Param("workspace") slug: string, @Body() dto: DeleteWorkspaceDto, @CurrentUser() user: AuthenticatedUser) {
+  remove(
+    @Param("workspace") slug: string,
+    @Body() dto: DeleteWorkspaceDto,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
     return this.service.remove(slug, dto.confirmName, user.email);
   }
 }

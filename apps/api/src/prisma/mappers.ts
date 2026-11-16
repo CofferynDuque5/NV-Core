@@ -24,6 +24,7 @@ import type {
   AffiliateEvent as PAffiliateEvent,
   Template as PTemplate,
 } from "@prisma/client";
+import { isDeadGroup } from "../modules/groups/group-activity";
 import type {
   Automation,
   AutomationRun,
@@ -87,6 +88,11 @@ export const mapContact = (c: PContact): Contact => ({
   consentAt: iso(c.consentAt),
   consentSource: c.consentSource ?? undefined,
   attribution: (c.attribution as unknown as Contact["attribution"]) ?? undefined,
+  birthday: c.birthday ?? undefined,
+  custom:
+    c.custom && typeof c.custom === "object" && !Array.isArray(c.custom) && Object.keys(c.custom).length > 0
+      ? (c.custom as Record<string, string>)
+      : undefined,
 });
 
 export const mapContactNote = (n: PContactNote): ContactNote => ({
@@ -106,8 +112,15 @@ export const mapGroup = (g: PGroup): Group => ({
   admins: g.admins,
   description: g.description ?? undefined,
   tags: g.tags,
-  lastActivityAt: iso(g.createdAt),
+  // Last message seen in the group (only the time is stored).
+  lastActivityAt: iso(g.lastMessageAt),
+  ...(g.channel === "wa" || g.channel === "tg" ? { inactive: isDeadGroup(g) } : {}),
   remoteJid: g.remoteJid ?? undefined,
+  sendFrom: g.sendFrom ?? null,
+  sendUntil: g.sendUntil ?? null,
+  maxPerDay: g.maxPerDay ?? null,
+  // The brand's number/account that is in the group and sends to it.
+  line: g.channel === "tg" ? g.tgLine : g.waLine,
   synced: g.synced,
   excluded: g.excluded,
   category: g.category,
@@ -221,8 +234,19 @@ export const mapCampaign = (
   rotateAttachments: c.rotateAttachments ?? false,
   lastRunAt: iso(c.lastRunAt) ?? null,
   targetGroups: c.targets?.map((t) => t.groupId) ?? [],
+  waLines: c.waLines ?? [],
+  tgLines: c.tgLines ?? [],
+  items: Array.isArray(c.items) ? (c.items as unknown as Campaign["items"]) : [],
   prices: (c.prices as Record<string, string> | null) ?? {},
   addFooter: c.addFooter ?? true,
+  category: c.category ?? null,
+  batchSize: c.batchSize ?? null,
+  batchPauseMin: c.batchPauseMin ?? null,
+  pendingGroups: c.pendingGroups?.length ?? 0,
+  pendingAt: iso(c.pendingAt) ?? null,
+  confirmSlot: c.confirmSlot ?? null,
+  confirmState: (c.confirmState as Campaign["confirmState"]) ?? null,
+  confirmFor: iso(c.confirmFor) ?? null,
 });
 
 export const mapPost = (p: PPost & { campaign?: { name: string } | null }): Post => ({
@@ -288,7 +312,7 @@ const RUN_STATUSES = ["ok", "skipped", "waiting", "error"] as const;
 
 export const mapAutomationRun = (r: PAutomationRun): AutomationRun => ({
   id: r.id,
-  trigger: r.trigger === "resume" || r.trigger === "inactive" ? r.trigger : "message",
+  trigger: r.trigger === "resume" || r.trigger === "inactive" || r.trigger === "birthday" ? r.trigger : "message",
   contactHandle: r.contactHandle,
   contactName: r.contactName ?? undefined,
   status: (RUN_STATUSES as readonly string[]).includes(r.status) ? (r.status as AutomationRun["status"]) : "error",
@@ -322,20 +346,24 @@ export const mapConversation = (c: PConversation, last?: PMessage | null): Conve
   contactInitials: initials(c.contactName),
   contactHandle: c.contactHandle ?? undefined,
   preview: last?.text.slice(0, 140) ?? "",
-  // A thread whose newest message is incoming is awaiting our reply.
-  unread: last?.direction === "in" && !c.resolved ? 1 : 0,
+  // Incoming messages not opened yet (or marked «no leído» by hand).
+  unread: c.unreadCount ?? 0,
   lastMessageAt: (last?.createdAt ?? c.createdAt).toISOString(),
   assignee: c.assignee ?? undefined,
   labels: c.labels ?? [],
   resolved: c.resolved,
+  ...(c.savedName ? { savedName: true } : {}),
+  // Open chat whose last message came from the contact: someone has to answer.
+  ...(!c.resolved && last?.direction === "in" ? { waitingSince: last.createdAt.toISOString() } : {}),
 });
 
 export const mapMessage = (m: PMessage): Message => ({
   id: m.id,
   conversationId: m.conversationId,
-  direction: m.direction === "in" ? "in" : "out",
+  direction: m.direction === "in" ? "in" : m.direction === "note" ? "note" : "out",
   text: m.text,
   at: m.createdAt.toISOString(),
+  ...(m.direction === "note" && m.author ? { author: m.author } : {}),
 });
 
 export const mapNotification = (n: PNotification): Notification => ({
@@ -344,6 +372,7 @@ export const mapNotification = (n: PNotification): Notification => ({
   title: n.title,
   meta: n.meta ?? undefined,
   ...(n.recipient ? { personal: true } : {}),
+  ...(n.actions ? { actions: n.actions as unknown as Notification["actions"] } : {}),
   read: n.read,
   createdAt: n.createdAt.toISOString(),
 });

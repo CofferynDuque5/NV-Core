@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { fold, matches } from "./command-palette";
+import { fold, matches } from "@/lib/search";
 import { ago } from "./notifications-panel";
 
 describe("buscador: fold / matches", () => {

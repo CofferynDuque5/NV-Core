@@ -73,3 +73,55 @@ export function resolvePacing(env: NodeJS.ProcessEnv = process.env): PacingOptio
 
   return { minMs, maxMs, batchSize, cooldownMs };
 }
+
+/**
+ * Per-account turn: each WhatsApp number / Telegram account sends at most one
+ * message every `minGapMs`, across ALL campaigns running at the same time.
+ * Without it, two campaigns that start together each keep their own pauses,
+ * so the account sends twice as fast as the anti-ban rhythm allows. The turn
+ * is reserved synchronously, so concurrent runs queue up in order.
+ */
+const nextFree = new Map<string, number>();
+export function reserveAccountTurn(key: string, minGapMs: number, now = Date.now()): number {
+  if (minGapMs <= 0) return 0;
+  const at = Math.max(now, nextFree.get(key) ?? 0);
+  nextFree.set(key, at + minGapMs);
+  return at - now;
+}
+/** Test helper: forget every account's turn. */
+export function resetAccountTurns(): void {
+  nextFree.clear();
+}
+
+/**
+ * The anti-ban rhythm in plain words for `groups` sends, with a rough time:
+ * «un mensaje cada 3–7 s, con una pausa de ~1 min cada 20 grupos; tarda unos 3 min».
+ */
+export function describeSendPace(
+  groups: number,
+  o: Pick<PacingOptions, "minMs" | "maxMs" | "batchSize" | "cooldownMs">,
+  batchSize?: number | null,
+  batchPauseMin?: number | null,
+): string {
+  const s = (ms: number) => Math.max(0, Math.round(ms / 1000));
+  if (o.maxMs <= 0 && !batchSize) return "sin pausas entre mensajes (el ritmo anti-ban está desactivado en el servidor).";
+  const gap = s(o.minMs) === s(o.maxMs) ? `${s(o.minMs)} s` : `${s(o.minMs)}–${s(o.maxMs)} s`;
+  const avgGap = (o.minMs + o.maxMs) / 2;
+  let rest: string;
+  let restMs: number;
+  if (batchSize && batchSize > 0) {
+    const min = batchPauseMin ?? 10;
+    rest = `en lotes de ${batchSize} grupos con ${min} min de pausa entre lotes`;
+    restMs = Math.max(0, Math.ceil(groups / batchSize) - 1) * min * 60_000;
+  } else if (o.batchSize > 0 && o.cooldownMs > 0) {
+    const m = Math.max(1, Math.round(o.cooldownMs / 60_000));
+    rest = `con una pausa de ~${m} min cada ${o.batchSize} grupos`;
+    restMs = Math.floor(Math.max(0, groups - 1) / o.batchSize) * o.cooldownMs;
+  } else {
+    rest = "";
+    restMs = 0;
+  }
+  const total = Math.max(0, groups - 1) * avgGap + restMs;
+  const mins = Math.max(1, Math.round(total / 60_000));
+  return `un mensaje cada ${gap} por número${rest ? `, ${rest}` : ""}; tarda unos ${mins} min.`;
+}

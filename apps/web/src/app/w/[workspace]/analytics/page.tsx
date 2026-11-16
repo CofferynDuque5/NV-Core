@@ -97,7 +97,11 @@ function Segmented<T extends string | number>({
   ariaLabel: string;
 }) {
   return (
-    <div role="tablist" aria-label={ariaLabel} className="inline-flex max-w-full overflow-x-auto rounded-lg border border-line-soft bg-panel p-0.5">
+    <div
+      role="tablist"
+      aria-label={ariaLabel}
+      className="border-line-soft bg-panel inline-flex max-w-full overflow-x-auto rounded-lg border p-0.5"
+    >
       {options.map((o) => (
         <button
           key={String(o.value)}
@@ -165,7 +169,7 @@ export default function AnalyticsPage() {
     <div className="space-y-6">
       <PageHeader
         eyebrow="Business Intelligence"
-        title="Analytics"
+        title="Analítica"
         description="Métricas reales de tu workspace, comparadas con el período anterior."
         actions={
           <Segmented
@@ -181,16 +185,18 @@ export default function AnalyticsPage() {
       {snap ? (
         <div
           data-testid="analytics-provenance"
-          className="nv-panel flex flex-wrap items-center gap-x-4 gap-y-1 px-4 py-2.5 text-xs text-ink-muted"
+          className="nv-panel text-ink-muted flex flex-wrap items-center gap-x-4 gap-y-1 px-4 py-2.5 text-xs"
         >
           <span>
-            <span className="text-ink-faint">Fuente:</span> datos propios de este workspace (no se consultan redes
-            externas)
+            <span className="text-ink-faint">Fuente:</span> datos propios de este workspace (no se
+            consultan redes externas)
           </span>
           {periodLabel ? (
             <span>
               <span className="text-ink-faint">Período:</span> {periodLabel}
-              {compared ? <span className="text-ink-faint"> · comparado con {compared}</span> : null}
+              {compared ? (
+                <span className="text-ink-faint"> · comparado con {compared}</span>
+              ) : null}
             </span>
           ) : null}
           {snap.generatedAt ? (
@@ -268,13 +274,20 @@ export default function AnalyticsPage() {
           {snap!.conversion!.map((r) => (
             <div key={r.label} className="nv-panel p-4" title={r.source?.method}>
               <div className="flex items-center justify-between">
-                <span className="text-xs text-ink-muted">{r.label}</span>
-                <span className="text-lg font-semibold tabular-nums text-ink-bright">{r.value}</span>
+                <span className="text-ink-muted text-xs">{r.label}</span>
+                <span className="text-ink-bright text-lg font-semibold tabular-nums">
+                  {r.value}
+                </span>
               </div>
-              <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-line">
-                <div className="h-full rounded-full" style={{ width: `${r.pct}%`, background: r.accent }} />
+              <div className="bg-line mt-2 h-1.5 w-full overflow-hidden rounded-full">
+                <div
+                  className="h-full rounded-full"
+                  style={{ width: `${r.pct}%`, background: r.accent }}
+                />
               </div>
-              {r.source ? <div className="mt-2 text-[11px] text-ink-faint">{sourceLine(r.source)}</div> : null}
+              {r.source ? (
+                <div className="text-ink-faint mt-2 text-[11px]">{sourceLine(r.source)}</div>
+              ) : null}
             </div>
           ))}
         </div>
@@ -328,7 +341,10 @@ export default function AnalyticsPage() {
                       axisLine={false}
                       tickLine={false}
                     />
-                    <Tooltip contentStyle={tooltipStyle} cursor={{ stroke: "hsl(var(--line-strong))" }} />
+                    <Tooltip
+                      contentStyle={tooltipStyle}
+                      cursor={{ stroke: "hsl(var(--line-strong))" }}
+                    />
                     <Area
                       type="monotone"
                       dataKey={metric}
@@ -346,7 +362,10 @@ export default function AnalyticsPage() {
           {/* Channel share + stage distribution */}
           <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
             <Panel>
-              <PanelHeader title="Publicaciones por canal" description={withSource(`Período: ${days} días`, "platforms")} />
+              <PanelHeader
+                title="Publicaciones por canal"
+                description={withSource(`Período: ${days} días`, "platforms")}
+              />
               <div className="h-72 p-4">
                 {mounted && platformData.length > 0 ? (
                   <ResponsiveContainer width="100%" height="100%">
@@ -363,7 +382,10 @@ export default function AnalyticsPage() {
                       <Tooltip
                         contentStyle={tooltipStyle}
                         cursor={{ fill: "hsl(var(--panel-raised))" }}
-                        formatter={(v: number, _n, p) => [`${v} (${(p?.payload as { pct?: string })?.pct ?? ""})`, "Publicaciones"]}
+                        formatter={(v: number, _n, p) => [
+                          `${v} (${(p?.payload as { pct?: string })?.pct ?? ""})`,
+                          "Publicaciones",
+                        ]}
                       />
                       <Bar dataKey="value" radius={[0, 4, 4, 0]}>
                         {platformData.map((d) => (
@@ -373,13 +395,18 @@ export default function AnalyticsPage() {
                     </BarChart>
                   </ResponsiveContainer>
                 ) : (
-                  <div className="grid h-full place-items-center text-xs text-ink-faint">Sin publicaciones</div>
+                  <div className="text-ink-faint grid h-full place-items-center text-xs">
+                    Sin publicaciones
+                  </div>
                 )}
               </div>
             </Panel>
 
             <Panel>
-              <PanelHeader title="Contactos por etapa" description={withSource("Etapas actuales", "funnel")} />
+              <PanelHeader
+                title="Contactos por etapa"
+                description={withSource("Etapas actuales", "funnel")}
+              />
               <div className="h-72 p-4">
                 {mounted && stageData.length > 0 ? (
                   <ResponsiveContainer width="100%" height="100%">
@@ -401,7 +428,9 @@ export default function AnalyticsPage() {
                     </PieChart>
                   </ResponsiveContainer>
                 ) : (
-                  <div className="grid h-full place-items-center text-xs text-ink-faint">Sin contactos</div>
+                  <div className="text-ink-faint grid h-full place-items-center text-xs">
+                    Sin contactos
+                  </div>
                 )}
               </div>
             </Panel>
@@ -412,7 +441,10 @@ export default function AnalyticsPage() {
             <Panel>
               <PanelHeader
                 title="Leads por origen"
-                description={withSource("Contactos nuevos del período según su primer origen", "leadSources")}
+                description={withSource(
+                  "Contactos nuevos del período según su primer origen",
+                  "leadSources",
+                )}
               />
               <ul className="space-y-2.5 p-5" data-testid="lead-sources">
                 {(() => {
@@ -421,21 +453,29 @@ export default function AnalyticsPage() {
                   return rows.map((r) => (
                     <li key={r.source ?? "__none__"} className="flex items-center gap-3 text-sm">
                       <span
-                        className={cn("w-56 shrink-0 truncate", r.source === null ? "text-ink-faint" : "text-ink")}
+                        className={cn(
+                          "w-56 shrink-0 truncate",
+                          r.source === null ? "text-ink-faint" : "text-ink",
+                        )}
                         title={leadSourceLabel(r.source)}
                       >
                         {leadSourceLabel(r.source)}
                       </span>
-                      <span className="h-2 flex-1 overflow-hidden rounded-full bg-line">
+                      <span className="bg-line h-2 flex-1 overflow-hidden rounded-full">
                         <span
                           className="block h-full rounded-full"
                           style={{
                             width: `${Math.round((r.count / max) * 100)}%`,
-                            background: r.source === null ? "hsl(var(--line-strong))" : "linear-gradient(90deg,#5F86F2,#8C7BEF)",
+                            background:
+                              r.source === null
+                                ? "hsl(var(--line-strong))"
+                                : "linear-gradient(90deg,#5F86F2,#8C7BEF)",
                           }}
                         />
                       </span>
-                      <span className="w-10 text-right tabular-nums text-ink-bright">{r.count}</span>
+                      <span className="text-ink-bright w-10 text-right tabular-nums">
+                        {r.count}
+                      </span>
                     </li>
                   ));
                 })()}
@@ -447,7 +487,10 @@ export default function AnalyticsPage() {
           <Panel>
             <PanelHeader
               title="Mapa de actividad"
-              description={withSource(peak ? `Hora pico: ${peak} (UTC)` : "Mensajes por día y hora (UTC)", "heatmap")}
+              description={withSource(
+                peak ? `Hora pico: ${peak} (UTC)` : "Mensajes por día y hora (UTC)",
+                "heatmap",
+              )}
             />
             <ActivityHeatmap matrix={heatmap} />
           </Panel>
@@ -457,16 +500,19 @@ export default function AnalyticsPage() {
       {/* Top campaigns */}
       {(snap?.topCampaigns ?? []).length > 0 ? (
         <Panel>
-          <PanelHeader title="Mejores campañas" description={withSource("Por número de publicaciones", "topCampaigns")} />
-          <ul className="divide-y divide-line">
+          <PanelHeader
+            title="Mejores campañas"
+            description={withSource("Por número de publicaciones", "topCampaigns")}
+          />
+          <ul className="divide-line divide-y">
             {(snap?.topCampaigns ?? []).map((c, i) => (
               <li key={c.id} className="flex items-center gap-3 px-5 py-3">
-                <span className="grid size-6 place-items-center rounded-md bg-panel-raised text-xs font-bold text-ink-muted">
+                <span className="bg-panel-raised text-ink-muted grid size-6 place-items-center rounded-md text-xs font-bold">
                   {i + 1}
                 </span>
-                <Activity className="size-4 text-state-success" />
-                <span className="flex-1 truncate text-sm text-ink">{c.name}</span>
-                <span className="text-xs text-ink-muted">{c.posts} posts</span>
+                <Activity className="text-state-success size-4" />
+                <span className="text-ink flex-1 truncate text-sm">{c.name}</span>
+                <span className="text-ink-muted text-xs">{c.posts} posts</span>
               </li>
             ))}
           </ul>

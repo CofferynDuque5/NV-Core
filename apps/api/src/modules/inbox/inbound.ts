@@ -38,6 +38,18 @@ export interface InboundMessage {
   externalId?: string | null;
   /** History replayed after linking: stored, never treated as new. */
   history?: boolean;
+  /** WhatsApp number (line) of the brand that got it; replies go out from it. */
+  waLine?: number;
+  /** Telegram account (line) of the brand that got it; replies go out from it. */
+  tgLine?: number;
+  /** Name the brand saved for the number in its own phone (wins over everything else). */
+  savedName?: string | null;
+  /** The contact's own profile name. */
+  profileName?: string | null;
+  /** Photo, audio, video, sticker or document in the message. */
+  media?: { kind: import("@nv/domain").ChatMediaKind; mime: string; size: number; name?: string; seconds?: number };
+  /** Sealed platform message to download the attachment later. */
+  mediaRef?: string;
 }
 
 /** A reply sent from the panel comes back from WhatsApp; within this window it's the same message. */

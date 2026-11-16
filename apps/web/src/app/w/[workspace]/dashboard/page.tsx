@@ -1,4 +1,3 @@
-
 import {
   AlertTriangle,
   BarChart3,
@@ -13,6 +12,7 @@ import {
 } from "lucide-react";
 
 import { Link } from "react-router-dom";
+import { simplifyNotice } from "@nv/domain";
 
 import { useWorkspace } from "@/hooks/use-workspace";
 import { useAuthStore } from "@/stores/auth-store";
@@ -26,6 +26,7 @@ import { PageHeader } from "@/components/common/page-header";
 import { OnboardingChecklist } from "@/components/dashboard/onboarding-checklist";
 import { SampleDataBanner } from "@/components/dashboard/sample-data-banner";
 import { GoalSteps } from "@/components/dashboard/goal-steps";
+import { DayActivity } from "@/components/dashboard/day-activity";
 import { Panel, PanelHeader } from "@/components/common/panel";
 import { KpiCard } from "@/components/common/kpi-card";
 import { EmptyState } from "@/components/common/empty-state";
@@ -91,11 +92,37 @@ export default function DashboardPage() {
 
       {/* KPI tiles — every value is real; metrics show em-dash until the backend has data */}
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <KpiCard label="Campañas activas" icon={Megaphone} accent="#5B8DEF" loading={campaigns.isLoading} value={campaigns.data ? String(activeCampaigns.length) : null} />
-        <KpiCard label="Publicaciones hoy" icon={Send} accent="#7C7CF0" loading={posts.isLoading} value={posts.data ? String(activePosts.length) : null} />
-        <KpiCard label="Mensajes (7 días)" icon={Eye} accent="#3FB950" loading={analytics.isLoading} value={weeklyMessages} />
-        <KpiCard label="Alertas activas" icon={AlertTriangle} accent="#F85149" loading={notifications.isLoading} value={notifications.data ? String(alerts.length) : null} />
+        <KpiCard
+          label="Campañas activas"
+          icon={Megaphone}
+          accent="#5B8DEF"
+          loading={campaigns.isLoading}
+          value={campaigns.data ? String(activeCampaigns.length) : null}
+        />
+        <KpiCard
+          label="Publicaciones hoy"
+          icon={Send}
+          accent="#7C7CF0"
+          loading={posts.isLoading}
+          value={posts.data ? String(activePosts.length) : null}
+        />
+        <KpiCard
+          label="Mensajes (7 días)"
+          icon={Eye}
+          accent="#3FB950"
+          loading={analytics.isLoading}
+          value={weeklyMessages}
+        />
+        <KpiCard
+          label="Alertas activas"
+          icon={AlertTriangle}
+          accent="#F85149"
+          loading={notifications.isLoading}
+          value={notifications.data ? String(alerts.length) : null}
+        />
       </div>
+
+      <DayActivity />
 
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-3">
         {/* Today's agenda */}
@@ -116,7 +143,7 @@ export default function DashboardPage() {
               <EmptyState
                 icon={CalendarClock}
                 title="Nada programado para hoy"
-                description="Programa tu primera publicación desde el Calendario o el Campaign Builder."
+                description="Programa tu primera publicación desde el Calendario o el Editor de contenido."
                 action={
                   <Button size="sm" asChild>
                     <Link to={`/w/${ws.slug}/builder`}>Crear publicación</Link>
@@ -129,14 +156,14 @@ export default function DashboardPage() {
                 {activePosts.map((p) => (
                   <li
                     key={p.id}
-                    className="flex items-center gap-3 rounded-xl border border-line-soft bg-panel-raised p-3"
+                    className="border-line-soft bg-panel-raised flex items-center gap-3 rounded-xl border p-3"
                   >
-                    <span className="rounded-md bg-panel-high px-2 py-0.5 text-[11px] font-semibold uppercase text-ink-muted">
+                    <span className="bg-panel-high text-ink-muted rounded-md px-2 py-0.5 text-[11px] font-semibold uppercase">
                       {p.channel}
                     </span>
-                    <span className="flex-1 truncate text-sm text-ink">{p.title}</span>
+                    <span className="text-ink flex-1 truncate text-sm">{p.title}</span>
                     {p.scheduledAt ? (
-                      <span className="whitespace-nowrap text-xs text-ink-faint">
+                      <span className="text-ink-faint whitespace-nowrap text-xs">
                         {new Date(p.scheduledAt).toLocaleTimeString("es-ES", {
                           hour: "2-digit",
                           minute: "2-digit",
@@ -166,15 +193,22 @@ export default function DashboardPage() {
             ) : (
               <ul className="space-y-2">
                 {alerts.slice(0, 5).map((n) => (
-                  <li key={n.id} className="flex items-start gap-2.5 rounded-xl bg-panel-raised p-3">
+                  <li
+                    key={n.id}
+                    className="bg-panel-raised flex items-start gap-2.5 rounded-xl p-3"
+                  >
                     <span
                       className="mt-1.5 size-2 shrink-0 rounded-full"
                       style={{ background: NOTIF_ACCENT[n.type] ?? NOTIF_ACCENT.info }}
                       aria-hidden
                     />
                     <div className="min-w-0">
-                      <div className="truncate text-sm text-ink">{n.title}</div>
-                      {n.meta ? <div className="text-xs text-ink-faint">{n.meta}</div> : null}
+                      <div className="text-ink truncate text-sm">{n.title}</div>
+                      {n.meta ? (
+                        <div className="text-ink-faint line-clamp-3 text-xs">
+                          {simplifyNotice(n.meta)}
+                        </div>
+                      ) : null}
                     </div>
                   </li>
                 ))}
@@ -215,18 +249,18 @@ export default function DashboardPage() {
                 {activeCampaigns.slice(0, 5).map((c) => (
                   <li
                     key={c.id}
-                    className="flex items-center gap-3 rounded-xl border border-line-soft bg-panel-raised p-3"
+                    className="border-line-soft bg-panel-raised flex items-center gap-3 rounded-xl border p-3"
                   >
                     <span
                       className="size-2.5 shrink-0 rounded-full"
                       style={{ background: c.accent ?? "#5B8DEF" }}
                       aria-hidden
                     />
-                    <span className="flex-1 truncate text-sm text-ink">{c.name}</span>
-                    <span className="rounded-full bg-panel-high px-2 py-0.5 text-[11px] font-medium capitalize text-ink-muted">
+                    <span className="text-ink flex-1 truncate text-sm">{c.name}</span>
+                    <span className="bg-panel-high text-ink-muted rounded-full px-2 py-0.5 text-[11px] font-medium capitalize">
                       {c.status}
                     </span>
-                    <span className="w-10 text-right text-xs tabular-nums text-ink-faint">
+                    <span className="text-ink-faint w-10 text-right text-xs tabular-nums">
                       {c.progress}%
                     </span>
                   </li>
@@ -244,7 +278,7 @@ export default function DashboardPage() {
               <Link
                 key={qa.label}
                 to={`/w/${ws.slug}/${qa.href}`}
-                className="flex flex-col items-start gap-2 rounded-xl border border-line-soft bg-panel-raised p-3 transition-colors hover:border-line-bright"
+                className="border-line-soft bg-panel-raised hover:border-line-bright flex flex-col items-start gap-2 rounded-xl border p-3 transition-colors"
               >
                 <span
                   className="grid size-8 place-items-center rounded-lg"
@@ -252,7 +286,7 @@ export default function DashboardPage() {
                 >
                   <qa.icon className="size-4" />
                 </span>
-                <span className="text-xs font-medium text-ink">{qa.label}</span>
+                <span className="text-ink text-xs font-medium">{qa.label}</span>
               </Link>
             ))}
           </div>
@@ -280,7 +314,7 @@ export default function DashboardPage() {
         </div>
       </Panel>
 
-      <p className="flex items-center gap-1.5 text-xs text-ink-faint">
+      <p className="text-ink-faint flex items-center gap-1.5 text-xs">
         <Zap className="size-3.5" /> Los indicadores muestran «—» hasta conectar el backend. Ningún
         dato es ficticio.
       </p>

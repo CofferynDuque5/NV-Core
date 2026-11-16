@@ -57,8 +57,13 @@ export function ruleValid(rule: SegmentRule): boolean {
 }
 
 /** A short human label for a rule chip, e.g. "Etapa es igual a Cliente". */
-export function ruleLabel(rule: SegmentRule): string {
-  const field = segmentFieldSpec(rule.field)?.label ?? rule.field;
+export function ruleLabel(rule: SegmentRule, customLabels: Record<string, string> = {}): string {
+  const custom = rule.field.startsWith("custom.") ? rule.field.slice(7) : null;
+  const field = (custom && customLabels[custom]) || (segmentFieldSpec(rule.field)?.label ?? rule.field);
+  if (rule.operator === "birthday_in_days") {
+    const n = Number(rule.value);
+    return n === 0 ? "Cumple hoy" : n === 1 ? "Cumple hoy o mañana" : `Cumple en los próximos ${n} días`;
+  }
   const op = segmentOperatorSpec(rule.operator)?.label ?? rule.operator;
   if (isValueless(rule.operator)) return `${field} ${op}`;
   return `${field} ${op} ${rule.value}`.trim();

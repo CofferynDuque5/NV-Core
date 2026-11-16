@@ -11,19 +11,29 @@ import {
   Param,
   Patch,
   Post,
+  Put,
   Query,
   ServiceUnavailableException,
   UseGuards,
 } from "@nestjs/common";
 import { ApiBearerAuth, ApiPropertyOptional, ApiTags } from "@nestjs/swagger";
 import {
+  CONTACT_FIELD_TYPES,
   CONTACT_STAGES,
+  cleanContactFields,
+  cleanCustomValues,
+  normalizeBirthday,
   type Contact,
+  type ContactFieldDef,
+  type ContactFieldType,
   type ContactImportResult,
   type ContactStage,
+  type SegmentMatch,
+  type SegmentRule,
 } from "@nv/domain";
 import { Prisma } from "@prisma/client";
-import { IsArray, IsIn, IsOptional, IsString, MaxLength, MinLength } from "class-validator";
+import { Type } from "class-transformer";
+import { ArrayMaxSize, ArrayMinSize, IsArray, IsBoolean, IsIn, IsObject, IsOptional, IsString, MaxLength, MinLength, ValidateNested } from "class-validator";
 
 import { parseCsv, toCsv } from "../../common/csv";
 
@@ -32,7 +42,9 @@ import { PaginationQueryDto } from "../../common/dto/pagination.dto";
 import { WorkspaceId } from "../../common/tenant/workspace.decorator";
 import { WorkspaceGuard } from "../../common/tenant/workspace.guard";
 import { AuditLogger } from "../../common/audit-logger.service";
-import { ConsentService } from "../consent/consent.service";
+import { ConsentService, phoneKey } from "../consent/consent.service";
+import { findDuplicateGroups, mergeContactFields } from "./contact-merge";
+import { brandTimeZone, buildContactWhere } from "../segments/segment-eval";
 import { PlanService } from "../../common/plan/plan.service";
 import { PrismaService } from "../../prisma/prisma.service";
 import { mapContact, mapContactNote } from "../../prisma/mappers";
@@ -47,6 +59,27 @@ export class ContactsQueryDto extends PaginationQueryDto {
   @IsOptional()
   @IsIn(CONTACT_STAGES)
   stage?: ContactStage;
+
+  @ApiPropertyOptional({ description: "Solo los contactos de este segmento guardado." })
+  @IsOptional()
+  @IsString()
+  @MaxLength(64)
+  segment?: string;
+}
+
+export class ContactFieldDto {
+  @IsOptional() @IsString() @MaxLength(30) key?: string;
+  @IsString() @MaxLength(40) label!: string;
+  @IsIn(CONTACT_FIELD_TYPES) type!: ContactFieldType;
+  @IsOptional() @IsArray() @ArrayMaxSize(30) @IsString({ each: true }) @MaxLength(40, { each: true }) options?: string[];
+}
+
+export class SaveContactFieldsDto {
+  @IsArray()
+  @ArrayMaxSize(20)
+  @ValidateNested({ each: true })
+  @Type(() => ContactFieldDto)
+  fields!: ContactFieldDto[];
 }
 
 export class ImportContactsDto {
@@ -54,6 +87,16 @@ export class ImportContactsDto {
   @IsString()
   @MaxLength(5_000_000) // ~5 MB guard
   csv!: string;
+
+  @ApiPropertyOptional({ description: "true = solo calcula qué pasaría (vista previa), no guarda nada." })
+  @IsOptional()
+  @IsBoolean()
+  dryRun?: boolean;
+}
+
+export class MergeContactsDto {
+  @IsString() @MaxLength(64) keepId!: string;
+  @IsArray() @ArrayMinSize(1) @ArrayMaxSize(20) @IsString({ each: true }) mergeIds!: string[];
 }
 
 export class CreateContactDto {
@@ -86,6 +129,17 @@ export class CreateContactDto {
   @IsOptional()
   @IsIn(CONTACT_STAGES)
   stage?: ContactStage;
+
+  @ApiPropertyOptional({ description: "«15/03/1990», «15/03» o «1990-03-15»; vacío lo borra." })
+  @IsOptional()
+  @IsString()
+  @MaxLength(20)
+  birthday?: string;
+
+  @ApiPropertyOptional({ description: "Campos personalizados de la marca: { clave: valor }." })
+  @IsOptional()
+  @IsObject()
+  custom?: Record<string, string>;
 }
 
 export class UpdateContactDto {
@@ -95,6 +149,8 @@ export class UpdateContactDto {
   @IsOptional() @IsString() company?: string;
   @IsOptional() @IsArray() @IsString({ each: true }) tags?: string[];
   @IsOptional() @IsIn(CONTACT_STAGES) stage?: ContactStage;
+  @IsOptional() @IsString() @MaxLength(20) birthday?: string;
+  @IsOptional() @IsObject() custom?: Record<string, string>;
 }
 
 export class AddContactNoteDto {
@@ -115,6 +171,61 @@ const ACCENT_SCAN_LIMIT = 20_000;
 /** Lowercase without accents: «Ramírez» → «ramirez». */
 export function foldAccents(text: string): string {
   return text.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+}
+
+
+const EXPORT_COLUMNS = ["name", "phone", "email", "company", "tags", "stage", "birthday", "createdAt", "optOutAt", "consentAt"];
+
+/** The brand's custom contact field definitions. */
+export async function contactFieldDefs(prisma: PrismaService, workspaceSlug: string): Promise<ContactFieldDef[]> {
+  const row = await Promise.resolve()
+    .then(() => prisma.workspaceSettings.findUnique({ where: { workspaceSlug }, select: { contactFields: true } }))
+    .catch(() => null);
+  return cleanContactFields(row?.contactFields ?? []);
+}
+
+/**
+ * CSV of the contacts matching `where` (paged by id so it scales), with one
+ * column per custom field, titled with the field's name.
+ */
+export async function contactsCsv(
+  prisma: PrismaService,
+  workspaceSlug: string,
+  where: Prisma.ContactWhereInput,
+): Promise<string> {
+  if (!prisma.enabled) return toCsv([], EXPORT_COLUMNS);
+  const defs = await contactFieldDefs(prisma, workspaceSlug);
+  const cols = [...EXPORT_COLUMNS, ...defs.map((d) => d.label)];
+  const rows: Record<string, unknown>[] = [];
+  let cursor: string | undefined;
+  for (;;) {
+    const batch = await prisma.contact.findMany({
+      where: { AND: [where, { workspaceSlug }] },
+      orderBy: { id: "asc" },
+      take: 1000,
+      ...(cursor ? { skip: 1, cursor: { id: cursor } } : {}),
+    });
+    if (batch.length === 0) break;
+    for (const c of batch) {
+      const custom = (c.custom ?? {}) as Record<string, string>;
+      rows.push({
+        name: c.name,
+        phone: c.phone ?? "",
+        email: c.email ?? "",
+        company: c.company ?? "",
+        tags: (c.tags ?? []).join(";"),
+        stage: c.stage,
+        birthday: c.birthday ?? "",
+        createdAt: c.createdAt.toISOString(),
+        optOutAt: c.optOutAt?.toISOString() ?? "",
+        consentAt: c.consentAt?.toISOString() ?? "",
+        ...Object.fromEntries(defs.map((d) => [d.label, custom[d.key] ?? ""])),
+      });
+    }
+    cursor = batch[batch.length - 1]!.id;
+    if (batch.length < 1000) break;
+  }
+  return toCsv(rows, cols);
 }
 
 @Injectable()
@@ -140,8 +251,10 @@ export class ContactsService {
     // workspace — never limited to the current page (the old client-side filter
     // over the first 100 rows silently missed matches beyond it).
     const accentIds = q ? await this.accentInsensitiveMatches(workspaceId, q) : [];
+    const inSegment = query.segment ? await this.segmentWhere(workspaceId, query.segment) : null;
     const where: Prisma.ContactWhereInput = {
       workspaceSlug: workspaceId,
+      ...(inSegment ? { AND: [inSegment] } : {}),
       ...(query.stage ? { stage: query.stage } : {}),
       ...(q
         ? {
@@ -188,53 +301,69 @@ export class ContactsService {
       .map((r) => r.id);
   }
 
-  private static readonly EXPORT_COLUMNS = [
-    "name",
-    "phone",
-    "email",
-    "company",
-    "tags",
-    "stage",
-    "createdAt",
-    "optOutAt",
-    "consentAt",
-  ];
-
   /** Export every contact as CSV, paged internally so it scales to large tenants. */
   async exportCsv(workspaceId: string): Promise<string> {
-    const cols = ContactsService.EXPORT_COLUMNS;
-    if (!this.prisma.enabled) return toCsv([], cols);
-    const rows: Record<string, unknown>[] = [];
-    let cursor: string | undefined;
-    for (;;) {
-      const batch = await this.prisma.contact.findMany({
-        where: { workspaceSlug: workspaceId },
-        orderBy: { id: "asc" },
-        take: 1000,
-        ...(cursor ? { skip: 1, cursor: { id: cursor } } : {}),
-      });
-      if (batch.length === 0) break;
-      for (const c of batch) {
-        rows.push({
-          name: c.name,
-          phone: c.phone ?? "",
-          email: c.email ?? "",
-          company: c.company ?? "",
-          tags: (c.tags ?? []).join(";"),
-          stage: c.stage,
-          createdAt: c.createdAt.toISOString(),
-          optOutAt: c.optOutAt?.toISOString() ?? "",
-          consentAt: c.consentAt?.toISOString() ?? "",
-        });
-      }
-      cursor = batch[batch.length - 1]!.id;
-      if (batch.length < 1000) break;
+    return contactsCsv(this.prisma, workspaceId, { workspaceSlug: workspaceId });
+  }
+
+  /** Where-clause of a saved segment of this brand (404 if it is not theirs). */
+  private async segmentWhere(workspaceId: string, segmentId: string): Promise<Prisma.ContactWhereInput> {
+    const seg = await this.db().segment.findFirst({ where: { id: segmentId, workspaceSlug: workspaceId } });
+    if (!seg) throw new NotFoundException("Segmento no encontrado.");
+    return buildContactWhere(
+      workspaceId,
+      (seg.rules as unknown as SegmentRule[]) ?? [],
+      (seg.match as SegmentMatch) ?? "all",
+      new Date(),
+      await brandTimeZone(this.prisma, workspaceId),
+    );
+  }
+
+  /** The brand's custom contact fields. */
+  async fields(workspaceId: string): Promise<ContactFieldDef[]> {
+    if (!this.prisma.enabled) return [];
+    return contactFieldDefs(this.prisma, workspaceId);
+  }
+
+  async saveFields(workspaceId: string, actor: string, raw: readonly object[]): Promise<ContactFieldDef[]> {
+    const fields = cleanContactFields(raw);
+    await this.db().workspaceSettings.upsert({
+      where: { workspaceSlug: workspaceId },
+      create: { workspaceSlug: workspaceId, contactFields: fields as unknown as Prisma.InputJsonValue },
+      update: { contactFields: fields as unknown as Prisma.InputJsonValue },
+    });
+    await this.audit.record(workspaceId, actor, "contacts.fields", String(fields.length));
+    return fields;
+  }
+
+  /** Birthday + custom values from a create/update body (400 on a bad value). */
+  private async extras(
+    workspaceId: string,
+    dto: { birthday?: string; custom?: Record<string, string> },
+    current: unknown = {},
+  ): Promise<{ birthday?: string | null; custom?: Prisma.InputJsonValue }> {
+    const out: { birthday?: string | null; custom?: Prisma.InputJsonValue } = {};
+    if (dto.birthday !== undefined) {
+      const b = normalizeBirthday(dto.birthday);
+      if (b === undefined) throw new BadRequestException("Cumpleaños no válido. Escríbelo como 15/03 o 15/03/1990.");
+      out.birthday = b;
     }
-    return toCsv(rows, cols);
+    if (dto.custom !== undefined) {
+      const defs = await contactFieldDefs(this.prisma, workspaceId);
+      const base = current && typeof current === "object" && !Array.isArray(current) ? (current as Record<string, string>) : {};
+      // Only what was sent can be rejected; fields not sent keep their value
+      // and a sent empty value clears it.
+      const sent = cleanCustomValues(defs, dto.custom);
+      if (sent.errors.length > 0) throw new BadRequestException(sent.errors[0]);
+      const kept = Object.fromEntries(Object.entries(base).filter(([k]) => !(k in dto.custom!)));
+      const { values } = cleanCustomValues(defs, { ...kept, ...sent.values });
+      out.custom = values;
+    }
+    return out;
   }
 
   /** Bulk-create contacts from CSV. Dedupes by email (case-insensitive). */
-  async importCsv(workspaceId: string, actor: string, csv: string): Promise<ContactImportResult> {
+  async importCsv(workspaceId: string, actor: string, csv: string, dryRun = false): Promise<ContactImportResult> {
     const db = this.db();
     const records = parseCsv(csv);
     const MAX = 5000;
@@ -244,10 +373,12 @@ export class ContactsService {
 
     // Preload existing emails once for dedupe (bounded set, cheap vs. per-row query).
     const existingRows = await db.contact.findMany({
-      where: { workspaceSlug: workspaceId, email: { not: null } },
-      select: { email: true },
+      where: { workspaceSlug: workspaceId, OR: [{ email: { not: null } }, { phone: { not: null } }] },
+      select: { email: true, phone: true },
     });
-    const seen = new Set(existingRows.map((r) => r.email!.toLowerCase()));
+    const seen = new Set(existingRows.filter((r) => r.email).map((r) => r.email!.toLowerCase()));
+    // Same phone (last 9 digits) = same person, too.
+    const seenPhones = new Set(existingRows.map((r) => phoneKey(r.phone)).filter((k): k is string => !!k));
 
     const pick = (r: Record<string, string>, ...keys: string[]) => {
       for (const k of keys) {
@@ -274,7 +405,9 @@ export class ContactsService {
       }
       const email = pick(r, "email", "correo");
       const emailKey = email.toLowerCase();
-      if (emailKey && seen.has(emailKey)) {
+      const phone = pick(r, "phone", "telefono", "teléfono", "celular", "whatsapp");
+      const pKey = phoneKey(phone);
+      if ((emailKey && seen.has(emailKey)) || (pKey && seenPhones.has(pKey))) {
         skipped++;
         continue;
       }
@@ -291,14 +424,20 @@ export class ContactsService {
         data: {
           workspaceSlug: workspaceId,
           name,
-          phone: pick(r, "phone", "telefono", "teléfono") || null,
+          phone: phone || null,
           email: email || null,
           company: pick(r, "company", "empresa") || null,
           tags,
           stage,
+          birthday: normalizeBirthday(pick(r, "birthday", "cumpleaños", "cumpleanos", "nacimiento")) ?? null,
         },
       });
       if (emailKey) seen.add(emailKey); // dedupe within the file too
+      if (pKey) seenPhones.add(pKey);
+    }
+
+    if (dryRun) {
+      return { created: toCreate.length, skipped, errors: errors.slice(0, 50), dryRun: true };
     }
 
     // Phase 2: gate on the plan limit (402 when it would overflow), then write.
@@ -317,6 +456,67 @@ export class ContactsService {
     return { created, skipped, errors: errors.slice(0, 50) };
   }
 
+  /** Contacts that look like the same person (same phone or email), for «Fusionar duplicados». */
+  async duplicates(workspaceId: string): Promise<{ groups: Contact[][] }> {
+    if (!this.prisma.enabled) return { groups: [] };
+    const rows = await this.prisma.contact.findMany({
+      where: { workspaceSlug: workspaceId, OR: [{ phone: { not: null } }, { email: { not: null } }] },
+      orderBy: { createdAt: "asc" },
+      take: 20_000,
+    });
+    return { groups: findDuplicateGroups(rows).slice(0, 100).map((g) => g.map(mapContact)) };
+  }
+
+  /**
+   * Merge `mergeIds` into `keepId`: fields filled, tags joined, opt-out kept,
+   * and their notes, tasks, payments and sequence/automation history moved
+   * to the kept contact. The merged contacts are deleted. All or nothing.
+   */
+  async merge(workspaceId: string, actor: string, keepId: string, mergeIds: string[]): Promise<Contact> {
+    const db = this.db();
+    const ids = [...new Set(mergeIds)].filter((id) => id !== keepId);
+    if (ids.length === 0) throw new BadRequestException("Elige al menos otro contacto para fusionar.");
+    const merged = await db.$transaction(async (tx) => {
+      const keep = await tx.contact.findFirst({ where: { id: keepId, workspaceSlug: workspaceId } });
+      if (!keep) throw new NotFoundException("Contacto no encontrado.");
+      const others = await tx.contact.findMany({ where: { id: { in: ids }, workspaceSlug: workspaceId } });
+      if (others.length !== ids.length) throw new NotFoundException("Alguno de los contactos ya no existe.");
+      const fields = mergeContactFields(keep, others);
+      const where = { workspaceSlug: workspaceId, contactId: { in: ids } };
+      await tx.contactNote.updateMany({ where, data: { contactId: keepId } });
+      await tx.task.updateMany({ where, data: { contactId: keepId } });
+      await tx.paymentRequest.updateMany({ where, data: { contactId: keepId } });
+      // One enrollment per sequence / one fire per automation: keep the kept contact's.
+      const enrolled = new Set(
+        (await tx.sequenceEnrollment.findMany({ where: { contactId: keepId }, select: { sequenceId: true } })).map((e) => e.sequenceId),
+      );
+      for (const e of await tx.sequenceEnrollment.findMany({ where: { contactId: { in: ids } } })) {
+        if (enrolled.has(e.sequenceId)) await tx.sequenceEnrollment.delete({ where: { id: e.id } });
+        else {
+          await tx.sequenceEnrollment.update({ where: { id: e.id }, data: { contactId: keepId } });
+          enrolled.add(e.sequenceId);
+        }
+      }
+      const fired = new Set(
+        (await tx.automationInactiveFire.findMany({ where: { contactId: keepId }, select: { automationId: true } })).map((f) => f.automationId),
+      );
+      for (const f of await tx.automationInactiveFire.findMany({ where: { contactId: { in: ids } } })) {
+        if (fired.has(f.automationId)) await tx.automationInactiveFire.delete({ where: { id: f.id } });
+        else {
+          await tx.automationInactiveFire.update({ where: { id: f.id }, data: { contactId: keepId } });
+          fired.add(f.automationId);
+        }
+      }
+      await tx.contact.deleteMany({ where: { id: { in: ids }, workspaceSlug: workspaceId } });
+      return tx.contact.update({
+        where: { id: keepId },
+        data: { ...fields, attribution: (fields.attribution ?? Prisma.DbNull) as Prisma.InputJsonValue },
+      });
+    });
+    await this.audit.record(workspaceId, actor, "contacts.merge", `${keepId} ← ${ids.join(",")}`);
+    return mapContact(merged);
+  }
+
   async create(workspaceId: string, actor: string, dto: CreateContactDto): Promise<Contact> {
     await this.plans.assertWithinLimit(workspaceId, "contacts", 1);
     const row = await this.db().contact.create({
@@ -328,6 +528,7 @@ export class ContactsService {
         company: dto.company,
         tags: dto.tags ?? [],
         stage: dto.stage ?? "Lead",
+        ...(await this.extras(workspaceId, dto)),
       },
     });
     await this.audit.record(workspaceId, actor, "contact.create", row.id);
@@ -342,7 +543,11 @@ export class ContactsService {
   ): Promise<Contact> {
     const existing = await this.db().contact.findFirst({ where: { id, workspaceSlug: workspaceId } });
     if (!existing) throw new NotFoundException("Contacto no encontrado.");
-    const row = await this.prisma.contact.update({ where: { id }, data: dto });
+    const { birthday: _b, custom: _c, ...plain } = dto;
+    const row = await this.prisma.contact.update({
+      where: { id },
+      data: { ...plain, ...(await this.extras(workspaceId, dto, existing.custom)) },
+    });
     await this.audit.record(workspaceId, actor, "contact.update", id);
     return mapContact(row);
   }
@@ -425,7 +630,35 @@ export class ContactsController {
     @CurrentUser() user: AuthenticatedUser,
     @Body() dto: ImportContactsDto,
   ): Promise<ContactImportResult> {
-    return this.service.importCsv(workspaceId, user.email, dto.csv);
+    return this.service.importCsv(workspaceId, user.email, dto.csv, dto.dryRun === true);
+  }
+
+  @Get("fields")
+  fields(@WorkspaceId() workspaceId: string) {
+    return this.service.fields(workspaceId);
+  }
+
+  @Put("fields")
+  @Roles("Owner", "Admin")
+  @UseGuards(RolesGuard)
+  saveFields(
+    @WorkspaceId() workspaceId: string,
+    @CurrentUser() user: AuthenticatedUser,
+    @Body() dto: SaveContactFieldsDto,
+  ) {
+    return this.service.saveFields(workspaceId, user.email, dto.fields);
+  }
+
+  @Get("duplicates")
+  duplicates(@WorkspaceId() workspaceId: string) {
+    return this.service.duplicates(workspaceId);
+  }
+
+  @Post("merge")
+  @Roles("Owner", "Admin", "Editor")
+  @UseGuards(RolesGuard)
+  merge(@WorkspaceId() workspaceId: string, @CurrentUser() user: AuthenticatedUser, @Body() dto: MergeContactsDto) {
+    return this.service.merge(workspaceId, user.email, dto.keepId, dto.mergeIds);
   }
 
   @Post()

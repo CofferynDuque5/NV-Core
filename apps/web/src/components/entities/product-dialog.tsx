@@ -1,6 +1,6 @@
 import * as React from "react";
 import { Loader2, Paperclip } from "lucide-react";
-import type { CampaignAttachment, Product } from "@nv/domain";
+import { isValidPrice, type CampaignAttachment, type Product } from "@nv/domain";
 
 import { useSaveProduct, useUploadCampaignAttachment } from "@/hooks/use-domain-mutations";
 import { STORE_CURRENCIES, currencyLabel } from "@/lib/products";
@@ -68,9 +68,22 @@ export function ProductDialog({
 
   const submit = () => {
     setError(null);
+    if (!name.trim()) {
+      setError("Ponle un nombre al producto.");
+      return;
+    }
+    const badPrice = Object.entries(prices).find(([, v]) => !isValidPrice(v));
+    if (badPrice) {
+      setError(`El precio en ${currencyLabel(badPrice[0])} no es válido: escribe solo un número mayor o igual a 0, por ejemplo 6.50.`);
+      return;
+    }
     const n = stock.trim() === "" ? null : Number(stock);
-    if (n !== null && (!Number.isInteger(n) || n < 0)) {
-      setError("El stock debe ser un número entero, o vacío si no lo controlas.");
+    if (n !== null && !Number.isInteger(n)) {
+      setError("El stock debe ser un número entero (sin decimales), o vacío si no lo controlas.");
+      return;
+    }
+    if (n !== null && n < 0) {
+      setError("El stock no puede ser negativo: escribe 0 o más, o déjalo vacío.");
       return;
     }
     save.mutate(
@@ -158,6 +171,8 @@ export function ProductDialog({
                 inputMode="decimal"
                 className="h-8"
                 value={prices[c] ?? ""}
+                aria-invalid={!isValidPrice(prices[c])}
+                placeholder="0.00"
                 onChange={(e) => setPrices((p) => ({ ...p, [c]: e.target.value }))}
               />
             </div>

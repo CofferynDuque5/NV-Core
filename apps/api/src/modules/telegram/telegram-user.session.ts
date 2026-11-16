@@ -11,8 +11,28 @@ import {
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
+/** Most a single Telegram call may take before the send is given up. */
+const TG_CALL_MS = Math.max(5_000, Number(process.env.TELEGRAM_SEND_TIMEOUT_MS ?? 60_000));
+
+/**
+ * GramJS has no request timeout: on a half-dead connection a send can wait
+ * for ever, leaving the campaign stuck on one group («en curso…») and the
+ * rest never sent. Every call gets a limit; the send then fails with a clear
+ * reason and the campaign moves on.
+ */
+function withTimeout<T>(p: Promise<T>, ms: number, what: string): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const limit = new Promise<never>((_, reject) => {
+    timer = setTimeout(
+      () => reject(new Error(`Telegram no respondió en ${Math.round(ms / 1000)} s (${what}).`)),
+      ms,
+    );
+  });
+  return Promise.race([p, limit]).finally(() => clearTimeout(timer));
+}
+
 async function fetchToBuffer(url: string): Promise<Buffer> {
-  const res = await fetch(url);
+  const res = await fetch(url, { signal: AbortSignal.timeout(TG_CALL_MS) });
   if (!res.ok) throw new Error(`No se pudo descargar el adjunto (${res.status}).`);
   return Buffer.from(await res.arrayBuffer());
 }
@@ -244,7 +264,12 @@ export class TelegramUserSession {
     try {
       const msg = event?.message;
       if (!msg || msg.out) return;
-      if (!event.isPrivate) return; // 1:1 only
+      if (!event.isPrivate) {
+        const chatId = String(msg.chatId ?? event.chatId ?? "");
+        const ts = Number(msg.date ?? 0);
+        if (chatId) this.events.onGroupActivity?.(this.workspaceSlug, chatId, ts > 0 ? new Date(ts * 1000) : new Date());
+        return; // only the time; group texts never reach the Inbox
+      }
       const text: string = msg.message ?? "";
       if (!text.trim()) return;
       const sender = await msg.getSender().catch(() => null);
@@ -304,17 +329,19 @@ export class TelegramUserSession {
       id = to;
     }
     try {
-      return await this.client.getInputEntity(id);
-    } catch {
-      await this.client.getDialogs({ limit: 500 }); // repopulate entity cache
-      return this.client.getInputEntity(id);
+      return await withTimeout(this.client.getInputEntity(id), TG_CALL_MS, "buscar el grupo");
+    } catch (err) {
+      if (/no respondió/.test((err as Error).message)) throw err;
+      // repopulate entity cache
+      await withTimeout(this.client.getDialogs({ limit: 500 }), TG_CALL_MS, "leer tus grupos");
+      return withTimeout(this.client.getInputEntity(id), TG_CALL_MS, "buscar el grupo");
     }
   }
 
   async sendText(to: string, text: string): Promise<{ id: string }> {
     if (!this.client || !this.isConnected) throw new Error("Telegram no está conectado.");
     const entity = await this.resolve(to);
-    const res = await this.client.sendMessage(entity, { message: text });
+    const res: any = await withTimeout(this.client.sendMessage(entity, { message: text }), TG_CALL_MS, "enviar el mensaje");
     return { id: String(res?.id ?? "") };
   }
 
@@ -330,11 +357,16 @@ export class TelegramUserSession {
     const buffer = await fetchToBuffer(attachment.url);
     const name = attachment.filename ?? "archivo";
     const file = new CustomFile(name, buffer.length, "", buffer);
-    const res = await this.client.sendFile(entity, {
-      file,
-      caption: text || undefined,
-      forceDocument: attachment.kind === "document",
-    });
+    // Uploading a photo takes longer than a text: twice the limit.
+    const res: any = await withTimeout(
+      this.client.sendFile(entity, {
+        file,
+        caption: text || undefined,
+        forceDocument: attachment.kind === "document",
+      }),
+      TG_CALL_MS * 2,
+      "subir la imagen",
+    );
     return { id: String(res?.id ?? "") };
   }
 

@@ -9,6 +9,11 @@ import { Panel, PanelHeader } from "@/components/common/panel";
 import { EmptyState } from "@/components/common/empty-state";
 import { ListSkeleton } from "@/components/common/skeletons";
 import { Button } from "@/components/ui/button";
+import { PlanOverview } from "@/components/access/plan-access";
+import { useAccess } from "@/hooks/use-domain-data";
+import { useWorkspace } from "@/hooks/use-workspace";
+import { useAuthStore } from "@/stores/auth-store";
+import { isBackendConfigured } from "@/lib/env";
 
 const STATUS_LABELS: Record<string, string> = {
   active: "Activa",
@@ -19,8 +24,23 @@ const STATUS_LABELS: Record<string, string> = {
   unpaid: "Impaga",
 };
 
+/** Plans paid by hand (Básico / Pro): what the brand has and how to upgrade. */
+function ManualPlans() {
+  const ws = useWorkspace();
+  const role = useAuthStore((s) => s.memberships.find((m) => m.workspaceSlug === ws.slug)?.role);
+  const access = useAccess(ws.slug, isBackendConfigured());
+  if (!access.data) return <ListSkeleton rows={3} />;
+  return <PlanOverview slug={ws.slug} access={access.data} canPay={role === "Owner" || role === "Admin"} />;
+}
+
 export function BillingTab() {
   const billing = useBilling();
+  // Without Stripe, billing is the manual Básico / Pro plans.
+  if (!billing.isLoading && billing.data && !billing.data.configured) return <ManualPlans />;
+  return <StripeBilling billing={billing} />;
+}
+
+function StripeBilling({ billing }: { billing: ReturnType<typeof useBilling> }) {
   const checkout = useCheckout();
   const portal = useBillingPortal();
 

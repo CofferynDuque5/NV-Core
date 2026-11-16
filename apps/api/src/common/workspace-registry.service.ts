@@ -7,6 +7,7 @@ import {
   WORKSPACE_GOAL_IDS,
   type Workspace,
   type WorkspaceKind,
+  initialsOf,
 } from "@nv/domain";
 
 import { AuthStore } from "../auth/auth.store";
@@ -24,9 +25,7 @@ export function slugify(name: string): string {
 }
 
 function monogram(name: string): string {
-  const words = name.trim().split(/\s+/).filter(Boolean);
-  const letters = (words[0]?.[0] ?? "") + (words[1]?.[0] ?? words[0]?.[1] ?? "");
-  return letters.toUpperCase() || "NV";
+  return initialsOf(name);
 }
 
 interface DbWorkspaceRow {
@@ -101,8 +100,23 @@ export class WorkspaceRegistry {
     return list.map((w) => ({ ...w, goals: goals.get(w.slug) ?? [] }));
   }
 
+  /** Brands seen to exist recently (checked on every request by the workspace guard). */
+  private readonly seen = new Map<string, number>();
+
   async exists(slug: string): Promise<boolean> {
-    return (await this.resolve(slug)) !== null;
+    const at = this.seen.get(slug);
+    if (at && Date.now() - at < 60_000) return true;
+    const found = (await this.resolve(slug)) !== null;
+    if (found) {
+      if (this.seen.size > 5000) this.seen.clear();
+      this.seen.set(slug, Date.now());
+    } else this.seen.delete(slug);
+    return found;
+  }
+
+  /** Forget a brand at once (after deleting it). */
+  forget(slug: string): void {
+    this.seen.delete(slug);
   }
 
   /** All workspaces: built-in config + user-created DB rows. */

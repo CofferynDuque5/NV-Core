@@ -1,8 +1,11 @@
 import * as React from "react";
-import { Navigate, Route, Routes, useParams } from "react-router-dom";
+import { Navigate, Route, Routes, useLocation, useParams, useSearchParams } from "react-router-dom";
 import { DEFAULT_WORKSPACE_SLUG } from "@nv/domain";
 
 import { AppShell } from "@/components/shell/app-shell";
+import { useAuthStore } from "@/stores/auth-store";
+import { isBackendConfigured } from "@/lib/env";
+import { pageTitle } from "@/lib/page-title";
 
 // Auth pages (small, loaded eagerly)
 import LoginPage from "@/app/login/page";
@@ -20,6 +23,8 @@ const PublicFunnelPage = React.lazy(() => import("@/app/fn/[funnel]/page"));
 // Platform super-admin (global, not workspace-scoped).
 const AdminPage = React.lazy(() => import("@/app/admin/page"));
 const DemoPage = React.lazy(() => import("@/app/demo/page"));
+const JoinPage = React.lazy(() => import("@/app/join/[token]/page"));
+const InstalarPage = React.lazy(() => import("@/app/instalar/page"));
 
 // Workspace module pages — lazy-loaded so each becomes its own chunk and the
 // initial payload stays small (faster load, lower memory on the VPS).
@@ -42,6 +47,7 @@ const AutomatizacionesPage = React.lazy(() => import("@/app/w/[workspace]/automa
 const TareasPage = React.lazy(() => import("@/app/w/[workspace]/tareas/page"));
 const AnalyticsPage = React.lazy(() => import("@/app/w/[workspace]/analytics/page"));
 const InformesPage = React.lazy(() => import("@/app/w/[workspace]/informes/page"));
+const PlanPage = React.lazy(() => import("@/app/w/[workspace]/plan/page"));
 const CobrosPage = React.lazy(() => import("@/app/w/[workspace]/cobros/page"));
 const MarketplacePage = React.lazy(() => import("@/app/w/[workspace]/marketplace/page"));
 const ConexionesPage = React.lazy(() => import("@/app/w/[workspace]/conexiones/page"));
@@ -78,296 +84,351 @@ function WorkspacePage({ children }: { children: React.ReactNode }) {
   );
 }
 
+/** «/»: your own brand when signed in, the login otherwise (never a built-in sample brand). */
+/** App shortcuts (long-press on the installed icon) open «/?ir=inbox» etc. */
+const SHORTCUT_PAGES = new Set(["inbox", "campanas", "cobros"]);
+
+function HomeRedirect() {
+  const [params] = useSearchParams();
+  const ir = params.get("ir");
+  const page = ir && SHORTCUT_PAGES.has(ir) ? ir : "dashboard";
+  const status = useAuthStore((s) => s.status);
+  const memberships = useAuthStore((s) => s.memberships);
+  const hydrate = useAuthStore((s) => s.hydrate);
+  const backend = isBackendConfigured();
+  React.useEffect(() => {
+    if (backend && status === "idle") void hydrate();
+  }, [backend, status, hydrate]);
+  if (!backend) return <Navigate to={`/w/${DEFAULT_WORKSPACE_SLUG}/dashboard`} replace />;
+  if (status === "unauthenticated") return <Navigate to="/login" replace />;
+  if (status !== "authenticated") return <RouteFallback />;
+  const first = memberships[0]?.workspaceSlug;
+  return <Navigate to={first ? `/w/${first}/${page}` : "/onboarding"} replace />;
+}
+
+/** Keeps the browser tab title in step with the page (history, screen readers). */
+function RouteTitle() {
+  const { pathname } = useLocation();
+  React.useEffect(() => {
+    document.title = pageTitle(pathname);
+  }, [pathname]);
+  return null;
+}
+
 /** Route table — mirrors the original Next.js app-router structure 1:1. */
 export function AppRoutes() {
   return (
-    <Routes>
-      <Route
-        path="/"
-        element={<Navigate to={`/w/${DEFAULT_WORKSPACE_SLUG}/dashboard`} replace />}
-      />
+    <>
+      <RouteTitle />
+      <Routes>
+        <Route path="/" element={<HomeRedirect />} />
 
-      {/* Auth */}
-      <Route path="/login" element={<LoginPage />} />
-      <Route
-        path="/demo"
-        element={
-          <React.Suspense fallback={<RouteFallback />}>
-            <DemoPage />
-          </React.Suspense>
-        }
-      />
-      <Route path="/register" element={<RegisterPage />} />
-      <Route path="/forgot-password" element={<ForgotPasswordPage />} />
-      <Route path="/reset-password" element={<ResetPasswordPage />} />
-      <Route path="/verify-email" element={<VerifyEmailPage />} />
-      <Route path="/onboarding" element={<OnboardingPage />} />
+        {/* Auth */}
+        <Route path="/login" element={<LoginPage />} />
+        <Route
+          path="/demo"
+          element={
+            <React.Suspense fallback={<RouteFallback />}>
+              <DemoPage />
+            </React.Suspense>
+          }
+        />
+        <Route path="/register" element={<RegisterPage />} />
+        <Route
+          path="/instalar"
+          element={
+            <React.Suspense fallback={<RouteFallback />}>
+              <InstalarPage />
+            </React.Suspense>
+          }
+        />
+        <Route
+          path="/join/:token"
+          element={
+            <React.Suspense fallback={<RouteFallback />}>
+              <JoinPage />
+            </React.Suspense>
+          }
+        />
+        <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+        <Route path="/reset-password" element={<ResetPasswordPage />} />
+        <Route path="/verify-email" element={<VerifyEmailPage />} />
+        <Route path="/onboarding" element={<OnboardingPage />} />
 
-      {/* Public embeddable form (no auth) */}
-      <Route
-        path="/f/:form"
-        element={
-          <React.Suspense fallback={<RouteFallback />}>
-            <PublicFormPage />
-          </React.Suspense>
-        }
-      />
-      <Route
-        path="/fn/:funnel"
-        element={
-          <React.Suspense fallback={<RouteFallback />}>
-            <PublicFunnelPage />
-          </React.Suspense>
-        }
-      />
+        {/* Public embeddable form (no auth) */}
+        <Route
+          path="/f/:form"
+          element={
+            <React.Suspense fallback={<RouteFallback />}>
+              <PublicFormPage />
+            </React.Suspense>
+          }
+        />
+        <Route
+          path="/fn/:funnel"
+          element={
+            <React.Suspense fallback={<RouteFallback />}>
+              <PublicFunnelPage />
+            </React.Suspense>
+          }
+        />
 
-      {/* Platform super-admin (global) */}
-      <Route
-        path="/admin"
-        element={
-          <React.Suspense fallback={<RouteFallback />}>
-            <AdminPage />
-          </React.Suspense>
-        }
-      />
+        {/* Platform super-admin (global) */}
+        <Route
+          path="/admin"
+          element={
+            <React.Suspense fallback={<RouteFallback />}>
+              <AdminPage />
+            </React.Suspense>
+          }
+        />
 
-      {/* Workspace shell */}
-      <Route path="/w/:workspace" element={<Navigate to="dashboard" replace />} />
-      <Route
-        path="/w/:workspace/dashboard"
-        element={
-          <WorkspacePage>
-            <DashboardPage />
-          </WorkspacePage>
-        }
-      />
-      <Route
-        path="/w/:workspace/tienda"
-        element={
-          <WorkspacePage>
-            <TiendaPage />
-          </WorkspacePage>
-        }
-      />
-      <Route
-        path="/w/:workspace/perfil"
-        element={
-          <WorkspacePage>
-            <PerfilPage />
-          </WorkspacePage>
-        }
-      />
-      <Route
-        path="/w/:workspace/calendario"
-        element={
-          <WorkspacePage>
-            <CalendarioPage />
-          </WorkspacePage>
-        }
-      />
-      <Route
-        path="/w/:workspace/campanas"
-        element={
-          <WorkspacePage>
-            <CampanasPage />
-          </WorkspacePage>
-        }
-      />
-      <Route
-        path="/w/:workspace/contactos"
-        element={
-          <WorkspacePage>
-            <ContactosPage />
-          </WorkspacePage>
-        }
-      />
-      <Route
-        path="/w/:workspace/grupos"
-        element={
-          <WorkspacePage>
-            <GruposPage />
-          </WorkspacePage>
-        }
-      />
-      <Route
-        path="/w/:workspace/segmentos"
-        element={
-          <WorkspacePage>
-            <SegmentosPage />
-          </WorkspacePage>
-        }
-      />
-      <Route
-        path="/w/:workspace/formularios"
-        element={
-          <WorkspacePage>
-            <FormulariosPage />
-          </WorkspacePage>
-        }
-      />
-      <Route
-        path="/w/:workspace/embudos"
-        element={
-          <WorkspacePage>
-            <EmbudosPage />
-          </WorkspacePage>
-        }
-      />
-      <Route
-        path="/w/:workspace/secuencias"
-        element={
-          <WorkspacePage>
-            <SecuenciasPage />
-          </WorkspacePage>
-        }
-      />
-      <Route
-        path="/w/:workspace/afiliados"
-        element={
-          <WorkspacePage>
-            <AfiliadosPage />
-          </WorkspacePage>
-        }
-      />
-      <Route
-        path="/w/:workspace/inbox"
-        element={
-          <WorkspacePage>
-            <InboxPage />
-          </WorkspacePage>
-        }
-      />
-      <Route
-        path="/w/:workspace/builder"
-        element={
-          <WorkspacePage>
-            <BuilderPage />
-          </WorkspacePage>
-        }
-      />
-      <Route
-        path="/w/:workspace/ai"
-        element={
-          <WorkspacePage>
-            <AiPage />
-          </WorkspacePage>
-        }
-      />
-      <Route
-        path="/w/:workspace/plantillas"
-        element={
-          <WorkspacePage>
-            <PlantillasPage />
-          </WorkspacePage>
-        }
-      />
-      <Route
-        path="/w/:workspace/biblioteca"
-        element={
-          <WorkspacePage>
-            <BibliotecaPage />
-          </WorkspacePage>
-        }
-      />
-      <Route
-        path="/w/:workspace/cobros"
-        element={
-          <WorkspacePage>
-            <CobrosPage />
-          </WorkspacePage>
-        }
-      />
-      <Route
-        path="/w/:workspace/informes"
-        element={
-          <WorkspacePage>
-            <InformesPage />
-          </WorkspacePage>
-        }
-      />
-      <Route
-        path="/w/:workspace/tareas"
-        element={
-          <WorkspacePage>
-            <TareasPage />
-          </WorkspacePage>
-        }
-      />
-      <Route
-        path="/w/:workspace/automatizaciones"
-        element={
-          <WorkspacePage>
-            <AutomatizacionesPage />
-          </WorkspacePage>
-        }
-      />
-      <Route
-        path="/w/:workspace/analytics"
-        element={
-          <WorkspacePage>
-            <AnalyticsPage />
-          </WorkspacePage>
-        }
-      />
-      <Route
-        path="/w/:workspace/marketplace"
-        element={
-          <WorkspacePage>
-            <MarketplacePage />
-          </WorkspacePage>
-        }
-      />
-      <Route
-        path="/w/:workspace/conexiones"
-        element={
-          <WorkspacePage>
-            <ConexionesPage />
-          </WorkspacePage>
-        }
-      />
-      <Route
-        path="/w/:workspace/configuracion"
-        element={
-          <WorkspacePage>
-            <ConfiguracionPage />
-          </WorkspacePage>
-        }
-      />
-      <Route
-        path="/w/:workspace/historial"
-        element={
-          <WorkspacePage>
-            <HistorialPage />
-          </WorkspacePage>
-        }
-      />
-      <Route
-        path="/w/:workspace/ayuda"
-        element={
-          <WorkspacePage>
-            <AyudaPage />
-          </WorkspacePage>
-        }
-      />
-      <Route
-        path="/w/:workspace/novedades"
-        element={
-          <WorkspacePage>
-            <NovedadesPage />
-          </WorkspacePage>
-        }
-      />
-      <Route
-        path="/w/:workspace/estado"
-        element={
-          <WorkspacePage>
-            <EstadoPage />
-          </WorkspacePage>
-        }
-      />
+        {/* Workspace shell */}
+        <Route path="/w/:workspace" element={<Navigate to="dashboard" replace />} />
+        <Route
+          path="/w/:workspace/dashboard"
+          element={
+            <WorkspacePage>
+              <DashboardPage />
+            </WorkspacePage>
+          }
+        />
+        <Route
+          path="/w/:workspace/tienda"
+          element={
+            <WorkspacePage>
+              <TiendaPage />
+            </WorkspacePage>
+          }
+        />
+        <Route
+          path="/w/:workspace/perfil"
+          element={
+            <WorkspacePage>
+              <PerfilPage />
+            </WorkspacePage>
+          }
+        />
+        <Route
+          path="/w/:workspace/calendario"
+          element={
+            <WorkspacePage>
+              <CalendarioPage />
+            </WorkspacePage>
+          }
+        />
+        <Route
+          path="/w/:workspace/campanas"
+          element={
+            <WorkspacePage>
+              <CampanasPage />
+            </WorkspacePage>
+          }
+        />
+        <Route
+          path="/w/:workspace/contactos"
+          element={
+            <WorkspacePage>
+              <ContactosPage />
+            </WorkspacePage>
+          }
+        />
+        <Route
+          path="/w/:workspace/grupos"
+          element={
+            <WorkspacePage>
+              <GruposPage />
+            </WorkspacePage>
+          }
+        />
+        <Route
+          path="/w/:workspace/segmentos"
+          element={
+            <WorkspacePage>
+              <SegmentosPage />
+            </WorkspacePage>
+          }
+        />
+        <Route
+          path="/w/:workspace/formularios"
+          element={
+            <WorkspacePage>
+              <FormulariosPage />
+            </WorkspacePage>
+          }
+        />
+        <Route
+          path="/w/:workspace/embudos"
+          element={
+            <WorkspacePage>
+              <EmbudosPage />
+            </WorkspacePage>
+          }
+        />
+        <Route
+          path="/w/:workspace/secuencias"
+          element={
+            <WorkspacePage>
+              <SecuenciasPage />
+            </WorkspacePage>
+          }
+        />
+        <Route
+          path="/w/:workspace/afiliados"
+          element={
+            <WorkspacePage>
+              <AfiliadosPage />
+            </WorkspacePage>
+          }
+        />
+        <Route
+          path="/w/:workspace/inbox"
+          element={
+            <WorkspacePage>
+              <InboxPage />
+            </WorkspacePage>
+          }
+        />
+        <Route
+          path="/w/:workspace/builder"
+          element={
+            <WorkspacePage>
+              <BuilderPage />
+            </WorkspacePage>
+          }
+        />
+        <Route
+          path="/w/:workspace/ai"
+          element={
+            <WorkspacePage>
+              <AiPage />
+            </WorkspacePage>
+          }
+        />
+        <Route
+          path="/w/:workspace/plantillas"
+          element={
+            <WorkspacePage>
+              <PlantillasPage />
+            </WorkspacePage>
+          }
+        />
+        <Route
+          path="/w/:workspace/biblioteca"
+          element={
+            <WorkspacePage>
+              <BibliotecaPage />
+            </WorkspacePage>
+          }
+        />
+        <Route
+          path="/w/:workspace/cobros"
+          element={
+            <WorkspacePage>
+              <CobrosPage />
+            </WorkspacePage>
+          }
+        />
+        <Route
+          path="/w/:workspace/plan"
+          element={
+            <WorkspacePage>
+              <PlanPage />
+            </WorkspacePage>
+          }
+        />
+        <Route
+          path="/w/:workspace/informes"
+          element={
+            <WorkspacePage>
+              <InformesPage />
+            </WorkspacePage>
+          }
+        />
+        <Route
+          path="/w/:workspace/tareas"
+          element={
+            <WorkspacePage>
+              <TareasPage />
+            </WorkspacePage>
+          }
+        />
+        <Route
+          path="/w/:workspace/automatizaciones"
+          element={
+            <WorkspacePage>
+              <AutomatizacionesPage />
+            </WorkspacePage>
+          }
+        />
+        <Route
+          path="/w/:workspace/analytics"
+          element={
+            <WorkspacePage>
+              <AnalyticsPage />
+            </WorkspacePage>
+          }
+        />
+        <Route
+          path="/w/:workspace/marketplace"
+          element={
+            <WorkspacePage>
+              <MarketplacePage />
+            </WorkspacePage>
+          }
+        />
+        <Route
+          path="/w/:workspace/conexiones"
+          element={
+            <WorkspacePage>
+              <ConexionesPage />
+            </WorkspacePage>
+          }
+        />
+        <Route
+          path="/w/:workspace/configuracion"
+          element={
+            <WorkspacePage>
+              <ConfiguracionPage />
+            </WorkspacePage>
+          }
+        />
+        <Route
+          path="/w/:workspace/historial"
+          element={
+            <WorkspacePage>
+              <HistorialPage />
+            </WorkspacePage>
+          }
+        />
+        <Route
+          path="/w/:workspace/ayuda"
+          element={
+            <WorkspacePage>
+              <AyudaPage />
+            </WorkspacePage>
+          }
+        />
+        <Route
+          path="/w/:workspace/novedades"
+          element={
+            <WorkspacePage>
+              <NovedadesPage />
+            </WorkspacePage>
+          }
+        />
+        <Route
+          path="/w/:workspace/estado"
+          element={
+            <WorkspacePage>
+              <EstadoPage />
+            </WorkspacePage>
+          }
+        />
 
-      {/* 404 */}
-      <Route path="*" element={<NotFound />} />
-    </Routes>
+        {/* 404 */}
+        <Route path="*" element={<NotFound />} />
+      </Routes>
+    </>
   );
 }

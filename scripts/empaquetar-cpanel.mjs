@@ -49,6 +49,9 @@ cpSync(join(root, "apps/web/dist"), join(out, "web"), { recursive: true });
   console.log("✔ NV Agente PC empaquetado en web/agente/NV-Agente-PC.zip");
 }
 
+// Herramienta para pasar los datos a otra base PostgreSQL (Neon → Supabase).
+cpSync(join(root, "scripts/copiar-base-de-datos.cjs"), join(out, "copiar-base-de-datos.js"));
+
 // Motores de Prisma para las plataformas típicas de hosting (CloudLinux = RHEL,
 // Debian/Ubuntu; OpenSSL 1.1 y 3.0) además del detectado ("native"). Así el
 // "Run NPM Install" de cPanel ya deja el motor correcto y el login no falla con
@@ -108,6 +111,8 @@ const pkg = {
   // en passenger-start.js al arrancar, con ruta ABSOLUTA (siempre funciona).
   scripts: {
     start: "node passenger-start.js",
+    // Copia los datos a otra base (p. ej. de Neon a Supabase): ver PASOS.
+    "copiar-base": "node copiar-base-de-datos.js",
   },
   dependencies: {
     ...deps,
@@ -195,6 +200,9 @@ function resolvePrismaCli() {
   return { file: bin, viaNode: false };
 }
 
+// Pooler de Supabase en modo transacción (puerto 6543).
+const SUPABASE_TX = /@[^/?#]*\\.pooler\\.supabase\\.com:6543(\\/|$)/i;
+
 // Autocorrige DATABASE_URL: tolera errores comunes al pegarla en el panel
 // (sslmode duplicado, un segundo '?', channel_binding, falta de sslmode).
 function sanitizeDbUrl(raw) {
@@ -202,9 +210,9 @@ function sanitizeDbUrl(raw) {
   const s = String(raw).trim();
   const isLocal = s.includes("localhost") || s.includes("127.0.0.1");
   const i = s.indexOf("?");
-  if (i === -1) return isLocal ? s : s + "?sslmode=require";
-  const base = s.slice(0, i);
-  const query = s.slice(i + 1).replace(/\\?/g, "&");
+  if (i === -1 && isLocal) return s;
+  const base = i === -1 ? s : s.slice(0, i);
+  const query = i === -1 ? "" : s.slice(i + 1).replace(/\\?/g, "&");
   const params = [];
   const seen = new Set();
   for (const pair of query.split("&")) {
@@ -218,14 +226,38 @@ function sanitizeDbUrl(raw) {
     params.push([k, v]);
   }
   if (!isLocal && !seen.has("sslmode")) params.push(["sslmode", "require"]);
+  // Supabase «Transaction pooler» (6543): Prisma necesita pgbouncer=true.
+  if (SUPABASE_TX.test(base) && !seen.has("pgbouncer")) params.push(["pgbouncer", "true"]);
   const qs = params.map(([k, v]) => (v === "" ? k : k + "=" + v)).join("&");
   return qs ? base + "?" + qs : base;
 }
 if (process.env.DATABASE_URL) {
   process.env.DATABASE_URL = sanitizeDbUrl(process.env.DATABASE_URL);
 }
-// Para MIGRAR, Neon recomienda la conexión DIRECTA (sin "-pooler").
-const migrateUrl = (process.env.DATABASE_URL || "").replace("-pooler.", ".");
+// Para MIGRAR: Neon usa la conexión DIRECTA (sin "-pooler"); Supabase pasa del
+// pooler de transacción (6543) al de sesión (5432), que admite cambios de estructura.
+function migrationUrl(url) {
+  const s = url || "";
+  if (SUPABASE_TX.test(s.split("?")[0])) {
+    const [base, query = ""] = s.split("?");
+    const q = query.split("&").filter((p) => p && !p.startsWith("pgbouncer=")).join("&");
+    const b = base.replace(/\\.pooler\\.supabase\\.com:6543/i, ".pooler.supabase.com:5432");
+    return q ? b + "?" + q : b;
+  }
+  return s.replace("-pooler.", ".");
+}
+const migrateUrl = migrationUrl(process.env.DATABASE_URL);
+
+// node-postgres trata sslmode=require como «verificar el certificado», y el de
+// Supabase lo firma su propia autoridad: se quita de la URL y se cifra con
+// ssl: { rejectUnauthorized: false }, igual que hace Prisma con sslmode=require.
+function pgConnectionString(url) {
+  const [base, query = ""] = String(url).split("?");
+  const keep = query
+    .split("&")
+    .filter((p) => p && !/^(sslmode|sslaccept|sslcert|sslrootcert|pgbouncer|connection_limit|pool_timeout|schema)=/.test(p));
+  return keep.length ? base + "?" + keep.join("&") : base;
+}
 
 const schema = path.join(__dirname, "prisma", "schema.prisma");
 const q = (s) => JSON.stringify(s);
@@ -354,7 +386,7 @@ function migrateWithPg() {
   const isLocal = /localhost|127\\.0\\.0\\.1/.test(migrateUrl);
   return (async () => {
     const client = new Client({
-      connectionString: migrateUrl,
+      connectionString: pgConnectionString(migrateUrl),
       ssl: isLocal ? false : { rejectUnauthorized: false },
     });
     await client.connect();
@@ -449,6 +481,9 @@ writeFileSync(
   join(out, ".env.example"),
   `# Renómbralo a .env (o define estas variables en el panel "Setup Node.js App").
 # OBLIGATORIAS
+# Supabase: Connect → «Session pooler» (puerto 5432, usuario postgres.<ref>), p. ej.
+#   postgresql://postgres.abcd:TU-CLAVE@aws-0-us-east-1.pooler.supabase.com:5432/postgres
+# (No uses «Direct connection» db.<ref>.supabase.co: solo funciona por IPv6.)
 DATABASE_URL=postgresql://usuario:password@host/db?sslmode=require
 JWT_SECRET=pon-aqui-un-texto-largo-de-mas-de-32-caracteres-xxxxx
 ENCRYPTION_KEY=otro-texto-largo-de-mas-de-32-caracteres-yyyyyyyyy
@@ -470,9 +505,20 @@ NV_ADMIN_EMAIL=tucorreo@ejemplo.com
 # bloquea y le muestra tus métodos de pago. Pon aquí el identificador (slug) de
 # TU marca donde configuraste esos métodos en Cobros (créala con NV_ADMIN_EMAIL
 # para que no tenga prueba). Al confirmar su pago como «Pagado», la marca del
-# cliente se activa PLAN_DAYS días más.
+# cliente se activa PLAN_DAYS días más con el plan que eligió.
+# PLAN_PRICE es el plan Pro y PLAN_BASIC_PRICE el Básico (1 WhatsApp, 1 Telegram, 1 marca).
 # NV_BILLING_WORKSPACE=nv-cobros
 # PLAN_PRICE=19
+# PLAN_BASIC_PRICE=7
+# Tu WhatsApp (con código de país, solo números) para recibir cada pago de plan.
+# Sale del WhatsApp conectado en NV_BILLING_WORKSPACE. También llega por correo a NV_ADMIN_EMAIL.
+# NV_ADMIN_WHATSAPP=584120000000
+# Zona horaria por defecto de las campañas programadas (cada marca puede cambiarla).
+# SCHEDULE_TIME_ZONE=America/Caracas
+# Tasa USDT→Bs: vacía = la del día (Binance P2P). Pon un número para fijarla.
+# USDT_VES_RATE=
+# Comprobantes de pago: carpeta PRIVADA (no la pongas dentro de public_html).
+# RECEIPTS_DIR=data/receipts
 # PLAN_CURRENCY=USD
 # PLAN_DAYS=30
 # TRIAL_HOURS=24
@@ -483,7 +529,15 @@ NV_ADMIN_EMAIL=tucorreo@ejemplo.com
 # TELEGRAM_API_HASH=
 # STRIPE_SECRET_KEY=
 # OPENAI_API_KEY=
-# RESEND_API_KEY=
+
+# CORREO GRATIS con tu propio buzón de cPanel (verificación, contraseña, invitaciones).
+# La contraseña del buzón va SOLO aquí, nunca en el código.
+# SMTP_HOST=mail.nvcorx.com
+# SMTP_PORT=465
+# SMTP_USER=nvmarketing@nvcorx.com
+# SMTP_PASS=
+# MAIL_FROM=NV Marketing <nvmarketing@nvcorx.com>
+# (Alternativa: RESEND_API_KEY=, se usa solo si no hay SMTP)
 `,
 );
 
@@ -569,6 +623,20 @@ ARCHIVOS SUBIDOS (Biblioteca y adjuntos de campañas)
   Revisa también el límite de subida de tu hosting.
 - Borrar un archivo de la Biblioteca no lo borra del disco (puede seguir en
   campañas ya enviadas).
+
+CAMPAÑAS PROGRAMADAS: QUE SALGAN A SU HORA
+- Las horas de las campañas y publicaciones usan la zona horaria de cada marca
+  (Venezuela por defecto; se cambia en Informes o al programar una campaña).
+  SCHEDULE_TIME_ZONE cambia el valor por defecto (p.ej. America/Bogota).
+- Muchos hostings cPanel "duermen" la app cuando nadie la visita: entonces no
+  hay nadie que mire el reloj y WhatsApp se desconecta. Para evitarlo:
+    1) Deja "PassengerMinInstances 1" en el .htaccess (ya viene en el ejemplo).
+    2) cPanel → "Cron Jobs" → agrega uno cada 5 minutos (*/5 * * * *) con:
+         curl -fsS https://TU-SUBDOMINIO/api/health > /dev/null
+       Así la app se mantiene despierta. Al despertar, el panel envía en las
+       3 horas siguientes lo que se haya quedado pendiente, sin repetir nada.
+- En Campañas, el botón «Enviar» espera hasta 20 s a que WhatsApp/Telegram
+  terminen de reconectar; si aun así no puede, el aviso dice el motivo.
 
 PRUEBA GRATIS DE 24 H Y COBRO DEL PLAN
 - Cada marca que crea un cliente tiene 24 horas gratis con todo el panel.

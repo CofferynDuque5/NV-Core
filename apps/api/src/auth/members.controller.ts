@@ -1,6 +1,6 @@
 import { Body, Controller, Delete, Get, HttpCode, Param, Post, UseGuards } from "@nestjs/common";
 import { ApiBearerAuth, ApiTags } from "@nestjs/swagger";
-import type { TeamInvitation, TeamMember } from "@nv/domain";
+import type { CreatedInviteLink, InviteLink, TeamInvitation, TeamMember } from "@nv/domain";
 
 import { WorkspaceGuard } from "../common/tenant/workspace.guard";
 import { WorkspaceId } from "../common/tenant/workspace.decorator";
@@ -11,6 +11,8 @@ import { Roles } from "./decorators/roles.decorator";
 import { CurrentUser } from "./decorators/current-user.decorator";
 import type { AuthenticatedUser } from "./auth.types";
 import { AddMemberDto } from "./dto/add-member.dto";
+import { CreateInviteLinkDto } from "./dto/invite-link.dto";
+import { InviteLinksService } from "./invite-links.service";
 import { toTeamMember } from "./member.mapper";
 
 /**
@@ -26,12 +28,15 @@ export class MembersController {
   constructor(
     private readonly auth: AuthService,
     private readonly store: AuthStore,
+    private readonly links: InviteLinksService,
   ) {}
 
   @Get()
-  async list(@WorkspaceId() workspaceId: string): Promise<TeamMember[]> {
+  async list(@WorkspaceId() workspaceId: string, @CurrentUser() me: AuthenticatedUser): Promise<TeamMember[]> {
     const rows = await this.store.listWorkspaceMembers(workspaceId);
-    return rows.map(({ user, role }) => toTeamMember(user, role));
+    // The read-only demo only ever sees itself: never other people's emails.
+    const visible = me?.demo ? rows.filter(({ user }) => user.id === me.userId) : rows;
+    return visible.map(({ user, role }) => toTeamMember(user, role));
   }
 
   @Roles("Owner", "Admin")
@@ -79,5 +84,32 @@ export class MembersController {
   @HttpCode(204)
   revokeInvitation(@WorkspaceId() workspaceId: string, @Param("id") id: string) {
     return this.auth.revokeInvitation(workspaceId, id);
+  }
+
+  /** Shareable links teammates can open to join this brand. */
+  @Roles("Owner", "Admin")
+  @UseGuards(RolesGuard)
+  @Get("invite-links")
+  inviteLinks(@WorkspaceId() workspaceId: string): Promise<InviteLink[]> {
+    return this.links.list(workspaceId);
+  }
+
+  @Roles("Owner", "Admin")
+  @UseGuards(RolesGuard)
+  @Post("invite-links")
+  createInviteLink(
+    @WorkspaceId() workspaceId: string,
+    @CurrentUser() user: AuthenticatedUser,
+    @Body() dto: CreateInviteLinkDto,
+  ): Promise<CreatedInviteLink> {
+    return this.links.create(workspaceId, user.userId, dto);
+  }
+
+  @Roles("Owner", "Admin")
+  @UseGuards(RolesGuard)
+  @Delete("invite-links/:id")
+  @HttpCode(204)
+  revokeInviteLink(@WorkspaceId() workspaceId: string, @Param("id") id: string) {
+    return this.links.revoke(workspaceId, id);
   }
 }

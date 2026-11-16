@@ -11,8 +11,9 @@ export function referralLink(apiBase: string, code: string): string {
 
 /** Click → conversion rate as a 0–100 number, 0 when no clicks. */
 export function conversionRate(a: Pick<Affiliate, "clicks" | "conversions">): number {
-  if (a.clicks <= 0) return 0;
-  return Math.round((a.conversions / a.clicks) * 1000) / 10;
+  const clicks = Number(a.clicks) || 0;
+  if (clicks <= 0) return 0;
+  return Math.round(((Number(a.conversions) || 0) / clicks) * 1000) / 10;
 }
 
 /** Format a money amount for display (no currency assumptions). */

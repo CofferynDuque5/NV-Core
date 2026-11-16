@@ -55,9 +55,12 @@ export function MonthView({ cursor, byDay, onCreate, onSelect, selectedId }: Vie
 
   return (
     <div>
-      <div className="grid grid-cols-7 border-b border-line">
+      <div className="border-line grid grid-cols-7 border-b">
         {WEEKDAYS_ES.map((w) => (
-          <div key={w} className="px-2 py-1.5 text-center text-[10px] font-medium uppercase tracking-wide text-ink-faint">
+          <div
+            key={w}
+            className="text-ink-faint px-2 py-1.5 text-center text-[10px] font-medium uppercase tracking-wide"
+          >
             {w}
           </div>
         ))}
@@ -69,14 +72,16 @@ export function MonthView({ cursor, byDay, onCreate, onSelect, selectedId }: Vie
           const isToday = sameDay(d, today);
           const dayPosts = byDay.get(key) ?? [];
           const drag = dnd?.dragging;
-          const danger = Boolean(drag && dayPosts.some((p) => p.id !== drag.id && p.channel === drag.channel));
+          const danger = Boolean(
+            drag && dayPosts.some((p) => p.id !== drag.id && p.channel === drag.channel),
+          );
           return (
             <DropZone
               key={key}
               onDrop={() => dnd?.drop(d)}
               danger={danger}
               className={cn(
-                "relative flex min-h-[104px] flex-col border-b border-r border-line-soft p-1",
+                "border-line-soft relative flex min-h-[104px] flex-col border-b border-r p-1",
                 !inMonth && "bg-panel-sunken/40",
               )}
             >
@@ -84,19 +89,23 @@ export function MonthView({ cursor, byDay, onCreate, onSelect, selectedId }: Vie
               <button
                 aria-label={`Programar el ${d.getDate()}`}
                 onClick={() => onCreate(d)}
-                className="absolute inset-0 z-0 transition-colors hover:bg-panel-raised/40"
+                className="hover:bg-panel-raised/40 absolute inset-0 z-0 transition-colors"
               />
               <div className="pointer-events-none relative z-10 mb-1 flex items-center justify-between">
                 <span
                   className={cn(
                     "grid size-5 place-items-center rounded text-[11px]",
-                    isToday ? "bg-brand font-bold text-white" : inMonth ? "text-ink-muted" : "text-ink-faint",
+                    isToday
+                      ? "bg-brand font-bold text-white"
+                      : inMonth
+                        ? "text-ink-muted"
+                        : "text-ink-faint",
                   )}
                 >
                   {d.getDate()}
                 </span>
                 {dayPosts.length > 0 ? (
-                  <span className="text-[10px] tabular-nums text-ink-faint">{dayPosts.length}</span>
+                  <span className="text-ink-faint text-[10px] tabular-nums">{dayPosts.length}</span>
                 ) : null}
               </div>
               <div className="relative z-10 flex flex-col gap-0.5">
@@ -106,7 +115,7 @@ export function MonthView({ cursor, byDay, onCreate, onSelect, selectedId }: Vie
                   </div>
                 ))}
                 {dayPosts.length > MAX ? (
-                  <span className="pointer-events-none pl-1 text-[10px] text-ink-faint">
+                  <span className="text-ink-faint pointer-events-none pl-1 text-[10px]">
                     +{dayPosts.length - MAX} más
                   </span>
                 ) : null}
@@ -135,17 +144,20 @@ function TimeGrid({
 
   return (
     <div className="overflow-x-auto">
-      <div className="grid min-w-[640px]" style={{ gridTemplateColumns: `56px repeat(${days.length}, 1fr)` }}>
+      <div
+        className={cn("grid", days.length > 1 && "min-w-[640px]")}
+        style={{ gridTemplateColumns: `56px repeat(${days.length}, 1fr)` }}
+      >
         {/* Header row */}
-        <div className="sticky top-0 z-10 border-b border-line bg-panel" />
+        <div className="border-line bg-panel sticky top-0 z-10 border-b" />
         {days.map((d) => {
           const isToday = sameDay(d, today);
           return (
             <div
               key={ymd(d)}
-              className="sticky top-0 z-10 border-b border-l border-line bg-panel px-2 py-1.5 text-center"
+              className="border-line bg-panel sticky top-0 z-10 border-b border-l px-2 py-1.5 text-center"
             >
-              <div className="text-[10px] uppercase tracking-wide text-ink-faint">
+              <div className="text-ink-faint text-[10px] uppercase tracking-wide">
                 {WEEKDAYS_ES[(d.getDay() + 6) % 7]}
               </div>
               <div
@@ -163,9 +175,9 @@ function TimeGrid({
         {/* Hour rows */}
         {HOURS.map((h) => (
           <React.Fragment key={h}>
-            <div className="flex items-center justify-end gap-1 border-r border-line-soft py-1 pr-2 text-right text-[10px] tabular-nums text-ink-faint">
+            <div className="border-line-soft text-ink-faint flex items-center justify-end gap-1 border-r py-1 pr-2 text-right text-[10px] tabular-nums">
               {recommended.has(h) ? (
-                <Sparkles className="size-3 text-brand-violet" aria-label="Mejor horario" />
+                <Sparkles className="text-brand-violet size-3" aria-label="Mejor horario" />
               ) : null}
               {String(h).padStart(2, "0")}:00
             </div>
@@ -174,7 +186,9 @@ function TimeGrid({
               const hourPosts = postsByHour(dayPosts).get(h) ?? [];
               const isNow = sameDay(d, today) && h === nowHour;
               const drag = dnd?.dragging;
-              const danger = Boolean(drag && hourPosts.some((p) => p.id !== drag.id && p.channel === drag.channel));
+              const danger = Boolean(
+                drag && hourPosts.some((p) => p.id !== drag.id && p.channel === drag.channel),
+              );
               const slot = `${String(h).padStart(2, "0")}:00`;
               return (
                 <DropZone
@@ -182,19 +196,26 @@ function TimeGrid({
                   onDrop={() => dnd?.drop(d, slot)}
                   danger={danger}
                   className={cn(
-                    "relative min-h-[52px] border-b border-l border-line-soft p-1",
+                    "border-line-soft relative min-h-[52px] border-b border-l p-1",
                     isNow && "bg-brand/5",
                   )}
                 >
                   <button
                     aria-label={`Programar ${slot}`}
                     onClick={() => onCreate(d, slot)}
-                    className="absolute inset-0 z-0 transition-colors hover:bg-panel-raised/50"
+                    className="hover:bg-panel-raised/50 absolute inset-0 z-0 transition-colors"
                   />
-                  {isNow ? <span className="absolute left-0 right-0 top-0 z-10 h-px bg-brand" /> : null}
+                  {isNow ? (
+                    <span className="bg-brand absolute left-0 right-0 top-0 z-10 h-px" />
+                  ) : null}
                   <div className="relative z-10 flex flex-col gap-0.5">
                     {hourPosts.map((p) => (
-                      <PostChip key={p.id} post={p} onSelect={onSelect} selected={p.id === selectedId} />
+                      <PostChip
+                        key={p.id}
+                        post={p}
+                        onSelect={onSelect}
+                        selected={p.id === selectedId}
+                      />
                     ))}
                   </div>
                 </DropZone>
@@ -207,7 +228,14 @@ function TimeGrid({
   );
 }
 
-export function WeekView({ cursor, byDay, onCreate, onSelect, selectedId, recommendedHours }: ViewProps) {
+export function WeekView({
+  cursor,
+  byDay,
+  onCreate,
+  onSelect,
+  selectedId,
+  recommendedHours,
+}: ViewProps) {
   const days = React.useMemo(() => weekDays(cursor), [cursor]);
   return (
     <TimeGrid
@@ -221,7 +249,14 @@ export function WeekView({ cursor, byDay, onCreate, onSelect, selectedId, recomm
   );
 }
 
-export function DayView({ cursor, byDay, onCreate, onSelect, selectedId, recommendedHours }: ViewProps) {
+export function DayView({
+  cursor,
+  byDay,
+  onCreate,
+  onSelect,
+  selectedId,
+  recommendedHours,
+}: ViewProps) {
   return (
     <TimeGrid
       days={[cursor]}
@@ -262,11 +297,11 @@ export function TimelineView({ cursor, byDay, onCreate, onSelect, selectedId }: 
   return (
     <div className="overflow-x-auto">
       <div className="grid min-w-[720px]" style={{ gridTemplateColumns: `120px repeat(7, 1fr)` }}>
-        <div className="sticky left-0 z-10 border-b border-line bg-panel" />
+        <div className="border-line bg-panel sticky left-0 z-10 border-b" />
         {days.map((d) => (
           <div
             key={ymd(d)}
-            className="border-b border-l border-line bg-panel px-2 py-1.5 text-center text-[10px] uppercase tracking-wide text-ink-faint"
+            className="border-line bg-panel text-ink-faint border-b border-l px-2 py-1.5 text-center text-[10px] uppercase tracking-wide"
           >
             {WEEKDAYS_ES[(d.getDay() + 6) % 7]} {d.getDate()}
           </div>
@@ -274,9 +309,9 @@ export function TimelineView({ cursor, byDay, onCreate, onSelect, selectedId }: 
 
         {activeChannels.map((ch) => (
           <React.Fragment key={ch.id}>
-            <div className="sticky left-0 z-10 flex items-center gap-2 border-b border-r border-line-soft bg-panel px-2.5 py-2">
+            <div className="border-line-soft bg-panel sticky left-0 z-10 flex items-center gap-2 border-b border-r px-2.5 py-2">
               <span className="size-2.5 shrink-0 rounded-full" style={{ background: ch.color }} />
-              <span className="truncate text-xs font-medium text-ink">{ch.name}</span>
+              <span className="text-ink truncate text-xs font-medium">{ch.name}</span>
             </div>
             {days.map((d) => {
               const cellPosts = (byDay.get(ymd(d)) ?? []).filter((p) => p.channel === ch.id);
@@ -290,18 +325,23 @@ export function TimelineView({ cursor, byDay, onCreate, onSelect, selectedId }: 
                   onDrop={() => dnd?.drop(d, undefined, ch.id)}
                   danger={danger}
                   className={cn(
-                    "relative min-h-[56px] border-b border-l border-line-soft p-1",
+                    "border-line-soft relative min-h-[56px] border-b border-l p-1",
                     isToday && "bg-brand/5",
                   )}
                 >
                   <button
                     aria-label={`Programar ${ch.name}`}
                     onClick={() => onCreate(d)}
-                    className="absolute inset-0 z-0 transition-colors hover:bg-panel-raised/50"
+                    className="hover:bg-panel-raised/50 absolute inset-0 z-0 transition-colors"
                   />
                   <div className="relative z-10 flex flex-col gap-0.5">
                     {cellPosts.map((p) => (
-                      <PostChip key={p.id} post={p} onSelect={onSelect} selected={p.id === selectedId} />
+                      <PostChip
+                        key={p.id}
+                        post={p}
+                        onSelect={onSelect}
+                        selected={p.id === selectedId}
+                      />
                     ))}
                   </div>
                 </DropZone>
@@ -348,17 +388,19 @@ export function AgendaView({ cursor, byDay, onCreate, onSelect, selectedId }: Vi
 
   return (
     <div>
-      <div className="flex items-center justify-between gap-3 border-b border-line px-4 py-2.5">
-        <p className="text-xs text-ink-muted">
-          <span className="font-semibold text-ink-bright">{total}</span> publicación{total === 1 ? "" : "es"} en{" "}
-          <span className="font-semibold text-ink-bright">{withPosts.length}</span> día{withPosts.length === 1 ? "" : "s"} · próximas dos semanas
+      <div className="border-line flex items-center justify-between gap-3 border-b px-4 py-2.5">
+        <p className="text-ink-muted text-xs">
+          <span className="text-ink-bright font-semibold">{total}</span> publicación
+          {total === 1 ? "" : "es"} en{" "}
+          <span className="text-ink-bright font-semibold">{withPosts.length}</span> día
+          {withPosts.length === 1 ? "" : "s"} · próximas dos semanas
         </p>
         <Button size="sm" variant="secondary" onClick={() => onCreate(cursor)}>
           <Plus className="size-4" /> Programar
         </Button>
       </div>
 
-      <div className="divide-y divide-line-soft">
+      <div className="divide-line-soft divide-y">
         {withPosts.map((d) => {
           const dayPosts = [...(byDay.get(ymd(d)) ?? [])].sort((a, b) =>
             (a.scheduledAt ?? "").localeCompare(b.scheduledAt ?? ""),
@@ -374,17 +416,29 @@ export function AgendaView({ cursor, byDay, onCreate, onSelect, selectedId }: Vi
                     isToday ? "border-brand/50 bg-brand/10" : "border-line-soft bg-panel",
                   )}
                 >
-                  <span className={cn("text-[10px] font-medium uppercase tracking-wide", isToday ? "text-brand" : "text-ink-faint")}>
+                  <span
+                    className={cn(
+                      "text-[10px] font-medium uppercase tracking-wide",
+                      isToday ? "text-brand" : "text-ink-faint",
+                    )}
+                  >
                     {isToday ? "Hoy" : WEEKDAYS_ES[(d.getDay() + 6) % 7]}
                   </span>
-                  <span className={cn("text-2xl font-bold leading-none", isToday ? "text-brand" : "text-ink-bright")}>
+                  <span
+                    className={cn(
+                      "text-2xl font-bold leading-none",
+                      isToday ? "text-brand" : "text-ink-bright",
+                    )}
+                  >
                     {d.getDate()}
                   </span>
-                  <span className="text-[10px] text-ink-faint">{(MONTHS_ES[d.getMonth()] ?? "").slice(0, 3)}</span>
+                  <span className="text-ink-faint text-[10px]">
+                    {(MONTHS_ES[d.getMonth()] ?? "").slice(0, 3)}
+                  </span>
                 </div>
                 <button
                   onClick={() => onCreate(d)}
-                  className="mt-1.5 flex w-full items-center justify-center gap-1 rounded-md py-1 text-[11px] text-ink-faint transition-colors hover:bg-panel-raised hover:text-ink"
+                  className="text-ink-faint hover:bg-panel-raised hover:text-ink mt-1.5 flex w-full items-center justify-center gap-1 rounded-md py-1 text-[11px] transition-colors"
                   title="Programar este día"
                 >
                   <Plus className="size-3" /> Añadir
@@ -395,7 +449,10 @@ export function AgendaView({ cursor, byDay, onCreate, onSelect, selectedId }: Vi
               <div className="flex min-w-0 flex-1 flex-col gap-2">
                 {dayPosts.map((p) => {
                   const ch = CHANNELS[p.channel];
-                  const st = STATUS_STYLE[p.status] ?? { label: p.status, cls: "bg-panel-high text-ink-muted" };
+                  const st = STATUS_STYLE[p.status] ?? {
+                    label: p.status,
+                    cls: "bg-panel-high text-ink-muted",
+                  };
                   const cover = p.attachments?.find((a) => a.url)?.url;
                   return (
                     <button
@@ -411,31 +468,49 @@ export function AgendaView({ cursor, byDay, onCreate, onSelect, selectedId }: Vi
                       <span className="w-1 shrink-0" style={{ background: ch.color }} />
                       <span className="flex min-w-0 flex-1 items-center gap-3 py-2.5 pr-3">
                         {cover ? (
-                          <img src={cover} alt="" className="size-12 shrink-0 rounded-lg object-cover" />
+                          <img
+                            src={cover}
+                            alt=""
+                            className="size-12 shrink-0 rounded-lg object-cover"
+                          />
                         ) : (
-                          <span className="grid size-12 shrink-0 place-items-center rounded-lg bg-panel-raised text-ink-faint">
+                          <span className="bg-panel-raised text-ink-faint grid size-12 shrink-0 place-items-center rounded-lg">
                             <ImageIcon className="size-4" />
                           </span>
                         )}
                         <span className="min-w-0 flex-1">
                           <span className="flex items-center gap-2">
-                            <span className="inline-flex items-center gap-1 text-xs tabular-nums text-ink-muted">
+                            <span className="text-ink-muted inline-flex items-center gap-1 text-xs tabular-nums">
                               <Clock className="size-3" />
                               {p.scheduledAt
-                                ? new Date(p.scheduledAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+                                ? new Date(p.scheduledAt).toLocaleTimeString([], {
+                                    hour: "2-digit",
+                                    minute: "2-digit",
+                                  })
                                 : "—"}
                             </span>
-                            <span className={cn("rounded-full px-1.5 py-px text-[10px] font-medium", st.cls)}>{st.label}</span>
+                            <span
+                              className={cn(
+                                "rounded-full px-1.5 py-px text-[10px] font-medium",
+                                st.cls,
+                              )}
+                            >
+                              {st.label}
+                            </span>
                             {p.campaignName ? (
-                              <span className="truncate rounded-full bg-brand-violet/10 px-1.5 py-px text-[10px] font-medium text-brand-violet">
+                              <span className="bg-brand-violet/10 text-brand-violet truncate rounded-full px-1.5 py-px text-[10px] font-medium">
                                 {p.campaignName}
                               </span>
                             ) : null}
                           </span>
-                          <span className="mt-0.5 block truncate text-sm font-medium text-ink-bright">{p.title}</span>
-                          {p.copy ? <span className="block truncate text-xs text-ink-faint">{p.copy}</span> : null}
+                          <span className="text-ink-bright mt-0.5 block truncate text-sm font-medium">
+                            {p.title}
+                          </span>
+                          {p.copy ? (
+                            <span className="text-ink-faint block truncate text-xs">{p.copy}</span>
+                          ) : null}
                         </span>
-                        <span className="flex shrink-0 items-center gap-1.5 text-[11px] text-ink-muted">
+                        <span className="text-ink-muted flex shrink-0 items-center gap-1.5 text-[11px]">
                           <ChannelChip id={p.channel} />
                           <span className="hidden sm:inline">{ch.name}</span>
                         </span>

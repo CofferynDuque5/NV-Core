@@ -33,14 +33,14 @@ export default function ConfiguracionPage() {
     });
 
   return (
-    <div className="space-y-6">
+    <div className="min-w-0 space-y-6">
       <PageHeader
         eyebrow="Sistema"
         title="Configuración"
         description="Tu marca y sus objetivos, el equipo, redes y web, roles, permisos y auditoría."
       />
 
-      <Tabs value={activeTab} onValueChange={onTabChange}>
+      <Tabs value={activeTab} onValueChange={onTabChange} className="min-w-0">
         <TabsList className="max-w-full justify-start overflow-x-auto">
           <TabsTrigger value="marca">Marca</TabsTrigger>
           <TabsTrigger value="equipo">Equipo</TabsTrigger>
@@ -148,7 +148,7 @@ export default function ConfiguracionPage() {
                         <ScrollText className="size-3.5" />
                       </span>
                       <div className="min-w-0 flex-1">
-                        <span className="text-sm text-ink">
+                        <span className="text-sm text-ink [overflow-wrap:anywhere]">
                           <span className="font-medium">{log.actor}</span>{" "}
                           <span className="text-ink-muted">{log.action}</span>
                           {log.target ? (

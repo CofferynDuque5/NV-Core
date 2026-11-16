@@ -1,17 +1,105 @@
 {
-  "name": "NV Marketing — Business OS",
+  "name": "NV Marketing",
   "short_name": "NV Marketing",
   "description": "Marketing, CRM y automatización para tu negocio. Gestiona campañas, contactos y contenido desde tu teléfono o computadora.",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
-  "orientation": "portrait-primary",
   "background_color": "#0B0D10",
   "theme_color": "#0B0D10",
   "lang": "es",
   "icons": [
-    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
-    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
-    { "src": "/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "id": "/",
+  "categories": [
+    "business",
+    "productivity"
+  ],
+  "display_override": [
+    "standalone",
+    "minimal-ui"
+  ],
+  "shortcuts": [
+    {
+      "name": "Inbox",
+      "short_name": "Inbox",
+      "url": "/?ir=inbox",
+      "icons": [
+        {
+          "src": "/icon-192.png",
+          "sizes": "192x192"
+        }
+      ]
+    },
+    {
+      "name": "Campañas",
+      "short_name": "Campañas",
+      "url": "/?ir=campanas",
+      "icons": [
+        {
+          "src": "/icon-192.png",
+          "sizes": "192x192"
+        }
+      ]
+    },
+    {
+      "name": "Cobros",
+      "short_name": "Cobros",
+      "url": "/?ir=cobros",
+      "icons": [
+        {
+          "src": "/icon-192.png",
+          "sizes": "192x192"
+        }
+      ]
+    }
+  ],
+  "screenshots": [
+    {
+      "src": "/screenshots/movil-inbox.webp",
+      "sizes": "600x1298",
+      "type": "image/webp",
+      "form_factor": "narrow",
+      "label": "Inbox con WhatsApp, Instagram, Facebook y Telegram"
+    },
+    {
+      "src": "/screenshots/movil-cobros.webp",
+      "sizes": "600x1298",
+      "type": "image/webp",
+      "form_factor": "narrow",
+      "label": "Cobros con métodos locales"
+    },
+    {
+      "src": "/screenshots/pc-dashboard.webp",
+      "sizes": "1600x1000",
+      "type": "image/webp",
+      "form_factor": "wide",
+      "label": "Inicio del panel"
+    },
+    {
+      "src": "/screenshots/pc-inbox.webp",
+      "sizes": "1600x1000",
+      "type": "image/webp",
+      "form_factor": "wide",
+      "label": "Inbox unificado"
+    }
   ]
 }

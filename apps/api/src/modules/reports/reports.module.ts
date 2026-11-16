@@ -19,7 +19,7 @@ import {
   DEFAULT_REPORT_TIME_ZONE,
   REPORT_TIME_ZONES,
   formatPaymentAmount,
-  isReportTimeZone,
+  scheduleTimeZone,
   type PaymentCurrency,
   type WeeklyReport,
   type WeeklyReportAttention,
@@ -189,7 +189,9 @@ export class ReportsService implements OnModuleInit, OnModuleDestroy {
     const weekStart = parseWeekStart(week);
     if (!weekStart) throw new NotFoundException("La semana debe empezar en lunes (AAAA-MM-DD).");
     const row = this.prisma.enabled
-      ? await this.prisma.weeklyReport.findUnique({ where: { workspaceSlug_weekStart: { workspaceSlug, weekStart } } })
+      ? await this.prisma.weeklyReport.findUnique({
+          where: { workspaceSlug_weekStart: { workspaceSlug, weekStart } },
+        })
       : null;
     if (!row) throw new NotFoundException("No hay informe para esa semana.");
     return this.map(row);
@@ -207,15 +209,25 @@ export class ReportsService implements OnModuleInit, OnModuleDestroy {
   }
 
   /** Change the zone. Stored reports keep the zone they were cut in; the next ones use the new one. */
-  async updateSettings(workspaceSlug: string, actor: string, input: WeeklyReportSettingsDto): Promise<WeeklyReportSettings> {
-    if (!this.prisma.enabled) return { timeZone: DEFAULT_REPORT_TIME_ZONE };
+  async updateSettings(
+    workspaceSlug: string,
+    actor: string,
+    input: WeeklyReportSettingsDto,
+  ): Promise<WeeklyReportSettings> {
+    if (!this.prisma.enabled)
+      return { timeZone: scheduleTimeZone(null, process.env.SCHEDULE_TIME_ZONE) };
     const row = await this.prisma.workspaceSettings.upsert({
       where: { workspaceSlug },
       create: { workspaceSlug, timeZone: input.timeZone, updatedBy: actor },
       update: { timeZone: input.timeZone, updatedBy: actor },
     });
-    await this.audit.record(workspaceSlug, actor, "report.settings", `Zona horaria del informe: ${row.timeZone}`);
-    return { timeZone: row.timeZone };
+    await this.audit.record(
+      workspaceSlug,
+      actor,
+      "report.settings",
+      `Zona horaria de la marca: ${row.timeZone}`,
+    );
+    return { timeZone: await this.timeZone(workspaceSlug) };
   }
 
   private async timeZone(workspaceSlug: string): Promise<string> {
@@ -223,10 +235,16 @@ export class ReportsService implements OnModuleInit, OnModuleDestroy {
   }
 
   /** Saved zones; workspaces without a valid one fall back to UTC. */
+  /** The brand's zone (the same one its campaign times use): saved, else the deployment default. */
   private async timeZones(slugs: string[]): Promise<Map<string, string>> {
-    if (!this.prisma.enabled || slugs.length === 0) return new Map();
-    const rows = await this.prisma.workspaceSettings.findMany({ where: { workspaceSlug: { in: slugs } } });
-    return new Map(rows.filter((r) => isReportTimeZone(r.timeZone)).map((r) => [r.workspaceSlug, r.timeZone]));
+    const fallback = process.env.SCHEDULE_TIME_ZONE;
+    if (!this.prisma.enabled || slugs.length === 0)
+      return new Map(slugs.map((s) => [s, scheduleTimeZone(null, fallback)]));
+    const rows = await this.prisma.workspaceSettings.findMany({
+      where: { workspaceSlug: { in: slugs } },
+    });
+    const saved = new Map(rows.map((r) => [r.workspaceSlug, r.timeZone]));
+    return new Map(slugs.map((s) => [s, scheduleTimeZone(saved.get(s), fallback)]));
   }
 
   /**
@@ -235,17 +253,30 @@ export class ReportsService implements OnModuleInit, OnModuleDestroy {
    * what needs someone right now. Every number is a DB count of the
    * workspace's own rows.
    */
-  async build(workspaceSlug: string, weekStart: Date, tz: string, until?: Date): Promise<WeeklyReport> {
+  async build(
+    workspaceSlug: string,
+    weekStart: Date,
+    tz: string,
+    until?: Date,
+  ): Promise<WeeklyReport> {
     const week = weekBounds(weekStart, tz);
     const before = weekBounds(new Date(weekStart.getTime() - WEEK_MS), tz);
     const to = until ?? week.to;
     const from = week.from;
     const cur: Range = { gte: from, lt: to };
-    const prev: Range = { gte: before.from, lt: until ? new Date(before.from.getTime() + (to.getTime() - from.getTime())) : before.to };
+    const prev: Range = {
+      gte: before.from,
+      lt: until ? new Date(before.from.getTime() + (to.getTime() - from.getTime())) : before.to,
+    };
     const ws = { workspaceSlug };
     const now = new Date();
 
-    const counters: { key: string; label: string; source: string; count: (r: Range) => Promise<number> }[] = [
+    const counters: {
+      key: string;
+      label: string;
+      source: string;
+      count: (r: Range) => Promise<number>;
+    }[] = [
       {
         key: "contacts",
         label: "Contactos nuevos",
@@ -262,21 +293,30 @@ export class ReportsService implements OnModuleInit, OnModuleDestroy {
         key: "messagesIn",
         label: "Mensajes recibidos",
         source: "Mensajes entrantes del Inbox.",
-        count: (r) => this.prisma.message.count({ where: { direction: "in", conversation: ws, createdAt: r } }),
+        count: (r) =>
+          this.prisma.message.count({ where: { direction: "in", conversation: ws, createdAt: r } }),
       },
       {
         key: "messagesOut",
         label: "Mensajes enviados",
         source: "Respuestas salientes del Inbox (equipo, IA y automatizaciones).",
-        count: (r) => this.prisma.message.count({ where: { direction: "out", conversation: ws, createdAt: r } }),
+        count: (r) =>
+          this.prisma.message.count({
+            where: { direction: "out", conversation: ws, createdAt: r },
+          }),
       },
       {
         key: "postsSent",
         label: "Publicaciones enviadas",
-        source: "Publicaciones en estado «enviada» programadas (o creadas, si no tenían fecha) en la semana.",
+        source:
+          "Publicaciones en estado «enviada» programadas (o creadas, si no tenían fecha) en la semana.",
         count: (r) =>
           this.prisma.post.count({
-            where: { ...ws, status: "sent", OR: [{ scheduledAt: r }, { scheduledAt: null, createdAt: r }] },
+            where: {
+              ...ws,
+              status: "sent",
+              OR: [{ scheduledAt: r }, { scheduledAt: null, createdAt: r }],
+            },
           }),
       },
       {
@@ -288,8 +328,10 @@ export class ReportsService implements OnModuleInit, OnModuleDestroy {
       {
         key: "automationRuns",
         label: "Automatizaciones que actuaron",
-        source: "Ejecuciones de automatizaciones que hicieron algo (no incluye omitidas ni con error).",
-        count: (r) => this.prisma.automationRun.count({ where: { ...ws, status: "ok", startedAt: r } }),
+        source:
+          "Ejecuciones de automatizaciones que hicieron algo (no incluye omitidas ni con error).",
+        count: (r) =>
+          this.prisma.automationRun.count({ where: { ...ws, status: "ok", startedAt: r } }),
       },
       {
         key: "tasksDone",
@@ -342,7 +384,10 @@ export class ReportsService implements OnModuleInit, OnModuleDestroy {
       leadSources: rankLeadSources(leadRows),
       attention,
       payments: mergePaymentTotals(sums(paidNow), sums(paidBefore)),
-      inbox: { ...inbox, messagesIn: values[counters.findIndex((c) => c.key === "messagesIn")] ?? 0 },
+      inbox: {
+        ...inbox,
+        messagesIn: values[counters.findIndex((c) => c.key === "messagesIn")] ?? 0,
+      },
     };
   }
 
@@ -379,13 +424,19 @@ export class ReportsService implements OnModuleInit, OnModuleDestroy {
         take: INBOX_ROWS * 4,
       }),
       this.prisma.contact.findMany({
-        where: { workspaceSlug, phone: { not: null }, NOT: { attribution: { equals: Prisma.DbNull } } },
+        where: {
+          workspaceSlug,
+          phone: { not: null },
+          NOT: { attribution: { equals: Prisma.DbNull } },
+        },
         select: { phone: true },
         orderBy: { createdAt: "desc" },
         take: INBOX_ROWS * 4,
       }),
     ]);
-    const formPhones = new Set(formContacts.map((c) => phoneKey(c.phone)).filter((k): k is string => k !== null));
+    const formPhones = new Set(
+      formContacts.map((c) => phoneKey(c.phone)).filter((k): k is string => k !== null),
+    );
     return summarizeInbox({
       rows,
       previousRows,
@@ -396,7 +447,12 @@ export class ReportsService implements OnModuleInit, OnModuleDestroy {
   }
 
   /** What needs someone: open items now, and failures inside the week. Empty entries are left out. */
-  private async attention(workspaceSlug: string, week: Range, now: Date, tz: string): Promise<WeeklyReportAttention[]> {
+  private async attention(
+    workspaceSlug: string,
+    week: Range,
+    now: Date,
+    tz: string,
+  ): Promise<WeeklyReportAttention[]> {
     const fmtDay = (d: Date) => shortDay(d, tz);
     const ws = { workspaceSlug };
     const overdueWhere = { ...ws, status: { not: "done" }, dueAt: { lt: now } };
@@ -429,25 +485,43 @@ export class ReportsService implements OnModuleInit, OnModuleDestroy {
       overduePay,
     ] = await Promise.all([
       this.prisma.task.count({ where: overdueWhere }),
-      this.prisma.task.findMany({ where: overdueWhere, orderBy: { dueAt: "asc" }, take: ATTENTION_ITEMS }),
+      this.prisma.task.findMany({
+        where: overdueWhere,
+        orderBy: { dueAt: "asc" },
+        take: ATTENTION_ITEMS,
+      }),
       // Open conversations whose latest message is the customer's.
-      this.prisma.$queryRaw<{ id: string; contactName: string; at: Date; total: number }[]>(Prisma.sql`
+      this.prisma.$queryRaw<
+        { id: string; contactName: string; at: Date; total: number }[]
+      >(Prisma.sql`
         SELECT c.id, c."contactName", m."createdAt" AS at, COUNT(*) OVER()::int AS total
         FROM "Conversation" c
         JOIN LATERAL (
           SELECT direction, "createdAt" FROM "Message"
-          WHERE "conversationId" = c.id ORDER BY "createdAt" DESC LIMIT 1
+          WHERE "conversationId" = c.id AND direction <> 'note' ORDER BY "createdAt" DESC LIMIT 1
         ) m ON true
         WHERE c."workspaceSlug" = ${workspaceSlug} AND c.resolved = false AND m.direction = 'in'
         ORDER BY m."createdAt" ASC
         LIMIT ${ATTENTION_ITEMS}
       `),
       this.prisma.conversation.count({ where: humanWhere }),
-      this.prisma.conversation.findMany({ where: humanWhere, orderBy: { createdAt: "asc" }, take: ATTENTION_ITEMS }),
+      this.prisma.conversation.findMany({
+        where: humanWhere,
+        orderBy: { createdAt: "asc" },
+        take: ATTENTION_ITEMS,
+      }),
       this.prisma.post.count({ where: postWhere }),
-      this.prisma.post.findMany({ where: postWhere, orderBy: { createdAt: "desc" }, take: ATTENTION_ITEMS }),
+      this.prisma.post.findMany({
+        where: postWhere,
+        orderBy: { createdAt: "desc" },
+        take: ATTENTION_ITEMS,
+      }),
       this.prisma.sendLog.count({ where: sendWhere }),
-      this.prisma.sendLog.findMany({ where: sendWhere, orderBy: { createdAt: "desc" }, take: ATTENTION_ITEMS }),
+      this.prisma.sendLog.findMany({
+        where: sendWhere,
+        orderBy: { createdAt: "desc" },
+        take: ATTENTION_ITEMS,
+      }),
       this.prisma.automationRun.count({ where: runWhere }),
       this.prisma.automationRun.findMany({
         where: runWhere,
@@ -456,9 +530,17 @@ export class ReportsService implements OnModuleInit, OnModuleDestroy {
         include: { automation: { select: { name: true } } },
       }),
       this.prisma.paymentRequest.count({ where: toVerifyWhere }),
-      this.prisma.paymentRequest.findMany({ where: toVerifyWhere, orderBy: { updatedAt: "asc" }, take: ATTENTION_ITEMS }),
+      this.prisma.paymentRequest.findMany({
+        where: toVerifyWhere,
+        orderBy: { updatedAt: "asc" },
+        take: ATTENTION_ITEMS,
+      }),
       this.prisma.paymentRequest.count({ where: overduePayWhere }),
-      this.prisma.paymentRequest.findMany({ where: overduePayWhere, orderBy: { dueAt: "asc" }, take: ATTENTION_ITEMS }),
+      this.prisma.paymentRequest.findMany({
+        where: overduePayWhere,
+        orderBy: { dueAt: "asc" },
+        take: ATTENTION_ITEMS,
+      }),
     ]);
     const money = (p: { amount: Prisma.Decimal; currency: string }) =>
       formatPaymentAmount(Number(p.amount.toString()), p.currency as PaymentCurrency);
@@ -480,7 +562,11 @@ export class ReportsService implements OnModuleInit, OnModuleDestroy {
         label: "Conversaciones sin responder",
         section: "inbox",
         count: unanswered[0]?.total ?? 0,
-        items: unanswered.map((c) => ({ id: c.id, label: c.contactName, meta: `escribió el ${fmtDay(c.at)}` })),
+        items: unanswered.map((c) => ({
+          id: c.id,
+          label: c.contactName,
+          meta: `escribió el ${fmtDay(c.at)}`,
+        })),
       },
       {
         key: "needsHuman",
@@ -512,7 +598,11 @@ export class ReportsService implements OnModuleInit, OnModuleDestroy {
         label: "Automatizaciones con error",
         section: "automatizaciones",
         count: runsN,
-        items: runs.map((r) => ({ id: r.id, label: r.automation.name, meta: r.error ?? undefined })),
+        items: runs.map((r) => ({
+          id: r.id,
+          label: r.automation.name,
+          meta: r.error ?? undefined,
+        })),
       },
       {
         key: "paymentsToVerify",
@@ -522,7 +612,9 @@ export class ReportsService implements OnModuleInit, OnModuleDestroy {
         items: toVerify.map((p) => ({
           id: p.id,
           label: p.concept,
-          meta: [money(p), p.methodLabel, p.reference ? `ref ${p.reference}` : null].filter(Boolean).join(" · "),
+          meta: [money(p), p.methodLabel, p.reference ? `ref ${p.reference}` : null]
+            .filter(Boolean)
+            .join(" · "),
         })),
       },
       {
@@ -530,13 +622,22 @@ export class ReportsService implements OnModuleInit, OnModuleDestroy {
         label: "Cobros vencidos sin pagar",
         section: "cobros",
         count: overduePayN,
-        items: overduePay.map((p) => ({ id: p.id, label: p.concept, meta: `${money(p)} · vencía ${fmtDay(p.dueAt!)}` })),
+        items: overduePay.map((p) => ({
+          id: p.id,
+          label: p.concept,
+          meta: `${money(p)} · vencía ${fmtDay(p.dueAt!)}`,
+        })),
       },
     ];
     return out.filter((a) => a.count > 0);
   }
 
-  private map(row: { id: string; weekStart: Date; createdAt: Date; data: Prisma.JsonValue }): WeeklyReport {
+  private map(row: {
+    id: string;
+    weekStart: Date;
+    createdAt: Date;
+    data: Prisma.JsonValue;
+  }): WeeklyReport {
     const data = row.data as unknown as WeeklyReport;
     return {
       ...data,
@@ -588,5 +689,9 @@ export class ReportsController {
   }
 }
 
-@Module({ imports: [NotificationsModule], controllers: [ReportsController], providers: [ReportsService] })
+@Module({
+  imports: [NotificationsModule],
+  controllers: [ReportsController],
+  providers: [ReportsService],
+})
 export class ReportsModule {}

@@ -54,3 +54,14 @@ describe("historial helpers", () => {
     expect(searchHistorial(dated, {})).toHaveLength(2);
   });
 });
+
+describe("summarize: envíos en curso", () => {
+  it("un envío «en curso…» no cuenta como error", () => {
+    const rows = [
+      { ok: true, error: null },
+      { ok: false, error: "en curso…" },
+      { ok: false, error: "USER_BANNED_IN_CHANNEL" },
+    ] as unknown as Parameters<typeof summarize>[0];
+    expect(summarize(rows)).toEqual({ total: 3, ok: 1, error: 1 });
+  });
+});

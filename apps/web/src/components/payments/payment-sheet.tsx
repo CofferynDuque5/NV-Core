@@ -1,8 +1,9 @@
 import * as React from "react";
-import { Check, Copy } from "lucide-react";
+import { Check, Copy, FileText } from "lucide-react";
 import {
   PAYMENT_STATUS_LABEL,
   PAYMENT_TRANSITIONS,
+  SALES_PLANS,
   formatPaymentAmount,
   paymentInstructions,
   type PaymentMethod,
@@ -11,6 +12,8 @@ import {
 } from "@nv/domain";
 
 import { useUpdatePayment } from "@/hooks/use-domain-mutations";
+import { useServices } from "@/hooks/use-services";
+import { useWorkspace } from "@/hooks/use-workspace";
 import { useConfirm } from "@/providers/confirm-provider";
 import { errorMessage } from "@/components/entities/form-dialog";
 import { Badge } from "@/components/ui/badge";
@@ -19,7 +22,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Sheet, SheetBody, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
-import { STATUS_BADGE, methodsFor } from "@/lib/payments";
+import { STATUS_BADGE, methodsFor, payerRows } from "@/lib/payments";
+import { toast } from "sonner";
 
 const selectCls =
   "flex h-9 w-full rounded-lg border border-line-soft bg-panel-raised px-3 text-sm text-ink focus-visible:border-brand/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/25";
@@ -35,6 +39,68 @@ const ACTION: Partial<Record<PaymentStatus, Partial<Record<PaymentStatus, string
   pagado: { por_verificar: "Deshacer confirmación" },
   cancelado: { pendiente: "Reabrir cobro" },
 };
+
+/** What the customer sent with a plan payment: how, how much in Bs, who paid, receipt. */
+function PlanPaymentDetails({ payment }: { payment: PaymentRequest }) {
+  const svc = useServices();
+  const ws = useWorkspace();
+  const plan = payment.plan!;
+  const openReceipt = async () => {
+    // Open the tab right away (popup blockers), then point it at the file.
+    const tab = window.open("", "_blank");
+    try {
+      const url = URL.createObjectURL(await svc.payments.receipt(ws.id, payment.id));
+      if (tab) tab.location.href = url;
+      else window.location.href = url;
+      setTimeout(() => URL.revokeObjectURL(url), 60_000);
+    } catch (e) {
+      tab?.close();
+      toast.error(errorMessage(e));
+    }
+  };
+  const rows = [
+    { key: "brand", label: "Marca", value: plan.forWorkspace },
+    ...(plan.planId ? [{ key: "plan", label: "Plan", value: SALES_PLANS[plan.planId].name }] : []),
+    ...(payment.methodLabel ? [{ key: "method", label: "Pagó con", value: payment.methodLabel }] : []),
+    ...(plan.localAmount != null && plan.localCurrency
+      ? [
+          {
+            key: "local",
+            label: "Monto a recibir",
+            value: `${formatPaymentAmount(plan.localAmount, plan.localCurrency as PaymentRequest["currency"])}${plan.rate ? ` (tasa ${plan.rate} Bs/USDT)` : ""}`,
+          },
+        ]
+      : []),
+    ...(payment.reference ? [{ key: "ref", label: "Referencia", value: payment.reference }] : []),
+    ...payerRows(plan.payer),
+    { key: "by", label: "Cuenta que envió", value: payment.createdBy },
+  ];
+  return (
+    <section className="space-y-2 rounded-xl border border-line-soft p-3" data-testid="payment-plan-details">
+      <h3 className="text-sm font-semibold text-ink-bright">Datos que envió el cliente</h3>
+      <dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-1 text-sm">
+        {rows.map((r) => (
+          <React.Fragment key={r.key}>
+            <dt className="text-ink-faint">{r.label}</dt>
+            <dd className="break-all text-ink" data-testid={`payment-plan-${r.key}`}>
+              {r.value}
+            </dd>
+          </React.Fragment>
+        ))}
+      </dl>
+      {plan.hasReceipt ? (
+        <Button size="sm" variant="secondary" onClick={() => void openReceipt()} data-testid="payment-receipt">
+          <FileText className="size-4" /> Ver comprobante
+        </Button>
+      ) : (
+        <p className="text-xs text-state-warning">Este pago no trae comprobante.</p>
+      )}
+      <p className="text-xs text-ink-muted">
+        Revisa en tu banco o billetera que llegó ese monto con esa referencia antes de confirmar. Al confirmarlo, la marca queda activa.
+      </p>
+    </section>
+  );
+}
 
 /**
  * One payment request: the message to send the customer (copy, never sent by
@@ -165,9 +231,11 @@ export function PaymentSheet({
           {payment.status === "rechazado" && payment.rejectReason ? (
             <p className="text-xs text-state-danger">Rechazado: {payment.rejectReason}</p>
           ) : null}
-          {payment.note ? <p className="text-xs text-ink-muted">Nota: {payment.note}</p> : null}
+          {payment.note && !payment.plan ? <p className="text-xs text-ink-muted">Nota: {payment.note}</p> : null}
 
-          {!closed ? (
+          {payment.plan ? <PlanPaymentDetails payment={payment} /> : null}
+
+          {!closed && !payment.plan ? (
             <section className="space-y-2" data-testid="payment-message">
               <h3 className="text-sm font-semibold text-ink-bright">Mensaje para el cliente</h3>
               {offer.length === 0 ? (

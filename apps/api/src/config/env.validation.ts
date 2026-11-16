@@ -20,7 +20,7 @@ export const envSchema = z.object({
   ENCRYPTION_KEY: z.string().min(32).optional(),
   // Access token lifetime (short). Refresh tokens extend the session.
   JWT_EXPIRES_IN: z.string().default("15m"),
-  REFRESH_TOKEN_TTL_DAYS: z.coerce.number().int().positive().default(7),
+  REFRESH_TOKEN_TTL_DAYS: z.coerce.number().int().positive().default(30),
   // Allow public registration to claim Owner of an unclaimed built-in workspace.
   // Off by default (secure); "true"/"1" to enable open self-serve claiming.
   ALLOW_OPEN_WORKSPACE_CLAIM: z.string().optional(),
@@ -110,14 +110,44 @@ export const envSchema = z.object({
   // Manual plan payment after the trial: the operator's own brand whose
   // Cobros methods customers pay to, and the price of each paid period.
   NV_BILLING_WORKSPACE: z.string().optional(),
+  // Pro (PLAN_PRICE, default 19) and Básico (PLAN_BASIC_PRICE, default 7).
   PLAN_PRICE: z.coerce.number().positive().max(1_000_000).optional(),
+  PLAN_BASIC_PRICE: z.coerce.number().positive().max(1_000_000).optional(),
   PLAN_CURRENCY: z.enum(["COP", "VES", "PEN", "USD", "USDT"]).optional(),
   PLAN_DAYS: z.coerce.number().int().min(1).max(400).optional(),
+  // Una prueba gratis por dispositivo: además del id del navegador, se compara
+  // la huella del navegador + IP de la última semana. false = solo id y cuenta.
+  TRIAL_FINGERPRINT_CHECK: z
+    .enum(["true", "false"])
+    .default("true")
+    .transform((v) => v === "true"),
+  // Comprobantes de pago de planes: carpeta PRIVADA (nunca se sirve en público).
+  RECEIPTS_DIR: z.string().default("data/receipts"),
+  // Tasa USDT→bolívares para los métodos en VES. Vacía = la del día (mediana de
+  // ofertas de Binance P2P, se refresca cada 30 min). Con un número, se usa ese.
+  USDT_VES_RATE: z.coerce.number().positive().max(100_000_000).optional(),
+  // false = no consultar Binance (solo USDT_VES_RATE, o sin tasa).
+  USDT_RATE_AUTO: z
+    .enum(["true", "false"])
+    .default("true")
+    .transform((v) => v === "true"),
+  // WhatsApp del operador (solo números, con código de país) al que llega cada
+  // pago de plan, enviado desde el WhatsApp conectado en NV_BILLING_WORKSPACE.
+  NV_ADMIN_WHATSAPP: z.string().regex(/^\+?\d{8,15}$/, "NV_ADMIN_WHATSAPP: solo dígitos con código de país").optional(),
   CLOUDINARY_URL: z.string().optional(),
   // Alternativa de hosting de imágenes (https://api.imgbb.com). Solo imágenes.
   IMGBB_API_KEY: z.string().optional(),
+  // Correo saliente (verificación, recuperar contraseña, invitaciones).
+  // Gratis: el buzón de tu propio cPanel por SMTP (SMTP_HOST=mail.tudominio.com,
+  // SMTP_USER=el correo, SMTP_PASS=su contraseña). Si no hay SMTP se usa Resend
+  // (RESEND_API_KEY); sin ninguno, no se envía nada.
+  SMTP_HOST: z.string().optional(),
+  SMTP_PORT: z.coerce.number().int().min(1).max(65535).default(465),
+  SMTP_USER: z.string().optional(),
+  SMTP_PASS: z.string().optional(),
   RESEND_API_KEY: z.string().optional(),
-  MAIL_FROM: z.string().default("NV Marketing <onboarding@resend.dev>"),
+  // Remitente. Sin MAIL_FROM: «NV Marketing <SMTP_USER>» o el de pruebas de Resend.
+  MAIL_FROM: z.string().optional(),
 });
 
 export type Env = z.infer<typeof envSchema>;

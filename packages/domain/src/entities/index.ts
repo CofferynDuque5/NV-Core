@@ -21,6 +21,7 @@ import type {
   SegmentOperator,
   WorkspaceKind,
 } from "../enums";
+import type { SalesPlanId } from "../config/sales-plans";
 
 /**
  * Domain entities.
@@ -111,6 +112,22 @@ export interface CampaignAttachment {
   path?: string;
 }
 
+/**
+ * One extra message of a campaign, usually one product: its own text (with
+ * {{precio}} from its own prices) and its own image. Sent to every target
+ * group after the main message, a few seconds apart.
+ */
+export interface CampaignItem {
+  /** Tienda product it came from (null = written by hand). */
+  productId?: string | null;
+  /** Short name shown in the panel and in the Historial. */
+  name: string;
+  text: string;
+  attachments?: CampaignAttachment[];
+  /** Price per currency for {{precio}} in this message. */
+  prices?: Record<string, string>;
+}
+
 export interface Campaign {
   id: string;
   name: string;
@@ -146,11 +163,30 @@ export interface Campaign {
   rotateAttachments?: boolean;
   /** Ids of the WhatsApp groups this campaign targets. */
   targetGroups?: string[];
+  /** WhatsApp numbers (lines) it sends from; empty = every number of the brand. */
+  waLines?: number[];
+  /** Telegram accounts (lines) it sends from; empty = every account of the brand. */
+  tgLines?: number[];
+  /** Extra messages, one per product, each with its own text and image. */
+  items?: CampaignItem[];
   /** Price per currency for {{precio}}: { VES: "350", COP: "40.000" }. */
   prices?: Record<string, string>;
   /** Add the brand links + NV Marketing credit to group messages. */
   addFooter?: boolean;
+  /** Category the team files it under; null = «Sin categoría». */
+  category?: string | null;
   lastRunAt?: string | null;
+  /** Batches: after `batchSize` groups, pause `batchPauseMin` minutes (null = default pacing). */
+  batchSize?: number | null;
+  batchPauseMin?: number | null;
+  /** Groups waiting for their sending hours, and when they go. */
+  pendingGroups?: number;
+  pendingAt?: string | null;
+  /** The next scheduled send waiting on «Confirmar» / «No enviar». */
+  confirmSlot?: string | null;
+  confirmState?: "pending" | "confirmed" | "skipped" | null;
+  /** When that send happens. */
+  confirmFor?: string | null;
 }
 
 export interface Post {
@@ -204,6 +240,10 @@ export interface Contact {
   consentSource?: string;
   /** Where the contact first came from (forms and funnels only). */
   attribution?: LeadAttribution;
+  /** «YYYY-MM-DD» or «MM-DD» when the year is unknown. */
+  birthday?: string;
+  /** Values of the brand's custom fields, by field key. */
+  custom?: Record<string, string>;
 }
 
 /**
@@ -243,9 +283,13 @@ export interface AttributionInput {
 
 /** Result of a bulk contact CSV import. */
 export interface ContactImportResult {
+  /** Created (or, in a preview, that would be created). */
   created: number;
+  /** Already in Contactos (same email or phone) or repeated in the file. */
   skipped: number;
   errors: string[];
+  /** true when nothing was saved (preview). */
+  dryRun?: boolean;
 }
 
 export interface Group {
@@ -262,6 +306,8 @@ export interface Group {
   avatarHue?: number;
   /** WhatsApp group JID (present when synced from Baileys). */
   remoteJid?: string;
+  /** The brand's WhatsApp number / Telegram account (line) that is in it and sends to it. */
+  line?: number;
   /** True when populated from a WhatsApp sync. */
   synced?: boolean;
   /** «Apartado»: campaigns never post here. */
@@ -282,6 +328,16 @@ export interface Group {
   /** Creator's WhatsApp id (read on sync). */
   ownerJid?: string | null;
   rulesCheckedAt?: string | null;
+  /** Last campaign send to this group (any result) and whether it went out. */
+  lastSentAt?: string | null;
+  lastSendOk?: boolean | null;
+  /** Nobody wrote in it for 30 days (WhatsApp/Telegram groups seen by the connected session). */
+  inactive?: boolean;
+  /** Own sending hours «HH:MM» (brand zone); unset = the brand's hours. */
+  sendFrom?: string | null;
+  sendUntil?: string | null;
+  /** Most campaign messages per day; unset = the brand's limit. */
+  maxPerDay?: number | null;
 }
 
 /** Group fields the user edits to decide where campaigns go. */
@@ -610,8 +666,8 @@ export interface AutomationTestResult {
 export interface AutomationRun {
   id: string;
   /** "message" = incoming message; "resume" = continued after a wait step. */
-  /** "inactive" = the contact went N days without writing. */
-  trigger: "message" | "resume" | "inactive";
+  /** "inactive" = the contact went N days without writing; "birthday" = it is their birthday. */
+  trigger: "message" | "resume" | "inactive" | "birthday";
   contactHandle: string;
   contactName?: string;
   /** ok: did something · skipped: nothing to do · waiting: paused on a wait · error: failed. */
@@ -689,14 +745,69 @@ export interface Conversation {
   /** Triage labels. */
   labels?: string[];
   resolved: boolean;
+  /** Open chat whose last message is from the contact: when that message arrived (nobody has answered yet). */
+  waitingSince?: string;
+  /** Minutes from the contact's first message to the team's first answer (null = not answered yet). */
+  firstReplyMins?: number | null;
+  /** True when contactName is the name saved in the brand's own WhatsApp. */
+  savedName?: boolean;
+}
+
+/** What the panel polls to ring when a chat message arrives. */
+export interface InboxPulse {
+  /** Unread messages in all chats of the brand. */
+  unread: number;
+  /** Newest message a contact sent. */
+  latest: { id: string; conversationId: string; contactName: string; channel: ChannelId; text: string; at: string } | null;
+}
+
+/** Kind of attachment in a chat message. */
+export type ChatMediaKind = "image" | "video" | "audio" | "voice" | "sticker" | "document";
+
+/** Attachment of a chat message (photo, video, audio, voice note, sticker or document). */
+export interface ChatMedia {
+  kind: ChatMediaKind;
+  mime: string;
+  /** Bytes. */
+  size: number;
+  /** File name (documents). */
+  name?: string;
+  /** Length of audio/video in seconds. */
+  seconds?: number;
+  /** Private link valid for a few hours, only for members of the brand; absent while not downloaded. */
+  url?: string;
+  /** Why the file is not available (too big, expired on WhatsApp…). */
+  unavailable?: string;
 }
 
 export interface Message {
   id: string;
   conversationId: string;
-  direction: "in" | "out";
+  /** "note" = internal team note: shown only in the panel, never sent to the contact. */
+  direction: "in" | "out" | "note";
   text: string;
   at: string;
+  /** Team member who wrote the note (email). */
+  author?: string;
+  /** Photo, audio, video or document attached to the message. */
+  media?: ChatMedia;
+}
+
+/** Inbox saved reply. {{nombre}}, {{nombre_completo}}, {{saludo}}, {{fecha}} and {{nombre_marca}} are filled in the chat. */
+export interface QuickReply {
+  id: string;
+  title: string;
+  text: string;
+}
+
+/** «Confirmar» / «No enviar» on the notice before a scheduled send. */
+export interface NotificationAction {
+  type: "campaign-confirm";
+  campaignId: string;
+  slot: string;
+  state: "pending" | "confirmed" | "skipped";
+  /** Who answered, when answered. */
+  by?: string;
 }
 
 export interface Notification {
@@ -706,6 +817,8 @@ export interface Notification {
   meta?: string;
   /** True when addressed to the current member only (e.g. a task assignment). */
   personal?: boolean;
+  /** Buttons the notice offers (a campaign about to be sent). */
+  actions?: NotificationAction | null;
   read: boolean;
   createdAt: string;
 }
@@ -932,9 +1045,40 @@ export interface PaymentRequest {
   paidAt?: string;
   /** Email of who confirmed it. */
   verifiedBy?: string;
+  /** Set when a customer paid a plan from the panel (billing brand only). */
+  plan?: PaymentPlanDetails;
   createdBy: string;
   createdAt: string;
   updatedAt: string;
+}
+
+/** What a customer sent with a plan payment: who paid, how much in Bs, receipt. */
+export interface PaymentPlanDetails {
+  /** Brand the plan is for. */
+  forWorkspace: string;
+  planId?: SalesPlanId;
+  /** Payer details (keys from planPayerFields). */
+  payer: Record<string, string>;
+  hasReceipt: boolean;
+  localAmount?: number;
+  localCurrency?: string;
+  rate?: number;
+}
+
+/** Whether a plan payment can reach the operator's WhatsApp, and why not. */
+export interface WhatsappAlertStatus {
+  /** Number the alert goes to (NV_ADMIN_WHATSAPP), or null when not set. */
+  to: string | null;
+  /** Brand whose WhatsApp sends it (NV_BILLING_WORKSPACE), or "" when not set. */
+  billingWorkspace: string;
+  /** That brand has a WhatsApp connected right now. */
+  connected: boolean;
+  /** Number connected in that brand (the sender). */
+  from: string | null;
+  /** Everything is in place to send. */
+  ready: boolean;
+  /** What is missing or wrong, in plain words (null when ready and fine). */
+  problem: string | null;
 }
 
 /** A team to-do on the workspace task board. */
@@ -1097,16 +1241,35 @@ export interface AccessPlan {
   days: number;
 }
 
+/** One plan the brand can pay for, with the operator's price. */
+export interface AccessPlanOption extends AccessPlan {
+  id: SalesPlanId;
+}
+
 /** The brand's own last plan payment, as the customer sees it. */
 export interface AccessPayment {
   id: string;
+  /** Plan this payment is for (older payments: none = Pro). */
+  planId?: SalesPlanId;
   status: PaymentStatus;
   amount: number;
   currency: PaymentCurrency;
   methodLabel?: string;
   reference?: string;
   rejectReason?: string;
+  /** What was paid in the method's own money (e.g. bolívares), when it differs. */
+  localAmount?: number;
+  localCurrency?: string;
   createdAt: string;
+}
+
+/** USDT price in bolívares used to quote Venezuelan methods. */
+export interface UsdtRate {
+  /** Bolívares per USDT. */
+  rate: number;
+  /** "binance" = median of Binance P2P offers; "manual" = set by the operator. */
+  source: "binance" | "manual";
+  at: string;
 }
 
 /**
@@ -1114,21 +1277,59 @@ export interface AccessPayment {
  * operator has not set a billing brand with active payment methods yet.
  */
 export interface AccessOverview extends WorkspaceAccess {
+  /** Price of Pro (kept for older panels). */
   plan: AccessPlan;
+  /** Every plan with its price, cheapest first. */
+  plans: AccessPlanOption[];
+  /** Plan in force: the paid one, or Pro while on the trial. Absent when unlimited. */
+  planId?: SalesPlanId;
   methods: PaymentMethod[];
   payment?: AccessPayment;
+  /** Today's USDT rate in bolívares (absent when it couldn't be fetched). */
+  vesRate?: UsdtRate;
+  /** The trial's one campaign send was already used. */
+  trialSendUsed?: boolean;
+  /** No trial: this device or account already had one. */
+  trialDenied?: boolean;
 }
 
 export interface AccessPaymentInput {
+  /** Plan being paid for (default Pro). */
+  planId?: SalesPlanId;
   methodId: string;
   reference: string;
-  note?: string;
+  /** Payer details (see planPayerFields). */
+  payer: Record<string, string>;
+  /** Photo or PDF of the payment. */
+  receipt: File;
+}
+
+/** A plan payment waiting for (or past) the operator's approval. */
+export interface PlanPaymentReview {
+  id: string;
+  forWorkspace: string;
+  planId?: SalesPlanId;
+  status: PaymentStatus;
+  amount: number;
+  currency: PaymentCurrency;
+  localAmount?: number;
+  localCurrency?: string;
+  rate?: number;
+  methodLabel?: string;
+  reference?: string;
+  payer: Record<string, string>;
+  hasReceipt: boolean;
+  rejectReason?: string;
+  createdBy: string;
+  createdAt: string;
 }
 
 /** One brand on a trial or paid plan, for the platform admin. */
 export interface AdminAccessRow extends WorkspaceAccess {
   workspaceSlug: string;
   createdAt: string;
+  /** Plan in force (Pro during the trial). */
+  planId?: SalesPlanId;
 }
 
 /** Example records older versions loaded into new brands, still present. */
@@ -1208,4 +1409,41 @@ export interface AdminLoginEvent {
 export interface AdminLogins {
   users: AdminLoginUser[];
   events: AdminLoginEvent[];
+}
+
+/** One visit to the panel (a browser tab), newest first. */
+export interface AdminPanelSession {
+  id: string;
+  userId: string;
+  email: string;
+  name: string;
+  /** The shared «Ver demo» account. */
+  demo: boolean;
+  /** "Chrome · Windows". */
+  device: string;
+  deviceKind: "movil" | "tablet" | "computadora";
+  ip: string | null;
+  workspaceSlug: string | null;
+  lastPath: string | null;
+  pageViews: number;
+  /** Pages seen per section key ("campanas", "inbox", …). */
+  sections: Record<string, number>;
+  startedAt: string;
+  lastAt: string;
+}
+
+/** What the panel tab reports about itself. */
+export interface PanelPing {
+  /** Random id of this browser tab's visit (8–40 letters, digits, - or _). */
+  sessionId: string;
+  /** Current route, e.g. "/w/mi-marca/campanas". */
+  path: string;
+}
+
+/** Panel usage over the chosen period (super-admin «Usuarios y actividad»). */
+export interface AdminActivity {
+  since: string;
+  sessions: AdminPanelSession[];
+  /** Wrong password tries on real accounts in the period. */
+  failedLogins: number;
 }

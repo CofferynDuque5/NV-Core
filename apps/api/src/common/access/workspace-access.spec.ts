@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { OPEN_WHEN_EXPIRED, accessState, extendPaidUntil, routeSection } from "./workspace-access";
+import { OPEN_WHEN_EXPIRED, accessState, effectivePlan, extendPaidUntil, planLimits, routeSection } from "./workspace-access";
 
 const now = new Date("2026-10-27T12:00:00Z");
 const h = (n: number) => new Date(now.getTime() + n * 3_600_000);
@@ -43,5 +43,29 @@ describe("routeSection", () => {
 
   it("solo deja abiertos el plan y la facturación", () => {
     expect([...OPEN_WHEN_EXPIRED].sort()).toEqual(["access", "billing"]);
+  });
+});
+
+describe("effectivePlan / planLimits", () => {
+  const past = new Date(now.getTime() - 3_600_000);
+  const future = new Date(now.getTime() + 86_400_000);
+
+  it("sin fila no hay plan ni límites", () => {
+    expect(effectivePlan(null, now)).toBeUndefined();
+    expect(planLimits(null, now)).toBeUndefined();
+  });
+
+  it("la prueba tiene todo lo de Pro", () => {
+    expect(effectivePlan({ trialEndsAt: future, paidUntil: null }, now)).toBe("pro");
+  });
+
+  it("pagado: el plan elegido; pagos de antes de los planes son Pro", () => {
+    expect(effectivePlan({ trialEndsAt: past, paidUntil: future, planId: "basico" }, now)).toBe("basico");
+    expect(effectivePlan({ trialEndsAt: past, paidUntil: future, planId: null }, now)).toBe("pro");
+    expect(planLimits({ trialEndsAt: past, paidUntil: future, planId: "basico" }, now)).toEqual({
+      whatsappNumbers: 1,
+      telegramAccounts: 1,
+      brands: 1,
+    });
   });
 });

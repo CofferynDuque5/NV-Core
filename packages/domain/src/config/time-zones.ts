@@ -26,3 +26,32 @@ export function isReportTimeZone(v: unknown): v is ReportTimeZone {
 export function reportTimeZoneLabel(id: string | undefined): string {
   return REPORT_TIME_ZONES.find((z) => z.id === id)?.label ?? "UTC (hora universal)";
 }
+
+/**
+ * Zone used when a brand never picked one for its campaign times. The brands
+ * sell in Venezuela, Colombia and Peru; the server's own clock (often a US or
+ * UTC host) sent campaigns hours off. SCHEDULE_TIME_ZONE changes it.
+ */
+export const DEFAULT_SCHEDULE_TIME_ZONE: ReportTimeZone = "America/Caracas";
+
+/**
+ * The zone a brand's daily/weekly campaign times are read in: the zone the
+ * brand saved, unless it is still the column default «UTC» (never chosen),
+ * then the deployment default, then {@link DEFAULT_SCHEDULE_TIME_ZONE}.
+ */
+export function scheduleTimeZone(saved?: string | null, deploymentDefault?: string | null): string {
+  if (saved && saved !== "UTC" && isReportTimeZone(saved)) return saved;
+  const fallback = deploymentDefault?.trim();
+  if (fallback && isValidTimeZone(fallback)) return fallback;
+  return DEFAULT_SCHEDULE_TIME_ZONE;
+}
+
+/** Whether the runtime knows `tz` (an IANA zone such as «America/Caracas»). */
+export function isValidTimeZone(tz: string): boolean {
+  try {
+    new Intl.DateTimeFormat("en-US", { timeZone: tz });
+    return true;
+  } catch {
+    return false;
+  }
+}

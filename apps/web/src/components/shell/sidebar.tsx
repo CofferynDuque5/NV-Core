@@ -1,73 +1,64 @@
 import { Link, useLocation } from "react-router-dom";
-import { ChevronLeft, ChevronsUpDown } from "lucide-react";
+import { ChevronLeft, ChevronsUpDown, Lock } from "lucide-react";
+import { initialsOf } from "@nv/domain";
 
 import { cn } from "@/lib/utils";
 import { BrandMark } from "./brand-mark";
 import { useUiStore } from "@/stores/ui-store";
 import { useAuthStore } from "@/stores/auth-store";
 import { useWorkspace } from "@/hooks/use-workspace";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { getNavIcon } from "./sidebar-icon";
 import { navSectionsFor } from "@/lib/goal-nav";
+import { usePlanLocks } from "@/hooks/use-plan-locks";
 
 export function Sidebar({ onOpenSwitcher }: { onOpenSwitcher: () => void }) {
   const collapsed = useUiStore((s) => s.navCollapsed);
   const toggleNav = useUiStore((s) => s.toggleNav);
   const user = useAuthStore((s) => s.user);
   const ws = useWorkspace();
+  const locks = usePlanLocks(ws.slug) as string[];
   const { pathname } = useLocation();
 
-  const userInitials = user
-    ? user.name
-        .split(" ")
-        .map((w) => w[0])
-        .filter(Boolean)
-        .slice(0, 2)
-        .join("")
-        .toUpperCase()
-    : "NV";
+  const userInitials = user ? initialsOf(user.name) : "NV";
 
   return (
     <aside
       className={cn(
-        "sticky top-0 z-30 hidden h-screen flex-col border-r border-line bg-nav transition-[width] duration-200 lg:flex",
+        "border-line bg-nav sticky top-0 z-30 hidden h-screen flex-col border-r transition-[width] duration-200 lg:flex",
         collapsed ? "w-16" : "w-[248px]",
       )}
     >
       {/* Header */}
       <div
         className={cn(
-          "flex h-[57px] shrink-0 items-center gap-2.5 border-b border-line px-3.5",
+          "border-line flex h-[57px] shrink-0 items-center gap-2.5 border-b px-3.5",
           collapsed && "justify-center",
         )}
       >
         <button
           onClick={toggleNav}
           title="Expandir / colapsar"
-          className="grid size-8 shrink-0 place-items-center rounded-[9px] bg-gradient-to-br from-brand to-brand-violet shadow-brand"
+          className="from-brand to-brand-violet shadow-brand grid size-8 shrink-0 place-items-center rounded-[9px] bg-gradient-to-br"
         >
           <BrandMark size={19} />
         </button>
         {!collapsed ? (
           <>
             <div className="min-w-0 flex-1 leading-none">
-              <div className="font-display text-lg font-semibold tracking-tight nv-gradient-text">
+              <div className="font-display nv-gradient-text text-lg font-semibold tracking-tight">
                 NV Marketing
               </div>
-              <div className="mt-0.5 text-[8.5px] font-semibold tracking-[0.22em] text-ink-faint">
-                BUSINESS OS
+              <div className="text-ink-faint mt-0.5 text-[8.5px] font-semibold tracking-[0.22em]">
+                PANEL DE VENTAS
               </div>
             </div>
             <button
               onClick={toggleNav}
               title="Colapsar"
-              className="grid size-6 shrink-0 place-items-center rounded-md border border-line-strong bg-panel-raised hover:bg-secondary"
+              className="border-line-strong bg-panel-raised hover:bg-secondary grid size-6 shrink-0 place-items-center rounded-md border"
             >
-              <ChevronLeft className="size-3.5 text-ink-muted" />
+              <ChevronLeft className="text-ink-muted size-3.5" />
             </button>
           </>
         ) : null}
@@ -79,7 +70,7 @@ export function Sidebar({ onOpenSwitcher }: { onOpenSwitcher: () => void }) {
           onClick={onOpenSwitcher}
           title="Cambiar de workspace"
           className={cn(
-            "flex w-full items-center gap-2.5 rounded-[10px] border border-line-soft bg-panel px-2.5 py-2 text-left transition-colors hover:border-line-bright",
+            "border-line-soft bg-panel hover:border-line-bright flex w-full items-center gap-2.5 rounded-[10px] border px-2.5 py-2 text-left transition-colors",
             collapsed && "justify-center px-0",
           )}
         >
@@ -92,10 +83,10 @@ export function Sidebar({ onOpenSwitcher }: { onOpenSwitcher: () => void }) {
           {!collapsed ? (
             <>
               <span className="min-w-0 flex-1 leading-tight">
-                <span className="block truncate text-xs font-bold text-ink">{ws.name}</span>
-                <span className="block truncate text-[10px] text-ink-faint">{ws.tagline}</span>
+                <span className="text-ink block truncate text-xs font-bold">{ws.name}</span>
+                <span className="text-ink-faint block truncate text-[10px]">{ws.tagline}</span>
               </span>
-              <ChevronsUpDown className="size-3.5 shrink-0 text-ink-faint" />
+              <ChevronsUpDown className="text-ink-faint size-3.5 shrink-0" />
             </>
           ) : null}
         </button>
@@ -106,11 +97,11 @@ export function Sidebar({ onOpenSwitcher }: { onOpenSwitcher: () => void }) {
         {navSectionsFor(ws.goals).map((section) => (
           <div key={section.label}>
             {!collapsed ? (
-              <div className="px-2 pb-1.5 pt-1 text-[10px] font-semibold tracking-[0.16em] text-ink-faint">
+              <div className="text-ink-faint px-2 pb-1.5 pt-1 text-[10px] font-semibold tracking-[0.16em]">
                 {section.label}
               </div>
             ) : (
-              <div className="mx-2 mb-1.5 mt-1 h-px bg-line" />
+              <div className="bg-line mx-2 mb-1.5 mt-1 h-px" />
             )}
             <ul className="space-y-0.5">
               {section.items.map((item) => {
@@ -125,12 +116,12 @@ export function Sidebar({ onOpenSwitcher }: { onOpenSwitcher: () => void }) {
                       "group relative flex items-center gap-2.5 rounded-[10px] px-2 py-2 text-[13px] font-medium transition-all",
                       collapsed && "justify-center px-0",
                       active
-                        ? "bg-gradient-to-r from-brand/18 to-brand-violet/10 text-ink-bright ring-1 ring-inset ring-brand/25 shadow-[0_6px_18px_-12px_rgba(124,124,240,0.8)]"
+                        ? "from-brand/18 to-brand-violet/10 text-ink-bright ring-brand/25 bg-gradient-to-r shadow-[0_6px_18px_-12px_rgba(124,124,240,0.8)] ring-1 ring-inset"
                         : "text-ink-soft hover:bg-panel-raised hover:text-ink",
                     )}
                   >
                     {active && !collapsed ? (
-                      <span className="absolute left-0 top-1/2 h-5 w-1 -translate-y-1/2 rounded-r-full nv-brand-gradient" />
+                      <span className="nv-brand-gradient absolute left-0 top-1/2 h-5 w-1 -translate-y-1/2 rounded-r-full" />
                     ) : null}
                     <Icon
                       className={cn(
@@ -139,6 +130,13 @@ export function Sidebar({ onOpenSwitcher }: { onOpenSwitcher: () => void }) {
                       )}
                     />
                     {!collapsed ? <span className="truncate">{item.label}</span> : null}
+                    {!collapsed && locks.includes(item.module) ? (
+                      <Lock
+                        className="text-ink-faint ml-auto size-3.5 shrink-0"
+                        aria-label="Solo en el plan Pro"
+                        data-testid={`nav-lock-${item.module}`}
+                      />
+                    ) : null}
                   </Link>
                 );
                 return (
@@ -160,22 +158,22 @@ export function Sidebar({ onOpenSwitcher }: { onOpenSwitcher: () => void }) {
       </nav>
 
       {/* Footer / user */}
-      <div className="border-t border-line p-2.5">
+      <div className="border-line border-t p-2.5">
         <div
           className={cn(
             "flex items-center gap-2.5 rounded-[10px] px-2 py-1.5",
             collapsed && "justify-center px-0",
           )}
         >
-          <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-gradient-to-br from-brand to-brand-violet text-[11px] font-bold text-white">
+          <span className="from-brand to-brand-violet grid size-8 shrink-0 place-items-center rounded-lg bg-gradient-to-br text-[11px] font-bold text-white">
             {userInitials}
           </span>
           {!collapsed ? (
             <div className="min-w-0 flex-1 leading-tight">
-              <div className="truncate text-xs font-semibold text-ink">
+              <div className="text-ink truncate text-xs font-semibold">
                 {user ? user.name : "Tu cuenta"}
               </div>
-              <div className="truncate text-[10px] text-ink-faint">
+              <div className="text-ink-faint truncate text-[10px]">
                 {user ? user.email : "Sin sesión iniciada"}
               </div>
             </div>

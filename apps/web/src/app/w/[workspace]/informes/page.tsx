@@ -20,7 +20,11 @@ import {
 
 import { REPORT_TIME_ZONES, reportTimeZoneLabel, type WeeklyReportInbox } from "@nv/domain";
 
-import { useWeeklyReport, useWeeklyReportSettings, useWeeklyReports } from "@/hooks/use-domain-data";
+import {
+  useWeeklyReport,
+  useWeeklyReportSettings,
+  useWeeklyReports,
+} from "@/hooks/use-domain-data";
 import { useUpdateWeeklyReportSettings } from "@/hooks/use-domain-mutations";
 import { useAuthStore } from "@/stores/auth-store";
 import { useWorkspace } from "@/hooks/use-workspace";
@@ -84,7 +88,7 @@ export default function InformesPage() {
         actions={
           <div className="flex flex-wrap items-center gap-2 print:hidden">
             <label htmlFor="report-zone" className="sr-only">
-              Zona horaria
+              Zona horaria de la marca
             </label>
             <select
               id="report-zone"
@@ -92,9 +96,13 @@ export default function InformesPage() {
               value={settings.data?.timeZone ?? ""}
               onChange={(e) => saveSettings.mutate({ timeZone: e.target.value })}
               disabled={!settings.isSuccess || !canEditZone || saveSettings.isPending}
-              title={canEditZone ? "Las semanas empiezan el lunes a medianoche en esta zona" : "Solo Owner o Admin pueden cambiarla"}
+              title={
+                canEditZone
+                  ? "Zona de la marca: las semanas empiezan el lunes a medianoche y las campañas usan estas horas"
+                  : "Solo Owner o Admin pueden cambiarla"
+              }
             >
-              {REPORT_TIME_ZONES.map((z) => (
+              {REPORT_TIME_ZONES.filter((z) => z.id !== "UTC").map((z) => (
                 <option key={z.id} value={z.id}>
                   {z.label}
                 </option>
@@ -141,16 +149,21 @@ export default function InformesPage() {
       {r ? (
         <div
           data-testid="report-provenance"
-          className="nv-panel flex flex-wrap items-center gap-x-4 gap-y-1 px-4 py-2.5 text-xs text-ink-muted"
+          className="nv-panel text-ink-muted flex flex-wrap items-center gap-x-4 gap-y-1 px-4 py-2.5 text-xs"
         >
-          <span className="text-sm font-medium text-ink-bright">Semana del {weekRangeLabel(r.weekStart, r.weekEnd)}</span>
+          <span className="text-ink-bright text-sm font-medium">
+            Semana del {weekRangeLabel(r.weekStart, r.weekEnd)}
+          </span>
           {live ? (
-            <span>En curso: cifras hasta ahora, comparadas con el mismo tramo de la semana pasada.</span>
+            <span>
+              En curso: cifras hasta ahora, comparadas con el mismo tramo de la semana pasada.
+            </span>
           ) : (
             <span>Semana cerrada, comparada con la anterior.</span>
           )}
           <span title={new Date(r.generatedAt).toLocaleString()}>
-            <span className="text-ink-faint">{live ? "Actualizado:" : "Generado:"}</span> {relativeTime(r.generatedAt)}
+            <span className="text-ink-faint">{live ? "Actualizado:" : "Generado:"}</span>{" "}
+            {relativeTime(r.generatedAt)}
           </span>
           <span>
             <span className="text-ink-faint">Hora:</span> {reportTimeZoneLabel(r.timeZone)}
@@ -161,13 +174,18 @@ export default function InformesPage() {
 
       {!r ? (
         report.isError ? (
-          <Panel className="p-6 text-sm text-ink-muted">No se pudo cargar el informe. Vuelve a intentarlo en un momento.</Panel>
+          <Panel className="text-ink-muted p-6 text-sm">
+            No se pudo cargar el informe. Vuelve a intentarlo en un momento.
+          </Panel>
         ) : (
           <KpiSkeletonRow />
         )
       ) : (
         <>
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4 print:grid-cols-4" data-testid="report-metrics">
+          <div
+            className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4 print:grid-cols-4"
+            data-testid="report-metrics"
+          >
             {r.metrics.map((m) => {
               const look = METRIC_ICON[m.key] ?? { icon: Send, accent: "#5F86F2" };
               const d = metricDelta(m);
@@ -190,7 +208,10 @@ export default function InformesPage() {
           {r.inbox ? <InboxValue inbox={r.inbox} workspace={ws.slug} /> : null}
 
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-3 print:block print:space-y-4">
-            <Panel className="lg:col-span-2 print:![break-inside:auto]" data-testid="report-attention">
+            <Panel
+              className="lg:col-span-2 print:![break-inside:auto]"
+              data-testid="report-attention"
+            >
               <PanelHeader
                 title="Necesita atención"
                 description={
@@ -200,34 +221,37 @@ export default function InformesPage() {
                 }
               />
               {r.attention.length === 0 ? (
-                <div className="flex items-center gap-2 px-5 pb-5 pt-3 text-sm text-ink-muted">
-                  <CheckCircle2 className="size-4 text-state-success" /> Nada pendiente. Todo en orden.
+                <div className="text-ink-muted flex items-center gap-2 px-5 pb-5 pt-3 text-sm">
+                  <CheckCircle2 className="text-state-success size-4" /> Nada pendiente. Todo en
+                  orden.
                 </div>
               ) : (
-                <ul className="divide-y divide-line-soft px-5 pb-3 pt-1">
+                <ul className="divide-line-soft divide-y px-5 pb-3 pt-1">
                   {r.attention.map((a) => (
                     <li key={a.key} className="py-3 [break-inside:avoid]">
                       <div className="flex items-center gap-2">
-                        <AlertTriangle className="size-4 text-state-warning" />
-                        <span className="text-sm font-medium text-ink-bright">{a.label}</span>
-                        <span className="rounded-full bg-state-warning/15 px-2 py-0.5 text-[11px] font-medium text-state-warning">
+                        <AlertTriangle className="text-state-warning size-4" />
+                        <span className="text-ink-bright text-sm font-medium">{a.label}</span>
+                        <span className="bg-state-warning/15 text-state-warning rounded-full px-2 py-0.5 text-[11px] font-medium">
                           {a.count}
                         </span>
                         <Link
                           to={sectionPath(ws.slug, a.section)}
-                          className="ml-auto text-xs text-brand hover:underline print:hidden"
+                          className="text-brand ml-auto text-xs hover:underline print:hidden"
                         >
                           Ir a {SECTION_LABEL[a.section] ?? a.section}
                         </Link>
                       </div>
-                      <ul className="mt-1.5 space-y-0.5 pl-6 text-xs text-ink-muted">
+                      <ul className="text-ink-muted mt-1.5 space-y-0.5 pl-6 text-xs">
                         {a.items.map((item) => (
                           <li key={item.id} className="truncate">
                             <span className="text-ink">{item.label}</span>
                             {item.meta ? <span> · {item.meta}</span> : null}
                           </li>
                         ))}
-                        {a.count > a.items.length ? <li>y {a.count - a.items.length} más</li> : null}
+                        {a.count > a.items.length ? (
+                          <li>y {a.count - a.items.length} más</li>
+                        ) : null}
                       </ul>
                     </li>
                   ))}
@@ -237,15 +261,23 @@ export default function InformesPage() {
 
             <div className="space-y-4">
               <Panel data-testid="report-lead-sources">
-                <PanelHeader title="Leads por origen" description="Contactos nuevos, por su origen." />
+                <PanelHeader
+                  title="Leads por origen"
+                  description="Contactos nuevos, por su origen."
+                />
                 {r.leadSources.length === 0 ? (
-                  <p className="px-5 pb-5 pt-3 text-sm text-ink-muted">Sin contactos nuevos esta semana.</p>
+                  <p className="text-ink-muted px-5 pb-5 pt-3 text-sm">
+                    Sin contactos nuevos esta semana.
+                  </p>
                 ) : (
                   <ul className="space-y-1.5 px-5 pb-5 pt-3 text-sm">
                     {r.leadSources.map((l) => (
-                      <li key={l.source ?? "none"} className="flex items-center justify-between gap-3">
-                        <span className="truncate text-ink">{leadSourceLabel(l.source)}</span>
-                        <span className="font-medium tabular-nums text-ink-bright">{l.count}</span>
+                      <li
+                        key={l.source ?? "none"}
+                        className="flex items-center justify-between gap-3"
+                      >
+                        <span className="text-ink truncate">{leadSourceLabel(l.source)}</span>
+                        <span className="text-ink-bright font-medium tabular-nums">{l.count}</span>
                       </li>
                     ))}
                   </ul>
@@ -259,7 +291,9 @@ export default function InformesPage() {
                     description="Marcados «Pagado», por moneda."
                   />
                   {r.payments.length === 0 ? (
-                    <p className="px-5 pb-5 pt-3 text-sm text-ink-muted">Sin cobros confirmados esta semana ni la anterior.</p>
+                    <p className="text-ink-muted px-5 pb-5 pt-3 text-sm">
+                      Sin cobros confirmados esta semana ni la anterior.
+                    </p>
                   ) : (
                     <ul className="space-y-2.5 px-5 pb-5 pt-3 text-sm">
                       {r.payments.map((p) => {
@@ -268,9 +302,11 @@ export default function InformesPage() {
                           <li key={p.currency}>
                             <div className="flex items-center justify-between gap-3">
                               <span className="text-ink">{p.currency}</span>
-                              <span className="font-medium tabular-nums text-ink-bright">{line.amount}</span>
+                              <span className="text-ink-bright font-medium tabular-nums">
+                                {line.amount}
+                              </span>
                             </div>
-                            <p className="text-xs text-ink-muted">{line.detail}</p>
+                            <p className="text-ink-muted text-xs">{line.detail}</p>
                           </li>
                         );
                       })}
@@ -278,7 +314,7 @@ export default function InformesPage() {
                   )}
                   <Link
                     to={sectionPath(ws.slug, "cobros")}
-                    className="block border-t border-line-soft px-5 py-2.5 text-xs text-brand hover:underline print:hidden"
+                    className="border-line-soft text-brand block border-t px-5 py-2.5 text-xs hover:underline print:hidden"
                   >
                     Ir a Cobros
                   </Link>
@@ -296,11 +332,31 @@ export default function InformesPage() {
 function InboxValue({ inbox, workspace }: { inbox: WeeklyReportInbox; workspace: string }) {
   const v = inboxVerdict(inbox);
   const stats: { label: string; value: string; hint: string }[] = [
-    { label: "Conversaciones nuevas", value: String(inbox.conversations), hint: `Semana anterior: ${inbox.previousConversations}` },
-    { label: "Gracias al panel", value: String(inbox.fromPanel), hint: `Semana anterior: ${inbox.previousFromPanel}` },
-    { label: "Después de una campaña", value: String(inbox.afterCampaign), hint: "Hasta 48 h después de un envío confirmado" },
-    { label: "Desde formularios", value: String(inbox.fromForms), hint: "Su teléfono entró por un formulario o embudo" },
-    { label: "Respondidas", value: String(inbox.answered), hint: `${inbox.messagesIn} mensajes recibidos en total` },
+    {
+      label: "Conversaciones nuevas",
+      value: String(inbox.conversations),
+      hint: `Semana anterior: ${inbox.previousConversations}`,
+    },
+    {
+      label: "Gracias al panel",
+      value: String(inbox.fromPanel),
+      hint: `Semana anterior: ${inbox.previousFromPanel}`,
+    },
+    {
+      label: "Después de una campaña",
+      value: String(inbox.afterCampaign),
+      hint: "Hasta 48 h después de un envío confirmado",
+    },
+    {
+      label: "Desde formularios",
+      value: String(inbox.fromForms),
+      hint: "Su teléfono entró por un formulario o embudo",
+    },
+    {
+      label: "Respondidas",
+      value: String(inbox.answered),
+      hint: `${inbox.messagesIn} mensajes recibidos en total`,
+    },
     {
       label: "Primera respuesta",
       value: inbox.medianReplyMinutes === null ? "—" : minutesLabel(inbox.medianReplyMinutes),
@@ -313,7 +369,10 @@ function InboxValue({ inbox, workspace }: { inbox: WeeklyReportInbox; workspace:
         title="¿El panel vale la pena?"
         description="Conversaciones nuevas del Inbox y cuántas llegaron gracias a tus campañas y formularios."
         action={
-          <Link to={sectionPath(workspace, "inbox")} className="text-xs text-brand hover:underline print:hidden">
+          <Link
+            to={sectionPath(workspace, "inbox")}
+            className="text-brand text-xs hover:underline print:hidden"
+          >
             Ir al Inbox
           </Link>
         }
@@ -329,10 +388,13 @@ function InboxValue({ inbox, workspace }: { inbox: WeeklyReportInbox; workspace:
                 : "border-line-soft bg-panel-raised")
           }
         >
-          <div className="flex items-center gap-2 text-sm font-semibold text-ink-bright" data-testid="inbox-verdict">
-            <Sparkles className="size-4 text-brand" /> {v.headline}
+          <div
+            className="text-ink-bright flex items-center gap-2 text-sm font-semibold"
+            data-testid="inbox-verdict"
+          >
+            <Sparkles className="text-brand size-4" /> {v.headline}
           </div>
-          <ul className="mt-1.5 space-y-1 text-sm text-ink-muted">
+          <ul className="text-ink-muted mt-1.5 space-y-1 text-sm">
             {v.lines.map((l) => (
               <li key={l}>{l}</li>
             ))}
@@ -340,19 +402,23 @@ function InboxValue({ inbox, workspace }: { inbox: WeeklyReportInbox; workspace:
         </div>
         <dl className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-6 print:grid-cols-6">
           {stats.map((s) => (
-            <div key={s.label} className="rounded-lg border border-line-soft bg-panel-raised px-3 py-2.5">
-              <dt className="text-[11px] text-ink-faint">{s.label}</dt>
-              <dd className="text-lg font-semibold tabular-nums text-ink-bright">{s.value}</dd>
-              <dd className="text-[11px] leading-snug text-ink-muted">{s.hint}</dd>
+            <div
+              key={s.label}
+              className="border-line-soft bg-panel-raised rounded-lg border px-3 py-2.5"
+            >
+              <dt className="text-ink-faint text-[11px]">{s.label}</dt>
+              <dd className="text-ink-bright text-lg font-semibold tabular-nums">{s.value}</dd>
+              <dd className="text-ink-muted text-[11px] leading-snug">{s.hint}</dd>
             </div>
           ))}
         </dl>
         {inbox.byChannel.length > 0 ? (
-          <div className="flex flex-wrap items-center gap-2 text-xs text-ink-muted">
+          <div className="text-ink-muted flex flex-wrap items-center gap-2 text-xs">
             <span className="text-ink-faint">Por canal:</span>
             {inbox.byChannel.map((c) => (
-              <span key={c.channel} className="rounded-full border border-line-soft px-2.5 py-0.5">
-                {channelLabel(c.channel)} · <span className="font-medium text-ink-bright">{c.count}</span>
+              <span key={c.channel} className="border-line-soft rounded-full border px-2.5 py-0.5">
+                {channelLabel(c.channel)} ·{" "}
+                <span className="text-ink-bright font-medium">{c.count}</span>
               </span>
             ))}
           </div>

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { pacingDelay, resolvePacing, type PacingOptions } from "./pacing";
+import { pacingDelay, reserveAccountTurn, resetAccountTurns, resolvePacing, type PacingOptions } from "./pacing";
 
 const base: PacingOptions = { minMs: 3000, maxMs: 7000, batchSize: 20, cooldownMs: 60_000 };
 
@@ -72,5 +72,18 @@ describe("resolvePacing", () => {
       WHATSAPP_SEND_MAX_MS: "2000",
     } as NodeJS.ProcessEnv);
     expect(p.maxMs).toBe(p.minMs);
+  });
+});
+
+describe("reserveAccountTurn", () => {
+  it("dos campañas en la misma cuenta esperan su turno; otra cuenta no espera", () => {
+    resetAccountTurns();
+    expect(reserveAccountTurn("ws:wa:1", 3000, 1000)).toBe(0);
+    expect(reserveAccountTurn("ws:wa:1", 3000, 1000)).toBe(3000);
+    expect(reserveAccountTurn("ws:wa:1", 3000, 2000)).toBe(5000);
+    expect(reserveAccountTurn("ws:tg:1", 3000, 2000)).toBe(0);
+    // Once the gap has passed, no wait.
+    expect(reserveAccountTurn("ws:tg:1", 3000, 9000)).toBe(0);
+    expect(reserveAccountTurn("ws:wa:1", 0, 2000)).toBe(0);
   });
 });

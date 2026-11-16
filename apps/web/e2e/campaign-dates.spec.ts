@@ -28,6 +28,8 @@ test("campaign: publish every day only between two dates", async ({ page }) => {
   await page.goto(`/w/${WS}/campanas`, { waitUntil: "networkidle" });
   await page.getByRole("button", { name: "Nueva campaña" }).first().click();
   await page.fill("#cp-name", "Promo 28 al 30");
+  // A scheduled campaign needs something to send.
+  await page.fill("#cp-message", "Hola, mira nuestra promo");
   await page.getByRole("button", { name: "Facebook" }).click();
   await page.getByRole("button", { name: "Diario", exact: true }).click();
   const range = page.getByTestId("campaign-date-range");

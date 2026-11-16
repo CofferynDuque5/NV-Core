@@ -17,6 +17,7 @@ import { requestIdMiddleware } from "./common/middleware/request-id";
 import { initSentry } from "./common/observability/sentry";
 import { JsonLogger } from "./common/observability/json-logger";
 import { HttpLoggerInterceptor } from "./common/observability/http-logger.interceptor";
+import { isSpaRoute } from "./common/spa-routes";
 
 async function bootstrap(): Promise<void> {
   // Autocorrige DATABASE_URL antes de que Prisma la lea (tolera errores comunes
@@ -130,6 +131,9 @@ async function bootstrap(): Promise<void> {
           return res.status(404).type("text/plain").send(`No existe ${req.path}`);
         }
         res.setHeader("Cache-Control", "no-store");
+        // Unknown routes still get the app (it shows its own "not found" page),
+        // but with a real 404 status.
+        if (!isSpaRoute(req.path)) res.status(404);
         res.sendFile(indexHtml);
       },
     );

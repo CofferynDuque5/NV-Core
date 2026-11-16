@@ -13,13 +13,23 @@ describe.skipIf(!url)("Informe semanal contra PostgreSQL real", () => {
   const at = (s: string) => new Date(`2026-10-${s}Z`);
 
   async function seed(ws: string) {
-    const user = await prisma.user.create({ data: { email: `${ws}@nv.tv`, name: "Ana", passwordHash: "x" } });
-    await prisma.membership.create({ data: { userId: user.id, workspaceSlug: ws, role: "Owner", createdAt: at("01T00:00:00") } });
+    const user = await prisma.user.create({
+      data: { email: `${ws}@nv.tv`, name: "Ana", passwordHash: "x" },
+    });
+    await prisma.membership.create({
+      data: { userId: user.id, workspaceSlug: ws, role: "Owner", createdAt: at("01T00:00:00") },
+    });
     // Contacts: 3 in the week (2 from Instagram), 1 the week before, 1 in another workspace.
     const ig = { source: "instagram", via: "form" };
     await prisma.contact.createMany({
       data: [
-        { workspaceSlug: ws, name: "A", phone: "+58 412 555 0001", createdAt: at("12T09:00:00"), attribution: ig },
+        {
+          workspaceSlug: ws,
+          name: "A",
+          phone: "+58 412 555 0001",
+          createdAt: at("12T09:00:00"),
+          attribution: ig,
+        },
         { workspaceSlug: ws, name: "B", createdAt: at("14T09:00:00"), attribution: ig },
         { workspaceSlug: ws, name: "C", createdAt: at("18T23:00:00") },
         { workspaceSlug: ws, name: "D", createdAt: at("08T09:00:00") },
@@ -28,46 +38,143 @@ describe.skipIf(!url)("Informe semanal contra PostgreSQL real", () => {
     });
     // Inbox: one waiting for a reply, one answered, one asking for a person.
     const waiting = await prisma.conversation.create({
-      data: { workspaceSlug: ws, channel: "wa", contactName: "Lucía", contactHandle: "584125550001", createdAt: at("13T10:00:00") },
+      data: {
+        workspaceSlug: ws,
+        channel: "wa",
+        contactName: "Lucía",
+        contactHandle: "584125550001",
+        createdAt: at("13T10:00:00"),
+      },
     });
     const answered = await prisma.conversation.create({
-      data: { workspaceSlug: ws, channel: "wa", contactName: "Pedro", createdAt: at("13T11:00:00") },
+      data: {
+        workspaceSlug: ws,
+        channel: "wa",
+        contactName: "Pedro",
+        createdAt: at("13T11:00:00"),
+      },
     });
     const human = await prisma.conversation.create({
-      data: { workspaceSlug: ws, channel: "tg", contactName: "Marta", labels: ["requiere-humano"], createdAt: at("15T10:00:00") },
+      data: {
+        workspaceSlug: ws,
+        channel: "tg",
+        contactName: "Marta",
+        labels: ["requiere-humano"],
+        createdAt: at("15T10:00:00"),
+      },
     });
     await prisma.message.createMany({
       data: [
-        { conversationId: waiting.id, direction: "in", text: "¿precio?", createdAt: at("13T10:00:00") },
-        { conversationId: answered.id, direction: "in", text: "hola", createdAt: at("13T11:00:00") },
-        { conversationId: answered.id, direction: "out", text: "¡hola!", createdAt: at("13T11:05:00") },
-        { conversationId: human.id, direction: "in", text: "quiero hablar con alguien", createdAt: at("15T10:00:00") },
+        {
+          conversationId: waiting.id,
+          direction: "in",
+          text: "¿precio?",
+          createdAt: at("13T10:00:00"),
+        },
+        {
+          conversationId: answered.id,
+          direction: "in",
+          text: "hola",
+          createdAt: at("13T11:00:00"),
+        },
+        {
+          conversationId: answered.id,
+          direction: "out",
+          text: "¡hola!",
+          createdAt: at("13T11:05:00"),
+        },
+        {
+          conversationId: human.id,
+          direction: "in",
+          text: "quiero hablar con alguien",
+          createdAt: at("15T10:00:00"),
+        },
       ],
     });
     await prisma.post.createMany({
       data: [
-        { workspaceSlug: ws, channel: "ig", title: "Reel lanzamiento", status: "sent", scheduledAt: at("14T15:00:00") },
-        { workspaceSlug: ws, channel: "fb", title: "Post fallido", status: "error", scheduledAt: at("15T15:00:00") },
+        {
+          workspaceSlug: ws,
+          channel: "ig",
+          title: "Reel lanzamiento",
+          status: "sent",
+          scheduledAt: at("14T15:00:00"),
+        },
+        {
+          workspaceSlug: ws,
+          channel: "fb",
+          title: "Post fallido",
+          status: "error",
+          scheduledAt: at("15T15:00:00"),
+        },
       ],
     });
     await prisma.sendLog.createMany({
       data: [
-        { workspaceSlug: ws, campaignName: "Promo", groupName: "Clientes", ok: true, createdAt: at("16T10:00:00") },
-        { workspaceSlug: ws, campaignName: "Promo", groupName: "Clientes", ok: true, createdAt: at("16T10:01:00") },
-        { workspaceSlug: ws, campaignName: "Promo", groupName: "VIP", ok: false, error: "Sesión cerrada", createdAt: at("16T10:02:00") },
+        {
+          workspaceSlug: ws,
+          campaignName: "Promo",
+          groupName: "Clientes",
+          ok: true,
+          createdAt: at("16T10:00:00"),
+        },
+        {
+          workspaceSlug: ws,
+          campaignName: "Promo",
+          groupName: "Clientes",
+          ok: true,
+          createdAt: at("16T10:01:00"),
+        },
+        {
+          workspaceSlug: ws,
+          campaignName: "Promo",
+          groupName: "VIP",
+          ok: false,
+          error: "Sesión cerrada",
+          createdAt: at("16T10:02:00"),
+        },
       ],
     });
-    const flow = await prisma.automation.create({ data: { workspaceSlug: ws, name: "Bienvenida" } });
+    const flow = await prisma.automation.create({
+      data: { workspaceSlug: ws, name: "Bienvenida" },
+    });
     await prisma.automationRun.createMany({
       data: [
-        { workspaceSlug: ws, automationId: flow.id, trigger: "message", contactHandle: "1", status: "ok", startedAt: at("13T10:00:01") },
-        { workspaceSlug: ws, automationId: flow.id, trigger: "message", contactHandle: "2", status: "error", error: "IA sin configurar", startedAt: at("15T10:00:01") },
+        {
+          workspaceSlug: ws,
+          automationId: flow.id,
+          trigger: "message",
+          contactHandle: "1",
+          status: "ok",
+          startedAt: at("13T10:00:01"),
+        },
+        {
+          workspaceSlug: ws,
+          automationId: flow.id,
+          trigger: "message",
+          contactHandle: "2",
+          status: "error",
+          error: "IA sin configurar",
+          startedAt: at("15T10:00:01"),
+        },
       ],
     });
     await prisma.task.createMany({
       data: [
-        { workspaceSlug: ws, title: "Editar video", status: "done", completedAt: at("16T12:00:00"), createdBy: "x" },
-        { workspaceSlug: ws, title: "Llamar a proveedor", status: "todo", dueAt: at("10T12:00:00"), createdBy: "x" },
+        {
+          workspaceSlug: ws,
+          title: "Editar video",
+          status: "done",
+          completedAt: at("16T12:00:00"),
+          createdBy: "x",
+        },
+        {
+          workspaceSlug: ws,
+          title: "Llamar a proveedor",
+          status: "todo",
+          dueAt: at("10T12:00:00"),
+          createdBy: "x",
+        },
       ],
     });
     // Payments: confirmed in the week (2 COP + 1 USDT), the week before (COP + PEN), waiting, overdue, another workspace.
@@ -86,9 +193,16 @@ describe.skipIf(!url)("Informe semanal contra PostgreSQL real", () => {
         pay("Curso", 25, "USDT", { status: "pagado", paidAt: at("16T12:00:00") }),
         pay("Plan Pro", 100000, "COP", { status: "pagado", paidAt: at("07T12:00:00") }),
         pay("Plan mensual", 49.9, "PEN", { status: "pagado", paidAt: at("08T12:00:00") }),
-        pay("Pedido 12", 80000, "COP", { status: "por_verificar", methodLabel: "Nequi", reference: "M123" }),
+        pay("Pedido 12", 80000, "COP", {
+          status: "por_verificar",
+          methodLabel: "Nequi",
+          reference: "M123",
+        }),
         pay("Pedido 9", 20, "USD", { status: "pendiente", dueAt: at("10T12:00:00") }),
-        { ...pay("Ajeno", 999, "COP", { status: "pagado", paidAt: at("13T12:00:00") }), workspaceSlug: `${ws}-otro` },
+        {
+          ...pay("Ajeno", 999, "COP", { status: "pagado", paidAt: at("13T12:00:00") }),
+          workspaceSlug: `${ws}-otro`,
+        },
       ],
     });
   }
@@ -132,15 +246,27 @@ describe.skipIf(!url)("Informe semanal contra PostgreSQL real", () => {
       ],
     });
     const a = Object.fromEntries(report.attention.map((x) => [x.key, x]));
-    expect(a.overdueTasks?.items[0]).toMatchObject({ label: "Llamar a proveedor", meta: "vencía 10/10" });
+    expect(a.overdueTasks?.items[0]).toMatchObject({
+      label: "Llamar a proveedor",
+      meta: "vencía 10/10",
+    });
     expect(a.unanswered?.items.map((i) => i.label)).toEqual(["Lucía", "Marta"]);
     expect(a.needsHuman?.count).toBe(1);
     expect(a.postErrors?.items[0]?.label).toBe("Post fallido");
     expect(a.sendErrors?.items[0]).toMatchObject({ label: "Promo → VIP", meta: "Sesión cerrada" });
-    expect(a.automationErrors?.items[0]).toMatchObject({ label: "Bienvenida", meta: "IA sin configurar" });
+    expect(a.automationErrors?.items[0]).toMatchObject({
+      label: "Bienvenida",
+      meta: "IA sin configurar",
+    });
     expect(a.paymentsToVerify).toMatchObject({ count: 1, section: "cobros" });
-    expect(a.paymentsToVerify?.items[0]).toMatchObject({ label: "Pedido 12", meta: "$ 80.000 COP · Nequi · ref M123" });
-    expect(a.overduePayments?.items[0]).toMatchObject({ label: "Pedido 9", meta: "US$ 20,00 · vencía 10/10" });
+    expect(a.paymentsToVerify?.items[0]).toMatchObject({
+      label: "Pedido 12",
+      meta: "$ 80.000 COP · Nequi · ref M123",
+    });
+    expect(a.overduePayments?.items[0]).toMatchObject({
+      label: "Pedido 9",
+      meta: "US$ 20,00 · vencía 10/10",
+    });
     // Money per currency, never added across currencies.
     expect(report.payments).toEqual([
       { currency: "COP", amount: 200000, count: 2, previousAmount: 100000, previousCount: 1 },
@@ -158,7 +284,9 @@ describe.skipIf(!url)("Informe semanal contra PostgreSQL real", () => {
     expect(notes[0]?.meta).toContain("3 contactos nuevos (+2)");
     expect(notes[0]?.meta).toContain("3 cobros confirmados");
 
-    expect(await reports.list(ws)).toEqual([expect.objectContaining({ weekStart: "2026-10-12", weekEnd: "2026-10-18" })]);
+    expect(await reports.list(ws)).toEqual([
+      expect.objectContaining({ weekStart: "2026-10-12", weekEnd: "2026-10-18" }),
+    ]);
   });
 
   it("no mezcla workspaces ni inventa semanas", async () => {
@@ -172,8 +300,12 @@ describe.skipIf(!url)("Informe semanal contra PostgreSQL real", () => {
 
   it("omite workspaces que aún no se usaban esa semana", async () => {
     const ws = `it-rep-n-${Date.now()}`;
-    const user = await prisma.user.create({ data: { email: `${ws}@nv.tv`, name: "N", passwordHash: "x" } });
-    await prisma.membership.create({ data: { userId: user.id, workspaceSlug: ws, role: "Owner", createdAt: at("20T00:00:00") } });
+    const user = await prisma.user.create({
+      data: { email: `${ws}@nv.tv`, name: "N", passwordHash: "x" },
+    });
+    await prisma.membership.create({
+      data: { userId: user.id, workspaceSlug: ws, role: "Owner", createdAt: at("20T00:00:00") },
+    });
     await reports.sweep(at("21T10:00:00"));
     expect(await reports.list(ws)).toEqual([]);
   });
@@ -182,7 +314,9 @@ describe.skipIf(!url)("Informe semanal contra PostgreSQL real", () => {
     const ws = `it-rep-c-${Date.now()}`;
     // A second ago: Postgres rounds createdAt to the millisecond, which can land
     // just after the "now" the live week is cut at if both happen in the same ms.
-    await prisma.contact.create({ data: { workspaceSlug: ws, name: "Hoy", createdAt: new Date(Date.now() - 1000) } });
+    await prisma.contact.create({
+      data: { workspaceSlug: ws, name: "Hoy", createdAt: new Date(Date.now() - 1000) },
+    });
     const live = await reports.current(ws);
     expect(live.id).toBe("actual");
     expect(live.metrics.find((x) => x.key === "contacts")?.value).toBe(1);
@@ -191,12 +325,18 @@ describe.skipIf(!url)("Informe semanal contra PostgreSQL real", () => {
 
   it("corta la semana a la medianoche de la marca (Caracas)", async () => {
     const ws = `it-rep-tz-${Date.now()}`;
-    const user = await prisma.user.create({ data: { email: `${ws}@nv.tv`, name: "Tz", passwordHash: "x" } });
-    await prisma.membership.create({ data: { userId: user.id, workspaceSlug: ws, role: "Owner", createdAt: at("12T10:00:00") } });
-    expect(await reports.settings(ws)).toEqual({ timeZone: "UTC" });
-    expect(await reports.updateSettings(ws, "ana@nv.tv", { timeZone: "America/Caracas" })).toEqual({
-      timeZone: "America/Caracas",
+    const user = await prisma.user.create({
+      data: { email: `${ws}@nv.tv`, name: "Tz", passwordHash: "x" },
     });
+    await prisma.membership.create({
+      data: { userId: user.id, workspaceSlug: ws, role: "Owner", createdAt: at("12T10:00:00") },
+    });
+    // Never chosen: the brand's zone defaults to Caracas (same as its campaign times).
+    expect(await reports.settings(ws)).toEqual({ timeZone: "America/Caracas" });
+    expect(await reports.updateSettings(ws, "ana@nv.tv", { timeZone: "America/Lima" })).toEqual({
+      timeZone: "America/Lima",
+    });
+    await reports.updateSettings(ws, "ana@nv.tv", { timeZone: "America/Caracas" });
     await prisma.contact.createMany({
       data: [
         // Sunday 18, 23:00 in Caracas (already Monday in UTC): belongs to the week of the 12th.
@@ -206,7 +346,13 @@ describe.skipIf(!url)("Informe semanal contra PostgreSQL real", () => {
       ],
     });
     await prisma.task.create({
-      data: { workspaceSlug: ws, title: "Pagar hosting", status: "todo", dueAt: at("16T02:00:00"), createdBy: "x" },
+      data: {
+        workspaceSlug: ws,
+        title: "Pagar hosting",
+        status: "todo",
+        dueAt: at("16T02:00:00"),
+        createdBy: "x",
+      },
     });
 
     // Monday 00:30 UTC is still Sunday evening in Caracas: the week is not closed there yet.
@@ -218,10 +364,15 @@ describe.skipIf(!url)("Informe semanal contra PostgreSQL real", () => {
     expect(report.timeZone).toBe("America/Caracas");
     expect(report.metrics.find((m) => m.key === "contacts")?.value).toBe(1);
     // Dates shown in the brand's own day (15/10 in Caracas, 16/10 in UTC).
-    expect(report.attention.find((a) => a.key === "overdueTasks")?.items[0]?.meta).toBe("vencía 15/10");
+    expect(report.attention.find((a) => a.key === "overdueTasks")?.items[0]?.meta).toBe(
+      "vencía 15/10",
+    );
 
-    // An unknown saved zone falls back to UTC instead of breaking the report.
-    await prisma.workspaceSettings.update({ where: { workspaceSlug: ws }, data: { timeZone: "Marte/Base" } });
-    expect(await reports.settings(ws)).toEqual({ timeZone: "UTC" });
+    // An unknown saved zone falls back to the default instead of breaking the report.
+    await prisma.workspaceSettings.update({
+      where: { workspaceSlug: ws },
+      data: { timeZone: "Marte/Base" },
+    });
+    expect(await reports.settings(ws)).toEqual({ timeZone: "America/Caracas" });
   });
 });

@@ -12,6 +12,8 @@ export interface DomainEventMap {
     contactHandle: string;
     contactName: string;
     text: string;
+    /** Inbox chat it landed in (for the push notice link). */
+    conversationId?: string;
   };
   /**
    * A raw inbound message captured by a live session (WhatsApp Baileys /
@@ -30,12 +32,25 @@ export interface DomainEventMap {
     externalId?: string | null;
     /** History replayed after linking: stored, never treated as a new message. */
     history?: boolean;
+    /** WhatsApp number (line) of the brand that got the message. */
+    waLine?: number;
+    /** Telegram account (line) of the brand that got the message. */
+    tgLine?: number;
+    /** Name the brand saved for the number in its own phone. */
+    savedName?: string | null;
+    /** The contact's own profile name. */
+    profileName?: string | null;
+    /** Attachment of the message. */
+    media?: { kind: import("@nv/domain").ChatMediaKind; mime: string; size: number; name?: string; seconds?: number };
+    /** Sealed platform message to download the attachment later. */
+    mediaRef?: string;
   };
   /** Names learnt from a live session's contact list (phone → name). */
   "session.contact-names": {
     workspaceSlug: string;
     channel: "wa" | "tg";
-    names: { handle: string; name: string }[];
+    /** saved = the name in the brand's own phone (wins over everything else). */
+    names: { handle: string; name: string; saved?: boolean }[];
   };
   "message.sent": {
     workspaceSlug: string;

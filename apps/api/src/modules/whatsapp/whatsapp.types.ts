@@ -3,6 +3,10 @@ export type WhatsappStatusValue = "disconnected" | "connecting" | "qr" | "connec
 export interface WhatsappStatus {
   status: WhatsappStatusValue;
   provider: "baileys";
+  /** 1 = the brand's main number; 2, 3… = extra numbers. */
+  line?: number;
+  /** Name the user gave the number («Ventas»). */
+  label?: string | null;
   number: string | null;
   lastConnectionAt: string | null;
   groupsCount: number;
@@ -64,6 +68,14 @@ export interface SessionChatMessage {
   externalId?: string | null;
   /** Part of the history sent after linking: stored, but not treated as new. */
   history?: boolean;
+  /** Name the brand saved for the number in its own phone (null = not saved). */
+  savedName?: string | null;
+  /** The contact's own WhatsApp profile name. */
+  profileName?: string | null;
+  /** Attachment (photo, audio, video, sticker, document). */
+  media?: import("./chat-message").MediaInfo;
+  /** Sealed WhatsApp message to download the attachment later. */
+  mediaRef?: string;
 }
 
 /** Callbacks a BaileysSession uses to report changes back to the service. */
@@ -78,8 +90,10 @@ export interface SessionEvents {
   onGroups(workspaceSlug: string, groups: WhatsappGroup[]): void;
   /** A direct (1:1) chat message (received, or sent from the phone), for the Inbox. */
   onInbound(workspaceSlug: string, msg: SessionChatMessage): void;
+  /** Someone (not us) wrote in a group: only the time is used, for «grupos sin actividad». */
+  onGroupActivity?(workspaceSlug: string, groupJid: string, at: Date): void;
   /** Names from the WhatsApp contact list, to replace bare numbers in the Inbox. */
-  onContactNames?(workspaceSlug: string, names: { handle: string; name: string }[]): void;
+  onContactNames?(workspaceSlug: string, names: { handle: string; name: string; saved?: boolean }[]): void;
   /** A connection problem worth alerting the user about (disconnect, gave up…). */
   onAlert(workspaceSlug: string, alert: SessionAlert): void;
 }

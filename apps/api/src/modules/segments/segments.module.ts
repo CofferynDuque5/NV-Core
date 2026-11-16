@@ -27,7 +27,8 @@ import {
   type SegmentRule,
 } from "@nv/domain";
 import { Type } from "class-transformer";
-import { IsArray, IsIn, IsOptional, IsString, MinLength, ValidateNested } from "class-validator";
+import { ArrayMaxSize, IsArray, IsIn, IsOptional, IsString, Matches, MaxLength, MinLength, ValidateNested } from "class-validator";
+import { Prisma } from "@prisma/client";
 
 import { ListResultDto } from "../../common/dto/list-result.dto";
 import { WorkspaceId } from "../../common/tenant/workspace.decorator";
@@ -35,18 +36,21 @@ import { WorkspaceGuard } from "../../common/tenant/workspace.guard";
 import { AuditLogger } from "../../common/audit-logger.service";
 import { PrismaService } from "../../prisma/prisma.service";
 import { mapContact, mapSegment } from "../../prisma/mappers";
+import { contactsCsv } from "../contacts/contacts.module";
 import { RolesGuard } from "../../auth/guards/roles.guard";
 import { Roles } from "../../auth/decorators/roles.decorator";
 import { CurrentUser } from "../../auth/decorators/current-user.decorator";
 import type { AuthenticatedUser } from "../../auth/auth.types";
 import { LIST_CAP } from "../../common/query-limits";
-import { buildContactWhere, rulesError } from "./segment-eval";
+import { brandTimeZone, buildContactWhere, rulesError } from "./segment-eval";
 
 /** Max matching contacts returned by the rule-builder preview. */
 const PREVIEW_SAMPLE = 25;
 
 export class SegmentRuleDto {
-  @IsIn(SEGMENT_FIELDS)
+  @Matches(new RegExp(`^(${SEGMENT_FIELDS.join("|")}|custom\\.[a-z0-9_]{1,30})$`), {
+    message: "Campo desconocido.",
+  })
   field!: SegmentField;
 
   @IsIn(SEGMENT_OPERATORS)
@@ -104,6 +108,11 @@ export class PreviewSegmentDto {
   rules!: SegmentRuleDto[];
 }
 
+export class TagAllDto {
+  @IsOptional() @IsArray() @ArrayMaxSize(10) @IsString({ each: true }) @MaxLength(40, { each: true }) add?: string[];
+  @IsOptional() @IsArray() @ArrayMaxSize(10) @IsString({ each: true }) @MaxLength(40, { each: true }) remove?: string[];
+}
+
 /** Normalize DTO rules (optional value → "") and reject invalid ones. */
 function toRules(dtoRules: SegmentRuleDto[] | undefined): SegmentRule[] {
   const rules: SegmentRule[] = (dtoRules ?? []).map((r) => ({
@@ -137,6 +146,7 @@ export class SegmentsService {
     ]);
     // Compute each segment's live audience count from its rules.
     const now = new Date();
+    const tz = await brandTimeZone(this.prisma, workspaceId);
     const counts = await Promise.all(
       rows.map((r) =>
         this.prisma.contact.count({
@@ -145,6 +155,7 @@ export class SegmentsService {
             (r.rules as unknown as SegmentRule[]) ?? [],
             (r.match as SegmentMatch) ?? "all",
             now,
+            tz,
           ),
         }),
       ),
@@ -210,7 +221,13 @@ export class SegmentsService {
   async preview(workspaceId: string, dto: PreviewSegmentDto): Promise<SegmentPreview> {
     const rules = toRules(dto.rules);
     if (!this.prisma.enabled) return { count: 0, sample: [] };
-    const where = buildContactWhere(workspaceId, rules, dto.match ?? "all");
+    const where = buildContactWhere(
+      workspaceId,
+      rules,
+      dto.match ?? "all",
+      new Date(),
+      await brandTimeZone(this.prisma, workspaceId),
+    );
     const [count, sample] = await Promise.all([
       this.prisma.contact.count({ where }),
       this.prisma.contact.findMany({
@@ -228,7 +245,50 @@ export class SegmentsService {
     match: SegmentMatch,
   ): Promise<number> {
     if (!this.prisma.enabled) return 0;
-    return this.prisma.contact.count({ where: buildContactWhere(workspaceId, rules, match) });
+    const tz = await brandTimeZone(this.prisma, workspaceId);
+    return this.prisma.contact.count({ where: buildContactWhere(workspaceId, rules, match, new Date(), tz) });
+  }
+
+  /** Where-clause of one of the brand's segments (404 otherwise). */
+  private async whereOf(workspaceId: string, id: string): Promise<Prisma.ContactWhereInput> {
+    const seg = await this.db().segment.findFirst({ where: { id, workspaceSlug: workspaceId } });
+    if (!seg) throw new NotFoundException("Segmento no encontrado.");
+    return buildContactWhere(
+      workspaceId,
+      (seg.rules as unknown as SegmentRule[]) ?? [],
+      (seg.match as SegmentMatch) ?? "all",
+      new Date(),
+      await brandTimeZone(this.prisma, workspaceId),
+    );
+  }
+
+  /** CSV of the segment's contacts, same columns as Contactos → Exportar. */
+  async exportCsv(workspaceId: string, id: string): Promise<string> {
+    return contactsCsv(this.prisma, workspaceId, await this.whereOf(workspaceId, id));
+  }
+
+  /** Add and/or remove tags on every contact currently in the segment. */
+  async tagAll(workspaceId: string, actor: string, id: string, dto: TagAllDto): Promise<{ updated: number }> {
+    const clean = (l?: string[]) => [...new Set((l ?? []).map((t) => t.trim()).filter(Boolean))];
+    const add = clean(dto.add);
+    const remove = clean(dto.remove);
+    if (add.length === 0 && remove.length === 0) throw new BadRequestException("Indica qué etiquetas poner o quitar.");
+    const where = await this.whereOf(workspaceId, id);
+    const rows = await this.prisma.contact.findMany({ where, select: { id: true }, take: 50_000 });
+    const ids = rows.map((r) => r.id);
+    let updated = 0;
+    for (let i = 0; i < ids.length; i += 1000) {
+      const chunk = ids.slice(i, i + 1000);
+      // One statement per chunk: union with the new tags, minus the removed ones.
+      updated += await this.prisma.$executeRaw`
+        UPDATE "Contact" SET tags = COALESCE((
+          SELECT array_agg(DISTINCT t ORDER BY t) FROM unnest(tags || ${add}::text[]) AS t
+          WHERE NOT (t = ANY(${remove}::text[]))
+        ), '{}')
+        WHERE id = ANY(${chunk}::text[]) AND "workspaceSlug" = ${workspaceId}`;
+    }
+    await this.audit.record(workspaceId, actor, "segment.tag_all", `${id} +${add.join(",")} -${remove.join(",")} (${updated})`);
+    return { updated };
   }
 }
 
@@ -261,6 +321,24 @@ export class SegmentsController {
     @Body() dto: CreateSegmentDto,
   ) {
     return this.service.create(workspaceId, user.email, dto);
+  }
+
+  @Get(":id/export")
+  async export(@WorkspaceId() workspaceId: string, @Param("id") id: string): Promise<{ csv: string }> {
+    return { csv: await this.service.exportCsv(workspaceId, id) };
+  }
+
+  @Post(":id/tags")
+  @Roles("Owner", "Admin", "Editor")
+  @UseGuards(RolesGuard)
+  @HttpCode(200)
+  tagAll(
+    @WorkspaceId() workspaceId: string,
+    @CurrentUser() user: AuthenticatedUser,
+    @Param("id") id: string,
+    @Body() dto: TagAllDto,
+  ) {
+    return this.service.tagAll(workspaceId, user.email, id, dto);
   }
 
   @Patch(":id")

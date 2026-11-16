@@ -121,6 +121,20 @@ export const AUTOMATION_TEMPLATES: AutomationTemplate[] = [
     ],
     edges: [e("t", "m"), e("m", "a")],
   },
+  {
+    id: "cumpleanos",
+    name: "Felicitar en su cumpleaños",
+    summary: "El día del cumpleaños, a las 9 de la mañana de tu marca, le escribe una felicitación al contacto.",
+    needs: ["WhatsApp conectado", "Cumpleaños en la ficha del contacto"],
+    nodes: [
+      n("t", "trigger", "Cumpleaños", { event: "contact.birthday", hour: "9" }),
+      n("m", "action", "Felicitación", {
+        action: "send-message",
+        body: "¡Feliz cumpleaños, {{nombre}}! 🎉 Que tengas un gran día. Responde BAJA si no quieres más mensajes.",
+      }),
+    ],
+    edges: [e("t", "m")],
+  },
 ];
 
 /**

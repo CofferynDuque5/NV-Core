@@ -182,6 +182,7 @@ export class AuthService {
       // Count the failure and lock the account once the threshold is reached.
       if (user) {
         const attempts = await this.store.incrementFailedLogins(user.id);
+        await this.store.recordFailedLogin(user.id, meta);
         if (attempts >= AuthService.MAX_FAILED_LOGINS) {
           await this.store.lockUser(user.id, new Date(Date.now() + AuthService.LOCK_DURATION_MS));
         }
@@ -203,11 +204,15 @@ export class AuthService {
     const hash = hashToken(rawRefreshToken);
     const record = await this.store.findValidRefreshToken(hash);
     if (!record) throw new UnauthorizedException("Refresh token inválido o expirado.");
-    await this.store.revokeRefreshToken(hash);
-    const user = await this.store.findUserById(record.userId);
+    // Independent steps run together: with a remote database every
+    // sequential query adds a round trip to each page load.
+    const [, user] = await Promise.all([
+      this.store.revokeRefreshToken(hash),
+      this.store.findUserById(record.userId),
+    ]);
     if (!user) throw new UnauthorizedException("Usuario no encontrado.");
-    await this.store.touchSeen(user.id);
-    return this.issueTokens(user);
+    const [, result] = await Promise.all([this.store.touchSeen(user.id), this.issueTokens(user)]);
+    return result;
   }
 
   async logout(rawRefreshToken: string | undefined): Promise<void> {
@@ -383,7 +388,14 @@ export class AuthService {
   }
 
   private async issueTokens(user: UserRecord): Promise<AuthResult> {
-    const memberships = await this.store.membershipsOf(user.id);
+    const refreshToken = generateRefreshToken();
+    const ttlDays = this.config.get("auth", { infer: true }).refreshTtlDays;
+    const expiresAt = new Date(Date.now() + ttlDays * 24 * 60 * 60 * 1000);
+    // Refresh token: opaque, persisted as a hash, rotated on each refresh.
+    const [memberships] = await Promise.all([
+      this.store.membershipsOf(user.id),
+      this.store.createRefreshToken(user.id, hashToken(refreshToken), expiresAt),
+    ]);
     const payload: JwtPayload = {
       sub: user.id,
       email: user.email,
@@ -393,11 +405,6 @@ export class AuthService {
     // Access token: secret + short expiry come from JwtModule config (AuthModule).
     const accessToken = await this.jwt.signAsync(payload);
 
-    // Refresh token: opaque, persisted as a hash, rotated on each refresh.
-    const refreshToken = generateRefreshToken();
-    const ttlDays = this.config.get("auth", { infer: true }).refreshTtlDays;
-    const expiresAt = new Date(Date.now() + ttlDays * 24 * 60 * 60 * 1000);
-    await this.store.createRefreshToken(user.id, hashToken(refreshToken), expiresAt);
 
     return {
       accessToken,

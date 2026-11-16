@@ -1,7 +1,8 @@
 
 import * as React from "react";
-import { CONTACT_STAGES, type Contact, type ContactStage } from "@nv/domain";
+import { CONTACT_STAGES, type Contact, type ContactFieldDef, type ContactStage } from "@nv/domain";
 
+import { useContactFields } from "@/hooks/use-domain-data";
 import { useCreateContact, useUpdateContact } from "@/hooks/use-domain-mutations";
 import { FormDialog, errorMessage } from "./form-dialog";
 import { Input } from "@/components/ui/input";
@@ -28,6 +29,9 @@ export function ContactFormDialog({
   const [company, setCompany] = React.useState("");
   const [tags, setTags] = React.useState("");
   const [stage, setStage] = React.useState<ContactStage>("Lead");
+  const [birthday, setBirthday] = React.useState("");
+  const [custom, setCustom] = React.useState<Record<string, string>>({});
+  const fields = useContactFields().data ?? [];
   const [error, setError] = React.useState<string | null>(null);
 
   // Sync fields whenever the dialog opens (prefill for edit, blank for create).
@@ -39,6 +43,8 @@ export function ContactFormDialog({
     setCompany(contact?.company ?? "");
     setTags(contact?.tags.join(", ") ?? "");
     setStage(contact?.stage ?? "Lead");
+    setBirthday(birthdayInput(contact?.birthday));
+    setCustom(contact?.custom ?? {});
     setError(null);
   }, [open, contact]);
 
@@ -54,6 +60,9 @@ export function ContactFormDialog({
         .map((t) => t.trim())
         .filter(Boolean),
       stage,
+      birthday: birthday.trim(),
+      // Every defined field is sent, so clearing one really clears it.
+      ...(fields.length > 0 ? { custom: Object.fromEntries(fields.map((f) => [f.key, (custom[f.key] ?? "").trim()])) } : {}),
     };
     const opts = {
       onSuccess: () => onOpenChange(false),
@@ -113,6 +122,75 @@ export function ContactFormDialog({
           </select>
         </div>
       </div>
+      <div className="space-y-1.5">
+        <Label htmlFor="c-birthday">Cumpleaños (opcional)</Label>
+        <Input
+          id="c-birthday"
+          value={birthday}
+          onChange={(e) => setBirthday(e.target.value)}
+          placeholder="15/03 o 15/03/1990"
+          inputMode="numeric"
+        />
+      </div>
+      {fields.length > 0 ? (
+        <div className="grid grid-cols-2 gap-3" data-testid="contact-custom-fields">
+          {fields.map((f) => (
+            <CustomFieldInput
+              key={f.key}
+              field={f}
+              value={custom[f.key] ?? ""}
+              onChange={(v) => setCustom((c) => ({ ...c, [f.key]: v }))}
+            />
+          ))}
+        </div>
+      ) : null}
     </FormDialog>
   );
 }
+
+/** Stored «YYYY-MM-DD» / «MM-DD» shown the way people type it: «15/03/1990», «15/03». */
+function birthdayInput(b?: string): string {
+  if (!b) return "";
+  const md = b.slice(-5);
+  const dm = `${md.slice(3)}/${md.slice(0, 2)}`;
+  return b.length === 10 ? `${dm}/${b.slice(0, 4)}` : dm;
+}
+
+const selectClass =
+  "flex h-9 w-full rounded-lg border border-line-soft bg-panel-raised px-3 text-sm text-ink focus-visible:border-brand/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/25";
+
+function CustomFieldInput({
+  field,
+  value,
+  onChange,
+}: {
+  field: ContactFieldDef;
+  value: string;
+  onChange: (v: string) => void;
+}) {
+  const id = `c-field-${field.key}`;
+  return (
+    <div className="space-y-1.5">
+      <Label htmlFor={id}>{field.label}</Label>
+      {field.type === "select" ? (
+        <select id={id} value={value} onChange={(e) => onChange(e.target.value)} className={selectClass}>
+          <option value="">—</option>
+          {(field.options ?? []).map((o) => (
+            <option key={o} value={o}>
+              {o}
+            </option>
+          ))}
+        </select>
+      ) : (
+        <Input
+          id={id}
+          type={field.type === "date" ? "date" : "text"}
+          inputMode={field.type === "number" ? "decimal" : undefined}
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+        />
+      )}
+    </div>
+  );
+}
+

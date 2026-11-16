@@ -9,11 +9,15 @@ import {
   NotFoundException,
   Param,
   Post,
+  Query,
+  Res,
   UseGuards,
 } from "@nestjs/common";
+import { ConfigService } from "@nestjs/config";
+import type { Response } from "express";
 import { ApiBearerAuth, ApiTags } from "@nestjs/swagger";
 import { ROLES, type AdminLogins, type Role } from "@nv/domain";
-import { IsIn, IsInt, IsString, Max, Min, MinLength } from "class-validator";
+import { IsIn, IsInt, IsString, Max, MaxLength, Min, MinLength } from "class-validator";
 
 import { AuthModule } from "../../auth/auth.module";
 import { AuthStore } from "../../auth/auth.store";
@@ -21,13 +25,24 @@ import { SuperAdminGuard } from "../../auth/guards/super-admin.guard";
 import { WorkspaceRegistry } from "../../common/workspace-registry.service";
 import { WorkspaceAccessService } from "../../common/access/workspace-access.service";
 import { AuditLogger } from "../../common/audit-logger.service";
+import { MailService } from "../../common/mail.service";
 import { CurrentUser } from "../../auth/decorators/current-user.decorator";
 import type { AuthenticatedUser } from "../../auth/auth.types";
+import type { AppConfig } from "../../config/configuration";
+import { UsdtRateService } from "../../common/fx/usdt-rate.service";
+import { PaymentsModule, PaymentsService, receiptHeaders } from "../payments/payments.module";
+import { PlanPaymentAlerts } from "../payments/plan-payment-alerts";
+import { PanelActivityModule } from "../panel-activity/panel-activity.module";
+import { PanelActivityService } from "../panel-activity/panel-activity.service";
 
 export class SetMembershipDto {
   @IsString() @MinLength(3) email!: string;
   @IsString() @MinLength(1) workspaceSlug!: string;
   @IsIn(ROLES) role!: Role;
+}
+
+export class RejectPlanPaymentDto {
+  @IsString() @MinLength(3) @MaxLength(300) reason!: string;
 }
 
 export class ActivateAccessDto {
@@ -41,33 +56,9 @@ export interface AdminUserView {
   memberships: { workspaceSlug: string; role: Role }[];
 }
 
-/** "Chrome · Windows" from a browser's user agent (enough to recognise a device). */
-export function describeDevice(ua: string | null | undefined): string {
-  if (!ua) return "—";
-  const browser = /Edg\//.test(ua)
-    ? "Edge"
-    : /OPR\/|Opera/.test(ua)
-      ? "Opera"
-      : /Chrome\//.test(ua)
-        ? "Chrome"
-        : /Firefox\//.test(ua)
-          ? "Firefox"
-          : /Safari\//.test(ua)
-            ? "Safari"
-            : "Navegador";
-  const os = /Android/.test(ua)
-    ? "Android"
-    : /iPhone|iPad|iOS/.test(ua)
-      ? "iPhone/iPad"
-      : /Windows/.test(ua)
-        ? "Windows"
-        : /Mac OS X|Macintosh/.test(ua)
-          ? "Mac"
-          : /Linux/.test(ua)
-            ? "Linux"
-            : "otro sistema";
-  return `${browser} · ${os}`;
-}
+import { describeDevice } from "../../common/device";
+
+export { describeDevice };
 
 @Injectable()
 export class AdminService {
@@ -160,7 +151,87 @@ export class AdminService {
 @UseGuards(SuperAdminGuard)
 @Controller("admin")
 export class AdminController {
-  constructor(private readonly service: AdminService) {}
+  constructor(
+    private readonly service: AdminService,
+    private readonly mail: MailService,
+    private readonly payments: PaymentsService,
+    private readonly alerts: PlanPaymentAlerts,
+    private readonly rates: UsdtRateService,
+    private readonly config: ConfigService<AppConfig, true>,
+    private readonly panelActivity: PanelActivityService,
+  ) {}
+
+  private get billingWorkspace(): string {
+    return this.config.get("billing", { infer: true }).operatorWorkspace;
+  }
+
+  /** Plan payments customers sent, waiting ones first. */
+  @Get("plan-payments")
+  planPayments() {
+    return this.payments.planPayments(this.billingWorkspace);
+  }
+
+  /**
+   * The receipt of a plan payment. Served as a download-safe file: its real
+   * type (checked on upload), no sniffing, and a sandbox so a crafted PDF
+   * can't run anything on our domain.
+   */
+  @Get("plan-payments/:id/receipt")
+  async receipt(@Param("id") id: string, @Res() res: Response) {
+    const file = await this.payments.planPaymentReceipt(this.billingWorkspace, id);
+    res.set(receiptHeaders(file));
+    res.send(file.buf);
+  }
+
+  @Post("plan-payments/:id/approve")
+  @HttpCode(200)
+  approvePlanPayment(@Param("id") id: string, @CurrentUser() user: AuthenticatedUser) {
+    return this.payments.reviewPlanPayment(this.billingWorkspace, user.email, id, { approve: true });
+  }
+
+  @Post("plan-payments/:id/reject")
+  @HttpCode(200)
+  rejectPlanPayment(@Param("id") id: string, @Body() dto: RejectPlanPaymentDto, @CurrentUser() user: AuthenticatedUser) {
+    return this.payments.reviewPlanPayment(this.billingWorkspace, user.email, id, { approve: false, reason: dto.reason.trim() });
+  }
+
+  /** Today's USDT rate in bolívares, and where it came from. */
+  @Get("usdt-rate")
+  async usdtRate() {
+    return { rate: await this.rates.current() };
+  }
+
+  /** Whether plan payments can be announced by WhatsApp, and why not. */
+  @Get("whatsapp-alert")
+  whatsappAlert() {
+    return this.alerts.whatsappStatus();
+  }
+
+  /** Send a test alert to NV_ADMIN_WHATSAPP from the billing brand's WhatsApp. */
+  @Post("whatsapp-alert/test")
+  @HttpCode(200)
+  whatsappAlertTest() {
+    return this.alerts.whatsappTest();
+  }
+
+  /** How outgoing mail is set up (SMTP, Resend or none). */
+  @Get("mail")
+  mailStatus() {
+    return { provider: this.mail.provider };
+  }
+
+  /** Send a test email to the admin who asks, to check the mailbox works. */
+  @Post("mail/test")
+  @HttpCode(200)
+  async mailTest(@CurrentUser() user: AuthenticatedUser) {
+    const result = await this.mail.send({
+      to: user.email,
+      subject: "Prueba de correo · NV Marketing",
+      html: "<p>Si lees esto, el panel ya puede enviar correos (verificación, recuperar contraseña e invitaciones).</p>",
+      text: "Si lees esto, el panel ya puede enviar correos (verificación, recuperar contraseña e invitaciones).",
+    });
+    return { provider: this.mail.provider, sent: result.sent, to: user.email };
+  }
 
   @Get("users")
   users() {
@@ -175,6 +246,13 @@ export class AdminController {
   @Get("logins")
   logins() {
     return this.service.logins();
+  }
+
+  /** Panel visits (who, device, sections, time) of the last 1–90 days. */
+  @Get("activity")
+  activity(@Query("days") days?: string) {
+    const n = Math.round(Number(days ?? 7));
+    return this.panelActivity.overview(Number.isFinite(n) ? Math.min(90, Math.max(1, n)) : 7);
   }
 
   @Post("memberships")
@@ -209,7 +287,7 @@ export class AdminController {
 }
 
 @Module({
-  imports: [AuthModule],
+  imports: [AuthModule, PaymentsModule, PanelActivityModule],
   controllers: [AdminController],
   providers: [AdminService, SuperAdminGuard],
 })
