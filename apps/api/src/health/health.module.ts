@@ -7,6 +7,7 @@ import type { AppConfig } from "../config/configuration";
 import { PrismaService } from "../prisma/prisma.service";
 import { QueueManager } from "../core/queue/queue-manager.service";
 import { Public } from "../auth/decorators/public.decorator";
+import { detectDatabaseOutage } from "../common/filters/database-unavailable";
 
 @ApiTags("health")
 @Public()
@@ -122,7 +123,9 @@ export class HealthController {
         connected: false,
         code: err?.code ? String(err.code) : undefined,
         error: String(err?.message ?? e).slice(0, 400),
-        hint: "La app no puede conectar a la base (revisa DATABASE_URL o si tu proyecto de Supabase o Neon está activo).",
+        hint:
+          detectDatabaseOutage(e)?.message ??
+          "La app no puede conectar a la base (revisa DATABASE_URL o si tu proyecto de Supabase o Neon está activo).",
       };
     }
   }

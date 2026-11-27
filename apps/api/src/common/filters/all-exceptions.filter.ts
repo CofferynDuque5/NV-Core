@@ -9,6 +9,7 @@ import {
 import type { Request, Response } from "express";
 
 import { captureError } from "../observability/sentry";
+import { detectDatabaseOutage } from "./database-unavailable";
 
 /** Uniform JSON error envelope for every unhandled/HTTP exception. */
 @Catch()
@@ -19,6 +20,25 @@ export class AllExceptionsFilter implements ExceptionFilter {
     const ctx = host.switchToHttp();
     const response = ctx.getResponse<Response>();
     const request = ctx.getRequest<Request>();
+
+    // Base de datos caída o bloqueada por el proveedor: 503 con un mensaje claro
+    // (no el error crudo de Prisma) para que el panel diga qué pasa.
+    const outage = exception instanceof HttpException ? null : detectDatabaseOutage(exception);
+    if (outage) {
+      this.logger.error(
+        JSON.stringify({ method: request.method, path: request.url, status: 503, database: outage.reason }),
+        (exception as Error)?.message?.slice(0, 400),
+      );
+      response.status(HttpStatus.SERVICE_UNAVAILABLE).json({
+        statusCode: HttpStatus.SERVICE_UNAVAILABLE,
+        path: request.url,
+        timestamp: new Date().toISOString(),
+        requestId: (request.headers["x-request-id"] as string | undefined) ?? undefined,
+        message: outage.message,
+        code: outage.reason === "quota" ? "database_quota" : "database_unavailable",
+      });
+      return;
+    }
 
     const status =
       exception instanceof HttpException
