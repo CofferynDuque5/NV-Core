@@ -338,7 +338,10 @@ async function probePrismaEngine() {
   }
   const client = new PrismaClient();
   try {
-    await client.$queryRawUnsafe("SELECT 1");
+    await Promise.race([
+      client.$queryRawUnsafe("SELECT 1"),
+      new Promise((_, reject) => setTimeout(() => reject(new Error("la base de datos no respondió en 20 s")), 20000)),
+    ]);
   } catch (e) {
     const msg = String((e && e.message) || e);
     const m = msg.match(/Query Engine for runtime "([^"]+)"/);
@@ -388,6 +391,9 @@ function migrateWithPg() {
     const client = new Client({
       connectionString: pgConnectionString(migrateUrl),
       ssl: isLocal ? false : { rejectUnauthorized: false },
+      // Sin esto, una base que no contesta deja el arranque colgado para
+      // siempre y el panel nunca abre (ni siquiera para mostrar el aviso).
+      connectionTimeoutMillis: 15000,
     });
     await client.connect();
     await client.query(
